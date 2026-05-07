@@ -6315,6 +6315,7 @@ tbody tr:hover {
 }
 
 .ml3-picker-results button {
+  position: relative;
   border: 1px solid #d9e1d7;
   border-radius: 10px;
   background: #ffffff;
@@ -6322,7 +6323,7 @@ tbody tr:hover {
   min-height: 56px;
   padding: 8px 7px;
   display: grid;
-  grid-template-columns: 9px minmax(0, 1fr) minmax(92px, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(92px, auto);
   grid-template-rows: auto auto;
   column-gap: 6px;
   row-gap: 3px;
@@ -6395,7 +6396,7 @@ tbody tr:hover {
 }
 
 .ml3-picker-results button.is-selected em {
-  grid-column: 3;
+  grid-column: 2;
   grid-row: 2;
   justify-self: end;
   border-radius: 999px;
@@ -6440,7 +6441,7 @@ tbody tr:hover {
 
 .ml3-picker-results strong {
   font-size: 0.98rem;
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   line-height: 1.15;
   white-space: nowrap;
@@ -6449,7 +6450,7 @@ tbody tr:hover {
 }
 
 .ml3-picker-results span {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 2;
   color: #68756f;
   font-size: 0.74rem;
@@ -6457,7 +6458,7 @@ tbody tr:hover {
 }
 
 .ml3-picker-results b {
-  grid-column: 3;
+  grid-column: 2;
   grid-row: 1;
   border-radius: 999px;
   padding: 4px 7px;
@@ -6473,12 +6474,7 @@ tbody tr:hover {
 }
 
 .ml3-picker-dot {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  width: 9px;
-  height: 32px;
-  border-radius: 999px;
-  background: #8ba09a;
+  display: none;
 }
 
 .ml3-picker-dot--person { background: #c88600; }
