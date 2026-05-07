@@ -6242,7 +6242,7 @@ tbody tr:hover {
   padding: 6px;
   display: grid;
   align-content: center;
-  gap: 1px;
+  gap: 3px;
   text-align: center;
   font: inherit;
   cursor: pointer;
@@ -6265,6 +6265,7 @@ tbody tr:hover {
   font-size: 0.66rem;
   font-weight: 850;
   color: #5f6f66;
+  line-height: 1.2;
 }
 
 .ml3-picker-favorites button.is-selected {
@@ -6318,11 +6319,13 @@ tbody tr:hover {
   border-radius: 10px;
   background: #ffffff;
   color: #17211c;
-  min-height: 50px;
-  padding: 7px;
+  min-height: 56px;
+  padding: 8px 7px;
   display: grid;
   grid-template-columns: 9px minmax(0, 1fr) minmax(92px, auto);
-  gap: 6px;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  row-gap: 3px;
   align-items: center;
   text-align: inherit;
   cursor: pointer;
@@ -6438,15 +6441,19 @@ tbody tr:hover {
 .ml3-picker-results strong {
   font-size: 0.98rem;
   grid-column: 2;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  overflow-wrap: anywhere;
+  grid-row: 1;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ml3-picker-results span {
+  grid-column: 2;
+  grid-row: 2;
   color: #68756f;
   font-size: 0.74rem;
+  line-height: 1.2;
 }
 
 .ml3-picker-results b {
@@ -6469,7 +6476,7 @@ tbody tr:hover {
   grid-column: 1;
   grid-row: 1 / span 2;
   width: 9px;
-  height: 28px;
+  height: 32px;
   border-radius: 999px;
   background: #8ba09a;
 }
@@ -8350,8 +8357,8 @@ tbody tr:hover {
   }
 
   .ml3-picker-results button {
-    min-height: 48px;
-    padding: 7px;
+    min-height: 56px;
+    padding: 8px 7px;
   }
 
   .ml3-preview {
