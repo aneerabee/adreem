@@ -521,36 +521,41 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   const selectedBalance = selectedAccount ? accountBalanceChip(selectedAccount, balanceByAccountId.get(selectedAccount.id)) : null
   const showChooser = !selectedAccount || isChanging
   const preferredIndexById = new Map(preferredAccountIds.map((accountId, index) => [accountId, index]))
+  const accountBucket = (account) => balanceByAccountId.get(account.id) || { dinar: 0, usd: 0 }
+  const accountMagnitude = (account) => {
+    const bucket = accountBucket(account)
+    return Math.max(Math.abs(Math.round(bucket.dinar || 0)), Math.abs(Math.round(bucket.usd || 0)))
+  }
+  const hasVisibleBalance = (account) => accountMagnitude(account) > 0
   const preferredAccounts = preferredAccountIds
     .map((accountId) => accounts.find((account) => account.id === accountId))
     .filter(Boolean)
-  const quickLetters = Array.from(new Set(accounts.map((account) => account.ownerName?.trim()?.[0]).filter(Boolean))).slice(0, 10)
   const normalizedPreferredOwner = 'أنا'
   const quickFilters = [
     { key: '', label: 'الكل' },
+    { key: 'active', label: 'رصيد' },
     { key: 'owner:أنا', label: 'أنا' },
     { key: 'kind:cash', label: 'كاش' },
     { key: 'kind:bank', label: 'مصرف' },
-    { key: 'kind:usd', label: 'دولار' },
   ]
   const matchesQuickFilter = (account) => {
     if (!quickFilter) return true
-    if (quickFilter.startsWith('letter:')) return account.ownerName?.startsWith(quickFilter.replace('letter:', ''))
+    if (quickFilter === 'active') return hasVisibleBalance(account)
     if (quickFilter === 'owner:أنا') return account.ownerName === normalizedPreferredOwner
     if (quickFilter === 'kind:cash') return account.valueKind === VALUE_KINDS.CASH || account.subAccountName === 'كاش'
     if (quickFilter === 'kind:bank') return account.valueKind === VALUE_KINDS.BANK || /مصرف|بنك|حساب/i.test(account.subAccountName || '')
-    if (quickFilter === 'kind:usd') return /دولار|usd/i.test(`${account.ownerName} ${account.subAccountName} ${account.legacyName || ''}`)
     return true
   }
   const rankAccount = (account) => {
     const ownerName = String(account.ownerName || '').trim()
     const labelText = accountLabel(account).toLowerCase()
-    if (preferredIndexById.has(account.id)) return -50 + preferredIndexById.get(account.id)
-    if (account.id === value && ownerName === normalizedPreferredOwner) return -30
-    if (ownerName === normalizedPreferredOwner) return -20
-    if (account.id === value) return -15
-    if (normalizedQuery && labelText.startsWith(normalizedQuery)) return -10
-    if (normalizedQuery && ownerName.toLowerCase().startsWith(normalizedQuery)) return -8
+    const magnitude = accountMagnitude(account)
+    if (preferredIndexById.has(account.id)) return -1000 + preferredIndexById.get(account.id)
+    if (account.id === value) return -900
+    if (ownerName === normalizedPreferredOwner) return -820
+    if (magnitude > 0) return -700 - Math.min(magnitude / 1000, 250)
+    if (normalizedQuery && labelText.startsWith(normalizedQuery)) return -500
+    if (normalizedQuery && ownerName.toLowerCase().startsWith(normalizedQuery)) return -480
     return 0
   }
   const filteredAccounts = accounts
@@ -625,25 +630,16 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
                 {filter.label}
               </button>
             ))}
-            {quickLetters.map((letter) => (
-              <button
-                type="button"
-                key={letter}
-                className={quickFilter === `letter:${letter}` && !normalizedQuery ? 'is-active' : ''}
-                onClick={() => { setQuickFilter(`letter:${letter}`); setQuery('') }}
-              >
-                {letter}
-              </button>
-            ))}
           </div>
           <div className="ml3-picker-results">
             {resultAccounts.map((account) => {
               const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id))
+              const hasBalance = hasVisibleBalance(account)
               return (
                 <button
                   type="button"
                   key={account.id}
-                  className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${account.id === value ? 'is-selected' : ''}`}
+                  className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`}
                   onClick={() => chooseAccount(account.id)}
                 >
                   <span className={`ml3-picker-dot ml3-picker-dot--${visualKind(account)}`} aria-hidden="true" />
