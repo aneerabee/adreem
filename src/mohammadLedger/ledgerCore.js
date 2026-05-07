@@ -377,12 +377,13 @@ export function voidMovement(movement, reason = '', voidedAt = isoNow()) {
 }
 
 export function formatBalanceMeaning(account, amount) {
-  const value = roundMoney(amount)
+  const value = Math.round(asNumber(amount))
+  const formatted = Math.abs(value).toLocaleString('en-US')
   if (!value) return 'مسكر'
-  if (account?.valueKind === 'expense') return `تكلفة ${Math.abs(value)}`
-  if (account?.valueKind === 'asset') return `قيمة/رصيد أصل ${Math.abs(value)}`
+  if (account?.valueKind === 'expense') return `تكلفة ${formatted}`
+  if (account?.valueKind === 'asset') return `قيمة/رصيد أصل ${formatted}`
   if (account?.valueKind === 'cash' || account?.valueKind === 'bank') {
-    return value > 0 ? `موجود ${value}` : `ناقص ${Math.abs(value)}`
+    return value > 0 ? `موجود ${formatted}` : `ناقص ${formatted}`
   }
-  return value > 0 ? `لي عنده ${value}` : `عليّ له ${Math.abs(value)}`
+  return value > 0 ? `لي عنده ${formatted}` : `عليّ له ${formatted}`
 }

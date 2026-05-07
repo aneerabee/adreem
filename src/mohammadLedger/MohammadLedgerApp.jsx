@@ -237,13 +237,46 @@ function loadInitialLedgerState() {
 function money(value, currency = CURRENCIES.DINAR) {
   const unit = currency === CURRENCIES.USD ? '$' : 'د.ل'
   const rounded = Math.round(Number(value || 0))
-  return `${rounded.toLocaleString('en-US')} ${unit}`
+  return `${formatInteger(rounded)} ${unit}`
 }
 
 function signedMoney(value, currency = CURRENCIES.DINAR) {
   const rounded = Math.round(Number(value || 0))
   const prefix = rounded > 0 ? '+' : rounded < 0 ? '-' : ''
-  return `${prefix}${Math.abs(rounded).toLocaleString('en-US')} ${currency === CURRENCIES.USD ? '$' : 'د.ل'}`
+  return `${prefix}${formatInteger(Math.abs(rounded))} ${currency === CURRENCIES.USD ? '$' : 'د.ل'}`
+}
+
+function formatInteger(value) {
+  const rounded = Math.round(Number(value || 0))
+  return rounded.toLocaleString('en-US')
+}
+
+function formatCount(value) {
+  return formatInteger(value)
+}
+
+function formatRate(value) {
+  const number = Number(value || 0)
+  if (!Number.isFinite(number)) return ''
+  return number.toLocaleString('en-US', {
+    maximumFractionDigits: 6,
+  })
+}
+
+function formatNumericEntryValue(value, allowDecimal = false) {
+  const raw = String(value || '')
+  if (!raw) return ''
+  if (allowDecimal) {
+    const [whole, fraction = ''] = raw.split('.')
+    const formattedWhole = whole ? formatInteger(whole) : '0'
+    return raw.includes('.') ? `${formattedWhole}.${fraction}` : formattedWhole
+  }
+  return formatInteger(raw.replace(/\D/g, ''))
+}
+
+function parseWholeAmount(value) {
+  const number = Number(String(value || '').replace(/,/g, ''))
+  return Number.isFinite(number) ? Math.round(number) : 0
 }
 
 function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
@@ -319,7 +352,7 @@ function parseClassification(value) {
 }
 
 function nonZero(bucket) {
-  return Math.abs(bucket.dinar) > 0.000001 || Math.abs(bucket.usd) > 0.000001
+  return Math.round(Math.abs(bucket.dinar)) !== 0 || Math.round(Math.abs(bucket.usd)) !== 0
 }
 
 function MetricChip({ label, value, tone = 'neutral', currency = CURRENCIES.DINAR }) {
@@ -355,8 +388,8 @@ function accountKindText(account) {
 function accountBalanceChip(account, bucket) {
   const dinar = Number(bucket?.dinar || 0)
   const usd = Number(bucket?.usd || 0)
-  const hasDinar = Math.abs(dinar) > 0.000001
-  const hasUsd = Math.abs(usd) > 0.000001
+  const hasDinar = Math.round(Math.abs(dinar)) !== 0
+  const hasUsd = Math.round(Math.abs(usd)) !== 0
 
   if (!hasDinar && hasUsd) {
     return { tone: usd > 0 ? 'positive' : 'negative', text: money(Math.abs(usd), CURRENCIES.USD) }
@@ -417,8 +450,8 @@ function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
         {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b>تأكيد</b> : null}
       </div>
       <div className={`ml3-account-values ${balanceTone}`}>
-        {Math.abs(dinar) > 0.000001 ? <strong>{formatDisplayMeaning(account, dinar)}</strong> : <span>صفر</span>}
-        {Math.abs(usd) > 0.000001 ? <strong>{money(usd, CURRENCIES.USD)}</strong> : null}
+        {Math.round(Math.abs(dinar)) !== 0 ? <strong>{formatDisplayMeaning(account, dinar)}</strong> : <span>صفر</span>}
+        {Math.round(Math.abs(usd)) !== 0 ? <strong>{money(usd, CURRENCIES.USD)}</strong> : null}
       </div>
       {(onConfirm || onDisable) && (
         <div className="ml3-row-actions">
@@ -458,7 +491,7 @@ function AccountList({ title, subtitle, rows, emptyText = 'لا توجد عنا�
           <h2>{title}</h2>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        <span>{rows.length}</span>
+        <span>{formatCount(rows.length)}</span>
       </div>
       <div className="ml3-list">
         {rows.length === 0 ? (
@@ -629,11 +662,14 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   )
 }
 
-function NumericEntry({ label, value, onChange, name, placeholder = '0' }) {
+function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDecimal = false }) {
   const textValue = String(value || '')
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '000']
+  const keys = allowDecimal
+    ? ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '000']
+    : ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '000']
 
   function pushKey(key) {
+    if (!allowDecimal && key === '.') return
     if (key === '.' && textValue.includes('.')) return
     const next = textValue === '0' && key !== '.' ? key : `${textValue}${key}`
     onChange(next)
@@ -644,7 +680,7 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0' }) {
       {name ? <input type="hidden" name={name} value={textValue} /> : null}
       <div className="ml3-number-display">
         <span>{label}</span>
-        <strong>{textValue || placeholder}</strong>
+        <strong>{textValue ? formatNumericEntryValue(textValue, allowDecimal) : placeholder}</strong>
       </div>
       <div className="ml3-number-pad" aria-label={label}>
         {keys.map((key) => (
@@ -762,7 +798,7 @@ function AccountProfile({ bucket, movements, accounts, onClose, onEditMovement, 
 
         <div className={`ml3-profile-balance ${dinar > 0 ? 'is-positive' : dinar < 0 ? 'is-negative' : 'is-zero'}`}>
           <strong>{formatDisplayMeaning(account, dinar)}</strong>
-          <span>{Math.abs(usd) > 0.000001 ? money(usd, CURRENCIES.USD) : 'لا يوجد دولار'}</span>
+          <span>{Math.round(Math.abs(usd)) !== 0 ? money(usd, CURRENCIES.USD) : 'لا يوجد دولار'}</span>
         </div>
 
         <div className="ml3-profile-facts">
@@ -772,7 +808,7 @@ function AccountProfile({ bucket, movements, accounts, onClose, onEditMovement, 
           </div>
           <div>
             <span>الحركات</span>
-            <strong>{postedCount}</strong>
+            <strong>{formatCount(postedCount)}</strong>
           </div>
           <div>
             <span>الحالة</span>
@@ -847,7 +883,7 @@ function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisab
         </div>
         <b>{formatDisplayMeaning(account, dinar)}</b>
       </div>
-      {Math.abs(usd) > 0.000001 ? <p className="ml3-review-usd">{money(usd, CURRENCIES.USD)}</p> : null}
+      {Math.round(Math.abs(usd)) !== 0 ? <p className="ml3-review-usd">{money(usd, CURRENCIES.USD)}</p> : null}
       <form className="ml3-decision-grid" onSubmit={(event) => onResolve(event, account.id)}>
         <label>
           الاسم
@@ -1004,6 +1040,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
               value={reviewDraft.rate}
               onChange={(value) => updateReviewDraft('rate', value)}
               placeholder="7.5"
+              allowDecimal
             />
           </div>
         ) : null}
@@ -1045,16 +1082,16 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
 
 function AlertBoard({ reviewAccounts, reviewMovements, externalMissing }) {
   const alerts = []
-  if (reviewMovements.length) alerts.push({ tone: 'danger', title: 'حركات لا تدخل في الرصيد', detail: `${reviewMovements.length} حركة تحتاج إكمال.` })
-  if (reviewAccounts.length) alerts.push({ tone: 'warning', title: 'حسابات تحتاج تصنيف', detail: `${reviewAccounts.length} حساب يحتاج تأكيد قبل الاعتماد.` })
-  if (externalMissing.length) alerts.push({ tone: 'info', title: 'أسماء ظهرت خارج الملخص', detail: `${externalMissing.length} اسم يجب إنشاؤه أو تأكيده.` })
+  if (reviewMovements.length) alerts.push({ tone: 'danger', title: 'حركات ناقصة', detail: formatCount(reviewMovements.length) })
+  if (reviewAccounts.length) alerts.push({ tone: 'warning', title: 'حسابات للتصنيف', detail: formatCount(reviewAccounts.length) })
+  if (externalMissing.length) alerts.push({ tone: 'info', title: 'أسماء جديدة', detail: formatCount(externalMissing.length) })
   if (!alerts.length) return null
 
   return (
     <section className="ml3-alert-board">
       <div className="ml3-alert-title">
-        <strong>انتباه اليوم</strong>
-        <span>{alerts.length}</span>
+        <strong>تنبيه</strong>
+        <span>{formatCount(alerts.length)}</span>
       </div>
       <div className="ml3-alert-list">
         {alerts.map((alert) => (
@@ -1186,7 +1223,7 @@ export default function MohammadLedgerApp() {
   const movementConfig = movementConfigs[movementDraft.type] || movementConfigs[MOVEMENT_TYPES.TRANSFER]
   const normalizedDraft = {
     ...movementDraft,
-    amount: Number(movementDraft.amount),
+    amount: parseWholeAmount(movementDraft.amount),
     currency: movementConfig.currency || movementDraft.currency,
     destinationAccountId: movementConfig.needsDestination ? movementDraft.destinationAccountId : null,
     rate: movementDraft.rate === '' ? undefined : Number(movementDraft.rate),
@@ -1586,7 +1623,7 @@ export default function MohammadLedgerApp() {
       {
         ...movement,
         type: reviewDraft.type,
-        amount: Number(reviewDraft.amount),
+        amount: parseWholeAmount(reviewDraft.amount),
         currency: config.currency || reviewDraft.currency,
         sourceAccountId: reviewDraft.sourceAccountId || null,
         destinationAccountId: config.needsDestination ? reviewDraft.destinationAccountId || null : null,
@@ -1603,9 +1640,9 @@ export default function MohammadLedgerApp() {
     const activeGroup = accountGroupTabs.find((group) => group.key === activeAccountGroup) || accountGroupTabs[0]
     const moneyRows = balancesByKind.money || []
     const peopleRows = balancesByKind.people || []
-    const peoplePositive = peopleRows.filter((bucket) => bucket.dinar > 0.000001).sort(compareBalanceBuckets)
-    const peopleNegative = peopleRows.filter((bucket) => bucket.dinar < -0.000001).sort(compareBalanceBuckets)
-    const peopleZero = peopleRows.filter((bucket) => Math.abs(bucket.dinar) <= 0.000001 && Math.abs(bucket.usd) <= 0.000001).sort(compareBalanceBuckets)
+    const peoplePositive = peopleRows.filter((bucket) => Math.round(bucket.dinar) > 0).sort(compareBalanceBuckets)
+    const peopleNegative = peopleRows.filter((bucket) => Math.round(bucket.dinar) < 0).sort(compareBalanceBuckets)
+    const peopleZero = peopleRows.filter((bucket) => !nonZero(bucket)).sort(compareBalanceBuckets)
     const accountRowsByGroup = {
       people: [...moneyRows, ...peoplePositive, ...peopleNegative, ...peopleZero],
       assets: balancesByKind.assets || [],
@@ -1619,7 +1656,7 @@ export default function MohammadLedgerApp() {
           <div>
             <h2>الأرصدة</h2>
           </div>
-          <span>{balances.length}</span>
+          <span>{formatCount(balances.length)}</span>
         </div>
         <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
           {accountGroupTabs.map((group) => (
@@ -1630,7 +1667,7 @@ export default function MohammadLedgerApp() {
               onClick={() => setActiveAccountGroup(group.key)}
             >
               <strong>{group.label}</strong>
-              <span>{accountRowsByGroup[group.key]?.length || 0}</span>
+              <span>{formatCount(accountRowsByGroup[group.key]?.length || 0)}</span>
             </button>
           ))}
         </div>
@@ -1665,7 +1702,7 @@ export default function MohammadLedgerApp() {
             <div>
               <h2>مراجعة</h2>
             </div>
-            <span>{reviewItems.length}</span>
+            <span>{formatCount(reviewItems.length)}</span>
           </div>
           <div className="ml3-review-workspace">
             <div className="ml3-review-queue" aria-label="قائمة المراجعة">
@@ -1677,7 +1714,7 @@ export default function MohammadLedgerApp() {
                   className={`ml3-review-ticket ml3-review-ticket--${item.tone} ${activeReviewItem?.key === item.key ? 'is-active' : ''}`}
                   onClick={() => setActiveReviewKey(item.key)}
                 >
-                  <span>{index + 1}</span>
+                  <span>{formatCount(index + 1)}</span>
                   <strong>{item.label}</strong>
                   <b>{item.detail}</b>
                 </button>
@@ -1720,7 +1757,7 @@ export default function MohammadLedgerApp() {
             <div>
             <h2>السجل</h2>
             </div>
-            <span>{postedUserMovements.length}</span>
+            <span>{formatCount(postedUserMovements.length)}</span>
           </div>
           <div className="ml3-history-list">
             {postedUserMovements.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
@@ -1764,11 +1801,11 @@ export default function MohammadLedgerApp() {
           </button>
           <button type="button" className="ml3-home-card is-money" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('people') }}>
             <span>أماكن المال</span>
-            <strong>{balancesByKind.money.length} حساب</strong>
+            <strong>{formatCount(balancesByKind.money.length)} حساب</strong>
           </button>
           <button type="button" className="ml3-home-card is-review" onClick={() => setActiveSection('review')}>
             <span>مراجعة</span>
-            <strong>{balancesByKind.review.length + reviewMovements.length + unresolvedExternalAccounts.length}</strong>
+            <strong>{formatCount(balancesByKind.review.length + reviewMovements.length + unresolvedExternalAccounts.length)}</strong>
           </button>
         </div>
 
@@ -1778,7 +1815,7 @@ export default function MohammadLedgerApp() {
               <h2>أكبر أرصدة الناس</h2>
               <p>للتفاصيل الكاملة افتح قسم الأرصدة.</p>
             </div>
-            <span>{balancesByKind.people.filter(nonZero).length}</span>
+            <span>{formatCount(balancesByKind.people.filter(nonZero).length)}</span>
           </div>
           <div className="ml3-list">
             {balancesByKind.people.filter(nonZero).slice(0, 6).map((bucket) => (
@@ -1817,8 +1854,8 @@ export default function MohammadLedgerApp() {
           </div>
           <div className="ml3-top-actions">
             <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
-            <b>{activeAccounts.length} حساب</b>
-            <b>{reviewMovements.length} مشكلة</b>
+            <b>{formatCount(activeAccounts.length)} حساب</b>
+            <b>{formatCount(reviewMovements.length)} مشكلة</b>
           </div>
         </header>
 
@@ -1993,7 +2030,7 @@ export default function MohammadLedgerApp() {
                     <strong>السعر</strong>
                     <button type="button" onClick={() => editMovementStep(MOVEMENT_ENTRY_STEPS.RATE)}>تعديل</button>
                   </div>
-                  <b className="ml3-step-summary">{Number(movementDraft.rate || 0).toLocaleString('en-US')}</b>
+                  <b className="ml3-step-summary">{formatRate(movementDraft.rate)}</b>
                 </section>
               ) : null}
 
@@ -2008,6 +2045,7 @@ export default function MohammadLedgerApp() {
                   value={movementDraft.rate}
                   onChange={(value) => updateMovementDraft('rate', value)}
                   placeholder="7.5"
+                  allowDecimal
                 />
                 <button type="button" className="ml3-step-next" disabled={!hasMovementRate} onClick={advanceMovementStep}>
                   التالي
@@ -2142,7 +2180,7 @@ export default function MohammadLedgerApp() {
               <section className="ml3-today-panel">
                 <div className="ml3-today-head">
                   <h2>اليوم</h2>
-                  <span>{todayMovements.length}</span>
+                  <span>{formatCount(todayMovements.length)}</span>
                 </div>
                 <div className="ml3-today-list">
                   {todayMovements.length === 0 ? <p className="ml3-empty">لا توجد حركات اليوم.</p> : null}

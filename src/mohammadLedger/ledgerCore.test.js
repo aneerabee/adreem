@@ -290,10 +290,10 @@ describe('mohammad ledger core', () => {
     const expense = mohammadAccountCatalog.find((account) => account.id === 'personal-expense')
     const asset = mohammadAccountCatalog.find((account) => account.type === ACCOUNT_TYPES.ASSET)
 
-    expect(formatBalanceMeaning(person, -24942.2)).toBe('عليّ له 24942.2')
-    expect(formatBalanceMeaning(bank, -27290)).toBe('ناقص 27290')
-    expect(formatBalanceMeaning(expense, 112240)).toBe('تكلفة 112240')
-    expect(formatBalanceMeaning(asset, 15550)).toBe('قيمة/رصيد أصل 15550')
+    expect(formatBalanceMeaning(person, -24942.2)).toBe('عليّ له 24,942')
+    expect(formatBalanceMeaning(bank, -27290)).toBe('ناقص 27,290')
+    expect(formatBalanceMeaning(expense, 112240)).toBe('تكلفة 112,240')
+    expect(formatBalanceMeaning(asset, 15550)).toBe('قيمة/رصيد أصل 15,550')
   })
 
   it('creates dynamic accounts with validation before use', () => {

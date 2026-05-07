@@ -5454,6 +5454,7 @@ tbody tr:hover {
 
 .ml3-alert-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 5px;
   margin-top: 6px;
 }
@@ -5463,7 +5464,9 @@ tbody tr:hover {
   border-radius: 10px;
   padding: 7px 9px;
   display: grid;
-  gap: 3px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: center;
   position: relative;
   overflow: hidden;
   border: 1px solid transparent;
@@ -5498,6 +5501,23 @@ tbody tr:hover {
 .ml3-history-row span,
 .ml3-history-row small {
   color: #68756f;
+}
+
+.ml3-alert strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ml3-alert span {
+  direction: ltr;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #25352d;
+  font-size: 0.78rem;
+  font-weight: 950;
 }
 
 .ml3-panel-head p,
@@ -6926,6 +6946,8 @@ tbody tr:hover {
 
 .ml3-account-sections {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 7px;
 }
 
@@ -7054,12 +7076,12 @@ tbody tr:hover {
 
 .ml3-review-ticket {
   min-width: 0;
-  min-height: 48px;
+  min-height: 44px;
   border: 1px solid #e1e9df;
   border-radius: 10px;
   background: #f8faf7;
   color: #17211c;
-  padding: 7px 8px;
+  padding: 6px 8px;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 2px 7px;
@@ -7482,7 +7504,7 @@ tbody tr:hover {
 
 .ml3-review-card {
   display: grid;
-  gap: 8px;
+  gap: 7px;
   border-radius: 12px;
   padding: 8px;
   background: #ffffff;
@@ -7657,6 +7679,15 @@ tbody tr:hover {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 5px 8px;
+}
+
+.ml3-history-list {
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  align-items: start;
+}
+
+.ml3-history-list .ml3-empty {
+  grid-column: 1 / -1;
 }
 
 .ml3-history-row::before {
@@ -8275,11 +8306,17 @@ tbody tr:hover {
   .ml3-account-switcher,
   .ml3-home-grid,
   .ml3-entry-guide-grid,
+  .ml3-account-sections,
   .ml3-review-workspace {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .ml3-review-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .ml3-account-sections,
+  .ml3-history-list {
     grid-template-columns: 1fr;
   }
 
