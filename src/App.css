@@ -5872,6 +5872,13 @@ tbody tr:hover {
   background: #f5f7f4;
 }
 
+.ml3-step.is-open {
+  border-color: color-mix(in srgb, var(--ml3-step-tone) 52%, #ffffff);
+  box-shadow:
+    0 12px 30px color-mix(in srgb, var(--ml3-step-tone) 10%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
 .ml3-step-summary {
   display: block;
   min-width: 0;
@@ -8165,6 +8172,42 @@ tbody tr:hover {
     border-radius: 12px;
   }
 
+  .ml3-step:not(:last-child)::after {
+    display: none;
+  }
+
+  .ml3-step.is-open {
+    gap: 9px;
+    padding: 11px;
+    border-radius: 15px;
+    scroll-margin-top: 64px;
+  }
+
+  .ml3-step.is-open::before {
+    width: 8px;
+  }
+
+  .ml3-step.is-done {
+    display: grid;
+    grid-template-columns: 22px minmax(44px, 0.58fr) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px;
+    min-height: 36px;
+    padding: 5px 6px;
+    padding-inline-start: 9px;
+    border-radius: 10px;
+    opacity: 0.74;
+    filter: saturate(0.44);
+  }
+
+  .ml3-step.is-done::before {
+    width: 4px;
+  }
+
+  .ml3-step.is-done .ml3-step-head {
+    display: contents;
+  }
+
   .ml3-step::before {
     width: 6px;
   }
@@ -8176,8 +8219,38 @@ tbody tr:hover {
     border-radius: 9px;
   }
 
+  .ml3-step.is-open .ml3-step-head span {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+  }
+
+  .ml3-step.is-done .ml3-step-head span {
+    grid-column: 1;
+    grid-row: 1;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    font-size: 0.68rem;
+  }
+
   .ml3-step-head strong {
     font-size: 0.96rem;
+  }
+
+  .ml3-step.is-open .ml3-step-head strong {
+    font-size: 1.06rem;
+  }
+
+  .ml3-step.is-done .ml3-step-head strong {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.74rem;
   }
 
   .ml3-step-head button {
@@ -8185,14 +8258,43 @@ tbody tr:hover {
     font-size: 0.76rem;
   }
 
+  .ml3-step.is-done .ml3-step-head button {
+    grid-column: 4;
+    grid-row: 1;
+    min-height: 28px;
+    margin-inline-start: 0;
+    padding: 3px 8px;
+    border-radius: 8px;
+    font-size: 0.68rem;
+    transform: none;
+    box-shadow: none;
+  }
+
   .ml3-step-summary {
     font-size: 0.9rem;
     padding: 6px 8px;
   }
 
+  .ml3-step.is-done .ml3-step-summary {
+    grid-column: 3;
+    grid-row: 1;
+    min-width: 0;
+    padding: 0;
+    background: transparent;
+    font-size: 0.78rem;
+    line-height: 1.15;
+  }
+
   .ml3-quick-actions button,
   .ml3-step-next {
     font-size: 0.88rem;
+  }
+
+  .ml3-step.is-open .ml3-step-next {
+    min-height: 54px;
+    border-radius: 13px;
+    font-size: 1rem;
+    box-shadow: 0 12px 24px color-mix(in srgb, var(--ml3-step-tone) 22%, transparent);
   }
 
   .ml3-entry-card label,
@@ -8375,6 +8477,18 @@ tbody tr:hover {
   .ml3-quick-actions button {
     font-size: 0.7rem;
     padding-inline: 3px;
+  }
+
+  .ml3-step.is-open .ml3-quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .ml3-step.is-open .ml3-quick-actions button {
+    min-height: 58px;
+    padding: 7px 6px;
+    font-size: 0.92rem;
+    border-radius: 13px;
   }
 
   .ml3-action-choice span {
