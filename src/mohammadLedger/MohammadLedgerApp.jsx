@@ -22,6 +22,7 @@ import {
 } from './ledgerCore'
 import {
   getMohammadPersistenceMode,
+  listLocalMohammadBackups,
   loadLocalMohammadState,
   loadMohammadPersistedState,
   saveMohammadPersistedState,
@@ -133,6 +134,9 @@ const MOVEMENT_ENTRY_STEPS = {
   NOTE: 7,
   REVIEW: 8,
 }
+
+const CANCEL_WINDOW_HOURS = 24
+const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
 
 const accountPresets = [
   {
@@ -339,6 +343,26 @@ function isToday(value) {
   if (Number.isNaN(date.getTime())) return false
   const today = new Date()
   return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate()
+}
+
+function isRecentMovement(movement, now = Date.now()) {
+  const date = new Date(movement?.createdAt || movement?.updatedAt || '')
+  if (Number.isNaN(date.getTime())) return false
+  return now - date.getTime() <= CANCEL_WINDOW_MS
+}
+
+function canCancelMovement(movement) {
+  return movement?.status === MOVEMENT_STATUSES.POSTED && !movement.id?.startsWith('opening-') && isRecentMovement(movement)
+}
+
+function storageTextForStatus(saveStatus, storageMode) {
+  return {
+    loading: 'تحميل',
+    saving: 'حفظ',
+    saved: storageMode === 'supabase' ? 'سحابي' : 'محلي',
+    local: 'هذا الجهاز',
+    'local-only': 'سحابة ناقصة',
+  }[saveStatus] || 'محلي'
 }
 
 function classificationValue(account) {
@@ -717,7 +741,7 @@ function MovementMiniRow({ movement, accountById, onCancel }) {
         </div>
       ) : null}
       {movement.note ? <small>{movement.note}</small> : null}
-      {movement.status === MOVEMENT_STATUSES.POSTED ? (
+      {canCancelMovement(movement) ? (
         <button type="button" onClick={() => onCancel(movement.id)}>إلغاء</button>
       ) : null}
     </article>
@@ -759,7 +783,7 @@ function HistoryMovementRow({ movement, accountById, onCancel }) {
         </div>
       ) : null}
       {movement.note ? <small>{movement.note}</small> : null}
-      {movement.status === MOVEMENT_STATUSES.POSTED ? (
+      {canCancelMovement(movement) ? (
         <button type="button" onClick={() => onCancel(movement.id)}>إلغاء</button>
       ) : null}
     </article>
@@ -853,7 +877,7 @@ function AccountProfile({ bucket, movements, accounts, onClose, onEditMovement, 
                   {impacts.map((impact) => (
                     <b key={`${movement.id}-${impact.currency}`}>{signedMoney(impact.delta, impact.currency)}</b>
                   ))}
-                  {!movement.id?.startsWith('opening-') ? (
+                  {!movement.id?.startsWith('opening-') && canCancelMovement(movement) ? (
                     <button type="button" onClick={() => onEditMovement(movement)}>تعديل</button>
                   ) : null}
                 </div>
@@ -1119,6 +1143,8 @@ export default function MohammadLedgerApp() {
   const [, setSyncProblem] = useState(false)
   const [pendingUndo, setPendingUndo] = useState(null)
   const [activeReviewKey, setActiveReviewKey] = useState('')
+  const [editingMovementId, setEditingMovementId] = useState('')
+  const [backupSnapshots, setBackupSnapshots] = useState(() => listLocalMohammadBackups())
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -1199,6 +1225,16 @@ export default function MohammadLedgerApp() {
   const activeReviewItem = reviewItems.find((item) => item.key === activeReviewKey) || reviewItems[0] || null
   const postedUserMovements = movements.filter((movement) => !movement.id?.startsWith('opening-')).slice().reverse()
   const todayMovements = postedUserMovements.filter((movement) => isToday(movement.createdAt || movement.updatedAt))
+  const latestUserMovement = postedUserMovements[0] || null
+  const ledgerHealthItems = useMemo(() => {
+    const items = []
+    if (saveStatus === 'saved' && storageMode === 'supabase') items.push({ tone: 'ok', label: 'السحابة', value: 'جاهزة' })
+    else items.push({ tone: 'warn', label: 'السحابة', value: storageTextForStatus(saveStatus, storageMode) })
+    items.push({ tone: reviewItems.length ? 'warn' : 'ok', label: 'المراجعة', value: reviewItems.length ? formatCount(reviewItems.length) : 'صفر' })
+    items.push({ tone: backupSnapshots.length ? 'ok' : 'warn', label: 'نسخ محلية', value: formatCount(backupSnapshots.length) })
+    items.push({ tone: latestUserMovement ? 'ok' : 'warn', label: 'آخر حركة', value: latestUserMovement ? movementDateTime(latestUserMovement.createdAt || latestUserMovement.updatedAt) : 'لا يوجد' })
+    return items
+  }, [backupSnapshots.length, latestUserMovement, reviewItems.length, saveStatus, storageMode])
   const totals = useMemo(() => {
     return balances.reduce(
       (acc, bucket) => {
@@ -1280,6 +1316,7 @@ export default function MohammadLedgerApp() {
           if (!sameRecordVersions(accounts, mergedAccounts)) setAccounts(mergedAccounts)
           if (!sameRecordVersions(movements, mergedMovements)) setMovements(mergedMovements)
         }
+        setBackupSnapshots(listLocalMohammadBackups())
       })
       .catch((err) => {
         if (cancelled) return
@@ -1414,20 +1451,40 @@ export default function MohammadLedgerApp() {
 
   function saveMovement(event) {
     event.preventDefault()
-    const movement = postMovement({ ...normalizedDraft, note: movementDraft.note.trim() }, accounts)
-    setMovements((current) => [...current, movement])
-    setFeedback(movement.status === MOVEMENT_STATUSES.POSTED ? 'تم الحفظ وتحديث الأرصدة.' : 'الحركة ناقصة وتحتاج حل.')
+    const originalMovement = editingMovementId ? movements.find((movement) => movement.id === editingMovementId) : null
+    const movement = postMovement(
+      {
+        ...originalMovement,
+        ...normalizedDraft,
+        id: originalMovement?.id,
+        createdAt: originalMovement?.createdAt,
+        note: movementDraft.note.trim(),
+      },
+      accounts,
+    )
+    setMovements((current) =>
+      originalMovement
+        ? current.map((item) => (item.id === originalMovement.id ? movement : item))
+        : [...current, movement],
+    )
+    setFeedback(movement.status === MOVEMENT_STATUSES.POSTED ? (originalMovement ? 'تم تعديل الحركة وتحديث الأرصدة.' : 'تم الحفظ وتحديث الأرصدة.') : 'الحركة ناقصة وتحتاج حل.')
     setPendingUndo({
       movementId: movement.id,
       label: `${movementLabels[movement.type] || 'حركة'} · ${money(movement.amount, movement.currency)}`,
     })
-    if (movement.status === MOVEMENT_STATUSES.POSTED) {
+    if (movement.status === MOVEMENT_STATUSES.POSTED || originalMovement) {
+      setEditingMovementId('')
       setMovementDraft(emptyMovementDraft(movementDraft.type))
       setMovementStep(MOVEMENT_ENTRY_STEPS.TYPE)
     }
   }
 
   function cancelMovement(movementId) {
+    const target = movements.find((movement) => movement.id === movementId)
+    if (target?.status === MOVEMENT_STATUSES.POSTED && !canCancelMovement(target)) {
+      setFeedback(`الإلغاء المباشر متاح فقط خلال آخر ${formatCount(CANCEL_WINDOW_HOURS)} ساعة. للحركات القديمة استخدم حركة تصحيح.`)
+      return
+    }
     setMovements((current) =>
       current.map((movement) => {
         if (movement.id !== movementId) return movement
@@ -1598,6 +1655,14 @@ export default function MohammadLedgerApp() {
   }
 
   function editReviewMovement(movement) {
+    if (movement.status === MOVEMENT_STATUSES.POSTED && !canCancelMovement(movement)) {
+      setFeedback(`تعديل الحركات القديمة غير مباشر. استخدم حركة تصحيح بدل تعديل حركة أقدم من ${formatCount(CANCEL_WINDOW_HOURS)} ساعة.`)
+      return
+    }
+    setEditingMovementId(movement.id)
+    setSelectedAccountId('')
+    setActiveSection('entry')
+    setActiveEntryMode('movement')
     setMovementStep(MOVEMENT_ENTRY_STEPS.AMOUNT)
     setMovementDraft({
       type: movement.type || MOVEMENT_TYPES.TRANSFER,
@@ -1608,8 +1673,7 @@ export default function MohammadLedgerApp() {
       rate: movement.rate ? String(movement.rate) : '',
       note: movement.note || '',
     })
-    setMovements((current) => current.filter((item) => item.id !== movement.id))
-    setFeedback('الحركة جاهزة للتعديل.')
+    setFeedback('الحركة مفتوحة للتعديل. لن تتغير الأرصدة إلا بعد الحفظ.')
   }
 
   function resolveReviewMovement(event, movement, reviewDraft) {
@@ -1630,6 +1694,52 @@ export default function MohammadLedgerApp() {
     )
     setMovements((current) => current.map((item) => (item.id === movement.id ? candidate : item)))
     setFeedback(candidate.status === MOVEMENT_STATUSES.POSTED ? 'تم إصلاح الحركة.' : 'ما زالت ناقصة.')
+  }
+
+  function restoreBackup(backup) {
+    if (!backup?.state) return
+    const ok = window.confirm('استرجاع هذه النسخة سيستبدل الحالة الحالية ثم يحفظها على السحابة. هل تريد المتابعة؟')
+    if (!ok) return
+    setAccounts(normalizeStoredAccounts(backup.state.accounts || []))
+    setMovements(Array.isArray(backup.state.movements) ? backup.state.movements : [])
+    setFeedback('تم استرجاع النسخة. يتم حفظها الآن.')
+    setBackupSnapshots(listLocalMohammadBackups())
+  }
+
+  function refreshBackups() {
+    setBackupSnapshots(listLocalMohammadBackups())
+    setFeedback('تم تحديث قائمة النسخ المحلية.')
+  }
+
+  function renderHealthPanel() {
+    const latestBackup = backupSnapshots[0] || null
+    return (
+      <section className="ml3-health-panel">
+        <div className="ml3-health-head">
+          <h2>صحة الدفتر</h2>
+          <span>{storageText}</span>
+        </div>
+        <div className="ml3-health-grid">
+          {ledgerHealthItems.map((item) => (
+            <article className={`ml3-health-item is-${item.tone}`} key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </article>
+          ))}
+        </div>
+        <div className="ml3-backup-actions">
+          <button type="button" onClick={refreshBackups}>تحديث النسخ</button>
+          <button type="button" disabled={!latestBackup} onClick={() => restoreBackup(latestBackup)}>
+            استرجاع آخر نسخة
+          </button>
+        </div>
+        {latestBackup ? (
+          <p>آخر نسخة: {movementDateTime(latestBackup.savedAt)} · {formatCount(latestBackup.movementCount)} حركة</p>
+        ) : (
+          <p>لا توجد نسخة محلية محفوظة بعد.</p>
+        )}
+      </section>
+    )
   }
 
   function renderAccountsSection() {
@@ -1823,13 +1933,7 @@ export default function MohammadLedgerApp() {
     )
   }
 
-  const storageText = {
-    loading: 'تحميل',
-    saving: 'حفظ',
-    saved: storageMode === 'supabase' ? 'سحابي' : 'محلي',
-    local: 'هذا الجهاز',
-    'local-only': 'سحابة ناقصة',
-  }[saveStatus] || 'محلي'
+  const storageText = storageTextForStatus(saveStatus, storageMode)
 
   return (
     <main className="ml3-app" dir="rtl">
@@ -1895,6 +1999,12 @@ export default function MohammadLedgerApp() {
               <div className="ml3-undo-banner">
                 <span>{pendingUndo.label}</span>
                 <button type="button" onClick={undoPendingMovement}>تراجع</button>
+              </div>
+            ) : null}
+            {editingMovementId ? (
+              <div className="ml3-edit-banner">
+                <span>تعديل حركة محفوظة</span>
+                <button type="button" onClick={() => { setEditingMovementId(''); setMovementDraft(emptyMovementDraft(movementDraft.type)); setMovementStep(MOVEMENT_ENTRY_STEPS.TYPE); setFeedback('تم ترك التعديل بدون تغيير الحركة.') }}>ترك</button>
               </div>
             ) : null}
             <div className="ml3-entry-mode">
@@ -2191,6 +2301,7 @@ export default function MohammadLedgerApp() {
                 </div>
               </section>
             ) : null}
+            {renderHealthPanel()}
 
             {activeEntryMode === 'account' ? (
             <form className="ml3-add-account" onSubmit={addAccount}>

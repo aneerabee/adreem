@@ -120,6 +120,18 @@ function writeLocalBackup(state) {
   window.localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(nextBackups))
 }
 
+export function listLocalMohammadBackups() {
+  if (!hasBrowserStorage()) return []
+  try {
+    const rawBackups = window.localStorage.getItem(BACKUP_STORAGE_KEY)
+    const backups = rawBackups ? JSON.parse(rawBackups) : []
+    return Array.isArray(backups) ? backups.filter((backup) => backup?.state) : []
+  } catch (err) {
+    console.warn('[mohammad-persistence] backup list failed:', err?.message || err)
+    return []
+  }
+}
+
 async function loadRemoteMohammadState(fallbackState) {
   const client = getSupabaseClient()
   if (!client) return null

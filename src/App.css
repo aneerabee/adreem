@@ -5609,7 +5609,8 @@ tbody tr:hover {
   grid-column: 1 / -1;
 }
 
-.ml3-undo-banner {
+.ml3-undo-banner,
+.ml3-edit-banner {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
@@ -5626,14 +5627,22 @@ tbody tr:hover {
   animation: ml3-rise 0.18s ease both;
 }
 
-.ml3-undo-banner span {
+.ml3-edit-banner {
+  border-color: #d7c2ef;
+  background: #f7f1ff;
+  color: #503a86;
+}
+
+.ml3-undo-banner span,
+.ml3-edit-banner span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ml3-undo-banner button {
+.ml3-undo-banner button,
+.ml3-edit-banner button {
   border: 0;
   border-radius: 999px;
   background: #17613d;
@@ -5643,6 +5652,109 @@ tbody tr:hover {
   font-size: 0.75rem;
   font-weight: 950;
   cursor: pointer;
+}
+
+.ml3-edit-banner button {
+  background: #7052bd;
+}
+
+.ml3-health-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  border: 1px solid #d9e1d7;
+  border-radius: 12px;
+  background: #fbfdf9;
+  padding: 8px;
+}
+
+.ml3-health-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ml3-health-head h2 {
+  margin: 0;
+  color: #25352d;
+  font-size: 0.96rem;
+}
+
+.ml3-health-head span {
+  border-radius: 999px;
+  background: #e4f5eb;
+  color: #137144;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.ml3-health-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.ml3-health-item {
+  min-width: 0;
+  border-radius: 10px;
+  background: #eef2ed;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+
+.ml3-health-item span,
+.ml3-health-panel p {
+  margin: 0;
+  color: #68756f;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.ml3-health-item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #25352d;
+  font-size: 0.8rem;
+  font-weight: 950;
+}
+
+.ml3-health-item.is-ok {
+  background: #e4f8ec;
+}
+
+.ml3-health-item.is-warn {
+  background: #fff1d8;
+}
+
+.ml3-backup-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.ml3-backup-actions button {
+  border: 0;
+  border-radius: 10px;
+  min-height: 42px;
+  background: #25352d;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.ml3-backup-actions button:disabled {
+  background: #d9e1d7;
+  color: #708078;
+  cursor: not-allowed;
 }
 
 .ml3-entry-mode {
@@ -7373,13 +7485,15 @@ tbody tr:hover {
 .ml3-account-main {
   border: 0;
   background: transparent;
-  padding: 0;
+  min-height: 44px;
+  padding: 7px 0;
   text-align: inherit;
   font: inherit;
   color: inherit;
   cursor: pointer;
   display: grid;
-  gap: 0;
+  align-content: center;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -8167,6 +8281,14 @@ tbody tr:hover {
 
   .ml3-entry-card {
     gap: 4px;
+  }
+
+  .ml3-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-health-panel {
+    padding: 7px;
   }
 
   .ml3-step {
