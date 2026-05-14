@@ -1,12 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
+import {
+  MOHAMMAD_STATE_ROW_ID,
+  MOHAMMAD_STATE_TABLE,
+  mergeLedgerStates,
+  normalizeLedgerState,
+  stateTimestamp,
+} from './ledgerState.js'
 
 export const MOHAMMAD_STORAGE_KEY = 'mohammad-ledger-v1'
 
 const BACKUP_STORAGE_KEY = 'mohammad-ledger-backups-v1'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-const SUPABASE_TABLE = 'ml_state'
-const STATE_ROW_ID = 'default'
 const BACKUP_LIMIT = 12
 
 let cachedClient = null
@@ -27,52 +32,6 @@ function getSupabaseClient() {
 
 export function getMohammadPersistenceMode() {
   return getSupabaseClient() ? 'supabase' : 'local'
-}
-
-function normalizeLedgerState(state, fallbackState) {
-  const safeState = state && typeof state === 'object' ? state : {}
-  const accounts = Array.isArray(safeState.accounts) ? safeState.accounts : fallbackState.accounts
-  const movements = Array.isArray(safeState.movements) ? safeState.movements : fallbackState.movements
-  return {
-    accounts,
-    movements,
-    version: 1,
-    savedAt: safeState.savedAt || new Date().toISOString(),
-  }
-}
-
-function stateTimestamp(state) {
-  const time = new Date(state?.savedAt || 0).getTime()
-  return Number.isFinite(time) ? time : 0
-}
-
-function recordTimestamp(record) {
-  const time = new Date(record?.updatedAt || record?.reviewedAt || record?.disabledAt || record?.voidedAt || record?.createdAt || 0).getTime()
-  return Number.isFinite(time) ? time : 0
-}
-
-function mergeRecordsById(left = [], right = []) {
-  const byId = new Map()
-  for (const record of [...left, ...right]) {
-    if (!record?.id) continue
-    const existing = byId.get(record.id)
-    if (!existing || recordTimestamp(record) >= recordTimestamp(existing)) {
-      byId.set(record.id, record)
-    }
-  }
-  return Array.from(byId.values())
-}
-
-function mergeLedgerStates(localState, remoteState, fallbackState) {
-  const local = normalizeLedgerState(localState, fallbackState)
-  const remote = normalizeLedgerState(remoteState, fallbackState)
-  const savedAt = stateTimestamp(remote) >= stateTimestamp(local) ? remote.savedAt : local.savedAt
-  return {
-    version: 1,
-    savedAt,
-    accounts: mergeRecordsById(local.accounts, remote.accounts),
-    movements: mergeRecordsById(local.movements, remote.movements),
-  }
 }
 
 function chooseFreshestState(localState, remoteState, fallbackState) {
@@ -124,9 +83,9 @@ async function loadRemoteMohammadState(fallbackState) {
   const client = getSupabaseClient()
   if (!client) return null
   const { data, error } = await client
-    .from(SUPABASE_TABLE)
+    .from(MOHAMMAD_STATE_TABLE)
     .select('payload')
-    .eq('id', STATE_ROW_ID)
+    .eq('id', MOHAMMAD_STATE_ROW_ID)
     .maybeSingle()
 
   if (error) throw error
@@ -137,9 +96,9 @@ async function loadRemoteMohammadState(fallbackState) {
 async function saveRemoteMohammadState(state) {
   const client = getSupabaseClient()
   if (!client) return
-  const { error } = await client.from(SUPABASE_TABLE).upsert(
+  const { error } = await client.from(MOHAMMAD_STATE_TABLE).upsert(
     {
-      id: STATE_ROW_ID,
+      id: MOHAMMAD_STATE_ROW_ID,
       payload: state,
       updated_at: new Date().toISOString(),
     },

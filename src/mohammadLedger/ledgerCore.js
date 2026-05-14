@@ -1,4 +1,9 @@
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, buildAccountMap } from './accountCatalog'
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, buildAccountMap } from './accountCatalog.js'
+import {
+  areTransferAccountsCompatible,
+  sameLogicalAccount,
+  transferCompatibilityMessage,
+} from './accountCompatibility.js'
 
 export const CURRENCIES = {
   DINAR: 'LYD',
@@ -133,13 +138,11 @@ export function validateMovement(movement, accounts = []) {
   if (TWO_SIDED_TYPES.has(type) && sourceId && destinationId && sourceId !== destinationId) {
     const sourceAccount = accountMap.get(sourceId)
     const destinationAccount = accountMap.get(destinationId)
-    if (
-      sourceAccount &&
-      destinationAccount &&
-      String(sourceAccount.ownerName || '').trim() === String(destinationAccount.ownerName || '').trim() &&
-      String(sourceAccount.subAccountName || '').trim() === String(destinationAccount.subAccountName || '').trim()
-    ) {
+    if (sameLogicalAccount(sourceAccount, destinationAccount)) {
       errors.push({ field: 'destinationAccountId', message: 'لا يمكن التحويل بين نفس الاسم ونفس التفصيل.' })
+    }
+    if (type === MOVEMENT_TYPES.TRANSFER && !areTransferAccountsCompatible(sourceAccount, destinationAccount, currency)) {
+      errors.push({ field: 'destinationAccountId', message: transferCompatibilityMessage(sourceAccount, destinationAccount, currency) })
     }
   }
   if ((type === MOVEMENT_TYPES.USD_SALE || type === MOVEMENT_TYPES.USD_PURCHASE) && (!Number.isFinite(movement?.rate) || movement.rate <= 0)) {

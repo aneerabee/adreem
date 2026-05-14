@@ -5,7 +5,6 @@ import {
   VALUE_KINDS,
   getActivePostingAccounts,
   knownExternalAccounts,
-  mohammadAccountCatalog,
 } from './accountCatalog'
 import {
   CURRENCIES,
@@ -13,7 +12,6 @@ import {
   MOVEMENT_TYPES,
   buildPostingEntries,
   createAccount,
-  createOpeningMovements,
   postMovement,
   previewMovement,
   summarizeBalances,
@@ -26,17 +24,24 @@ import {
   loadMohammadPersistedState,
   saveMohammadPersistedState,
 } from './mohammadPersistence'
-
-const movementLabels = {
-  [MOVEMENT_TYPES.TRANSFER]: 'تحويل',
-  [MOVEMENT_TYPES.EXPENSE]: 'مصروف',
-  [MOVEMENT_TYPES.TRUCK_EXPENSE]: 'مصروف شاحنة',
-  [MOVEMENT_TYPES.TRUCK_INCOME]: 'دخل شاحنة',
-  [MOVEMENT_TYPES.USD_SALE]: 'بعت دولار',
-  [MOVEMENT_TYPES.USD_PURCHASE]: 'اشتريت دولار',
-  [MOVEMENT_TYPES.EXTERNAL_INCOME]: 'دخل',
-  [MOVEMENT_TYPES.CORRECTION]: 'تعديل رصيد',
-}
+import {
+  createMohammadFallbackState,
+  normalizeMohammadAccounts,
+  sameRecordVersions,
+} from './ledgerState'
+import {
+  MOVEMENT_ENTRY_STEPS,
+  movementConfigFor,
+  movementDefaultsFor,
+  movementLabels,
+  movementPreferredAccountIds,
+  movementTone,
+  movementTypeOptions,
+} from './movementConfig'
+import {
+  getMovementAccounts,
+  sameLogicalAccount,
+} from './movementAccounts'
 
 const sectionTabs = [
   { key: 'entry', label: 'إدخال' },
@@ -45,94 +50,6 @@ const sectionTabs = [
   { key: 'history', label: 'السجل' },
 ]
 
-const movementTypeOptions = [
-  {
-    type: MOVEMENT_TYPES.TRANSFER,
-    label: 'تحويل',
-    detail: 'من حساب إلى حساب',
-    tone: 'transfer',
-  },
-  {
-    type: MOVEMENT_TYPES.EXPENSE,
-    label: 'مصروف',
-    detail: 'يخصم من مكان واحد',
-    tone: 'expense',
-  },
-  {
-    type: MOVEMENT_TYPES.USD_SALE,
-    label: 'بعت دولار',
-    detail: 'دولار يخرج ودينار يدخل',
-    tone: 'sale',
-  },
-  {
-    type: MOVEMENT_TYPES.USD_PURCHASE,
-    label: 'اشتريت دولار',
-    detail: 'دينار يخرج ودولار يدخل',
-    tone: 'purchase',
-  },
-]
-
-const movementConfigs = {
-  [MOVEMENT_TYPES.TRANSFER]: {
-    amountLabel: 'المبلغ',
-    currencyLocked: false,
-    needsDestination: true,
-    needsRate: false,
-    sourceLabel: 'من',
-    destinationLabel: 'إلى',
-    routeTitle: 'الأطراف',
-  },
-  [MOVEMENT_TYPES.EXPENSE]: {
-    amountLabel: 'المبلغ',
-    currencyLocked: false,
-    needsDestination: false,
-    needsRate: false,
-    sourceLabel: 'يخصم من',
-    routeTitle: 'الحساب',
-  },
-  [MOVEMENT_TYPES.USD_SALE]: {
-    amountLabel: 'كم دولار بعت؟',
-    currency: CURRENCIES.USD,
-    currencyText: 'دولار',
-    currencyLocked: true,
-    needsDestination: true,
-    needsRate: true,
-    rateLabel: 'سعر بيع الدولار',
-    sourceLabel: 'الدولار يخرج من',
-    destinationLabel: 'الدينار يدخل إلى',
-    routeTitle: 'اتجاه البيع',
-  },
-  [MOVEMENT_TYPES.USD_PURCHASE]: {
-    amountLabel: 'كم دينار دفعت؟',
-    currency: CURRENCIES.DINAR,
-    currencyText: 'دينار',
-    currencyLocked: true,
-    needsDestination: true,
-    needsRate: true,
-    rateLabel: 'سعر شراء الدولار',
-    sourceLabel: 'الدينار يخرج من',
-    destinationLabel: 'الدولار يدخل إلى',
-    routeTitle: 'اتجاه الشراء',
-  },
-}
-
-const movementDefaultAccounts = {
-  [MOVEMENT_TYPES.TRANSFER]: { sourceAccountId: 'me-cash', destinationAccountId: 'saeed-cash' },
-  [MOVEMENT_TYPES.EXPENSE]: { sourceAccountId: 'me-cash', destinationAccountId: '' },
-  [MOVEMENT_TYPES.USD_SALE]: { sourceAccountId: 'me-cash', destinationAccountId: 'me-jumhouria' },
-  [MOVEMENT_TYPES.USD_PURCHASE]: { sourceAccountId: 'me-jumhouria', destinationAccountId: 'me-cash' },
-}
-
-const MOVEMENT_ENTRY_STEPS = {
-  TYPE: 1,
-  AMOUNT: 2,
-  CURRENCY: 3,
-  RATE: 4,
-  SOURCE: 5,
-  DESTINATION: 6,
-  NOTE: 7,
-  REVIEW: 8,
-}
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -206,35 +123,10 @@ const accountTypeLabels = {
   [ACCOUNT_TYPES.REVIEW]: 'يحتاج حل',
 }
 
-function normalizeStoredAccounts(accounts = []) {
-  return accounts.map((account) => {
-    if (account.id === 'saeed-bank' && account.type === ACCOUNT_TYPES.BANK && account.valueKind === VALUE_KINDS.BANK) {
-      return {
-        ...account,
-        type: ACCOUNT_TYPES.PERSON,
-        valueKind: VALUE_KINDS.RECEIVABLE,
-        notes: account.notes || 'فرع مصرفي لشخص، وليس مكان مال خاص بي.',
-      }
-    }
-    return account
-  })
-}
-
-function sameRecordVersions(left = [], right = []) {
-  if (left.length !== right.length) return false
-  const version = (item) => item.updatedAt || item.reviewedAt || item.disabledAt || item.mergedIntoAccountId || item.createdAt || item.voidedAt || item.status || ''
-  const leftKeys = left.map((item) => `${item.id}:${version(item)}`).sort()
-  const rightKeys = right.map((item) => `${item.id}:${version(item)}`).sort()
-  return leftKeys.every((key, index) => key === rightKeys[index])
-}
-
 function loadInitialLedgerState() {
-  const fallback = {
-    accounts: normalizeStoredAccounts(mohammadAccountCatalog),
-    movements: createOpeningMovements(mohammadAccountCatalog),
-  }
+  const fallback = createMohammadFallbackState()
   const localState = loadLocalMohammadState(fallback)
-  return { ...localState, accounts: normalizeStoredAccounts(localState.accounts) }
+  return { ...localState, accounts: normalizeMohammadAccounts(localState.accounts) }
 }
 
 function money(value, currency = CURRENCIES.DINAR) {
@@ -283,8 +175,8 @@ function parseWholeAmount(value) {
 }
 
 function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
-  const config = movementConfigs[type] || movementConfigs[MOVEMENT_TYPES.TRANSFER]
-  const defaults = movementDefaultAccounts[type] || movementDefaultAccounts[MOVEMENT_TYPES.TRANSFER]
+  const config = movementConfigFor(type)
+  const defaults = movementDefaultsFor(type)
   return {
     type,
     amount: '',
@@ -315,14 +207,6 @@ function movementStatusLabel(status) {
   if (status === MOVEMENT_STATUSES.NEEDS_REVIEW) return 'ناقص'
   if (status === MOVEMENT_STATUSES.VOIDED) return 'ملغي'
   return 'مسودة'
-}
-
-function movementTone(type) {
-  if (type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) return 'expense'
-  if (type === MOVEMENT_TYPES.USD_SALE) return 'sale'
-  if (type === MOVEMENT_TYPES.USD_PURCHASE) return 'purchase'
-  if (type === MOVEMENT_TYPES.TRANSFER) return 'transfer'
-  return 'neutral'
 }
 
 function movementTime(value) {
@@ -438,17 +322,6 @@ function accountBalanceChip(account, bucket) {
     tone: dinar > 0 ? 'positive' : 'negative',
     text: dinar > 0 ? `أقبض ${money(dinar)}` : `أدفع ${money(Math.abs(dinar))}`,
   }
-}
-
-function sameLogicalAccount(left, right) {
-  if (!left || !right) return false
-  return (
-    left.id === right.id ||
-    (
-      String(left.ownerName || '').trim() === String(right.ownerName || '').trim() &&
-      String(left.subAccountName || '').trim() === String(right.subAccountName || '').trim()
-    )
-  )
 }
 
 function compareBalanceBuckets(a, b) {
@@ -986,26 +859,17 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
     rate: movement.rate ? String(movement.rate) : '',
     note: movement.note || '',
   })
-  const reviewConfig = movementConfigs[reviewDraft.type] || movementConfigs[MOVEMENT_TYPES.TRANSFER]
+  const reviewConfig = movementConfigFor(reviewDraft.type)
   const reviewSourceAccount = activeAccounts.find((account) => account.id === reviewDraft.sourceAccountId)
   const reviewDestinationAccount = activeAccounts.find((account) => account.id === reviewDraft.destinationAccountId)
-  const postingAccounts = activeAccounts.filter((account) =>
-    account.valueKind !== VALUE_KINDS.EXPENSE &&
-    account.valueKind !== VALUE_KINDS.ASSET &&
-    account.status === ACCOUNT_STATUSES.ACTIVE
-  )
-  const reviewSourceAccounts = reviewDestinationAccount
-    ? postingAccounts.filter((account) => !sameLogicalAccount(account, reviewDestinationAccount))
-    : postingAccounts
-  const reviewDestinationAccounts = reviewSourceAccount
-    ? postingAccounts.filter((account) => !sameLogicalAccount(account, reviewSourceAccount))
-    : postingAccounts
+  const reviewSourceAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'source', reviewDraft)
+  const reviewDestinationAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'destination', reviewDraft)
 
   function updateReviewDraft(field, value) {
     setReviewDraft((current) => {
       const next = { ...current, [field]: value }
       if (field === 'type') {
-        const config = movementConfigs[value] || movementConfigs[MOVEMENT_TYPES.TRANSFER]
+        const config = movementConfigFor(value)
         next.currency = config.currency || next.currency
         next.destinationAccountId = config.needsDestination ? next.destinationAccountId : ''
         next.rate = config.needsRate ? next.rate : ''
@@ -1069,7 +933,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
             value={reviewDraft.sourceAccountId || ''}
             accounts={reviewSourceAccounts}
             onChange={(value) => updateReviewDraft('sourceAccountId', value || '')}
-            preferredAccountIds={['me-cash', 'me-jumhouria', 'saeed-cash', 'saeed-bank']}
+            preferredAccountIds={movementPreferredAccountIds(reviewDraft.type, 'source')}
             balanceByAccountId={balanceByAccountId}
           />
         </div>
@@ -1080,7 +944,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
               value={reviewDraft.destinationAccountId || ''}
               accounts={reviewDestinationAccounts}
               onChange={(value) => updateReviewDraft('destinationAccountId', value || '')}
-              preferredAccountIds={['me-cash', 'me-jumhouria', 'saeed-cash', 'saeed-bank']}
+              preferredAccountIds={movementPreferredAccountIds(reviewDraft.type, 'destination')}
               balanceByAccountId={balanceByAccountId}
             />
           </div>
@@ -1240,7 +1104,7 @@ export default function MohammadLedgerApp() {
     )
   }, [balances])
 
-  const movementConfig = movementConfigs[movementDraft.type] || movementConfigs[MOVEMENT_TYPES.TRANSFER]
+  const movementConfig = movementConfigFor(movementDraft.type)
   const normalizedDraft = {
     ...movementDraft,
     amount: parseWholeAmount(movementDraft.amount),
@@ -1270,7 +1134,7 @@ export default function MohammadLedgerApp() {
       const result = await loadMohammadPersistedState(initialState)
       if (cancelled) return
       setStorageMode(result.mode)
-      setAccounts(normalizeStoredAccounts(result.state.accounts))
+      setAccounts(normalizeMohammadAccounts(result.state.accounts))
       setMovements(result.state.movements)
       setSaveStatus(result.loadError ? 'local-only' : 'saved')
       setSyncProblem(Boolean(result.loadError))
@@ -1299,7 +1163,7 @@ export default function MohammadLedgerApp() {
         setSyncProblem(hasSyncProblem)
         setSaveStatus(result.supabaseOk ? 'saved' : (result.mode === 'supabase' ? 'local-only' : 'local'))
         if (result.state) {
-          const mergedAccounts = normalizeStoredAccounts(result.state.accounts)
+          const mergedAccounts = normalizeMohammadAccounts(result.state.accounts)
           const mergedMovements = result.state.movements || []
           if (!sameRecordVersions(accounts, mergedAccounts)) setAccounts(mergedAccounts)
           if (!sameRecordVersions(movements, mergedMovements)) setMovements(mergedMovements)
@@ -1344,12 +1208,19 @@ export default function MohammadLedgerApp() {
   }, [activeSection, activeReviewKey, reviewItems])
 
   function updateMovementDraft(field, value) {
-    setMovementDraft((current) => ({ ...current, [field]: value }))
+    setMovementDraft((current) => {
+      const next = { ...current, [field]: value }
+      if (field === 'currency') {
+        next.sourceAccountId = ''
+        next.destinationAccountId = ''
+      }
+      return next
+    })
   }
 
   function chooseMovementType(type) {
-    const config = movementConfigs[type] || movementConfigs[MOVEMENT_TYPES.TRANSFER]
-    const defaults = movementDefaultAccounts[type] || movementDefaultAccounts[MOVEMENT_TYPES.TRANSFER]
+    const config = movementConfigFor(type)
+    const defaults = movementDefaultsFor(type)
     setMovementStep(MOVEMENT_ENTRY_STEPS.AMOUNT)
     setMovementDraft((current) => ({
       ...current,
@@ -1390,41 +1261,11 @@ export default function MohammadLedgerApp() {
   }
 
   function movementAccountsFor(role) {
-    const isPostingAccount = (account) =>
-      account.valueKind !== VALUE_KINDS.EXPENSE &&
-      account.valueKind !== VALUE_KINDS.ASSET &&
-      account.status === ACCOUNT_STATUSES.ACTIVE
-    const moneyOrPerson = activeAccounts.filter(isPostingAccount)
-    const usdReadyAccounts = moneyOrPerson.filter((account) => {
-      const hasUsdBalance = Math.abs(balanceByAccountId.get(account.id)?.usd || 0) > 0.000001
-      const text = `${account.ownerName || ''} ${account.subAccountName || ''} ${account.legacyName || ''}`.toLowerCase()
-      return hasUsdBalance || /دولار|usd|\$/.test(text)
-    })
-    const sourceAccount = accountById.get(movementDraft.sourceAccountId)
-    const destinationAccount = accountById.get(movementDraft.destinationAccountId)
-    const removeLogicalDuplicate = (list, compareAccount) =>
-      compareAccount ? list.filter((account) => !sameLogicalAccount(account, compareAccount)) : list
-
-    if (movementDraft.type === MOVEMENT_TYPES.USD_SALE && role === 'source') {
-      return usdReadyAccounts.length ? usdReadyAccounts : moneyOrPerson
-    }
-    if (movementDraft.type === MOVEMENT_TYPES.USD_PURCHASE && role === 'destination') {
-      return removeLogicalDuplicate(usdReadyAccounts.length ? usdReadyAccounts : moneyOrPerson, sourceAccount)
-    }
-    if (role === 'destination') {
-      return removeLogicalDuplicate(moneyOrPerson, sourceAccount)
-    }
-    if (role === 'source') {
-      return removeLogicalDuplicate(moneyOrPerson, destinationAccount)
-    }
-    return moneyOrPerson
+    return getMovementAccounts(accounts, balanceByAccountId, movementDraft.type, role, movementDraft)
   }
 
   function preferredMovementAccountIds(role) {
-    if (movementDraft.type === MOVEMENT_TYPES.EXPENSE && role === 'source') {
-      return ['me-cash', 'me-jumhouria', 'saeed-cash', 'saeed-bank']
-    }
-    return []
+    return movementPreferredAccountIds(movementDraft.type, role)
   }
 
   function chooseAccountPreset(preset) {
@@ -1665,7 +1506,7 @@ export default function MohammadLedgerApp() {
 
   function resolveReviewMovement(event, movement, reviewDraft) {
     event.preventDefault()
-    const config = movementConfigs[reviewDraft.type] || movementConfigs[MOVEMENT_TYPES.TRANSFER]
+    const config = movementConfigFor(reviewDraft.type)
     const candidate = postMovement(
       {
         ...movement,

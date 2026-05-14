@@ -122,6 +122,54 @@ describe('mohammad ledger core', () => {
     expect(movement.validation.errors.some((error) => error.message.includes('نفس الاسم'))).toBe(true)
   })
 
+  it('rejects normal transfers between different account kinds', () => {
+    const movement = postMovement(
+      {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 100,
+        currency: CURRENCIES.DINAR,
+        sourceAccountId: 'me-cash',
+        destinationAccountId: 'me-jumhouria',
+      },
+      mohammadAccountCatalog,
+    )
+
+    expect(movement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(movement.validation.errors.some((error) => error.message.includes('نفس النوع'))).toBe(true)
+  })
+
+  it('keeps currency exchange flows available for cash-to-bank conversion', () => {
+    const sale = postMovement(
+      {
+        type: MOVEMENT_TYPES.USD_SALE,
+        amount: 100,
+        currency: CURRENCIES.USD,
+        rate: 7.5,
+        sourceAccountId: 'me-cash',
+        destinationAccountId: 'me-jumhouria',
+      },
+      mohammadAccountCatalog,
+    )
+
+    expect(sale.status).toBe(MOVEMENT_STATUSES.POSTED)
+  })
+
+  it('rejects normal usd transfers into accounts that are not dollar-ready', () => {
+    const movement = postMovement(
+      {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 100,
+        currency: CURRENCIES.USD,
+        sourceAccountId: 'me-cash',
+        destinationAccountId: 'saeed-cash',
+      },
+      mohammadAccountCatalog,
+    )
+
+    expect(movement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(movement.validation.errors.some((error) => error.message.includes('الدولار'))).toBe(true)
+  })
+
   it('keeps inactive accounts out of balances and posting endpoints', () => {
     const accounts = [
       createAccount({
