@@ -37,6 +37,13 @@ import {
 } from './lib/viewerMode'
 import { buildSettlementHistory, summarizeSettlementHistory } from './lib/settlementHistory'
 import { buildAttentionAlerts } from './lib/attentionBoard'
+import {
+  canCancelTransfer,
+  canPermanentlyDeleteTransfer,
+  cancelTransferSafely,
+  getTransferDeletionSafety,
+  summarizeDeletionImpact,
+} from './lib/deletionSafety'
 import AttentionBoard from './components/AttentionBoard'
 import TabNav from './components/TabNav'
 import TransfersTab from './components/TransfersTab'
@@ -559,21 +566,38 @@ function App() {
     if (blockIfReadOnly()) return false
     const transfer = transfers.find((t) => t.id === id)
     if (!transfer) return false
-    if (transfer.settled) {
-      setFeedback('لا يمكن حذف حوالة مسوّاة — تؤثر على قيود المحاسبة ومطالبات الربح.')
+    const safety = getTransferDeletionSafety(transfer, ledgerEntries)
+    if (!safety.ok) {
+      setFeedback(`لا يمكن إلغاء هذه الحوالة: ${safety.reasons.join(' ')}`)
       return false
     }
-    if (transfer.status === 'picked_up') {
-      setFeedback('لا يمكن حذف حوالة تم سحبها لأنها تؤثر على الأرصدة والحسابات.')
-      return false
-    }
-    if (!window.confirm('حذف هذه الحوالة؟ (يمكن استعادتها من قسم "المحذوفات")')) return false
     const now = new Date().toISOString()
+    const impact = summarizeDeletionImpact(transfers, [id])
+    if (impact.financialChanged) {
+      setFeedback('تم إيقاف الإلغاء لأن الفحص وجد أثرا ماليا غير متوقع.')
+      return false
+    }
+    const defaultReason = transfer.status === 'issue' ? 'إلغاء حوالة مشكلة' : 'إلغاء حوالة غير مكتملة'
+    const reason = window.prompt('سبب الإلغاء؟ سيبقى محفوظا مع الحوالة في المحذوفات.', defaultReason)
+    if (reason === null) return false
+    const lines = [
+      'إلغاء آمن للحوالة',
+      '',
+      `الرقم: ${transfer.reference || 'بدون رقم'}`,
+      `الحالة: ${statusMeta[transfer.status]?.label || transfer.status}`,
+      `الحوالات النشطة: ${impact.activeBefore} → ${impact.activeAfter}`,
+      '',
+      'الأرصدة والربح والتسويات لن تتغير.',
+      'يمكن استعادتها من المحذوفات.',
+      '',
+      'تأكيد الإلغاء؟',
+    ]
+    if (!window.confirm(lines.join('\n'))) return false
     setState((s) => ({
       ...s,
-      transfers: s.transfers.map((t) => (t.id === id ? { ...t, deletedAt: now } : t)),
+      transfers: s.transfers.map((t) => (t.id === id ? cancelTransferSafely(t, reason, now) : t)),
     }))
-    setFeedback('تم حذف الحوالة — يمكن استعادتها من قسم المحذوفات.')
+    setFeedback('تم إلغاء الحوالة بأمان — يمكن استعادتها من المحذوفات.')
     return true
   }
 
@@ -584,6 +608,42 @@ function App() {
       transfers: s.transfers.map((t) => (t.id === id ? { ...t, deletedAt: null } : t)),
     }))
     setFeedback('تمت استعادة الحوالة.')
+  }
+
+  function permanentlyDeleteTransfer(id) {
+    if (blockIfReadOnly()) return false
+    const transfer = rawTransfers.find((t) => t.id === id)
+    if (!transfer) return false
+    const safety = getTransferDeletionSafety(transfer, ledgerEntries, { requireDeleted: true })
+    if (!safety.ok) {
+      setFeedback(`لا يمكن الحذف النهائي: ${safety.reasons.join(' ')}`)
+      return false
+    }
+    const phrase = window.prompt(
+      [
+        'حذف نهائي للحوالة من قاعدة البيانات.',
+        `الرقم: ${transfer.reference || 'بدون رقم'}`,
+        'لن تتغير الأرصدة لأنها ملغاة مسبقا، لكن لن تظهر في المحذوفات بعد ذلك.',
+        '',
+        'للتأكيد اكتب: حذف نهائي',
+      ].join('\n'),
+    )
+    if (phrase !== 'حذف نهائي') {
+      setFeedback('لم يتم الحذف النهائي — عبارة التأكيد غير مطابقة.')
+      return false
+    }
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    downloadFile({
+      fileName: `western-office-before-permanent-delete-${stamp}.json`,
+      content: serializeAppState(state),
+      contentType: 'application/json;charset=utf-8;',
+    })
+    setState((s) => ({
+      ...s,
+      transfers: s.transfers.filter((t) => t.id !== id),
+    }))
+    setFeedback('تم الحذف النهائي بعد إنشاء نسخة أمان تلقائية.')
+    return true
   }
 
   function restoreCustomer(id) {
@@ -693,6 +753,26 @@ function App() {
   const deletedCustomers = useMemo(
     () => rawCustomers.filter((c) => c.deletedAt).sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
     [rawCustomers],
+  )
+  const cancellableTransfers = useMemo(
+    () => transfers
+      .filter((t) => canCancelTransfer(t, ledgerEntries))
+      .sort((a, b) => {
+        const statusRank = { issue: 0, received: 1, review_hold: 2, with_employee: 3 }
+        const ar = statusRank[a.status] ?? 9
+        const br = statusRank[b.status] ?? 9
+        if (ar !== br) return ar - br
+        return new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime()
+      }),
+    [transfers, ledgerEntries],
+  )
+  const cancellableImpact = useMemo(
+    () => summarizeDeletionImpact(transfers, cancellableTransfers.map((t) => t.id)),
+    [transfers, cancellableTransfers],
+  )
+  const canPermanentDeleteTransferById = useCallback(
+    (id) => canPermanentlyDeleteTransfer(rawTransfers.find((t) => t.id === id), ledgerEntries),
+    [rawTransfers, ledgerEntries],
   )
 
   // Live receiver color map — used by tables to color receiver cells dynamically
@@ -1383,9 +1463,14 @@ function App() {
         <TrashTab
           deletedTransfers={deletedTransfers}
           deletedCustomers={deletedCustomers}
+          cancellableTransfers={cancellableTransfers}
+          cancellableImpact={cancellableImpact}
           customersById={allCustomersById}
+          onCancelTransfer={deleteTransfer}
           onRestoreTransfer={restoreTransfer}
+          onPermanentDeleteTransfer={permanentlyDeleteTransfer}
           onRestoreCustomer={restoreCustomer}
+          canPermanentDeleteTransfer={canPermanentDeleteTransferById}
           receiverColorMap={receiverColorMap}
         />
       ) : null}
