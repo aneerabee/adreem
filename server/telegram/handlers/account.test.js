@@ -118,4 +118,22 @@ describe('telegram account flow', () => {
     expect(session.step).toBe('amount')
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('عملية قديمة')
   })
+
+  it('ignores stale account buttons from an older account control card', async () => {
+    const ctx = createCtx()
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'account',
+      step: 'owner',
+      uiMessageId: 777,
+      draft: { ownerName: '', subAccountName: 'كاش', type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE },
+    })
+
+    await handleAccountCallback({ ...ctx, messageId: 55 }, 'acct:type:own-bank')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.flow).toBe('account')
+    expect(session.step).toBe('owner')
+    expect(session.draft.type).toBe(ACCOUNT_TYPES.PERSON)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('عملية قديمة')
+  })
 })

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
 import { handleMovementCallback } from './movement.js'
@@ -67,6 +68,32 @@ describe('telegram movement flow safety', () => {
     const session = ctx.sessions.get(ctx.chatId, ctx.userId)
     expect(session.flow).toBe('account')
     expect(session.step).toBe('owner')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('عملية قديمة')
+  })
+
+  it('ignores stale movement buttons from an older movement control card', async () => {
+    const ctx = createCtx()
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      step: 'amount',
+      uiMessageId: 777,
+      draft: {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 0,
+        currency: '',
+        currencyConfirmed: false,
+        sourceAccountId: '',
+        destinationAccountId: '',
+      },
+      choices: {},
+    })
+
+    await handleMovementCallback({ ...ctx, messageId: 55 }, 'mv:type:expense')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.flow).toBe('movement')
+    expect(session.step).toBe('amount')
+    expect(session.draft.type).toBe(MOVEMENT_TYPES.TRANSFER)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('عملية قديمة')
   })
 })

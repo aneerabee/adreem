@@ -103,6 +103,7 @@ export async function startAccount(ctx) {
 export async function handleAccountCallback(ctx, data) {
   const session = ctx.sessions.get(ctx.chatId, ctx.userId)
   if (!session || session.flow !== 'account') return sendExpiredAccountMessage(ctx)
+  if (isStaleAccountCallback(ctx, session)) return sendExpiredAccountMessage(ctx)
 
   if (data === 'acct:cancel') {
     ctx.sessions.clear(ctx.chatId, ctx.userId)
@@ -189,6 +190,10 @@ export async function handleAccountCallback(ctx, data) {
   }
 
   return sendStep(ctx, session)
+}
+
+function isStaleAccountCallback(ctx, session) {
+  return Boolean(ctx.isCallback && session.uiMessageId && ctx.messageId && ctx.messageId !== session.uiMessageId)
 }
 
 async function sendExpiredAccountMessage(ctx) {

@@ -179,6 +179,7 @@ export async function startMovement(ctx) {
 export async function handleMovementCallback(ctx, data) {
   const session = ctx.sessions.get(ctx.chatId, ctx.userId)
   if (!session || session.flow !== 'movement') return sendExpiredMovementMessage(ctx)
+  if (isStaleMovementCallback(ctx, session)) return sendExpiredMovementMessage(ctx)
 
   if (data === 'mv:cancel') {
     ctx.sessions.clear(ctx.chatId, ctx.userId)
@@ -293,6 +294,10 @@ export async function handleMovementCallback(ctx, data) {
   }
 
   return sendStep(ctx, session, 'أمر غير معروف.')
+}
+
+function isStaleMovementCallback(ctx, session) {
+  return Boolean(ctx.isCallback && session.uiMessageId && ctx.messageId && ctx.messageId !== session.uiMessageId)
 }
 
 async function sendExpiredMovementMessage(ctx) {
