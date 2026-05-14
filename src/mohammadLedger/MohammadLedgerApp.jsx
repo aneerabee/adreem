@@ -7,6 +7,15 @@ import {
   knownExternalAccounts,
 } from './accountCatalog'
 import {
+  accountClassificationOptions,
+  accountDetailOptions,
+  accountPresetFor,
+  accountPresets,
+  classificationValueFor as classificationValue,
+  emptyAccountDraft,
+  parseAccountClassification as parseClassification,
+} from './accountConfig'
+import {
   CURRENCIES,
   MOVEMENT_STATUSES,
   MOVEMENT_TYPES,
@@ -53,58 +62,6 @@ const sectionTabs = [
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
-
-const accountPresets = [
-  {
-    key: 'person-cash',
-    title: 'شخص أو جهة',
-    detail: 'رصيد بيننا',
-    type: ACCOUNT_TYPES.PERSON,
-    valueKind: VALUE_KINDS.RECEIVABLE,
-    subAccountName: 'كاش',
-  },
-  {
-    key: 'own-cash',
-    title: 'كاش عندي',
-    detail: 'مكان مال نقدي',
-    type: ACCOUNT_TYPES.CASH,
-    valueKind: VALUE_KINDS.CASH,
-    subAccountName: 'كاش',
-  },
-  {
-    key: 'own-bank',
-    title: 'حساب مصرفي',
-    detail: 'مكان مال مصرفي',
-    type: ACCOUNT_TYPES.BANK,
-    valueKind: VALUE_KINDS.BANK,
-    subAccountName: 'مصرفي',
-  },
-  {
-    key: 'asset',
-    title: 'أصل',
-    detail: 'شيء له قيمة',
-    type: ACCOUNT_TYPES.ASSET,
-    valueKind: VALUE_KINDS.ASSET,
-    subAccountName: 'أصل',
-  },
-  {
-    key: 'expense',
-    title: 'مصروف',
-    detail: 'خرج نهائيًا',
-    type: ACCOUNT_TYPES.EXPENSE,
-    valueKind: VALUE_KINDS.EXPENSE,
-    subAccountName: 'مصروف',
-  },
-]
-
-const accountDetailOptions = ['كاش', 'مصرفي', 'دولار', 'حساب', 'أصل', 'مصروف']
-
-const accountClassificationOptions = accountPresets.map((preset) => ({
-  value: `${preset.type}|${preset.valueKind}`,
-  label: preset.title,
-  type: preset.type,
-  valueKind: preset.valueKind,
-}))
 
 const accountGroupTabs = [
   { key: 'people', label: 'الناس + مالي', title: 'الناس + مالي' },
@@ -188,16 +145,6 @@ function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
   }
 }
 
-function emptyAccountDraft() {
-  return {
-    ownerName: '',
-    subAccountName: 'كاش',
-    type: ACCOUNT_TYPES.PERSON,
-    valueKind: VALUE_KINDS.RECEIVABLE,
-    notes: '',
-  }
-}
-
 function accountLabel(account) {
   return account ? `${account.ownerName} / ${account.subAccountName}` : ''
 }
@@ -246,16 +193,6 @@ function storageTextForStatus(saveStatus, storageMode) {
     local: 'هذا الجهاز',
     'local-only': 'سحابة ناقصة',
   }[saveStatus] || 'محلي'
-}
-
-function classificationValue(account) {
-  return `${account?.type || ACCOUNT_TYPES.PERSON}|${account?.valueKind || VALUE_KINDS.RECEIVABLE}`
-}
-
-function parseClassification(value) {
-  const [type, valueKind] = String(value || '').split('|')
-  const option = accountClassificationOptions.find((item) => item.type === type && item.valueKind === valueKind)
-  return option || accountClassificationOptions[0]
 }
 
 function nonZero(bucket) {
@@ -2088,7 +2025,7 @@ export default function MohammadLedgerApp() {
               <div className="ml3-entry-head">
                 <div>
                   <span>حساب جديد</span>
-                  <h2>{accountPresets.find((preset) => preset.type === accountDraft.type && preset.valueKind === accountDraft.valueKind)?.title || 'حساب'}</h2>
+                  <h2>{accountPresetFor(accountDraft.type, accountDraft.valueKind).title}</h2>
                 </div>
                 <b>{accountDraft.subAccountName}</b>
               </div>

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { accountDetailOptions, accountPresets } from '../../src/mohammadLedger/accountConfig.js'
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
 import { movementTypeOptions } from '../../src/mohammadLedger/movementConfig.js'
 import {
@@ -10,11 +11,61 @@ export function mainMenuKeyboard() {
   return {
     inline_keyboard: [
       [{ text: '➕ إدخال حركة', callback_data: 'main:movement', style: 'success' }],
+      [{ text: '➕ حساب جديد', callback_data: 'main:account', style: 'primary' }],
       [{ text: '👥 الحسابات', callback_data: 'main:accounts', style: 'primary' }, { text: '📊 اليوم', callback_data: 'main:today', style: 'primary' }],
       [{ text: '📒 السجل', callback_data: 'main:history' }, { text: '⚠️ مراجعة', callback_data: 'main:review' }],
       [{ text: '🔎 بحث', callback_data: 'main:search' }],
     ],
   }
+}
+
+export function accountTypeKeyboard(selectedKey = '') {
+  return {
+    inline_keyboard: [
+      ...accountPresets.map((preset) => ([{
+        text: `${selectedKey === preset.key ? '✓ ' : ''}${accountTypeIcon(preset.key)} ${preset.title} · ${preset.detail}`,
+        callback_data: `acct:type:${preset.key}`,
+        style: selectedKey === preset.key ? 'success' : 'primary',
+      }])),
+      [{ text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
+    ],
+  }
+}
+
+export function accountDetailKeyboard(selectedDetail = '') {
+  const rows = accountDetailOptions.map((detail, index) => ([{
+    text: `${selectedDetail === detail ? '✓ ' : ''}${detail}`,
+    callback_data: `acct:detail:${index}`,
+    style: selectedDetail === detail ? 'success' : 'primary',
+  }]))
+  rows.push([{ text: '↩️ رجوع', callback_data: 'acct:back' }, { text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }])
+  return { inline_keyboard: rows }
+}
+
+export function accountConfirmKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: 'تأكيد إنشاء الحساب', callback_data: 'acct:confirm', style: 'success' }],
+      [{ text: '↩️ تعديل التفصيل', callback_data: 'acct:back', style: 'primary' }, { text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
+    ],
+  }
+}
+
+export function accountTextStepKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '↩️ رجوع', callback_data: 'acct:back' }, { text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
+    ],
+  }
+}
+
+function accountTypeIcon(key) {
+  if (key === 'person-cash') return '👤'
+  if (key === 'own-cash') return '💵'
+  if (key === 'own-bank') return '🏦'
+  if (key === 'asset') return '🟣'
+  if (key === 'expense') return '🟠'
+  return '◼'
 }
 
 export function movementTypeKeyboard() {

@@ -6,6 +6,7 @@ import { mainMenuKeyboard } from './keyboards.js'
 import { accountBlockquote, escapeHtml, mainMenuText, movementBlockquote, movementLabels } from './messages.js'
 import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
+import { handleAccountCallback, handleAccountText, startAccount } from './handlers/account.js'
 import { handleMovementCallback, handleMovementText, startMovement } from './handlers/movement.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
@@ -225,11 +226,13 @@ async function handleCallback(update) {
   await telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
 
   if (data === 'main:movement') return startMovement(ctx)
+  if (data === 'main:account') return startAccount(ctx)
   if (data === 'main:accounts') return showAccounts(ctx)
   if (data === 'main:today') return showToday(ctx)
   if (data === 'main:history') return showHistory(ctx)
   if (data === 'main:review') return showReview(ctx)
   if (data === 'main:search') return startSearch(ctx)
+  if (data.startsWith('acct:')) return handleAccountCallback(ctx, data)
   if (data.startsWith('mv:')) return handleMovementCallback(ctx, data)
   return sendScreen(ctx, 'أمر غير معروف.')
 }
@@ -244,6 +247,10 @@ async function handleMessage(update) {
   if (!text) return null
   if (text === '/start' || text === 'القائمة') return showMainMenu(ctx)
   if (await handleMovementText(ctx, text)) {
+    await deleteUserInput(ctx)
+    return null
+  }
+  if (await handleAccountText(ctx, text)) {
     await deleteUserInput(ctx)
     return null
   }

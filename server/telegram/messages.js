@@ -1,4 +1,5 @@
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
+import { accountPresetFor } from '../../src/mohammadLedger/accountConfig.js'
 import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { transferAccountKind } from '../../src/mohammadLedger/accountCompatibility.js'
 import {
@@ -102,6 +103,81 @@ export function mainMenuText(summary = null) {
   }
   lines.push('', '<b>اختر العملية</b>')
   return lines.join('\n')
+}
+
+function accountStepTitle(session) {
+  if (session?.step === 'type') return 'اختر نوع الحساب'
+  if (session?.step === 'owner') return 'اكتب الاسم'
+  if (session?.step === 'detail') return 'اختر التفصيل'
+  if (session?.step === 'review') return 'راجع الحساب'
+  return 'حساب جديد'
+}
+
+function accountStepHelp(session) {
+  if (session?.step === 'type') return 'اختر التصنيف الصحيح قبل كتابة الاسم.'
+  if (session?.step === 'owner') return 'اكتب اسم الشخص أو المكان فقط.'
+  if (session?.step === 'detail') return 'اختر كاش أو مصرفي أو اكتب تفصيلًا قصيرًا.'
+  if (session?.step === 'review') return 'تأكد أن الاسم والتفصيل صحيحان قبل الحفظ.'
+  return ''
+}
+
+export function accountStepText(session) {
+  const draft = session?.draft || {}
+  const preset = accountPresetFor(draft.type, draft.valueKind)
+  const steps = ['type', 'owner', 'detail', 'review']
+  const currentIndex = Math.max(0, steps.indexOf(session?.step))
+  const progress = steps.map((step, index) => (index <= currentIndex ? '●' : '○')).join('')
+  const summary = []
+  if (draft.type) summary.push(htmlLine('النوع', preset.title))
+  if (draft.ownerName) summary.push(htmlLine('الاسم', draft.ownerName))
+  if (draft.subAccountName) summary.push(htmlLine('التفصيل', draft.subAccountName))
+
+  const lines = [
+    '<b>حساب جديد</b>',
+    `<code>${progress}  ${currentIndex + 1}/${steps.length}</code>`,
+    '',
+    ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
+    '<b>السؤال الآن</b>',
+    `<blockquote>${escapeHtml(accountStepTitle(session))}\n${escapeHtml(accountStepHelp(session))}</blockquote>`,
+  ]
+  return lines.join('\n')
+}
+
+export function accountReviewText(session, result = null) {
+  const draft = session?.draft || {}
+  const preset = accountPresetFor(draft.type, draft.valueKind)
+  const lines = [
+    '<b>تأكيد الحساب</b>',
+    '',
+    '<blockquote>',
+    escapeHtml(`${draft.ownerName || 'بدون اسم'} / ${draft.subAccountName || preset.subAccountName}`),
+    '\n',
+    escapeHtml(preset.title),
+    '\n',
+    escapeHtml('الرصيد الافتتاحي: صفر'),
+    '</blockquote>',
+  ]
+  const errors = result?.validation?.errors || []
+  if (errors.length) {
+    lines.push('', '<b>لا يمكن الحفظ الآن</b>')
+    errors.forEach((error) => lines.push(`- ${escapeHtml(error.message)}`))
+  }
+  return lines.join('\n')
+}
+
+export function accountCreatedText(account, { duplicate = false } = {}) {
+  const title = duplicate ? 'كان محفوظًا سابقًا ولم يتكرر.' : 'تم إنشاء الحساب.'
+  const preset = accountPresetFor(account?.type, account?.valueKind)
+  return [
+    `<b>${escapeHtml(title)}</b>`,
+    '<blockquote>',
+    escapeHtml(accountLabel(account)),
+    '\n',
+    escapeHtml(preset.title),
+    '\n',
+    escapeHtml('الرصيد: صفر'),
+    '</blockquote>',
+  ].join('')
 }
 
 export function movementStepText(session, accountsById = new Map()) {
