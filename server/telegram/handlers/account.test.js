@@ -84,7 +84,7 @@ describe('telegram account flow', () => {
 
     await startAccount(ctx)
     await handleAccountCallback(ctx, 'acct:type:own-bank')
-    await handleAccountText({ ...ctx, isCallback: false, messageId: 57 }, 'أنا')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 57 }, 'الجمهورية')
     await handleAccountCallback(ctx, 'acct:back')
 
     const session = ctx.sessions.get(ctx.chatId, ctx.userId)
@@ -92,6 +92,24 @@ describe('telegram account flow', () => {
     expect(session.step).toBe('owner')
     expect(session.draft).toMatchObject({
       ownerName: 'أنا',
+      subAccountName: 'الجمهورية',
+      type: ACCOUNT_TYPES.BANK,
+      valueKind: VALUE_KINDS.BANK,
+    })
+  })
+
+  it('creates my bank account without showing unrelated detail choices', async () => {
+    const ctx = createCtx()
+
+    await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:type:own-bank')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 57 }, 'الجمهورية')
+    await handleAccountCallback(ctx, 'acct:confirm')
+
+    expect(ctx.repository.state.accounts).toHaveLength(1)
+    expect(ctx.repository.state.accounts[0]).toMatchObject({
+      ownerName: 'أنا',
+      subAccountName: 'الجمهورية',
       type: ACCOUNT_TYPES.BANK,
       valueKind: VALUE_KINDS.BANK,
     })

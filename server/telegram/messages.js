@@ -1,5 +1,5 @@
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
-import { accountPresetFor } from '../../src/mohammadLedger/accountConfig.js'
+import { accountNameValue, accountPresetFor } from '../../src/mohammadLedger/accountConfig.js'
 import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { transferAccountKind } from '../../src/mohammadLedger/accountCompatibility.js'
 import {
@@ -86,7 +86,7 @@ function currentStepHelp(session) {
 
 function typeTag(account) {
   if (!account) return ''
-  const kind = transferAccountKind(account) === 'cash' ? 'كاش' : 'مصرف/حساب'
+  const kind = transferAccountKind(account) === 'cash' ? 'كاش' : 'حساب مصرفي'
   if (account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK) return `مالي · ${kind}`
   if (account.valueKind === VALUE_KINDS.RECEIVABLE) return `شخص/جهة · ${kind}`
   if (account.valueKind === VALUE_KINDS.ASSET) return 'أصل'
@@ -106,31 +106,34 @@ export function mainMenuText(summary = null) {
 }
 
 function accountStepTitle(session) {
-  if (session?.step === 'type') return 'اختر نوع الحساب'
-  if (session?.step === 'owner') return 'اكتب الاسم'
-  if (session?.step === 'detail') return 'اختر التفصيل'
+  const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
+  if (session?.step === 'type') return 'اختر التصنيف'
+  if (session?.step === 'owner') return preset.nameLabel || 'اكتب الاسم'
+  if (session?.step === 'detail') return preset.detailLabel || 'اختر التفصيل'
   if (session?.step === 'review') return 'راجع الحساب'
   return 'حساب جديد'
 }
 
 function accountStepHelp(session) {
-  if (session?.step === 'type') return 'اختر التصنيف الصحيح قبل كتابة الاسم.'
-  if (session?.step === 'owner') return 'اكتب اسم الشخص أو المكان فقط.'
-  if (session?.step === 'detail') return 'اختر كاش أو مصرفي أو اكتب تفصيلًا قصيرًا.'
-  if (session?.step === 'review') return 'تأكد أن الاسم والتفصيل صحيحان قبل الحفظ.'
+  const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
+  if (session?.step === 'type') return 'حدد هل هو شخص، مالي عندي، أصل، أو بند مصروف.'
+  if (session?.step === 'owner') return preset.namePlaceholder || 'اكتب الاسم فقط.'
+  if (session?.step === 'detail') return 'حدد كاش أو حساب مصرفي. العملة تختارها عند إدخال الحركة.'
+  if (session?.step === 'review') return 'تأكد من الاسم والتصنيف قبل الحفظ.'
   return ''
 }
 
 export function accountStepText(session) {
   const draft = session?.draft || {}
   const preset = accountPresetFor(draft.type, draft.valueKind)
-  const steps = ['type', 'owner', 'detail', 'review']
+  const steps = ['type', 'owner', ...(preset.skipDetail ? [] : ['detail']), 'review']
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = steps.map((step, index) => (index <= currentIndex ? '●' : '○')).join('')
   const summary = []
   if (draft.type) summary.push(htmlLine('النوع', preset.title))
-  if (draft.ownerName) summary.push(htmlLine('الاسم', draft.ownerName))
-  if (draft.subAccountName) summary.push(htmlLine('التفصيل', draft.subAccountName))
+  const nameValue = accountNameValue(draft)
+  if (nameValue) summary.push(htmlLine(preset.nameLabel || 'الاسم', nameValue))
+  if (!preset.skipDetail && draft.subAccountName) summary.push(htmlLine(preset.detailLabel || 'التفصيل', draft.subAccountName))
 
   const lines = [
     '<b>حساب جديد</b>',

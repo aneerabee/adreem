@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { accountDetailOptions, accountPresets } from '../../src/mohammadLedger/accountConfig.js'
+import { accountPresets } from '../../src/mohammadLedger/accountConfig.js'
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
 import { movementTypeOptions } from '../../src/mohammadLedger/movementConfig.js'
 import {
@@ -32,8 +32,8 @@ export function accountTypeKeyboard(selectedKey = '') {
   }
 }
 
-export function accountDetailKeyboard(selectedDetail = '') {
-  const rows = accountDetailOptions.map((detail, index) => ([{
+export function accountDetailKeyboard(selectedDetail = '', detailOptions = []) {
+  const rows = detailOptions.map((detail, index) => ([{
     text: `${selectedDetail === detail ? '✓ ' : ''}${detail}`,
     callback_data: `acct:detail:${index}`,
     style: selectedDetail === detail ? 'success' : 'primary',

@@ -8,9 +8,11 @@ import {
 } from './accountCatalog'
 import {
   accountClassificationOptions,
-  accountDetailOptions,
+  accountDetailOptionsFor,
+  accountNameValue,
   accountPresetFor,
   accountPresets,
+  applyAccountName,
   classificationValueFor as classificationValue,
   emptyAccountDraft,
   parseAccountClassification as parseClassification,
@@ -71,11 +73,11 @@ const accountGroupTabs = [
 ]
 
 const accountTypeLabels = {
-  [ACCOUNT_TYPES.PERSON]: 'شخص/جهة',
-  [ACCOUNT_TYPES.CASH]: 'كاش',
-  [ACCOUNT_TYPES.BANK]: 'مصرفي',
-  [ACCOUNT_TYPES.EXPENSE]: 'مصروف',
-  [ACCOUNT_TYPES.ASSET]: 'شيء',
+  [ACCOUNT_TYPES.PERSON]: 'شخص / جهة',
+  [ACCOUNT_TYPES.CASH]: 'مالي كاش',
+  [ACCOUNT_TYPES.BANK]: 'حساب مصرفي',
+  [ACCOUNT_TYPES.EXPENSE]: 'بند مصروف',
+  [ACCOUNT_TYPES.ASSET]: 'أصل',
   [ACCOUNT_TYPES.PROJECT]: 'مشروع',
   [ACCOUNT_TYPES.REVIEW]: 'يحتاج حل',
 }
@@ -222,7 +224,7 @@ function visualKind(account) {
 function accountKindText(account) {
   if (!account) return ''
   if (account.valueKind === VALUE_KINDS.CASH) return 'مالي كاش'
-  if (account.valueKind === VALUE_KINDS.BANK) return 'مالي مصرفي'
+  if (account.valueKind === VALUE_KINDS.BANK) return 'مالي حساب مصرفي'
   if (account.valueKind === VALUE_KINDS.ASSET) return 'أصل'
   if (account.valueKind === VALUE_KINDS.EXPENSE) return 'مصروف'
   if (account.status === ACCOUNT_STATUSES.NEEDS_REVIEW || account.valueKind === VALUE_KINDS.REVIEW) return 'مراجعة'
@@ -962,6 +964,9 @@ export default function MohammadLedgerApp() {
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts])
   const balances = useMemo(() => summarizeBalances(accounts, movements), [accounts, movements])
   const balanceByAccountId = useMemo(() => new Map(balances.map((bucket) => [bucket.account.id, bucket])), [balances])
+  const selectedAccountPreset = accountPresetFor(accountDraft.type, accountDraft.valueKind)
+  const selectedAccountDetails = accountDetailOptionsFor(accountDraft.type, accountDraft.valueKind)
+  const accountDraftNameValue = accountNameValue(accountDraft)
   const balancesByKind = useMemo(() => {
     const groups = {
       people: [],
@@ -1208,6 +1213,7 @@ export default function MohammadLedgerApp() {
   function chooseAccountPreset(preset) {
     setAccountDraft((current) => ({
       ...current,
+      ownerName: preset.ownerName || '',
       type: preset.type,
       valueKind: preset.valueKind,
       subAccountName: preset.subAccountName,
@@ -2025,9 +2031,9 @@ export default function MohammadLedgerApp() {
               <div className="ml3-entry-head">
                 <div>
                   <span>حساب جديد</span>
-                  <h2>{accountPresetFor(accountDraft.type, accountDraft.valueKind).title}</h2>
+                  <h2>{selectedAccountPreset.title}</h2>
                 </div>
-                <b>{accountDraft.subAccountName}</b>
+                <b>{selectedAccountPreset.detail}</b>
               </div>
               <div className="ml3-account-presets">
                 {accountPresets.map((preset) => (
@@ -2042,15 +2048,16 @@ export default function MohammadLedgerApp() {
                 ))}
               </div>
               <label>
-                الاسم
+                {selectedAccountPreset.nameLabel || 'الاسم'}
                 <input
-                  value={accountDraft.ownerName}
-                  onChange={(event) => setAccountDraft((current) => ({ ...current, ownerName: event.target.value }))}
-                  placeholder="اسم الشخص أو المكان أو الأصل"
+                  value={accountDraftNameValue}
+                  onChange={(event) => setAccountDraft((current) => applyAccountName(current, event.target.value))}
+                  placeholder={selectedAccountPreset.namePlaceholder || 'اكتب الاسم'}
                 />
               </label>
-              <div className="ml3-account-detail-choice" aria-label="تفصيل الحساب">
-                {accountDetailOptions.map((option) => (
+              {!selectedAccountPreset.skipDetail ? (
+              <div className="ml3-account-detail-choice" aria-label={selectedAccountPreset.detailLabel || 'تفصيل الحساب'}>
+                {selectedAccountDetails.map((option) => (
                   <button
                     type="button"
                     key={option}
@@ -2061,8 +2068,9 @@ export default function MohammadLedgerApp() {
                   </button>
                 ))}
               </div>
+              ) : null}
               <div className="ml3-account-summary">
-                <strong>{accountDraft.ownerName || 'الاسم'} · {accountDraft.subAccountName} · {accountTypeLabels[accountDraft.type]}</strong>
+                <strong>{accountDraft.ownerName || 'أنا'} · {accountDraft.subAccountName} · {accountTypeLabels[accountDraft.type]}</strong>
               </div>
               <button type="submit">إضافة حساب</button>
             </form>

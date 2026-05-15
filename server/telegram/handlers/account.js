@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { accountDetailOptions, accountPresetFor, accountPresets, emptyAccountDraft } from '../../../src/mohammadLedger/accountConfig.js'
+import {
+  accountDetailOptionsFor,
+  accountPresetFor,
+  accountPresets,
+  applyAccountName,
+  emptyAccountDraft,
+} from '../../../src/mohammadLedger/accountConfig.js'
 import { accountIdempotencyKey, appendTelegramAccount, validateAccountDraft } from '../../mohammadLedger/accountService.js'
 import {
   accountConfirmKeyboard,
@@ -75,7 +81,10 @@ async function sendStep(ctx, session, result = null) {
   if (session.step === STEPS.DETAIL) {
     return upsertAccountMessage(ctx, session, {
       text: accountStepText(session),
-      reply_markup: accountDetailKeyboard(session.draft.subAccountName),
+      reply_markup: accountDetailKeyboard(
+        session.draft.subAccountName,
+        accountDetailOptionsFor(session.draft.type, session.draft.valueKind),
+      ),
     })
   }
   if (session.step === STEPS.REVIEW) {
@@ -121,7 +130,7 @@ export async function handleAccountCallback(ctx, data) {
   }
 
   if (data === 'acct:back') {
-    session.step = previousStep(session.step)
+    session.step = previousStep(session)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
   }
@@ -131,6 +140,7 @@ export async function handleAccountCallback(ctx, data) {
     const preset = accountPresets.find((item) => item.key === key) || accountPresets[0]
     session.draft = {
       ...session.draft,
+      ownerName: preset.ownerName || '',
       type: preset.type,
       valueKind: preset.valueKind,
       subAccountName: preset.subAccountName,
@@ -142,7 +152,8 @@ export async function handleAccountCallback(ctx, data) {
 
   if (data.startsWith('acct:detail:')) {
     const index = Number(data.slice('acct:detail:'.length))
-    const detail = Number.isInteger(index) ? accountDetailOptions[index] : ''
+    const detailOptions = accountDetailOptionsFor(session.draft.type, session.draft.valueKind)
+    const detail = Number.isInteger(index) ? detailOptions[index] : ''
     if (!detail) return sendStep(ctx, session)
     session.draft.subAccountName = detail
     session.step = STEPS.REVIEW
@@ -219,15 +230,26 @@ export async function handleAccountText(ctx, text) {
   if (!session || session.flow !== 'account') return false
 
   if (session.step === STEPS.OWNER) {
-    const ownerName = String(text || '').trim()
-    if (!ownerName) {
+    const accountName = String(text || '').trim()
+    if (!accountName) {
       await sendStep(ctx, session)
       return true
     }
-    session.draft.ownerName = ownerName
-    session.step = STEPS.DETAIL
+    session.draft = applyAccountName(session.draft, accountName)
+    const preset = accountPresetFor(session.draft.type, session.draft.valueKind)
+    session.step = preset.skipDetail ? STEPS.REVIEW : STEPS.DETAIL
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
-    await sendStep(ctx, session)
+    if (session.step === STEPS.REVIEW) {
+      try {
+        const current = await ctx.repository.load()
+        await sendStep(ctx, session, validateAccountDraft(session.draft, current.state.accounts))
+      } catch (error) {
+        console.error('[mohammad-telegram-bot] account validation load failed', error?.message || error)
+        await sendAccountConnectionError(ctx, session)
+      }
+    } else {
+      await sendStep(ctx, session)
+    }
     return true
   }
 
@@ -253,9 +275,11 @@ export async function handleAccountText(ctx, text) {
   return false
 }
 
-function previousStep(step) {
+function previousStep(session) {
+  const step = session?.step
+  const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
   if (step === STEPS.OWNER) return STEPS.TYPE
   if (step === STEPS.DETAIL) return STEPS.OWNER
-  if (step === STEPS.REVIEW) return STEPS.DETAIL
+  if (step === STEPS.REVIEW) return preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL
   return STEPS.TYPE
 }
