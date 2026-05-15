@@ -76,12 +76,14 @@ describe('telegram ledger service', () => {
     })
 
     expect(transferSources.some((account) => account.id === 'saeed-cash')).toBe(false)
-    expect(usdTransferSources.every((account) => account.id === 'me-cash' || /دولار|usd|\$/i.test(`${account.ownerName} ${account.subAccountName} ${account.legacyName || ''}`))).toBe(true)
-    expect(usdTransferSources.some((account) => account.id === 'saeed-cash')).toBe(false)
+    expect(usdTransferSources.some((account) => account.id === 'me-jumhouria')).toBe(true)
+    expect(usdTransferSources.some((account) => account.id === 'saeed-cash')).toBe(true)
     expect(transferDestinations.some((account) => account.id === 'saeed-cash')).toBe(false)
     expect(transferDestinations.some((account) => account.id === 'me-jumhouria')).toBe(false)
-    expect(usdTransferDestinations.some((account) => account.id === 'saeed-cash')).toBe(false)
+    expect(usdTransferDestinations.some((account) => account.id === 'saeed-cash')).toBe(true)
+    expect(usdTransferDestinations.some((account) => account.id === 'me-jumhouria')).toBe(false)
     expect(usdSaleSources.some((account) => account.id === 'me-cash')).toBe(true)
+    expect(usdPurchaseDestinations.some((account) => account.id === 'me-cash')).toBe(true)
     expect(usdPurchaseDestinations.some((account) => account.id === 'me-jumhouria')).toBe(false)
   })
 

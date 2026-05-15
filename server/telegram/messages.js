@@ -130,10 +130,12 @@ export function accountStepText(session) {
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = steps.map((step, index) => (index <= currentIndex ? '●' : '○')).join('')
   const summary = []
-  if (draft.type) summary.push(htmlLine('النوع', preset.title))
+  if (currentIndex > steps.indexOf('type') && draft.type) summary.push(htmlLine('النوع', preset.title))
   const nameValue = accountNameValue(draft)
-  if (nameValue) summary.push(htmlLine(preset.nameLabel || 'الاسم', nameValue))
-  if (!preset.skipDetail && draft.subAccountName) summary.push(htmlLine(preset.detailLabel || 'التفصيل', draft.subAccountName))
+  if (currentIndex > steps.indexOf('owner') && nameValue) summary.push(htmlLine(preset.nameLabel || 'الاسم', nameValue))
+  if (!preset.skipDetail && currentIndex > steps.indexOf('detail') && draft.subAccountName) {
+    summary.push(htmlLine(preset.detailLabel || 'التفصيل', draft.subAccountName))
+  }
 
   const lines = [
     '<b>حساب جديد</b>',

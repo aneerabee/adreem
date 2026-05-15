@@ -23,17 +23,8 @@ export function transferAccountKind(account) {
   return account?.valueKind || 'account'
 }
 
-function accountCurrencyText(account) {
-  return `${account?.ownerName || ''} ${account?.subAccountName || ''} ${account?.legacyName || ''} ${account?.notes || ''}`.toLowerCase()
-}
-
-export function accountSupportsTransferCurrency(account, currency, bucket = null) {
-  if (!account) return false
-  if (!currency || currency === 'LYD') return true
-  if (currency !== 'USD') return true
-  const hasUsdBalance = Math.abs(Number(bucket?.usd || 0)) > 0.000001
-  const hasOpeningUsd = Math.abs(Number(account.openingUsd || 0)) > 0.000001
-  return hasUsdBalance || hasOpeningUsd || /دولار|usd|\$/.test(accountCurrencyText(account))
+export function accountSupportsTransferCurrency(account) {
+  return Boolean(account)
 }
 
 export function areTransferAccountsCompatible(sourceAccount, destinationAccount, currency = '', sourceBucket = null, destinationBucket = null) {
@@ -46,15 +37,6 @@ export function areTransferAccountsCompatible(sourceAccount, destinationAccount,
 export function transferCompatibilityMessage(sourceAccount, destinationAccount, currency = '', sourceBucket = null, destinationBucket = null) {
   if (!sourceAccount || !destinationAccount) return 'يجب اختيار حساب مصدر ووجهة صحيحين.'
   if (areTransferAccountsCompatible(sourceAccount, destinationAccount, currency, sourceBucket, destinationBucket)) return ''
-  if (
-    currency === 'USD' &&
-    (
-      !accountSupportsTransferCurrency(sourceAccount, currency, sourceBucket) ||
-      !accountSupportsTransferCurrency(destinationAccount, currency, destinationBucket)
-    )
-  ) {
-    return 'تحويل الدولار مسموح فقط بين حسابات دولار واضحة.'
-  }
   const kindLabel = (kind) => {
     if (kind === 'cash') return 'كاش'
     if (kind === 'bank') return 'مصرف'

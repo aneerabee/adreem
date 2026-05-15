@@ -154,7 +154,7 @@ describe('mohammad ledger core', () => {
     expect(sale.status).toBe(MOVEMENT_STATUSES.POSTED)
   })
 
-  it('rejects normal usd transfers into accounts that are not dollar-ready', () => {
+  it('allows normal usd transfers between same-kind accounts without requiring dollar in the account name', () => {
     const movement = postMovement(
       {
         type: MOVEMENT_TYPES.TRANSFER,
@@ -166,8 +166,7 @@ describe('mohammad ledger core', () => {
       mohammadAccountCatalog,
     )
 
-    expect(movement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
-    expect(movement.validation.errors.some((error) => error.message.includes('الدولار'))).toBe(true)
+    expect(movement.status).toBe(MOVEMENT_STATUSES.POSTED)
   })
 
   it('keeps inactive accounts out of balances and posting endpoints', () => {

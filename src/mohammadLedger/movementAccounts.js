@@ -47,7 +47,7 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
     return usdReadyAccounts.length ? usdReadyAccounts : moneyOrPerson
   }
   if (movementType === MOVEMENT_TYPES.USD_PURCHASE && role === 'destination') {
-    return removeDuplicate(usdReadyAccounts.length ? usdReadyAccounts : moneyOrPerson, sourceAccount)
+    return removeDuplicate(moneyOrPerson, sourceAccount)
   }
   if (role === 'destination') return removeTransferMismatch(removeDuplicate(transferReadyAccounts, sourceAccount), sourceAccount)
   if (role === 'source') return removeTransferMismatch(removeDuplicate(transferReadyAccounts, destinationAccount), destinationAccount)
