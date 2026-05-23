@@ -144,18 +144,14 @@ export async function saveMohammadPersistedState(state) {
     return { mode: 'local', localOk: true, supabaseOk: false, state: normalizedState }
   }
 
-  try {
-    const remoteState = await loadRemoteMohammadState(normalizedState)
-    if (remoteState) {
-      normalizedState = {
-        ...mergeLedgerStates(normalizedState, remoteState, normalizedState),
-        savedAt: new Date().toISOString(),
-      }
-      writeLocalMohammadState(normalizedState)
+  const remoteState = await loadRemoteMohammadState(normalizedState)
+  if (remoteState) {
+    normalizedState = {
+      ...mergeLedgerStates(normalizedState, remoteState, normalizedState),
+      savedAt: new Date().toISOString(),
     }
-    await saveRemoteMohammadState(normalizedState)
-  } catch (err) {
-    throw err
+    writeLocalMohammadState(normalizedState)
   }
+  await saveRemoteMohammadState(normalizedState)
   return { mode: 'supabase', localOk: true, supabaseOk: true, state: normalizedState }
 }

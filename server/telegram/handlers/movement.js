@@ -159,7 +159,6 @@ async function sendAccountChoices(ctx, session, state, role, query = '') {
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
 
   const snapshot = buildLedgerSnapshot(state)
-  const config = movementConfigFor(session.draft.type)
   const lines = [movementStepText(session, snapshot.accountById), '']
   lines.push(stepPromptText(session))
   if (query) lines.push(`<b>بحث:</b> ${escapeHtml(query)}`)

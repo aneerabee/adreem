@@ -33,10 +33,10 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_BASE_PATH: ${{ github.event.repository.name == 'mohammad-ledger' && '/mohammad-ledger/' || '/western-office/' }}
-          VITE_DEFAULT_APP: ${{ github.event.repository.name == 'mohammad-ledger' && 'mohammad-ledger' || '' }}
-          VITE_APP_TITLE: ${{ github.event.repository.name == 'mohammad-ledger' && 'دفتر محمد' || 'Western Office' }}
-          VITE_APP_ICON: ${{ github.event.repository.name == 'mohammad-ledger' && '/mohammad-ledger/mohammad-ledger.svg' || '/western-office/favicon.svg' }}
+          VITE_BASE_PATH: /mohammad-ledger/
+          VITE_DEFAULT_APP: mohammad-ledger
+          VITE_APP_TITLE: دفتر محمد
+          VITE_APP_ICON: /mohammad-ledger/mohammad-ledger.svg
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 

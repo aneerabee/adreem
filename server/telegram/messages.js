@@ -77,8 +77,6 @@ function currentStepTitle(session) {
 }
 
 function currentStepHelp(session) {
-  const draft = session?.draft || {}
-  const config = movementConfigFor(draft.type)
   if (session?.step === 'type') return 'اختر العملية التي تريد تسجيلها.'
   if (session?.step === 'amount') return 'اكتب الرقم فقط. مثال: 1250'
   if (session?.step === 'currency') return 'اختر العملة حتى تظهر الحسابات المناسبة فقط.'
@@ -230,8 +228,6 @@ export function movementStepText(session, accountsById = new Map()) {
 }
 
 export function stepPromptText(session) {
-  const draft = session?.draft || {}
-  const config = movementConfigFor(draft.type)
   if (session?.step === 'amount') return 'أرسل المبلغ الآن كرقم فقط.'
   if (session?.step === 'rate') return 'أرسل سعر الصرف الآن.'
   if (session?.step === 'currency') return 'اضغط على العملة المناسبة.'

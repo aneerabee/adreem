@@ -75,16 +75,6 @@ const accountGroupTabs = [
   { key: 'review', label: 'مراجعة', title: 'مراجعة' },
 ]
 
-const accountTypeLabels = {
-  [ACCOUNT_TYPES.PERSON]: 'شخص أو شركة',
-  [ACCOUNT_TYPES.CASH]: 'مال نقدي عندي',
-  [ACCOUNT_TYPES.BANK]: 'حساب بنكي لي',
-  [ACCOUNT_TYPES.EXPENSE]: 'مصروف',
-  [ACCOUNT_TYPES.ASSET]: 'أصل أملكه',
-  [ACCOUNT_TYPES.PROJECT]: 'مشروع',
-  [ACCOUNT_TYPES.REVIEW]: 'يحتاج حل',
-}
-
 function loadInitialLedgerState() {
   const fallback = createMohammadFallbackState()
   const localState = loadLocalMohammadState(fallback)
@@ -796,8 +786,6 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
     note: movement.note || '',
   })
   const reviewConfig = movementConfigFor(reviewDraft.type)
-  const reviewSourceAccount = activeAccounts.find((account) => account.id === reviewDraft.sourceAccountId)
-  const reviewDestinationAccount = activeAccounts.find((account) => account.id === reviewDraft.destinationAccountId)
   const reviewSourceAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'source', reviewDraft)
   const reviewDestinationAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'destination', reviewDraft)
 
@@ -1092,7 +1080,9 @@ export default function MohammadLedgerApp() {
   useEffect(() => {
     if (!isHydrated) return undefined
     let cancelled = false
-    setSaveStatus('saving')
+    const timer = window.setTimeout(() => {
+      if (!cancelled) setSaveStatus('saving')
+    }, 0)
 
     saveMohammadPersistedState({ accounts, movements })
       .then((result) => {
@@ -1117,6 +1107,7 @@ export default function MohammadLedgerApp() {
 
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
   }, [accounts, movements, isHydrated])
 
@@ -1136,14 +1127,13 @@ export default function MohammadLedgerApp() {
   }, [selectedAccountId])
 
   useEffect(() => {
-    if (activeSection !== 'review') return
-    if (!reviewItems.length) {
-      setActiveReviewKey('')
-      return
-    }
-    if (!reviewItems.some((item) => item.key === activeReviewKey)) {
-      setActiveReviewKey(reviewItems[0].key)
-    }
+    if (activeSection !== 'review') return undefined
+    const nextKey = reviewItems.length && reviewItems.some((item) => item.key === activeReviewKey)
+      ? activeReviewKey
+      : (reviewItems[0]?.key || '')
+    if (nextKey === activeReviewKey) return undefined
+    const timer = window.setTimeout(() => setActiveReviewKey(nextKey), 0)
+    return () => window.clearTimeout(timer)
   }, [activeSection, activeReviewKey, reviewItems])
 
   function updateMovementDraft(field, value) {
@@ -1168,15 +1158,6 @@ export default function MohammadLedgerApp() {
       sourceAccountId: defaults.sourceAccountId,
       destinationAccountId: config.needsDestination ? defaults.destinationAccountId : '',
       rate: config.needsRate ? current.rate : '',
-    }))
-  }
-
-  function swapMovementSides() {
-    if (!movementConfig.needsDestination) return
-    setMovementDraft((current) => ({
-      ...current,
-      sourceAccountId: current.destinationAccountId || '',
-      destinationAccountId: current.sourceAccountId || '',
     }))
   }
 
@@ -1288,17 +1269,6 @@ export default function MohammadLedgerApp() {
     setAccounts((current) => [...current, account])
     setFeedback('تم إنشاء الحساب.')
     setAccountDraft(emptyAccountDraft())
-  }
-
-  function confirmAccount(accountId) {
-    setAccounts((current) =>
-      current.map((account) =>
-        account.id === accountId
-          ? { ...account, status: ACCOUNT_STATUSES.ACTIVE, type: account.type === ACCOUNT_TYPES.REVIEW ? ACCOUNT_TYPES.PERSON : account.type, valueKind: account.valueKind === VALUE_KINDS.REVIEW ? VALUE_KINDS.RECEIVABLE : account.valueKind, updatedAt: new Date().toISOString() }
-          : account,
-      ),
-    )
-    setFeedback('تم اعتماد الحساب.')
   }
 
   function resolveReviewAccount(event, accountId) {

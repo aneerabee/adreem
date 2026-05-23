@@ -1,35 +1,30 @@
-# Western Office
+# Mohammad Ledger
 
-نظام ويب بسيط لتنظيم حوالات ويسترن لمستخدم واحد.
+دفتر مالي مستقل لمحمد يعمل على الويب وTelegram Bot بنفس منطق الحسابات والحركات.
 
-## الفكرة
+## الروابط
 
-التطبيق يركز على السرعة والوضوح:
-
-- إدخال الحوالة بثلاثة حقول فقط
-- منع تكرار رقم الحوالة
-- تغيير الحالة مباشرة من الجدول
-- إضافة قيم السيستم والزبون عند الحاجة فقط
-- تسجيل سبب المشكلة والملاحظات
-- فلترة وبحث وفرز
-- تصدير CSV
-- نسخة احتياطية JSON واسترجاعها
+- التطبيق: https://aneerabee.github.io/mohammad-ledger/
+- GitHub: https://github.com/aneerabee/mohammad-ledger
 
 ## التشغيل المحلي
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-## الاختبارات
+## الفحص
 
 ```bash
 npm run test
-npm run lint
 npm run build
 ```
 
-## النشر
+## البوت
 
-النشر يتم تلقائيًا عبر GitHub Pages من خلال GitHub Actions عند أي push على فرع `main`.
+```bash
+npm run bot:mohammad
+```
+
+يحتاج البوت إلى متغيرات البيئة الخاصة بـTelegram وSupabase. لا تضع المفاتيح السرية داخل Git.
