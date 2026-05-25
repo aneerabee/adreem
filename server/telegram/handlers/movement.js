@@ -75,7 +75,7 @@ async function sendStep(ctx, session, textPrefix = '') {
     const loaded = await ctx.repository.load()
     state = loaded.state
   } catch (error) {
-    console.error('[mohammad-telegram-bot] ledger load failed', error?.message || error)
+    console.error('[adreem-telegram-bot] ledger load failed', error?.message || error)
     return upsertFlowMessage(ctx, session, {
       text: '<b>تعذر الاتصال بالدفتر الآن.</b>\n<blockquote>حاول مرة أخرى بعد لحظات.</blockquote>',
       reply_markup: mainMenuKeyboard(),
@@ -262,30 +262,30 @@ export async function handleMovementCallback(ctx, data) {
         telegramChatId: ctx.chatId,
       })
     } catch (error) {
-      console.error('[mohammad-telegram-bot] movement save failed', error?.message || error)
+      console.error('[adreem-telegram-bot] movement save failed', error?.message || error)
       return upsertFlowMessage(ctx, session, {
         text: '<b>تعذر حفظ الحركة الآن.</b>\n<blockquote>حاول مرة أخرى بعد لحظات.</blockquote>',
         reply_markup: confirmKeyboard(),
       })
     }
-    if (result.rejected) {
-      return upsertFlowMessage(ctx, session, { text: reviewMovementText(session, result.preview), reply_markup: confirmKeyboard() })
-    }
     ctx.sessions.clear(ctx.chatId, ctx.userId)
     const amountText = formatMoney(result.movement.amount, result.movement.currency)
-    const suffix = result.duplicate ? 'كانت محفوظة سابقًا ولم تتكرر.' : 'تم الحفظ وتحديث الدفتر.'
+    const suffix = savedMovementSuffix(result)
+    const detailText = result.needsReview
+      ? `${movementLabels[result.movement.type]} ${amountText}\nستظهر في قسم المراجعة.\nلا تغير الأرصدة قبل الاعتماد.`
+      : `${movementLabels[result.movement.type]} ${amountText}`
     try {
       return await ctx.telegram.editMessageText({
         chat_id: ctx.chatId,
         message_id: session.uiMessageId || ctx.messageId,
-        text: `<b>${escapeHtml(suffix)}</b>\n<blockquote>${escapeHtml(`${movementLabels[result.movement.type]} ${amountText}`)}</blockquote>`,
+        text: `<b>${escapeHtml(suffix)}</b>\n<blockquote>${escapeHtml(detailText)}</blockquote>`,
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })
     } catch {
       return ctx.telegram.sendMessage({
         chat_id: ctx.chatId,
-        text: `<b>${escapeHtml(suffix)}</b>\n<blockquote>${escapeHtml(`${movementLabels[result.movement.type]} ${amountText}`)}</blockquote>`,
+        text: `<b>${escapeHtml(suffix)}</b>\n<blockquote>${escapeHtml(detailText)}</blockquote>`,
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })
@@ -293,6 +293,11 @@ export async function handleMovementCallback(ctx, data) {
   }
 
   return sendStep(ctx, session, 'أمر غير معروف.')
+}
+
+function savedMovementSuffix(result) {
+  if (result.duplicate) return result.needsReview ? 'كانت محفوظة سابقًا في المراجعة.' : 'كانت محفوظة سابقًا ولم تتكرر.'
+  return result.needsReview ? 'تم حفظها في المراجعة.' : 'تم الحفظ وتحديث الدفتر.'
 }
 
 function isStaleMovementCallback(ctx, session) {
@@ -357,7 +362,7 @@ export async function handleMovementText(ctx, text) {
       const loaded = await ctx.repository.load()
       state = loaded.state
     } catch (error) {
-      console.error('[mohammad-telegram-bot] ledger load failed', error?.message || error)
+      console.error('[adreem-telegram-bot] ledger load failed', error?.message || error)
       await sendStep(ctx, session, 'تعذر الاتصال بالدفتر الآن. حاول مرة أخرى بعد لحظات.')
       return true
     }

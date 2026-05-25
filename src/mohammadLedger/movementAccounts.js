@@ -20,13 +20,10 @@ function isPostingAccount(account) {
 
 export function getMovementAccounts(accounts = [], balancesByAccountId = new Map(), movementType, role, selected = {}) {
   const moneyOrPerson = accounts.filter(isPostingAccount)
-  const transferReadyAccounts = movementType === MOVEMENT_TYPES.TRANSFER
-    ? moneyOrPerson.filter((account) => accountSupportsTransferCurrency(account, selected.currency, balancesByAccountId.get(account.id)))
-    : moneyOrPerson
-  const usdReadyAccounts = moneyOrPerson.filter((account) => {
-    const hasUsdBalance = Math.abs(balancesByAccountId.get(account.id)?.usd || 0) > 0.000001
-    return hasUsdBalance || /دولار|usd|\$/.test(searchableText(account))
-  })
+  const supportsCurrency = (account, currency = selected.currency) =>
+    accountSupportsTransferCurrency(account, currency, balancesByAccountId.get(account.id))
+  const currencyReadyAccounts = moneyOrPerson.filter((account) => supportsCurrency(account))
+  const transferReadyAccounts = currencyReadyAccounts
   const accountById = new Map(accounts.map((account) => [account.id, account]))
   const sourceAccount = accountById.get(selected.sourceAccountId)
   const destinationAccount = accountById.get(selected.destinationAccountId)
@@ -44,10 +41,16 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
       : list
 
   if (movementType === MOVEMENT_TYPES.USD_SALE && role === 'source') {
-    return usdReadyAccounts.length ? usdReadyAccounts : moneyOrPerson
+    return moneyOrPerson.filter((account) => supportsCurrency(account, 'USD'))
+  }
+  if (movementType === MOVEMENT_TYPES.USD_SALE && role === 'destination') {
+    return removeDuplicate(moneyOrPerson.filter((account) => supportsCurrency(account, 'LYD')), sourceAccount)
+  }
+  if (movementType === MOVEMENT_TYPES.USD_PURCHASE && role === 'source') {
+    return moneyOrPerson.filter((account) => supportsCurrency(account, 'LYD'))
   }
   if (movementType === MOVEMENT_TYPES.USD_PURCHASE && role === 'destination') {
-    return removeDuplicate(moneyOrPerson, sourceAccount)
+    return removeDuplicate(moneyOrPerson.filter((account) => supportsCurrency(account, 'USD')), sourceAccount)
   }
   if (role === 'destination') return removeTransferMismatch(removeDuplicate(transferReadyAccounts, sourceAccount), sourceAccount)
   if (role === 'source') return removeTransferMismatch(removeDuplicate(transferReadyAccounts, destinationAccount), destinationAccount)

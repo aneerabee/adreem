@@ -1,43 +1,44 @@
-import { ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, normalizeAccountCurrencyKind } from './accountCatalog.js'
+import { accountCurrencyLabel } from './accountCompatibility.js'
 
 export const accountPresets = [
   {
     key: 'person-cash',
-    title: 'شخص أو شركة',
-    detail: 'أقبض منه أو أدفع له',
+    title: 'شخص / جهة',
+    detail: 'رصيد بيني وبينه',
     type: ACCOUNT_TYPES.PERSON,
     valueKind: VALUE_KINDS.RECEIVABLE,
-    subAccountName: 'كاش',
+    subAccountName: 'نقدي معه',
     nameTarget: 'ownerName',
-    nameLabel: 'اسم الشخص أو الشركة',
-    namePlaceholder: 'مثال: سعيد أو المقر',
-    detailLabel: 'طريقة التعامل معه',
-    detailOptions: ['كاش معه', 'حساب بنكي له'],
+    nameLabel: 'اسم الشخص أو الجهة',
+    namePlaceholder: 'مثال: سعيد، المقر، شركة',
+    detailLabel: 'شكل الحساب بينكم',
+    detailOptions: ['نقدي معه', 'حساب بنكي له'],
   },
   {
     key: 'own-cash',
-    title: 'فلوسي كاش',
-    detail: 'في اليد أو الخزنة',
+    title: 'صندوق نقدي عندي',
+    detail: 'دينار أو دولار في اليد',
     type: ACCOUNT_TYPES.CASH,
     valueKind: VALUE_KINDS.CASH,
     ownerName: 'أنا',
-    subAccountName: 'كاش',
+    subAccountName: 'صندوق نقدي',
     nameTarget: 'subAccountName',
-    nameLabel: 'اسم مكان الكاش',
-    namePlaceholder: 'مثال: كاش البيت أو الخزنة',
+    nameLabel: 'اسم الصندوق',
+    namePlaceholder: 'مثال: كاش البيت، الخزنة، سعيد',
     skipDetail: true,
   },
   {
     key: 'own-bank',
-    title: 'حساب بنكي لي',
-    detail: 'مصرف أو بطاقة أو محفظة',
+    title: 'حساب بنكي عندي',
+    detail: 'مصرف / بطاقة / محفظة',
     type: ACCOUNT_TYPES.BANK,
     valueKind: VALUE_KINDS.BANK,
     ownerName: 'أنا',
-    subAccountName: 'حساب مصرفي',
+    subAccountName: 'حساب بنكي',
     nameTarget: 'subAccountName',
-    nameLabel: 'اسم البنك أو الحساب',
-    namePlaceholder: 'مثال: الجمهورية أو الوحدة',
+    nameLabel: 'اسم البنك أو المحفظة',
+    namePlaceholder: 'مثال: الجمهورية، الوحدة، بطاقة',
     skipDetail: true,
   },
   {
@@ -50,6 +51,18 @@ export const accountPresets = [
     nameTarget: 'ownerName',
     nameLabel: 'اسم الأصل',
     namePlaceholder: 'مثال: شاحنة أو أرض',
+    skipDetail: true,
+  },
+  {
+    key: 'project',
+    title: 'أصل / مشروع للتتبع',
+    detail: 'قيمة أو ملف متابعة',
+    type: ACCOUNT_TYPES.PROJECT,
+    valueKind: VALUE_KINDS.ASSET,
+    subAccountName: 'مشروع',
+    nameTarget: 'ownerName',
+    nameLabel: 'اسم المشروع',
+    namePlaceholder: 'مثال: شاحنة تعمل، مقر، ورشة',
     skipDetail: true,
   },
   {
@@ -76,9 +89,10 @@ export const accountClassificationOptions = accountPresets.map((preset) => ({
 export function emptyAccountDraft() {
   return {
     ownerName: '',
-    subAccountName: 'كاش',
+    subAccountName: 'نقدي معه',
     type: ACCOUNT_TYPES.PERSON,
     valueKind: VALUE_KINDS.RECEIVABLE,
+    currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
     notes: '',
   }
 }
@@ -90,6 +104,15 @@ export function accountPresetFor(type, valueKind) {
 export function accountDetailOptionsFor(type, valueKind) {
   const preset = accountPresetFor(type, valueKind)
   return preset.detailOptions || [preset.subAccountName].filter(Boolean)
+}
+
+export function accountNeedsCurrency(draftOrPreset = {}) {
+  const valueKind = draftOrPreset.valueKind
+  return valueKind === VALUE_KINDS.CASH || valueKind === VALUE_KINDS.BANK || valueKind === VALUE_KINDS.RECEIVABLE
+}
+
+export function accountCurrencyKindFor(draft = {}) {
+  return normalizeAccountCurrencyKind(draft.currencyKind, ACCOUNT_CURRENCY_KINDS.DINAR)
 }
 
 export function accountNameValue(draft = {}) {
@@ -105,12 +128,14 @@ export function applyAccountName(draft = {}, value = '') {
       ...draft,
       ownerName: preset.ownerName || draft.ownerName || '',
       subAccountName: cleanValue || preset.subAccountName,
+      currencyKind: accountCurrencyKindFor(draft),
     }
   }
   return {
     ...draft,
     ownerName: cleanValue,
     subAccountName: draft.subAccountName || preset.subAccountName,
+    currencyKind: accountCurrencyKindFor(draft),
   }
 }
 
@@ -118,31 +143,37 @@ export function accountDisplayName(account = {}) {
   const ownerName = String(account.ownerName || '').trim()
   const subAccountName = String(account.subAccountName || '').trim()
   const isMine = /^أنا$|^انا$/i.test(ownerName)
-  if (account.valueKind === VALUE_KINDS.CASH || (isMine && /كاش|نقد|خزنة|cash/i.test(subAccountName))) return `كاش عندي: ${subAccountName || ownerName || 'كاش'}`
-  if (account.valueKind === VALUE_KINDS.BANK || (isMine && /مصرف|بنك|حساب|الجمهورية|الوحدة|bank/i.test(subAccountName))) return `حسابي البنكي: ${subAccountName || ownerName || 'مصرف'}`
+  const currencySuffix = accountNeedsCurrency(account) ? ` · ${accountCurrencyLabel(account)}` : ''
+  if (account.valueKind === VALUE_KINDS.CASH || (isMine && /كاش|نقد|خزنة|cash/i.test(subAccountName))) return `صندوقي: ${subAccountName || ownerName || 'نقدي'}${currencySuffix}`
+  if (account.valueKind === VALUE_KINDS.BANK || (isMine && /مصرف|بنك|حساب|الجمهورية|الوحدة|bank/i.test(subAccountName))) return `بنكي: ${subAccountName || ownerName || 'حساب'}${currencySuffix}`
+  if (account.type === ACCOUNT_TYPES.PROJECT) return `مشروع: ${ownerName || subAccountName || 'بدون اسم'}`
   if (account.valueKind === VALUE_KINDS.ASSET) return `أصل: ${ownerName || subAccountName || 'بدون اسم'}`
   if (account.valueKind === VALUE_KINDS.EXPENSE) return `مصروف: ${ownerName || subAccountName || 'بدون اسم'}`
-  if (ownerName && subAccountName) return `${ownerName} · ${subAccountName}`
+  if (ownerName && subAccountName) return `${ownerName} · ${subAccountName}${currencySuffix}`
   return ownerName || subAccountName || 'حساب بدون اسم'
 }
 
 export function accountKindLabel(account = {}) {
-  if (account.valueKind === VALUE_KINDS.CASH) return 'مال نقدي عندي'
-  if (account.valueKind === VALUE_KINDS.BANK) return 'حساب بنكي لي'
+  const currencySuffix = accountNeedsCurrency(account) ? ` · ${accountCurrencyLabel(account)}` : ''
+  if (account.valueKind === VALUE_KINDS.CASH) return `صندوق نقدي عندي${currencySuffix}`
+  if (account.valueKind === VALUE_KINDS.BANK) return `حساب بنكي عندي${currencySuffix}`
+  if (account.type === ACCOUNT_TYPES.PROJECT) return 'أصل / مشروع للتتبع'
   if (account.valueKind === VALUE_KINDS.ASSET) return 'أصل أملكه'
   if (account.valueKind === VALUE_KINDS.EXPENSE) return 'مصروف'
   if (account.valueKind === VALUE_KINDS.REVIEW || account.type === ACCOUNT_TYPES.REVIEW) return 'مراجعة'
-  return 'شخص أو شركة'
+  return `شخص / جهة${currencySuffix}`
 }
 
 export function accountDraftSummary(draft = {}) {
   const preset = accountPresetFor(draft.type, draft.valueKind)
   const nameValue = accountNameValue(draft)
-  if (draft.valueKind === VALUE_KINDS.CASH) return `كاش عندي: ${nameValue || preset.subAccountName}`
-  if (draft.valueKind === VALUE_KINDS.BANK) return `حسابي البنكي: ${nameValue || preset.subAccountName}`
+  const currencySuffix = accountNeedsCurrency(draft) ? ` · ${accountCurrencyLabel({ currencyKind: accountCurrencyKindFor(draft) })}` : ''
+  if (draft.valueKind === VALUE_KINDS.CASH) return `صندوقي: ${nameValue || preset.subAccountName}${currencySuffix}`
+  if (draft.valueKind === VALUE_KINDS.BANK) return `بنكي: ${nameValue || preset.subAccountName}${currencySuffix}`
+  if (draft.type === ACCOUNT_TYPES.PROJECT) return `مشروع: ${nameValue || 'بدون اسم'}`
   if (draft.valueKind === VALUE_KINDS.ASSET) return `أصل أملكه: ${nameValue || 'بدون اسم'}`
   if (draft.valueKind === VALUE_KINDS.EXPENSE) return `مصروف: ${nameValue || 'بدون اسم'}`
-  return `${nameValue || 'بدون اسم'} · ${draft.subAccountName || preset.subAccountName}`
+  return `${nameValue || 'بدون اسم'} · ${draft.subAccountName || preset.subAccountName}${currencySuffix}`
 }
 
 export function classificationValueFor(account) {

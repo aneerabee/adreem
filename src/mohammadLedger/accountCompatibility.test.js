@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import {
   accountSupportsTransferCurrency,
   areTransferAccountsCompatible,
@@ -21,14 +21,25 @@ describe('mohammad account compatibility', () => {
     expect(transferCompatibilityMessage(cash, null, CURRENCIES.DINAR)).toBe('يجب اختيار حساب مصدر ووجهة صحيحين.')
   })
 
-  it('allows dinar and dollar on cash and bank accounts while keeping transfer kind checks', () => {
+  it('enforces currency and transfer kind checks together', () => {
     const cash = { id: 'cash', type: ACCOUNT_TYPES.CASH, subAccountName: 'كاش', valueKind: VALUE_KINDS.CASH }
-    const anotherCash = { id: 'cash-2', type: ACCOUNT_TYPES.CASH, subAccountName: 'خزنة', valueKind: VALUE_KINDS.CASH }
+    const usdCash = { id: 'cash-usd', type: ACCOUNT_TYPES.CASH, subAccountName: 'خزنة دولار', valueKind: VALUE_KINDS.CASH, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }
+    const multiCash = { id: 'cash-2', type: ACCOUNT_TYPES.CASH, subAccountName: 'خزنة', valueKind: VALUE_KINDS.CASH, currencyKind: ACCOUNT_CURRENCY_KINDS.MULTI }
     const bank = { id: 'bank', type: ACCOUNT_TYPES.BANK, subAccountName: 'الجمهورية', valueKind: VALUE_KINDS.BANK }
 
-    expect(accountSupportsTransferCurrency(cash, CURRENCIES.USD)).toBe(true)
-    expect(accountSupportsTransferCurrency(bank, CURRENCIES.USD)).toBe(true)
-    expect(areTransferAccountsCompatible(cash, anotherCash, CURRENCIES.USD)).toBe(true)
-    expect(areTransferAccountsCompatible(cash, bank, CURRENCIES.USD)).toBe(false)
+    expect(accountSupportsTransferCurrency(cash, CURRENCIES.USD)).toBe(false)
+    expect(accountSupportsTransferCurrency(usdCash, CURRENCIES.USD)).toBe(true)
+    expect(accountSupportsTransferCurrency(multiCash, CURRENCIES.USD)).toBe(true)
+    expect(accountSupportsTransferCurrency(multiCash, CURRENCIES.DINAR)).toBe(true)
+    expect(accountSupportsTransferCurrency(bank, CURRENCIES.USD)).toBe(false)
+    expect(areTransferAccountsCompatible(usdCash, multiCash, CURRENCIES.USD)).toBe(true)
+    expect(areTransferAccountsCompatible(cash, bank, CURRENCIES.DINAR)).toBe(false)
+  })
+
+  it('does not treat same owner and detail with different currencies as the same logical account', () => {
+    const dinar = { id: 'saeed-lyd', ownerName: 'سعيد', subAccountName: 'نقدي معه', valueKind: VALUE_KINDS.RECEIVABLE, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }
+    const usd = { id: 'saeed-usd', ownerName: 'سعيد', subAccountName: 'نقدي معه', valueKind: VALUE_KINDS.RECEIVABLE, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }
+
+    expect(sameLogicalAccount(dinar, usd)).toBe(false)
   })
 })

@@ -53,6 +53,37 @@ describe('telegram ledger service', () => {
     expect(saved).toHaveLength(1)
   })
 
+  it('saves incomplete telegram movements into review instead of rejecting them', async () => {
+    const repository = memoryRepository()
+    const draft = {
+      type: MOVEMENT_TYPES.TRANSFER,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: '',
+      note: '',
+    }
+
+    const first = await appendTelegramMovement(repository, draft, {
+      idempotencyKey: 'user-session-review',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+    const second = await appendTelegramMovement(repository, draft, {
+      idempotencyKey: 'user-session-review',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    const saved = repository.state.movements.filter((movement) => movement.idempotencyKey === 'user-session-review')
+    expect(first.rejected).toBeUndefined()
+    expect(first.needsReview).toBe(true)
+    expect(first.movement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(second.duplicate).toBe(true)
+    expect(second.needsReview).toBe(true)
+    expect(saved).toHaveLength(1)
+  })
+
   it('uses the shared web account-selection rules for telegram movement parties', () => {
     const state = createMohammadFallbackState()
     const transferSources = getMovementAccounts(state, MOVEMENT_TYPES.TRANSFER, 'source', {
@@ -76,11 +107,12 @@ describe('telegram ledger service', () => {
     })
 
     expect(transferSources.some((account) => account.id === 'saeed-cash')).toBe(false)
-    expect(usdTransferSources.some((account) => account.id === 'me-jumhouria')).toBe(true)
-    expect(usdTransferSources.some((account) => account.id === 'saeed-cash')).toBe(true)
+    expect(usdTransferSources.some((account) => account.id === 'me-jumhouria')).toBe(false)
+    expect(usdTransferSources.some((account) => account.id === 'saeed-cash')).toBe(false)
+    expect(usdTransferSources.some((account) => account.id === 'me-cash')).toBe(true)
     expect(transferDestinations.some((account) => account.id === 'saeed-cash')).toBe(false)
     expect(transferDestinations.some((account) => account.id === 'me-jumhouria')).toBe(false)
-    expect(usdTransferDestinations.some((account) => account.id === 'saeed-cash')).toBe(true)
+    expect(usdTransferDestinations.some((account) => account.id === 'saeed-cash')).toBe(false)
     expect(usdTransferDestinations.some((account) => account.id === 'me-jumhouria')).toBe(false)
     expect(usdSaleSources.some((account) => account.id === 'me-cash')).toBe(true)
     expect(usdPurchaseDestinations.some((account) => account.id === 'me-cash')).toBe(true)

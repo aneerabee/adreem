@@ -154,7 +154,7 @@ describe('mohammad ledger core', () => {
     expect(sale.status).toBe(MOVEMENT_STATUSES.POSTED)
   })
 
-  it('allows normal usd transfers between same-kind accounts without requiring dollar in the account name', () => {
+  it('rejects normal usd transfers into dinar-only accounts', () => {
     const movement = postMovement(
       {
         type: MOVEMENT_TYPES.TRANSFER,
@@ -164,6 +164,40 @@ describe('mohammad ledger core', () => {
         destinationAccountId: 'saeed-cash',
       },
       mohammadAccountCatalog,
+    )
+
+    expect(movement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(movement.validation.errors.some((error) => error.message.includes('عملة'))).toBe(true)
+  })
+
+  it('allows normal usd transfers between usd-compatible same-kind accounts', () => {
+    const accounts = [
+      createAccount({
+        id: 'my-usd-cash',
+        ownerName: 'أنا',
+        subAccountName: 'دولار الخزنة',
+        type: ACCOUNT_TYPES.CASH,
+        valueKind: 'cash',
+        currencyKind: CURRENCIES.USD,
+      }),
+      createAccount({
+        id: 'saeed-usd-cash',
+        ownerName: 'سعيد',
+        subAccountName: 'نقدي معه',
+        type: ACCOUNT_TYPES.PERSON,
+        valueKind: 'receivable',
+        currencyKind: CURRENCIES.USD,
+      }),
+    ]
+    const movement = postMovement(
+      {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 100,
+        currency: CURRENCIES.USD,
+        sourceAccountId: 'my-usd-cash',
+        destinationAccountId: 'saeed-usd-cash',
+      },
+      accounts,
     )
 
     expect(movement.status).toBe(MOVEMENT_STATUSES.POSTED)
@@ -285,6 +319,48 @@ describe('mohammad ledger core', () => {
     expect(preview.validation.errors.some((error) => error.field === 'rate')).toBe(true)
   })
 
+  it('enforces account currency compatibility for exchange and one-sided movements', () => {
+    const usdSaleFromDinarBank = postMovement(
+      {
+        type: MOVEMENT_TYPES.USD_SALE,
+        amount: 100,
+        currency: CURRENCIES.USD,
+        rate: 7.5,
+        sourceAccountId: 'me-jumhouria',
+        destinationAccountId: 'me-jumhouria',
+      },
+      mohammadAccountCatalog,
+    )
+    const usdPurchaseIntoDinarBank = postMovement(
+      {
+        type: MOVEMENT_TYPES.USD_PURCHASE,
+        amount: 750,
+        currency: CURRENCIES.DINAR,
+        rate: 7.5,
+        sourceAccountId: 'me-jumhouria',
+        destinationAccountId: 'me-jumhouria',
+      },
+      mohammadAccountCatalog,
+    )
+    const usdExpenseFromDinarBank = postMovement(
+      {
+        type: MOVEMENT_TYPES.EXPENSE,
+        amount: 50,
+        currency: CURRENCIES.USD,
+        sourceAccountId: 'me-jumhouria',
+        destinationAccountId: null,
+      },
+      mohammadAccountCatalog,
+    )
+
+    expect(usdSaleFromDinarBank.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(usdSaleFromDinarBank.validation.errors.some((error) => error.message.includes('حساب دولار'))).toBe(true)
+    expect(usdPurchaseIntoDinarBank.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(usdPurchaseIntoDinarBank.validation.errors.some((error) => error.message.includes('حساب دولار'))).toBe(true)
+    expect(usdExpenseFromDinarBank.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(usdExpenseFromDinarBank.validation.errors.some((error) => error.message.includes('عملة الحركة'))).toBe(true)
+  })
+
   it('rejects negative amounts for normal posted movements', () => {
     const movement = postMovement(
       {
@@ -351,7 +427,8 @@ describe('mohammad ledger core', () => {
       valueKind: 'receivable',
     })
 
-    expect(account.id).toContain('محمد-الكيفو-كاش')
+    expect(account.id).toContain('محمد-الكيفو-كاش-lyd')
+    expect(account.currencyKind).toBe(CURRENCIES.DINAR)
     expect(validateAccount(account, mohammadAccountCatalog).ok).toBe(true)
     expect(validateAccount({ ...account, ownerName: '' }, mohammadAccountCatalog).ok).toBe(false)
   })
@@ -375,5 +452,25 @@ describe('mohammad ledger core', () => {
 
     expect(validateAccount(account, mohammadAccountCatalog).ok).toBe(false)
     expect(validateAccount(account, [inactiveAccount]).ok).toBe(true)
+  })
+
+  it('allows same owner and detail when account currency is different', () => {
+    const dinarAccount = createAccount({
+      ownerName: 'سعيد',
+      subAccountName: 'نقدي معه',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: 'receivable',
+      currencyKind: CURRENCIES.DINAR,
+    })
+    const usdAccount = createAccount({
+      ownerName: 'سعيد',
+      subAccountName: 'نقدي معه',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: 'receivable',
+      currencyKind: CURRENCIES.USD,
+    })
+
+    expect(dinarAccount.id).not.toBe(usdAccount.id)
+    expect(validateAccount(usdAccount, [dinarAccount]).ok).toBe(true)
   })
 })

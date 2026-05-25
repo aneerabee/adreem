@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
 import { handleMovementCallback } from './movement.js'
@@ -95,5 +95,35 @@ describe('telegram movement flow safety', () => {
     expect(session.step).toBe('amount')
     expect(session.draft.type).toBe(MOVEMENT_TYPES.TRANSFER)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('عملية قديمة')
+  })
+
+  it('clears the chat flow and saves incomplete confirmed movements into review', async () => {
+    const ctx = createCtx()
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      step: 'review',
+      sessionId: 'needs-review-session',
+      uiMessageId: 55,
+      draft: {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 100,
+        currency: CURRENCIES.DINAR,
+        currencyConfirmed: true,
+        sourceAccountId: 'me-cash',
+        destinationAccountId: '',
+        rate: undefined,
+        note: '',
+      },
+      choices: {},
+    })
+
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const saved = ctx.repository.state.movements.find((movement) => movement.idempotencyKey === `${ctx.userId}-needs-review-session`)
+    expect(saved.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم حفظها في المراجعة')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('ستظهر في قسم المراجعة')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('لا تغير الأرصدة قبل الاعتماد')
   })
 })

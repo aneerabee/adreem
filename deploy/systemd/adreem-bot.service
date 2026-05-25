@@ -1,0 +1,17 @@
+[Unit]
+Description=ADREEM Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/argaz/apps/adreem
+EnvironmentFile=/home/argaz/apps/adreem/adreem.env
+ExecStart=/usr/bin/npm run bot:adreem
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/argaz/logs/adreem-bot.log
+StandardError=append:/home/argaz/logs/adreem-bot-error.log
+
+[Install]
+WantedBy=default.target
