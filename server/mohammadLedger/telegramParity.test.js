@@ -37,8 +37,8 @@ function comparableMovement(movement) {
   }
 }
 
-async function telegramMovementFor(draft) {
-  const repository = memoryRepository()
+async function telegramMovementFor(draft, initialState = createMohammadFallbackState()) {
+  const repository = memoryRepository(initialState)
   const result = await appendTelegramMovement(repository, draft, {
     idempotencyKey: `parity-${draft.type}-${draft.amount}-${draft.sourceAccountId || 'none'}-${draft.destinationAccountId || 'none'}`,
     telegramUserId: 1,
@@ -79,6 +79,74 @@ describe('telegram and web movement parity', () => {
 
     const webMovement = postMovement(draft, state.accounts)
     const telegramMovement = await telegramMovementFor(draft)
+
+    expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
+  })
+
+  it('posts a USD purchase with the same currency split as core/web', async () => {
+    const state = createMohammadFallbackState()
+    const draft = {
+      type: MOVEMENT_TYPES.USD_PURCHASE,
+      amount: 750,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-jumhouria',
+      destinationAccountId: 'me-cash',
+      rate: 7.5,
+      note: '',
+    }
+
+    const webMovement = postMovement(draft, state.accounts)
+    const telegramMovement = await telegramMovementFor(draft, state)
+
+    expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
+  })
+
+  it('posts an expense with the same single-account effect as core/web', async () => {
+    const state = createMohammadFallbackState()
+    const draft = {
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 90,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: '',
+      note: 'وقود',
+    }
+
+    const webMovement = postMovement(draft, state.accounts)
+    const telegramMovement = await telegramMovementFor(draft, state)
+
+    expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
+  })
+
+  it('posts a USD transfer with the same compatible-account effect as core/web', async () => {
+    const state = {
+      ...createMohammadFallbackState(),
+      accounts: [
+        ...createMohammadFallbackState().accounts,
+        {
+          id: 'usd-vault',
+          ownerName: 'أنا',
+          subAccountName: 'خزنة دولار',
+          type: 'cash',
+          valueKind: 'cash',
+          currencyKind: CURRENCIES.USD,
+          status: 'active',
+          openingDinar: 0,
+          openingUsd: 0,
+        },
+      ],
+    }
+    const draft = {
+      type: MOVEMENT_TYPES.TRANSFER,
+      amount: 25,
+      currency: CURRENCIES.USD,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: 'usd-vault',
+      note: '',
+    }
+
+    const webMovement = postMovement(draft, state.accounts)
+    const telegramMovement = await telegramMovementFor(draft, state)
 
     expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
   })

@@ -31,7 +31,7 @@ const BROWSER_STATE_ROW_ID = adreemStateRowId(BROWSER_LEDGER_IDENTITY)
 const BROWSER_READABLE_ROW_IDS = BROWSER_STATE_ROW_ID === ADREEM_STATE_ROW_ID
   ? [BROWSER_STATE_ROW_ID, MOHAMMAD_LEGACY_STATE_ROW_ID]
   : [BROWSER_STATE_ROW_ID]
-const BROWSER_STORAGE_KEYS = adreemStorageKeysForRowId(BROWSER_STATE_ROW_ID)
+const DIRECT_BROWSER_STORAGE_KEYS = adreemStorageKeysForRowId(BROWSER_STATE_ROW_ID)
 
 let cachedClient = null
 
@@ -68,6 +68,28 @@ export function adreemStorageKeysForRowId(rowId = ADREEM_STATE_ROW_ID) {
     migrationMarker: `${ADREEM_MIGRATION_MARKER_KEY}${suffix}`,
     canReadLegacy: rowId === ADREEM_STATE_ROW_ID,
   }
+}
+
+function tokenFingerprint(token = '') {
+  const text = String(token || '')
+  let hash = 5381
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) + hash) ^ text.charCodeAt(index)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+export function adreemStorageKeysForApiToken(token = '') {
+  const fingerprint = tokenFingerprint(token)
+  return adreemStorageKeysForRowId(`api:${fingerprint || 'empty'}`)
+}
+
+function browserStorageKeys() {
+  if (ADREEM_API_URL) {
+    const api = getAdreemApiConfig()
+    if (api?.token) return adreemStorageKeysForApiToken(api.token)
+  }
+  return DIRECT_BROWSER_STORAGE_KEYS
 }
 
 function getSupabaseClient() {
@@ -113,20 +135,32 @@ function readLocalStateByKey(key, fallbackState) {
 
 function writeMigrationMarker() {
   if (!hasBrowserStorage()) return
-  window.localStorage.setItem(BROWSER_STORAGE_KEYS.migrationMarker, JSON.stringify({
+  const storageKeys = browserStorageKeys()
+  window.localStorage.setItem(storageKeys.migrationMarker, JSON.stringify({
     from: MOHAMMAD_STORAGE_KEY,
-    to: BROWSER_STORAGE_KEYS.state,
+    to: storageKeys.state,
     migratedAt: new Date().toISOString(),
   }))
 }
 
+function tryWriteLocalBackup(state) {
+  try {
+    writeLocalBackup(state)
+  } catch (err) {
+    console.warn('[mohammad-persistence] local backup failed:', err?.message || err)
+  }
+}
+
 export function loadLocalMohammadState(fallbackState) {
   if (!hasBrowserStorage()) return normalizeLedgerState(fallbackState, fallbackState)
+  const storageKeys = browserStorageKeys()
   const fallback = normalizeLedgerState({ ...fallbackState, ...BROWSER_LEDGER_IDENTITY }, fallbackState)
-  const adreemState = readLocalStateByKey(BROWSER_STORAGE_KEYS.state, fallback)
-  const legacyState = BROWSER_STORAGE_KEYS.canReadLegacy ? readLocalStateByKey(MOHAMMAD_STORAGE_KEY, fallback) : null
+  const adreemState = readLocalStateByKey(storageKeys.state, fallback)
+  const legacyState = storageKeys.canReadLegacy ? readLocalStateByKey(MOHAMMAD_STORAGE_KEY, fallback) : null
 
   if (adreemState && legacyState) {
+    tryWriteLocalBackup(adreemState)
+    tryWriteLocalBackup(legacyState)
     const mergedState = mergeLedgerStates(adreemState, legacyState, fallback)
     writeLocalMohammadState(mergedState)
     writeMigrationMarker()
@@ -135,6 +169,7 @@ export function loadLocalMohammadState(fallbackState) {
 
   if (adreemState) return adreemState
   if (legacyState) {
+    tryWriteLocalBackup(legacyState)
     writeLocalMohammadState(legacyState)
     writeMigrationMarker()
     return legacyState
@@ -145,14 +180,20 @@ export function loadLocalMohammadState(fallbackState) {
 
 function writeLocalMohammadState(state) {
   if (!hasBrowserStorage()) return
-  window.localStorage.setItem(BROWSER_STORAGE_KEYS.state, JSON.stringify(state))
+  window.localStorage.setItem(browserStorageKeys().state, JSON.stringify(state))
 }
 
 function writeLocalBackup(state) {
   if (!hasBrowserStorage()) return
-  const rawBackups = window.localStorage.getItem(BROWSER_STORAGE_KEYS.backup) ||
-    (BROWSER_STORAGE_KEYS.canReadLegacy ? window.localStorage.getItem(LEGACY_BACKUP_STORAGE_KEY) : null)
-  const backups = rawBackups ? JSON.parse(rawBackups) : []
+  const storageKeys = browserStorageKeys()
+  const rawBackups = window.localStorage.getItem(storageKeys.backup) ||
+    (storageKeys.canReadLegacy ? window.localStorage.getItem(LEGACY_BACKUP_STORAGE_KEY) : null)
+  let backups = []
+  try {
+    backups = rawBackups ? JSON.parse(rawBackups) : []
+  } catch {
+    backups = []
+  }
   const nextBackups = [
     {
       savedAt: state.savedAt,
@@ -162,14 +203,15 @@ function writeLocalBackup(state) {
     },
     ...(Array.isArray(backups) ? backups : []),
   ].slice(0, BACKUP_LIMIT)
-  window.localStorage.setItem(BROWSER_STORAGE_KEYS.backup, JSON.stringify(nextBackups))
+  window.localStorage.setItem(storageKeys.backup, JSON.stringify(nextBackups))
 }
 
 export function listLocalAdreemBackups() {
   if (!hasBrowserStorage()) return []
   try {
-    const raw = window.localStorage.getItem(BROWSER_STORAGE_KEYS.backup) ||
-      (BROWSER_STORAGE_KEYS.canReadLegacy ? window.localStorage.getItem(LEGACY_BACKUP_STORAGE_KEY) : null)
+    const storageKeys = browserStorageKeys()
+    const raw = window.localStorage.getItem(storageKeys.backup) ||
+      (storageKeys.canReadLegacy ? window.localStorage.getItem(LEGACY_BACKUP_STORAGE_KEY) : null)
     const backups = raw ? JSON.parse(raw) : []
     return Array.isArray(backups) ? backups.filter((backup) => backup?.state) : []
   } catch {
@@ -290,11 +332,7 @@ export async function saveMohammadPersistedState(state) {
   )
 
   writeLocalMohammadState(normalizedState)
-  try {
-    writeLocalBackup(normalizedState)
-  } catch (err) {
-    console.warn('[mohammad-persistence] local backup failed:', err?.message || err)
-  }
+  tryWriteLocalBackup(normalizedState)
 
   if (getMohammadPersistenceMode() !== 'supabase') {
     if (getMohammadPersistenceMode() === 'api') {

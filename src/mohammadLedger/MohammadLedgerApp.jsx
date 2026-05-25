@@ -51,7 +51,9 @@ import {
   movementConfigFor,
   movementDefaultsFor,
   movementLabels,
+  movementNeedsSource,
   movementPreferredAccountIds,
+  movementSupportsDimension,
   movementTone,
   movementTypeOptions,
 } from './movementConfig'
@@ -63,10 +65,13 @@ import {
   RECURRING_FREQUENCIES,
   attachmentsForRecord,
   buildDimensionReports,
+  buildLedgerAlerts,
+  buildReconciliationCorrectionDrafts,
   createAttachment,
   createAuditEvent,
   createReconciliation,
   createRecurringRuleFromMovement,
+  disableRecurringRule,
   dimensionsFromAccounts,
   dueRecurringRules,
   lastReconciliationForAccount,
@@ -85,9 +90,9 @@ const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
 
 const accountGroupTabs = [
-  { key: 'people', label: 'مالي + ناس', title: 'مالي والناس' },
+  { key: 'people', label: 'مالي والناس', title: 'مالي والناس' },
   { key: 'assets', label: 'أصول', title: 'الأصول' },
-  { key: 'expenses', label: 'مصروف', title: 'المصروف' },
+  { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
   { key: 'review', label: 'مراجعة', title: 'مراجعة' },
 ]
 
@@ -177,7 +182,7 @@ function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
     type,
     amount: '',
     currency: config.currency || CURRENCIES.DINAR,
-    sourceAccountId: defaults.sourceAccountId,
+    sourceAccountId: config.needsSource === false ? '' : defaults.sourceAccountId,
     destinationAccountId: config.needsDestination ? defaults.destinationAccountId : '',
     rate: '',
     note: '',
@@ -669,7 +674,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
           <div>
             <span>{accountKindText(account)}</span>
             <h2>{accountLabel(account)}</h2>
-            <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'حساب علاقة ودين' : 'حساب مالي داخل الدفتر'}</p>
+            <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'دين / رصيد' : 'داخل الدفتر'}</p>
           </div>
         </div>
 
@@ -694,7 +699,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
         </div>
 
         <form className="ml3-profile-reconcile" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
-          <h3>مطابقة الرصيد</h3>
+          <h3>مطابقة</h3>
           {lastReconciliation ? (
             <p className="ml3-profile-note">
               آخر مطابقة: {movementDateTime(lastReconciliation.createdAt)} · {lastReconciliation.note}
@@ -711,14 +716,14 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
             </label>
             <label>
               ملاحظة
-              <input name="note" placeholder="سبب المطابقة مطلوب" />
+              <input name="note" placeholder="الملاحظة مطلوبة" />
             </label>
           </div>
           <button type="submit">إنشاء تصحيح</button>
         </form>
 
         <form className="ml3-profile-reconcile" onSubmit={(event) => onAddAttachment(event, account.id)}>
-          <h3>مرفقات الحساب</h3>
+          <h3>مرفقات</h3>
           <div className="ml3-profile-editor-grid">
             <label>
               اسم المرفق
@@ -740,7 +745,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
         </form>
 
         <form className="ml3-profile-editor" onSubmit={(event) => onUpdateAccount(event, account.id)}>
-          <h3>تعديل التصنيف</h3>
+          <h3>تصنيف الحساب</h3>
           <div className="ml3-profile-editor-grid">
             <label>
               الاسم الظاهر
@@ -763,7 +768,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
         </form>
 
         <div className="ml3-profile-movements">
-          <h3>حركات الحساب</h3>
+          <h3>الحركات</h3>
           {relatedMovements.length === 0 ? <p className="ml3-empty">لا توجد حركات لهذا الحساب.</p> : null}
           {relatedMovements.map((movement) => {
             const impacts = movementAccountImpact(movement, account.id)
@@ -893,6 +898,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
     note: movement.note || '',
   })
   const reviewConfig = movementConfigFor(reviewDraft.type)
+  const reviewNeedsSource = movementNeedsSource(reviewDraft.type)
   const reviewSourceAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'source', reviewDraft)
   const reviewDestinationAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'destination', reviewDraft)
 
@@ -958,6 +964,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
             />
           </div>
         ) : null}
+        {reviewNeedsSource ? (
         <div className="ml3-decision-wide">
           <AccountSearchSelect
             label={reviewConfig.sourceLabel || 'من'}
@@ -968,6 +975,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
             balanceByAccountId={balanceByAccountId}
           />
         </div>
+        ) : null}
         {reviewConfig.needsDestination ? (
           <div className="ml3-decision-wide">
             <AccountSearchSelect
@@ -995,18 +1003,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
 }
 
 function AlertBoard({ reviewAccounts, reviewMovements, externalMissing, balances, totals, dueRecurringCount = 0, reconciliationDiffCount = 0 }) {
-  const alerts = []
-  const negativeMoneyAccounts = balances.filter((bucket) =>
-    (bucket.account.valueKind === VALUE_KINDS.CASH || bucket.account.valueKind === VALUE_KINDS.BANK) &&
-    Math.round(bucket.dinar) < 0,
-  )
-  if (reviewMovements.length) alerts.push({ tone: 'danger', title: 'حركات ناقصة', detail: formatCount(reviewMovements.length) })
-  if (reviewAccounts.length) alerts.push({ tone: 'warning', title: 'حسابات للتصنيف', detail: formatCount(reviewAccounts.length) })
-  if (externalMissing.length) alerts.push({ tone: 'info', title: 'أسماء جديدة', detail: formatCount(externalMissing.length) })
-  if (negativeMoneyAccounts.length) alerts.push({ tone: 'danger', title: 'حساب مالي ناقص', detail: formatCount(negativeMoneyAccounts.length) })
-  if (Math.round(totals.iOwePeople) > 0) alerts.push({ tone: 'warning', title: 'أدفع للناس', detail: money(totals.iOwePeople) })
-  if (dueRecurringCount) alerts.push({ tone: 'info', title: 'حركات متكررة', detail: formatCount(dueRecurringCount) })
-  if (reconciliationDiffCount) alerts.push({ tone: 'warning', title: 'فروق مطابقة', detail: formatCount(reconciliationDiffCount) })
+  const alerts = buildLedgerAlerts({ reviewAccounts, reviewMovements, externalMissing, balances, totals, dueRecurringCount, reconciliationDiffCount })
   if (!alerts.length) return null
 
   return (
@@ -1019,7 +1016,7 @@ function AlertBoard({ reviewAccounts, reviewMovements, externalMissing, balances
         {alerts.map((alert) => (
           <article className={`ml3-alert ml3-alert--${alert.tone}`} key={alert.title}>
             <strong>{alert.title}</strong>
-            <span>{alert.detail}</span>
+            <span>{alert.format === 'money' ? money(alert.value) : formatCount(alert.value)}</span>
           </article>
         ))}
       </div>
@@ -1103,6 +1100,9 @@ export default function MohammadLedgerApp() {
   const [pendingUndo, setPendingUndo] = useState(null)
   const [activeReviewKey, setActiveReviewKey] = useState('')
   const [editingMovementId, setEditingMovementId] = useState('')
+  const [historyQuery, setHistoryQuery] = useState('')
+  const [historyType, setHistoryType] = useState('')
+  const [historyStatus, setHistoryStatus] = useState('')
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -1185,6 +1185,24 @@ export default function MohammadLedgerApp() {
   }, [balancesByKind.review, reviewMovements, unresolvedExternalAccounts])
   const activeReviewItem = reviewItems.find((item) => item.key === activeReviewKey) || reviewItems[0] || null
   const postedUserMovements = movements.filter((movement) => !movement.id?.startsWith('opening-')).slice().reverse()
+  const filteredHistoryMovements = useMemo(() => {
+    const normalizedQuery = historyQuery.trim().toLowerCase()
+    return postedUserMovements.filter((movement) => {
+      if (historyType && movement.type !== historyType) return false
+      if (historyStatus && movement.status !== historyStatus) return false
+      if (!normalizedQuery) return true
+      const source = accountById.get(movement.sourceAccountId)
+      const destination = accountById.get(movement.destinationAccountId)
+      const haystack = [
+        movementLabels[movement.type],
+        movementStatusLabel(movement.status),
+        movement.note,
+        source ? accountLabel(source) : '',
+        destination ? accountLabel(destination) : '',
+      ].join(' ').toLowerCase()
+      return haystack.includes(normalizedQuery)
+    })
+  }, [accountById, historyQuery, historyStatus, historyType, postedUserMovements])
   const todayMovements = postedUserMovements.filter((movement) => isToday(movement.createdAt || movement.updatedAt))
   const totals = useMemo(() => {
     return balances.reduce(
@@ -1204,12 +1222,16 @@ export default function MohammadLedgerApp() {
   }, [balances])
 
   const movementConfig = movementConfigFor(movementDraft.type)
+  const movementSourceRequired = movementNeedsSource(movementDraft.type)
+  const movementUsesDimension = movementSupportsDimension(movementDraft.type)
   const normalizedDraft = {
     ...movementDraft,
     amount: parseWholeAmount(movementDraft.amount),
     currency: movementConfig.currency || movementDraft.currency,
+    sourceAccountId: movementSourceRequired ? movementDraft.sourceAccountId : null,
     destinationAccountId: movementConfig.needsDestination ? movementDraft.destinationAccountId : null,
     rate: movementDraft.rate === '' ? undefined : Number(movementDraft.rate),
+    dimensionId: movementUsesDimension ? movementDraft.dimensionId || '' : '',
   }
   const preview = previewMovement(normalizedDraft, accounts, movements)
   const hasMovementAmount = Number.isFinite(normalizedDraft.amount) && normalizedDraft.amount > 0
@@ -1231,9 +1253,9 @@ export default function MohammadLedgerApp() {
     [ledgerExtras.reconciliations],
   )
   const hasMovementAccounts =
-    Boolean(movementDraft.sourceAccountId) &&
+    (!movementSourceRequired || Boolean(movementDraft.sourceAccountId)) &&
     (!movementConfig.needsDestination || Boolean(movementDraft.destinationAccountId)) &&
-    (!movementConfig.needsDestination || !sameLogicalAccount(selectedSourceAccount, selectedDestinationAccount))
+    (!movementConfig.needsDestination || !selectedSourceAccount || !sameLogicalAccount(selectedSourceAccount, selectedDestinationAccount))
   const canReviewMovement = canChooseMovementAccounts && hasMovementAccounts && movementStep >= MOVEMENT_ENTRY_STEPS.REVIEW
   const selectedBucket = balances.find((bucket) => bucket.account.id === selectedAccountId) || null
   const draftSourceAccount = selectedSourceAccount
@@ -1345,19 +1367,23 @@ export default function MohammadLedgerApp() {
       ...current,
       type,
       currency: config.currency || current.currency,
-      sourceAccountId: defaults.sourceAccountId,
+      sourceAccountId: movementNeedsSource(type) ? defaults.sourceAccountId : '',
       destinationAccountId: config.needsDestination ? defaults.destinationAccountId : '',
       rate: config.needsRate ? current.rate : '',
+      dimensionId: movementSupportsDimension(type) ? current.dimensionId : '',
     }))
   }
 
   function nextMovementStep(step = movementStep) {
+    const firstAccountStep = movementSourceRequired
+      ? MOVEMENT_ENTRY_STEPS.SOURCE
+      : (movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : MOVEMENT_ENTRY_STEPS.NOTE)
     if (step === MOVEMENT_ENTRY_STEPS.TYPE) return MOVEMENT_ENTRY_STEPS.AMOUNT
     if (step === MOVEMENT_ENTRY_STEPS.AMOUNT) return movementConfig.currencyLocked
-      ? (movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : MOVEMENT_ENTRY_STEPS.SOURCE)
+      ? (movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : firstAccountStep)
       : MOVEMENT_ENTRY_STEPS.CURRENCY
-    if (step === MOVEMENT_ENTRY_STEPS.CURRENCY) return movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : MOVEMENT_ENTRY_STEPS.SOURCE
-    if (step === MOVEMENT_ENTRY_STEPS.RATE) return MOVEMENT_ENTRY_STEPS.SOURCE
+    if (step === MOVEMENT_ENTRY_STEPS.CURRENCY) return movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : firstAccountStep
+    if (step === MOVEMENT_ENTRY_STEPS.RATE) return firstAccountStep
     if (step === MOVEMENT_ENTRY_STEPS.SOURCE) return movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : MOVEMENT_ENTRY_STEPS.NOTE
     if (step === MOVEMENT_ENTRY_STEPS.DESTINATION) return MOVEMENT_ENTRY_STEPS.NOTE
     if (step === MOVEMENT_ENTRY_STEPS.NOTE) return MOVEMENT_ENTRY_STEPS.REVIEW
@@ -1378,6 +1404,21 @@ export default function MohammadLedgerApp() {
 
   function preferredMovementAccountIds(role) {
     return movementPreferredAccountIds(movementDraft.type, role)
+  }
+
+  function movementStepNumber(step) {
+    const visibleSteps = [
+      MOVEMENT_ENTRY_STEPS.TYPE,
+      MOVEMENT_ENTRY_STEPS.AMOUNT,
+      MOVEMENT_ENTRY_STEPS.CURRENCY,
+      movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : null,
+      movementSourceRequired ? MOVEMENT_ENTRY_STEPS.SOURCE : null,
+      movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : null,
+      MOVEMENT_ENTRY_STEPS.NOTE,
+      MOVEMENT_ENTRY_STEPS.REVIEW,
+    ].filter(Boolean)
+    const index = visibleSteps.indexOf(step)
+    return index >= 0 ? index + 1 : step
   }
 
   function chooseAccountPreset(preset) {
@@ -1401,7 +1442,7 @@ export default function MohammadLedgerApp() {
         id: originalMovement?.id,
         createdAt: originalMovement?.createdAt,
         note: movementDraft.note.trim(),
-        dimensionId: movementDraft.dimensionId || '',
+        dimensionId: movementSupportsDimension(movementDraft.type) ? movementDraft.dimensionId || '' : '',
       },
       accounts,
     )
@@ -1563,27 +1604,6 @@ export default function MohammadLedgerApp() {
       setFeedback('المطابقة تحتاج ملاحظة واضحة.')
       return
     }
-    const corrections = [
-      { currency: CURRENCIES.DINAR, delta: actualDinar - Math.round(Number(currentDinar || 0)) },
-      { currency: CURRENCIES.USD, delta: actualUsd - Math.round(Number(currentUsd || 0)) },
-    ].filter((item) => item.delta !== 0)
-
-    const nextMovements = corrections.map((item) =>
-      postMovement(
-        {
-          type: MOVEMENT_TYPES.CORRECTION,
-          amount: item.delta,
-          currency: item.currency,
-          sourceAccountId: null,
-          destinationAccountId: accountId,
-          note,
-        },
-        accounts,
-      ),
-    )
-    if (nextMovements.length) {
-      setMovements((current) => [...current, ...nextMovements])
-    }
     const record = createReconciliation({
       accountId,
       actualDinar,
@@ -1592,6 +1612,10 @@ export default function MohammadLedgerApp() {
       expectedUsd: currentUsd,
       note,
     })
+    const nextMovements = buildReconciliationCorrectionDrafts(record).map((draft) => postMovement(draft, accounts))
+    if (nextMovements.length) {
+      setMovements((current) => [...current, ...nextMovements])
+    }
     setLedgerExtras((current) => ({
       ...current,
       reconciliations: [...(current.reconciliations || []), record],
@@ -1654,7 +1678,7 @@ export default function MohammadLedgerApp() {
     setLedgerExtras((current) => ({
       ...current,
       recurringRules: (current.recurringRules || []).map((item) =>
-        item.id === ruleId ? { ...item, status: 'inactive', disabledAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : item,
+        item.id === ruleId ? disableRecurringRule(item) : item,
       ),
       auditEvents: [
         ...(current.auditEvents || []),
@@ -1742,7 +1766,7 @@ export default function MohammadLedgerApp() {
       destinationAccountId: movement.destinationAccountId || '',
       rate: movement.rate ? String(movement.rate) : '',
       note: movement.note || '',
-      dimensionId: movement.dimensionId || '',
+      dimensionId: movementSupportsDimension(movement.type) ? movement.dimensionId || '' : '',
       attachmentLabel: '',
       attachmentUrl: '',
       recurringEnabled: false,
@@ -1760,10 +1784,11 @@ export default function MohammadLedgerApp() {
         type: reviewDraft.type,
         amount: parseWholeAmount(reviewDraft.amount),
         currency: config.currency || reviewDraft.currency,
-        sourceAccountId: reviewDraft.sourceAccountId || null,
+        sourceAccountId: movementNeedsSource(reviewDraft.type) ? reviewDraft.sourceAccountId || null : null,
         destinationAccountId: config.needsDestination ? reviewDraft.destinationAccountId || null : null,
         rate: reviewDraft.rate === '' ? undefined : Number(reviewDraft.rate),
         note: String(reviewDraft.note || '').trim(),
+        dimensionId: movementSupportsDimension(reviewDraft.type) ? movement.dimensionId || '' : '',
       },
       accounts,
     )
@@ -1901,11 +1926,31 @@ export default function MohammadLedgerApp() {
             <div>
             <h2>الحركات</h2>
             </div>
-            <span>{formatCount(postedUserMovements.length)}</span>
+            <span>{formatCount(filteredHistoryMovements.length)}</span>
+          </div>
+          <div className="ml3-history-filters" aria-label="فلترة الحركات">
+            <input
+              value={historyQuery}
+              onChange={(event) => setHistoryQuery(event.target.value)}
+              placeholder="بحث باسم أو ملاحظة"
+            />
+            <select value={historyType} onChange={(event) => setHistoryType(event.target.value)}>
+              <option value="">كل الأنواع</option>
+              {movementTypeOptions.map((option) => (
+                <option key={option.type} value={option.type}>{option.label}</option>
+              ))}
+              <option value={MOVEMENT_TYPES.CORRECTION}>تعديل رصيد</option>
+            </select>
+            <select value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value)}>
+              <option value="">كل الحالات</option>
+              <option value={MOVEMENT_STATUSES.POSTED}>تم</option>
+              <option value={MOVEMENT_STATUSES.NEEDS_REVIEW}>ناقص</option>
+              <option value={MOVEMENT_STATUSES.VOIDED}>ملغي</option>
+            </select>
           </div>
           <div className="ml3-history-list">
-            {postedUserMovements.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
-            {postedUserMovements.map((movement) => (
+            {filteredHistoryMovements.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
+            {filteredHistoryMovements.map((movement) => (
               <HistoryMovementRow
                 key={movement.id}
                 movement={movement}
@@ -2204,10 +2249,10 @@ export default function MohammadLedgerApp() {
               </section>
               ) : null}
 
-              {movementStep > MOVEMENT_ENTRY_STEPS.SOURCE ? (
+              {movementSourceRequired && movementStep > MOVEMENT_ENTRY_STEPS.SOURCE ? (
                 <section className="ml3-step ml3-step--source is-done">
                   <div className="ml3-step-head">
-                    <span>{movementConfig.needsRate ? 5 : 4}</span>
+                    <span>{movementStepNumber(MOVEMENT_ENTRY_STEPS.SOURCE)}</span>
                     <strong>{movementConfig.sourceLabel}</strong>
                     <button type="button" onClick={() => editMovementStep(MOVEMENT_ENTRY_STEPS.SOURCE)}>تعديل</button>
                   </div>
@@ -2215,10 +2260,10 @@ export default function MohammadLedgerApp() {
                 </section>
               ) : null}
 
-              {movementStep === MOVEMENT_ENTRY_STEPS.SOURCE ? (
+              {movementSourceRequired && movementStep === MOVEMENT_ENTRY_STEPS.SOURCE ? (
               <section className="ml3-step ml3-step--source is-open">
                 <div className="ml3-step-head">
-                  <span>{movementConfig.needsRate ? 5 : 4}</span>
+                  <span>{movementStepNumber(MOVEMENT_ENTRY_STEPS.SOURCE)}</span>
                   <strong>{movementConfig.sourceLabel}</strong>
                 </div>
                 <div className="ml3-route-picker is-single">
@@ -2240,7 +2285,7 @@ export default function MohammadLedgerApp() {
               {movementConfig.needsDestination && movementStep > MOVEMENT_ENTRY_STEPS.DESTINATION ? (
                 <section className="ml3-step ml3-step--destination is-done">
                   <div className="ml3-step-head">
-                    <span>{movementConfig.needsRate ? 6 : 5}</span>
+                    <span>{movementStepNumber(MOVEMENT_ENTRY_STEPS.DESTINATION)}</span>
                     <strong>{movementConfig.destinationLabel}</strong>
                     <button type="button" onClick={() => editMovementStep(MOVEMENT_ENTRY_STEPS.DESTINATION)}>تعديل</button>
                   </div>
@@ -2251,7 +2296,7 @@ export default function MohammadLedgerApp() {
               {movementConfig.needsDestination && movementStep === MOVEMENT_ENTRY_STEPS.DESTINATION ? (
               <section className="ml3-step ml3-step--destination is-open">
                 <div className="ml3-step-head">
-                  <span>{movementConfig.needsRate ? 6 : 5}</span>
+                  <span>{movementStepNumber(MOVEMENT_ENTRY_STEPS.DESTINATION)}</span>
                   <strong>{movementConfig.destinationLabel}</strong>
                 </div>
                 <div className="ml3-route-picker is-single">
@@ -2272,7 +2317,7 @@ export default function MohammadLedgerApp() {
               {movementStep > MOVEMENT_ENTRY_STEPS.NOTE ? (
                 <section className="ml3-step ml3-step--note is-done">
                   <div className="ml3-step-head">
-                    <span>{movementConfig.needsRate ? (movementConfig.needsDestination ? 7 : 6) : (movementConfig.needsDestination ? 6 : 5)}</span>
+                    <span>{movementStepNumber(MOVEMENT_ENTRY_STEPS.NOTE)}</span>
                     <strong>ملاحظة</strong>
                     <button type="button" onClick={() => editMovementStep(MOVEMENT_ENTRY_STEPS.NOTE)}>تعديل</button>
                   </div>
@@ -2283,7 +2328,7 @@ export default function MohammadLedgerApp() {
               {movementStep === MOVEMENT_ENTRY_STEPS.NOTE ? (
               <section className="ml3-step ml3-step--note is-open">
                 <div className="ml3-step-head">
-                  <span>{movementConfig.needsRate ? (movementConfig.needsDestination ? 7 : 6) : (movementConfig.needsDestination ? 6 : 5)}</span>
+                  <span>{movementStepNumber(MOVEMENT_ENTRY_STEPS.NOTE)}</span>
                   <strong>ملاحظة</strong>
                 </div>
                 <label>
@@ -2295,15 +2340,17 @@ export default function MohammadLedgerApp() {
                   />
                 </label>
                 <div className="ml3-extra-grid">
-                  <label>
-                    مشروع / أصل
-                    <select value={movementDraft.dimensionId} onChange={(event) => updateMovementDraft('dimensionId', event.target.value)}>
-                      <option value="">بدون ربط</option>
-                      {activeDimensions.map((dimension) => (
-                        <option key={dimension.id} value={dimension.id}>{dimension.name}</option>
-                      ))}
-                    </select>
-                  </label>
+                  {movementUsesDimension ? (
+                    <label>
+                      مشروع / أصل
+                      <select value={movementDraft.dimensionId} onChange={(event) => updateMovementDraft('dimensionId', event.target.value)}>
+                        <option value="">بدون ربط</option>
+                        {activeDimensions.map((dimension) => (
+                          <option key={dimension.id} value={dimension.id}>{dimension.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <label>
                     مرفق
                     <input
@@ -2338,7 +2385,7 @@ export default function MohammadLedgerApp() {
               {canReviewMovement ? (
               <section className="ml3-step ml3-step--review ml3-step--final is-open">
                 <div className="ml3-step-head">
-                  <span>{movementConfig.needsRate ? (movementConfig.needsDestination ? 8 : 7) : (movementConfig.needsDestination ? 7 : 6)}</span>
+                  <span>{movementStepNumber(MOVEMENT_ENTRY_STEPS.REVIEW)}</span>
                   <strong>{preview.validation.ok ? 'راجع التأثير' : 'أكمل الناقص'}</strong>
                 </div>
                 <div className={`ml3-preview ${preview.validation.ok ? 'is-ok' : 'is-review'}`}>

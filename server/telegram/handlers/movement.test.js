@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
-import { handleMovementCallback } from './movement.js'
+import { handleMovementCallback, handleMovementText } from './movement.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
   let state = initialState
@@ -125,5 +125,34 @@ describe('telegram movement flow safety', () => {
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم حفظها في المراجعة')
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('ستظهر في قسم المراجعة')
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('لا تغير الأرصدة قبل الاعتماد')
+  })
+
+  it('skips the source step for external income and asks directly for the destination account', async () => {
+    const ctx = createCtx()
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      step: 'amount',
+      sessionId: 'income-session',
+      uiMessageId: 55,
+      draft: {
+        type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+        amount: 0,
+        currency: '',
+        currencyConfirmed: false,
+        sourceAccountId: '',
+        destinationAccountId: '',
+        rate: undefined,
+        note: '',
+      },
+      choices: {},
+    })
+
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '100')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.step).toBe('destination')
+    expect(session.draft.sourceAccountId).toBe('')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('أين دخل المال')
   })
 })

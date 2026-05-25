@@ -25,6 +25,12 @@ export const movementTypeOptions = [
     tone: 'expense',
   },
   {
+    type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+    label: 'دخل',
+    detail: 'مال يدخل من خارج الدفتر',
+    tone: 'income',
+  },
+  {
     type: MOVEMENT_TYPES.USD_SALE,
     label: 'بعت دولار',
     detail: 'دولار يخرج ودينار يدخل',
@@ -71,6 +77,7 @@ export const movementConfigs = {
   [MOVEMENT_TYPES.TRUCK_INCOME]: {
     amountLabel: 'كم دخل الشاحنة؟',
     currencyLocked: false,
+    needsSource: false,
     needsDestination: true,
     needsRate: false,
     sourceLabel: 'مصدر خارجي',
@@ -110,6 +117,7 @@ export const movementConfigs = {
   [MOVEMENT_TYPES.EXTERNAL_INCOME]: {
     amountLabel: 'كم الدخل؟',
     currencyLocked: false,
+    needsSource: false,
     needsDestination: true,
     needsRate: false,
     sourceLabel: 'مصدر خارجي',
@@ -121,6 +129,7 @@ export const movementConfigs = {
   [MOVEMENT_TYPES.CORRECTION]: {
     amountLabel: 'قيمة التصحيح',
     currencyLocked: false,
+    needsSource: false,
     needsDestination: true,
     needsRate: false,
     sourceLabel: 'تصحيح',
@@ -175,8 +184,21 @@ export function movementNeedsDestination(type) {
   return movementConfigFor(type).needsDestination
 }
 
+export function movementNeedsSource(type) {
+  return movementConfigFor(type).needsSource !== false
+}
+
 export function movementNeedsRate(type) {
   return movementConfigFor(type).needsRate
+}
+
+export function movementSupportsDimension(type) {
+  return [
+    MOVEMENT_TYPES.EXPENSE,
+    MOVEMENT_TYPES.TRUCK_EXPENSE,
+    MOVEMENT_TYPES.EXTERNAL_INCOME,
+    MOVEMENT_TYPES.TRUCK_INCOME,
+  ].includes(type)
 }
 
 export function movementCurrencyFor(type, fallback = CURRENCIES.DINAR) {
@@ -185,6 +207,7 @@ export function movementCurrencyFor(type, fallback = CURRENCIES.DINAR) {
 
 export function movementTone(type) {
   if (type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) return 'expense'
+  if (type === MOVEMENT_TYPES.EXTERNAL_INCOME || type === MOVEMENT_TYPES.TRUCK_INCOME) return 'income'
   if (type === MOVEMENT_TYPES.USD_SALE) return 'sale'
   if (type === MOVEMENT_TYPES.USD_PURCHASE) return 'purchase'
   if (type === MOVEMENT_TYPES.TRANSFER) return 'transfer'

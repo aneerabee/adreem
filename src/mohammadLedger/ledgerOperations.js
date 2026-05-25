@@ -12,6 +12,15 @@ export const RECURRING_FREQUENCIES = {
   MONTHLY: 'monthly',
 }
 
+export const ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024
+export const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
+  '',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+])
+
 function nowIso() {
   return new Date().toISOString()
 }
@@ -89,10 +98,30 @@ export function buildDimensionReports(state = {}) {
   }).sort((a, b) => (Math.abs(b.net) + Math.abs(b.netUsd)) - (Math.abs(a.net) + Math.abs(a.netUsd)) || b.movementCount - a.movementCount)
 }
 
-export function createAttachment({ movementId = '', accountId = '', label = '', url = '', source = 'web' } = {}) {
+export function validateAttachmentDraft({ label = '', url = '', mimeType = '', sizeBytes = 0 } = {}) {
+  const errors = []
   const cleanLabel = String(label || url || '').trim()
   const cleanUrl = String(url || '').trim()
-  if (!cleanLabel && !cleanUrl) return null
+  const cleanMimeType = String(mimeType || '').trim().toLowerCase()
+  const cleanSize = Number(sizeBytes || 0)
+
+  if (!cleanLabel && !cleanUrl) errors.push({ field: 'label', message: 'اكتب اسم المرفق أو رابطه.' })
+  if (cleanMimeType && !ALLOWED_ATTACHMENT_MIME_TYPES.has(cleanMimeType)) {
+    errors.push({ field: 'mimeType', message: 'نوع المرفق غير مسموح.' })
+  }
+  if (Number.isFinite(cleanSize) && cleanSize > ATTACHMENT_MAX_SIZE_BYTES) {
+    errors.push({ field: 'sizeBytes', message: 'حجم المرفق أكبر من الحد المسموح.' })
+  }
+
+  return { ok: errors.length === 0, errors }
+}
+
+export function createAttachment({ movementId = '', accountId = '', label = '', url = '', source = 'web', mimeType = '', sizeBytes = 0, storagePath = '' } = {}) {
+  const validation = validateAttachmentDraft({ label, url, mimeType, sizeBytes })
+  if (!validation.ok) return null
+  const cleanLabel = String(label || url || '').trim()
+  const cleanUrl = String(url || '').trim()
+  const cleanMimeType = String(mimeType || '').trim().toLowerCase()
   const createdAt = nowIso()
   return {
     id: stableId('attachment', `${movementId || accountId}-${cleanLabel || cleanUrl}-${createdAt}`),
@@ -101,6 +130,9 @@ export function createAttachment({ movementId = '', accountId = '', label = '', 
     label: cleanLabel || cleanUrl,
     url: cleanUrl,
     source,
+    mimeType: cleanMimeType,
+    sizeBytes: Math.max(0, Math.round(Number(sizeBytes || 0))),
+    storagePath: String(storagePath || '').trim(),
     createdAt,
     updatedAt: createdAt,
   }
@@ -116,16 +148,41 @@ export function attachmentsForRecord(attachments = [], { movementId = '', accoun
 
 export function createReconciliation({ accountId, actualDinar, actualUsd, expectedDinar, expectedUsd, note = '' }) {
   const createdAt = nowIso()
+  const roundedActualDinar = Math.round(Number(actualDinar || 0))
+  const roundedActualUsd = Math.round(Number(actualUsd || 0))
+  const roundedExpectedDinar = Math.round(Number(expectedDinar || 0))
+  const roundedExpectedUsd = Math.round(Number(expectedUsd || 0))
   return {
     id: stableId('reconcile', `${accountId}-${createdAt}`),
     accountId,
-    actualDinar: Math.round(Number(actualDinar || 0)),
-    actualUsd: Math.round(Number(actualUsd || 0)),
-    expectedDinar: Math.round(Number(expectedDinar || 0)),
-    expectedUsd: Math.round(Number(expectedUsd || 0)),
+    actualDinar: roundedActualDinar,
+    actualUsd: roundedActualUsd,
+    expectedDinar: roundedExpectedDinar,
+    expectedUsd: roundedExpectedUsd,
+    diffDinar: roundedActualDinar - roundedExpectedDinar,
+    diffUsd: roundedActualUsd - roundedExpectedUsd,
     note: String(note || '').trim(),
     createdAt,
   }
+}
+
+export function buildReconciliationCorrectionDrafts(reconciliation) {
+  if (!reconciliation?.accountId) return []
+  const note = String(reconciliation.note || '').trim()
+  return [
+    { currency: CURRENCIES.DINAR, delta: Number(reconciliation.diffDinar || 0) },
+    { currency: CURRENCIES.USD, delta: Number(reconciliation.diffUsd || 0) },
+  ]
+    .filter((item) => item.delta !== 0)
+    .map((item) => ({
+      type: MOVEMENT_TYPES.CORRECTION,
+      amount: item.delta,
+      currency: item.currency,
+      sourceAccountId: null,
+      destinationAccountId: reconciliation.accountId,
+      note,
+      reconciliationId: reconciliation.id,
+    }))
 }
 
 export function lastReconciliationForAccount(reconciliations = [], accountId) {
@@ -166,6 +223,31 @@ export function dueRecurringRules(rules = [], date = new Date()) {
     .filter((rule) => rule.lastRunKey !== key)
 }
 
+export function buildLedgerAlerts({
+  reviewAccounts = [],
+  reviewMovements = [],
+  externalMissing = [],
+  balances = [],
+  totals = {},
+  dueRecurringCount = 0,
+  reconciliationDiffCount = 0,
+} = {}) {
+  const alerts = []
+  const negativeMoneyAccounts = balances.filter((bucket) =>
+    (bucket.account?.valueKind === VALUE_KINDS.CASH || bucket.account?.valueKind === VALUE_KINDS.BANK) &&
+    Math.round(bucket.dinar || 0) < 0,
+  )
+
+  if (reviewMovements.length) alerts.push({ tone: 'danger', title: 'حركات ناقصة', value: reviewMovements.length })
+  if (reviewAccounts.length) alerts.push({ tone: 'warning', title: 'حسابات للتصنيف', value: reviewAccounts.length })
+  if (externalMissing.length) alerts.push({ tone: 'info', title: 'أسماء جديدة', value: externalMissing.length })
+  if (negativeMoneyAccounts.length) alerts.push({ tone: 'danger', title: 'حساب مالي ناقص', value: negativeMoneyAccounts.length })
+  if (Math.round(Number(totals.iOwePeople || 0)) > 0) alerts.push({ tone: 'warning', title: 'أدفع للناس', value: Math.round(Number(totals.iOwePeople || 0)), format: 'money' })
+  if (dueRecurringCount) alerts.push({ tone: 'info', title: 'حركات متكررة', value: dueRecurringCount })
+  if (reconciliationDiffCount) alerts.push({ tone: 'warning', title: 'فروق مطابقة', value: reconciliationDiffCount })
+  return alerts
+}
+
 export function runRecurringRule(rule, accounts = [], date = new Date()) {
   const runKey = monthKey(date)
   const movement = postMovement(
@@ -194,6 +276,16 @@ export function runRecurringRule(rule, accounts = [], date = new Date()) {
             updatedAt: nowIso(),
           }),
     },
+  }
+}
+
+export function disableRecurringRule(rule, disabledAt = nowIso()) {
+  if (!rule) return null
+  return {
+    ...rule,
+    status: 'inactive',
+    disabledAt,
+    updatedAt: disabledAt,
   }
 }
 

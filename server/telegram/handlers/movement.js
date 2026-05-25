@@ -6,6 +6,7 @@ import {
   movementLabels,
   movementNeedsDestination,
   movementNeedsRate,
+  movementNeedsSource,
   movementPreferredAccountIds,
 } from '../../../src/mohammadLedger/movementConfig.js'
 import {
@@ -61,8 +62,13 @@ function createMovementSession() {
 
 function nextAfterAmount(type) {
   const config = movementConfigFor(type)
-  if (config.currencyLocked) return movementNeedsRate(type) ? STEPS.RATE : STEPS.SOURCE
+  if (config.currencyLocked) return movementNeedsRate(type) ? STEPS.RATE : firstAccountStep(type)
   return STEPS.CURRENCY
+}
+
+function firstAccountStep(type) {
+  if (movementNeedsSource(type)) return STEPS.SOURCE
+  return movementNeedsDestination(type) ? STEPS.DESTINATION : STEPS.NOTE
 }
 
 function nextAfterSource(type) {
@@ -221,7 +227,7 @@ export async function handleMovementCallback(ctx, data) {
   if (data.startsWith('mv:currency:')) {
     session.draft.currency = data.slice('mv:currency:'.length)
     session.draft.currencyConfirmed = true
-    session.step = STEPS.SOURCE
+    session.step = firstAccountStep(session.draft.type)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
   }
@@ -350,7 +356,7 @@ export async function handleMovementText(ctx, text) {
       return true
     }
     session.draft.rate = rate
-    session.step = STEPS.SOURCE
+    session.step = firstAccountStep(session.draft.type)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     await sendStep(ctx, session)
     return true
@@ -386,8 +392,8 @@ function previousStep(session) {
   if (session.step === STEPS.CURRENCY) return STEPS.AMOUNT
   if (session.step === STEPS.RATE) return STEPS.AMOUNT
   if (session.step === STEPS.SOURCE) return movementNeedsRate(session.draft.type) ? STEPS.RATE : (movementConfigFor(session.draft.type).currencyLocked ? STEPS.AMOUNT : STEPS.CURRENCY)
-  if (session.step === STEPS.DESTINATION) return STEPS.SOURCE
-  if (session.step === STEPS.NOTE) return movementNeedsDestination(session.draft.type) ? STEPS.DESTINATION : STEPS.SOURCE
+  if (session.step === STEPS.DESTINATION) return movementNeedsSource(session.draft.type) ? STEPS.SOURCE : (movementNeedsRate(session.draft.type) ? STEPS.RATE : (movementConfigFor(session.draft.type).currencyLocked ? STEPS.AMOUNT : STEPS.CURRENCY))
+  if (session.step === STEPS.NOTE) return movementNeedsDestination(session.draft.type) ? STEPS.DESTINATION : (movementNeedsSource(session.draft.type) ? STEPS.SOURCE : STEPS.CURRENCY)
   if (session.step === STEPS.REVIEW) return STEPS.NOTE
   return STEPS.TYPE
 }

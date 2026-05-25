@@ -14,6 +14,7 @@ import {
   movementLabels,
   movementNeedsDestination,
   movementNeedsRate,
+  movementNeedsSource,
   movementTone,
 } from '../../src/mohammadLedger/movementConfig.js'
 import { accountLabel, formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
@@ -42,6 +43,7 @@ function currencyLabel(currency) {
 function movementIcon(type) {
   const tone = movementTone(type)
   if (tone === 'expense') return '🔴'
+  if (tone === 'income') return '🟢'
   if (tone === 'sale') return '🟢'
   if (tone === 'purchase') return '🔵'
   if (tone === 'transfer') return '🔁'
@@ -206,7 +208,7 @@ export function movementStepText(session, accountsById = new Map()) {
     'amount',
     ...(config.currencyLocked ? [] : ['currency']),
     ...(movementNeedsRate(draft.type) ? ['rate'] : []),
-    'source',
+    ...(movementNeedsSource(draft.type) ? ['source'] : []),
     ...(movementNeedsDestination(draft.type) ? ['destination'] : []),
     'note',
     'review',

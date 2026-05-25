@@ -70,7 +70,7 @@ describe('telegram movement presentation', () => {
 
     expect(card).toContain('<blockquote>')
     expect(card).toContain('🔁 تحويل · 1,250 د.ل')
-    expect(card).toContain('من: صندوقي: كاش')
+    expect(card).toContain('من: كاش عندي: كاش')
     expect(card).toContain('إلى: سعيد · كاش')
     expect(card).toContain('ملاحظة: تجربة &lt;مهمة&gt;')
   })
@@ -108,7 +108,7 @@ describe('telegram movement presentation', () => {
     )
 
     expect(text).toContain('<b>تأكيد الحركة</b>')
-    expect(text).toContain('🔴 من: صندوقي: كاش')
+    expect(text).toContain('🔴 من: كاش عندي: كاش')
     expect(text).toContain('قبل: 2,000 د.ل')
     expect(text).toContain('التغيير: -500 د.ل')
     expect(text).toContain('بعد: 1,500 د.ل')

@@ -3,11 +3,15 @@ import { ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
   buildDimensionReports,
+  buildLedgerAlerts,
+  buildReconciliationCorrectionDrafts,
   createAttachment,
   createReconciliation,
   createRecurringRuleFromMovement,
+  disableRecurringRule,
   dueRecurringRules,
   runRecurringRule,
+  validateAttachmentDraft,
 } from './ledgerOperations.js'
 
 describe('adreem operational features', () => {
@@ -78,14 +82,28 @@ describe('adreem operational features', () => {
   })
 
   it('keeps attachments as ledger records linked to a movement or account', () => {
-    const attachment = createAttachment({ movementId: 'm1', label: 'إيصال', url: 'https://example.com/a.png' })
+    const attachment = createAttachment({
+      movementId: 'm1',
+      label: 'إيصال',
+      url: 'https://example.com/a.png',
+      mimeType: 'image/png',
+      sizeBytes: 4000,
+    })
 
     expect(attachment).toMatchObject({
       movementId: 'm1',
       label: 'إيصال',
       url: 'https://example.com/a.png',
+      mimeType: 'image/png',
+      sizeBytes: 4000,
       source: 'web',
     })
+  })
+
+  it('rejects unsafe attachment drafts before saving metadata', () => {
+    expect(validateAttachmentDraft({ label: 'ملف', mimeType: 'application/x-msdownload' }).ok).toBe(false)
+    expect(validateAttachmentDraft({ label: 'ملف كبير', sizeBytes: 11 * 1024 * 1024 }).ok).toBe(false)
+    expect(createAttachment({ label: '', url: '' })).toBeNull()
   })
 
   it('records reconciliation expectations and actual values', () => {
@@ -102,8 +120,32 @@ describe('adreem operational features', () => {
       accountId: 'me-cash',
       expectedDinar: 1000,
       actualDinar: 950,
+      diffDinar: -50,
       note: 'عد نقدي',
     })
+  })
+
+  it('builds correction drafts from reconciliation diffs only', () => {
+    const reconciliation = createReconciliation({
+      accountId: 'me-cash',
+      expectedDinar: 1000,
+      actualDinar: 950,
+      expectedUsd: 20,
+      actualUsd: 20,
+      note: 'مطابقة الصندوق',
+    })
+
+    expect(buildReconciliationCorrectionDrafts(reconciliation)).toEqual([
+      {
+        type: MOVEMENT_TYPES.CORRECTION,
+        amount: -50,
+        currency: CURRENCIES.DINAR,
+        sourceAccountId: null,
+        destinationAccountId: 'me-cash',
+        note: 'مطابقة الصندوق',
+        reconciliationId: reconciliation.id,
+      },
+    ])
   })
 
   it('runs monthly recurring rules once per month', () => {
@@ -143,5 +185,46 @@ describe('adreem operational features', () => {
     expect(run.rule.lastRunKey).toBe('')
     expect(run.rule.lastFailedRunKey).toBe('2026-05')
     expect(dueRecurringRules([run.rule], date)).toHaveLength(1)
+  })
+
+  it('disables recurring rules without deleting their history', () => {
+    const rule = createRecurringRuleFromMovement({
+      id: 'rent-1',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      currency: CURRENCIES.DINAR,
+      amount: 100,
+      sourceAccountId: 'me-cash',
+      note: 'إيجار',
+    })
+
+    const disabled = disableRecurringRule(rule, '2026-05-26T00:00:00.000Z')
+
+    expect(disabled).toMatchObject({
+      id: rule.id,
+      status: 'inactive',
+      disabledAt: '2026-05-26T00:00:00.000Z',
+    })
+    expect(dueRecurringRules([disabled], new Date('2026-06-01T00:00:00.000Z'))).toHaveLength(0)
+  })
+
+  it('builds actionable ledger alerts without false positives', () => {
+    expect(buildLedgerAlerts()).toEqual([])
+
+    const alerts = buildLedgerAlerts({
+      reviewMovements: [{ id: 'm1' }],
+      balances: [{ account: accounts[0], dinar: -100, usd: 0 }],
+      totals: { iOwePeople: 250 },
+      dueRecurringCount: 1,
+      reconciliationDiffCount: 1,
+    })
+
+    expect(alerts.map((alert) => alert.title)).toEqual([
+      'حركات ناقصة',
+      'حساب مالي ناقص',
+      'أدفع للناس',
+      'حركات متكررة',
+      'فروق مطابقة',
+    ])
   })
 })

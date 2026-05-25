@@ -98,6 +98,7 @@ export function movementTypeKeyboard() {
 function movementTypeButtonText(option) {
   if (option.tone === 'transfer') return `🔁 ${option.label} · ${option.detail}`
   if (option.tone === 'expense') return `🔴 ${option.label} · يخصم من حساب واحد`
+  if (option.tone === 'income') return `🟢 ${option.label} · يدخل إلى حساب واحد`
   if (option.tone === 'sale') return `🟢 ${option.label} · دولار يخرج ودينار يدخل`
   if (option.tone === 'purchase') return `🔵 ${option.label} · دينار يخرج ودولار يدخل`
   return option.label
@@ -105,7 +106,7 @@ function movementTypeButtonText(option) {
 
 function movementTypeButtonStyle(tone) {
   if (tone === 'expense') return 'danger'
-  if (tone === 'sale' || tone === 'purchase' || tone === 'transfer') return 'primary'
+  if (tone === 'sale' || tone === 'purchase' || tone === 'transfer' || tone === 'income') return 'primary'
   return 'primary'
 }
 

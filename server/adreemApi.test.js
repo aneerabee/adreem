@@ -49,6 +49,25 @@ describe('ADREEM web API auth helpers', () => {
     expect(tokenFromAuthHeader('abc123')).toBe('')
   })
 
+  it('rejects unknown web tokens before any ledger access', async () => {
+    const api = createAdreemApiHandler({
+      ADREEM_WEB_LEDGER_TOKENS: 'token-a=main',
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const request = {
+      method: 'GET',
+      url: '/api/ledger',
+      headers: { authorization: 'Bearer wrong-token' },
+    }
+    const response = createMockResponse()
+
+    await api(request, response)
+
+    expect(response.statusCode).toBe(401)
+    expect(JSON.parse(response.body).error).toMatch(/Invalid ledger token/)
+  })
+
   it('merges PUT state with the latest repository state instead of replacing arrays', async () => {
     const api = createAdreemApiHandler({
       ADREEM_WEB_LEDGER_TOKENS: 'token-a=main',

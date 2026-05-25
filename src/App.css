@@ -615,6 +615,12 @@
   --ml3-flow-ink: #116b43;
 }
 
+.ml3-entry-card--income {
+  --ml3-flow-tone: #0d8a54;
+  --ml3-flow-soft: #effaf3;
+  --ml3-flow-ink: #116b43;
+}
+
 .ml3-entry-card--purchase {
   --ml3-flow-tone: #9a671f;
   --ml3-flow-soft: #fff6e7;
@@ -878,11 +884,13 @@
 
 .ml3-action-choice--transfer.is-active { background: #25352d; }
 .ml3-action-choice--expense.is-active { background: #8a3c2d; }
+.ml3-action-choice--income.is-active { background: #0d7047; }
 .ml3-action-choice--sale.is-active { background: #197451; }
 .ml3-action-choice--purchase.is-active { background: #75512a; }
 
 .ml3-action-choice--transfer { border-bottom: 3px solid #25352d !important; }
 .ml3-action-choice--expense { border-bottom: 3px solid #b8322b !important; }
+.ml3-action-choice--income { border-bottom: 3px solid #0d8a54 !important; }
 .ml3-action-choice--sale { border-bottom: 3px solid #158553 !important; }
 .ml3-action-choice--purchase { border-bottom: 3px solid #9a671f !important; }
 
@@ -1547,6 +1555,7 @@
 .ml3-preview.is-review { background: #fff1d8; }
 
 .ml3-entry-card--expense .ml3-preview.is-ok { background: #fff0ec; }
+.ml3-entry-card--income .ml3-preview.is-ok { background: #effaf3; }
 .ml3-entry-card--sale .ml3-preview.is-ok { background: #effaf3; }
 .ml3-entry-card--purchase .ml3-preview.is-ok { background: #fff6e7; }
 
@@ -1634,6 +1643,7 @@
 
 .ml3-today-row--transfer::before { background: #25352d; }
 .ml3-today-row--expense::before { background: #b8322b; }
+.ml3-today-row--income::before { background: #0d8a54; }
 .ml3-today-row--sale::before { background: #158553; }
 .ml3-today-row--purchase::before { background: #9a671f; }
 
@@ -1643,6 +1653,11 @@
 }
 
 .ml3-today-row--sale {
+  background: #effaf3;
+  border-color: #b9e6c9;
+}
+
+.ml3-today-row--income {
   background: #effaf3;
   border-color: #b9e6c9;
 }
@@ -2680,6 +2695,27 @@
   align-items: start;
 }
 
+.ml3-history-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.8fr) minmax(120px, 0.8fr);
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.ml3-history-filters input,
+.ml3-history-filters select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d4ddd6;
+  border-radius: 9px;
+  background: #fbf7ed;
+  color: #25352d;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 850;
+  padding: 8px 9px;
+}
+
 .ml3-history-list .ml3-empty {
   grid-column: 1 / -1;
 }
@@ -2695,10 +2731,12 @@
 
 .ml3-history-row--transfer::before { background: #25352d; }
 .ml3-history-row--expense::before { background: #b8322b; }
+.ml3-history-row--income::before { background: #0d8a54; }
 .ml3-history-row--sale::before { background: #158553; }
 .ml3-history-row--purchase::before { background: #9a671f; }
 
 .ml3-history-row--expense { background: #fff0ec; border-color: #efb8ae; }
+.ml3-history-row--income { background: #effaf3; border-color: #b9e6c9; }
 .ml3-history-row--sale { background: #effaf3; border-color: #b9e6c9; }
 .ml3-history-row--purchase { background: #fff6e7; border-color: #ead2a8; }
 
@@ -3410,6 +3448,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .ml3-history-filters {
+    grid-template-columns: 1fr;
+  }
+
   .ml3-extra-grid {
     grid-template-columns: 1fr;
   }
@@ -3514,5 +3556,742 @@
   .ml3-profile-movement,
   .ml3-profile-editor-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ADREEM v2 compact operating surface */
+.ml3-app {
+  --adreem-ink: #17211c;
+  --adreem-muted: #5d6b64;
+  --adreem-line: #dbe4d9;
+  --adreem-card: #ffffff;
+  --adreem-page: #f3f6f1;
+  --adreem-deep: #20352b;
+  --adreem-green: #157348;
+  --adreem-red: #c63d34;
+  --adreem-blue: #176da8;
+  --adreem-amber: #9b651f;
+  --adreem-purple: #6752ad;
+  background:
+    radial-gradient(circle at 100% 0, rgba(21, 115, 72, 0.08), transparent 28rem),
+    linear-gradient(180deg, #f8faf6 0, var(--adreem-page) 100%);
+  color: var(--adreem-ink);
+  font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+}
+
+.ml3-shell {
+  width: min(1220px, calc(100% - 14px));
+  padding: 7px 0 20px;
+}
+
+.ml3-topbar {
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0 7px;
+  border-bottom: 1px solid rgba(32, 53, 43, 0.08);
+  margin-bottom: 6px;
+}
+
+.ml3-brand {
+  gap: 7px;
+}
+
+.ml3-brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--adreem-deep);
+  box-shadow: 0 8px 18px rgba(32, 53, 43, 0.14);
+}
+
+.ml3-brand-mark svg {
+  width: 22px;
+  height: 22px;
+}
+
+.ml3-topbar span,
+.ml3-entry-head span {
+  color: var(--adreem-muted);
+  font-size: 0.72rem;
+}
+
+.ml3-topbar h1 {
+  margin-top: 1px;
+  font-size: 1.2rem;
+  line-height: 1.05;
+}
+
+.ml3-top-actions {
+  gap: 4px;
+}
+
+.ml3-top-actions b,
+.ml3-tabs button,
+.ml3-panel-head > span,
+.ml3-card-title span {
+  border-radius: 8px;
+  padding: 4px 7px;
+  font-size: 0.72rem;
+}
+
+.ml3-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: rgba(224, 232, 222, 0.92);
+  backdrop-filter: blur(12px);
+}
+
+.ml3-tabs button {
+  min-height: 36px;
+  border-radius: 7px;
+  font-size: 0.78rem;
+}
+
+.ml3-tabs button.is-active {
+  background: var(--adreem-deep);
+  box-shadow: 0 7px 16px rgba(32, 53, 43, 0.16);
+}
+
+.ml3-metrics {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.ml3-metric {
+  min-height: 46px;
+  border-radius: 8px;
+  padding: 6px 8px;
+  box-shadow: inset 0 0 0 1px var(--adreem-line);
+}
+
+.ml3-metric:hover,
+.ml3-account-row:hover,
+.ml3-history-row:hover,
+.ml3-account-switcher button:hover,
+.ml3-home-card:hover,
+.ml3-home-focus button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(32, 53, 43, 0.09);
+}
+
+.ml3-metric strong {
+  font-size: 0.82rem;
+}
+
+.ml3-alert-board,
+.ml3-panel,
+.ml3-entry-card,
+.ml3-add-account,
+.ml3-today-panel,
+.ml3-review-card,
+.ml3-ops-card {
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--adreem-line);
+}
+
+.ml3-alert-board,
+.ml3-panel,
+.ml3-entry-card,
+.ml3-add-account {
+  padding: 6px;
+}
+
+.ml3-alert-board {
+  margin-bottom: 6px;
+}
+
+.ml3-alert-title {
+  min-height: 28px;
+}
+
+.ml3-alert-list {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.ml3-alert,
+.ml3-review-row {
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.ml3-layout,
+.ml3-layout.is-entry {
+  gap: 7px;
+}
+
+.ml3-layout.is-entry {
+  grid-template-columns: minmax(0, 940px);
+}
+
+.ml3-entry {
+  grid-template-columns: minmax(0, 560px) minmax(260px, 360px);
+  gap: 6px;
+  top: 6px;
+}
+
+.ml3-entry-mode {
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.ml3-entry-mode button {
+  min-height: 38px;
+  border-radius: 7px;
+}
+
+.ml3-entry-head {
+  gap: 8px;
+}
+
+.ml3-entry-card {
+  gap: 5px;
+  border-width: 1px;
+}
+
+.ml3-entry-card--movement .ml3-entry-head {
+  border-radius: 8px;
+  padding: 5px 6px;
+}
+
+.ml3-entry-head h2,
+.ml3-panel-head h2,
+.ml3-add-account h3 {
+  font-size: 0.96rem;
+}
+
+.ml3-step {
+  border-radius: 8px;
+  padding: 8px;
+  gap: 7px;
+}
+
+.ml3-step::before {
+  width: 5px;
+}
+
+.ml3-step:not(:last-child)::after {
+  display: none;
+}
+
+.ml3-step-head span {
+  width: 27px;
+  height: 27px;
+  border-radius: 7px;
+  font-size: 0.82rem;
+}
+
+.ml3-step-head strong {
+  font-size: 0.94rem;
+}
+
+.ml3-step-head button {
+  border-radius: 7px;
+  min-height: 29px;
+  padding: 4px 9px;
+  font-size: 0.72rem;
+}
+
+.ml3-step.is-open {
+  border-width: 2px;
+  padding: 10px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ml3-step-tone) 10%, transparent);
+}
+
+.ml3-step.is-done {
+  grid-template-columns: 24px minmax(58px, 0.45fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 5px 6px;
+  padding-inline-start: 9px;
+  opacity: 0.56;
+  filter: saturate(0.38);
+}
+
+.ml3-step.is-done .ml3-step-head {
+  display: contents;
+}
+
+.ml3-step.is-done .ml3-step-head span {
+  grid-column: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+}
+
+.ml3-step.is-done .ml3-step-head strong {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.74rem;
+}
+
+.ml3-step.is-done .ml3-step-summary {
+  grid-column: 3;
+  padding: 0;
+  background: transparent;
+  font-size: 0.78rem;
+}
+
+.ml3-step.is-done .ml3-step-head button {
+  grid-column: 4;
+  min-height: 27px;
+  margin-inline-start: 0;
+  padding: 3px 8px;
+  box-shadow: none;
+}
+
+.ml3-quick-actions {
+  gap: 4px;
+}
+
+.ml3-quick-actions button,
+.ml3-save,
+.ml3-add-account button,
+.ml3-history-row button,
+.ml3-mini-action,
+.ml3-step-next,
+.ml3-number-pad button {
+  border-radius: 8px;
+}
+
+.ml3-quick-actions button,
+.ml3-step-next {
+  min-height: 42px;
+}
+
+.ml3-action-choice {
+  min-height: 42px;
+}
+
+.ml3-number-display {
+  border-radius: 8px;
+  padding: 7px 8px;
+}
+
+.ml3-number-display strong {
+  font-size: 1.26rem;
+}
+
+.ml3-number-pad {
+  gap: 4px;
+}
+
+.ml3-number-pad button {
+  min-height: 39px;
+}
+
+.ml3-account-picker,
+.ml3-search-box,
+.ml3-picked-account,
+.ml3-picker-results button,
+.ml3-picker-favorites button {
+  border-radius: 8px;
+}
+
+.ml3-account-picker {
+  gap: 5px;
+  padding: 6px;
+}
+
+.ml3-picked-account {
+  padding: 7px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-width: 1px;
+}
+
+.ml3-picked-account.is-selected {
+  border-width: 2px;
+}
+
+.ml3-picked-account strong {
+  font-size: 0.92rem;
+}
+
+.ml3-picked-actions {
+  gap: 4px;
+}
+
+.ml3-picked-actions button,
+.ml3-balance-chip,
+.ml3-picked-actions b {
+  border-radius: 7px;
+}
+
+.ml3-picker-favorites {
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 4px;
+}
+
+.ml3-picker-chips {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.ml3-picker-chips button {
+  min-height: 34px;
+  border-radius: 7px;
+}
+
+.ml3-picker-results {
+  max-height: 260px;
+  gap: 4px;
+}
+
+.ml3-picker-results button {
+  min-height: 48px;
+  padding: 7px;
+  grid-template-columns: minmax(0, 1fr) minmax(88px, auto);
+}
+
+.ml3-picker-results strong {
+  font-size: 0.88rem;
+}
+
+.ml3-preview {
+  border-radius: 8px;
+}
+
+.ml3-effect {
+  grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(58px, auto));
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.ml3-today-panel {
+  padding: 6px;
+}
+
+.ml3-today-list {
+  max-height: 536px;
+}
+
+.ml3-today-row {
+  border-radius: 8px;
+  padding: 6px 7px;
+  padding-inline-start: 12px;
+}
+
+.ml3-account-presets {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.ml3-account-presets button,
+.ml3-account-detail-choice button {
+  border-radius: 8px;
+  min-height: 40px;
+}
+
+.ml3-panel-head {
+  margin-bottom: 6px;
+  border-radius: 8px;
+  padding: 6px 7px;
+}
+
+.ml3-account-switcher {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.ml3-account-switcher button,
+.ml3-home-card,
+.ml3-home-focus,
+.ml3-account-sections .ml3-list-block {
+  border-radius: 8px;
+}
+
+.ml3-account-switcher button {
+  min-height: 38px;
+  padding: 5px 7px;
+}
+
+.ml3-account-sections {
+  gap: 6px;
+}
+
+.ml3-account-sections .ml3-list-block {
+  padding: 5px;
+}
+
+.ml3-account-row,
+.ml3-history-row {
+  border-radius: 8px;
+  padding: 5px 7px;
+  padding-inline-start: 11px;
+}
+
+.ml3-account-main {
+  min-height: 38px;
+  padding: 5px 0;
+}
+
+.ml3-account-main strong,
+.ml3-history-row strong {
+  font-size: 0.8rem;
+}
+
+.ml3-account-values strong {
+  border-radius: 7px;
+  font-size: 0.72rem;
+}
+
+.ml3-history-list {
+  grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
+  gap: 6px;
+}
+
+.ml3-history-route b,
+.ml3-history-effects span,
+.ml3-today-effects span {
+  border-radius: 7px;
+}
+
+.ml3-review-workspace {
+  grid-template-columns: minmax(210px, 0.36fr) minmax(0, 1fr);
+  gap: 7px;
+}
+
+.ml3-review-ticket {
+  min-height: 42px;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.ml3-review-card {
+  padding: 7px;
+  gap: 6px;
+}
+
+.ml3-decision-grid {
+  gap: 5px;
+}
+
+.ml3-profile-layer {
+  overscroll-behavior: contain;
+}
+
+.ml3-profile {
+  width: min(410px, calc(100vw - 18px));
+  border-radius: 8px;
+  padding: 8px;
+  gap: 6px;
+}
+
+.ml3-profile-balance,
+.ml3-profile-facts div,
+.ml3-profile-reconcile,
+.ml3-profile-editor,
+.ml3-profile-movement {
+  border-radius: 8px;
+}
+
+.ml3-profile-head h2 {
+  font-size: 1.05rem;
+}
+
+@media (max-width: 980px) {
+  .ml3-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ml3-entry {
+    grid-template-columns: minmax(0, 1fr);
+    position: static;
+  }
+
+  .ml3-today-list {
+    max-height: 280px;
+  }
+}
+
+@media (max-width: 640px) {
+  .ml3-app {
+    font-size: 13px;
+  }
+
+  .ml3-shell {
+    width: 100%;
+    padding: 5px 5px 14px;
+  }
+
+  .ml3-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    padding: 3px 0 5px;
+  }
+
+  .ml3-brand-mark {
+    width: 31px;
+    height: 31px;
+  }
+
+  .ml3-topbar h1 {
+    font-size: 1.02rem;
+  }
+
+  .ml3-top-actions {
+    justify-content: stretch;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ml3-top-actions b {
+    text-align: center;
+    padding: 4px 5px;
+  }
+
+  .ml3-tabs {
+    top: 0;
+    margin-inline: -1px;
+  }
+
+  .ml3-tabs button {
+    min-height: 38px;
+    font-size: 0.72rem;
+  }
+
+  .ml3-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ml3-metric {
+    min-height: 42px;
+  }
+
+  .ml3-layout,
+  .ml3-layout.is-entry,
+  .ml3-layout.is-content-only,
+  .ml3-entry,
+  .ml3-account-sections,
+  .ml3-review-workspace,
+  .ml3-ops-grid,
+  .ml3-history-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ml3-entry-card,
+  .ml3-add-account,
+  .ml3-panel,
+  .ml3-alert-board {
+    padding: 5px;
+  }
+
+  .ml3-entry-mode button {
+    min-height: 40px;
+  }
+
+  .ml3-step.is-open {
+    padding: 9px;
+  }
+
+  .ml3-step.is-done {
+    grid-template-columns: 22px minmax(46px, 0.5fr) minmax(0, 1fr) auto;
+    min-height: 32px;
+    padding: 4px 5px;
+    padding-inline-start: 8px;
+  }
+
+  .ml3-step.is-done .ml3-step-head strong,
+  .ml3-step.is-done .ml3-step-summary,
+  .ml3-step.is-done .ml3-step-head button {
+    font-size: 0.68rem;
+  }
+
+  .ml3-step.is-open .ml3-quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-step.is-open .ml3-quick-actions button {
+    min-height: 52px;
+  }
+
+  .ml3-picked-account,
+  .ml3-history-row,
+  .ml3-effect {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ml3-account-row {
+    grid-template-columns: minmax(0, 1fr) minmax(108px, auto);
+    min-height: 58px;
+  }
+
+  .ml3-account-main {
+    min-height: 34px;
+  }
+
+  .ml3-account-main strong {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ml3-picked-actions {
+    display: grid;
+    grid-template-columns: 1fr 0.7fr 0.7fr;
+  }
+
+  .ml3-picker-results button {
+    grid-template-columns: minmax(0, 1fr) minmax(82px, auto);
+  }
+
+  .ml3-account-switcher {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-account-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-account-values {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    justify-items: start;
+  }
+
+  .ml3-account-meta {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .ml3-today-list,
+  .ml3-picker-results {
+    max-height: 245px;
+  }
+
+  .ml3-review-queue {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-review-ticket {
+    min-height: 48px;
+  }
+
+  .ml3-profile-layer {
+    padding: 6px;
+  }
+
+  .ml3-profile {
+    width: auto;
+    height: calc(100vh - 12px);
+    max-height: calc(100vh - 12px);
   }
 }

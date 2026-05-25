@@ -3,6 +3,7 @@ import {
   ADREEM_MIGRATION_MARKER_KEY,
   ADREEM_STORAGE_KEY,
   MOHAMMAD_STORAGE_KEY,
+  adreemStorageKeysForApiToken,
   adreemStorageKeysForRowId,
   listLocalAdreemBackups,
   loadLocalMohammadState,
@@ -46,6 +47,17 @@ describe('adreem local persistence migration', () => {
     })
   })
 
+  it('scopes API-token browser storage without writing the raw token into localStorage keys', () => {
+    const tokenKeys = adreemStorageKeysForApiToken('secret-token-for-rabee')
+    const otherTokenKeys = adreemStorageKeysForApiToken('secret-token-for-saeed')
+
+    expect(tokenKeys.state).toMatch(/^adreem-ledger-v1:api:/)
+    expect(tokenKeys.backup).toMatch(/^adreem-ledger-backups-v1:api:/)
+    expect(tokenKeys.canReadLegacy).toBe(false)
+    expect(tokenKeys.state).not.toContain('secret-token-for-rabee')
+    expect(tokenKeys.state).not.toBe(otherTokenKeys.state)
+  })
+
   it('reads the legacy Mohammad key once and writes the ADREEM key without deleting legacy data', () => {
     const legacyState = {
       version: 1,
@@ -65,6 +77,7 @@ describe('adreem local persistence migration', () => {
     expect(JSON.parse(store.get(ADREEM_STORAGE_KEY)).version).toBe(ADREEM_LEDGER_VERSION)
     expect(JSON.parse(store.get(ADREEM_MIGRATION_MARKER_KEY)).from).toBe(MOHAMMAD_STORAGE_KEY)
     expect(store.get(MOHAMMAD_STORAGE_KEY)).toBe(JSON.stringify(legacyState))
+    expect(listLocalAdreemBackups()[0].state.accounts.map((account) => account.id)).toEqual(['person-1'])
   })
 
   it('merges ADREEM and legacy keys when both exist so old tabs cannot silently split the ledger', () => {
@@ -157,6 +170,19 @@ describe('adreem local persistence migration', () => {
 
     expect(restored.accounts.map((account) => account.id)).toContain('backup-account')
     expect(JSON.parse(store.get(ADREEM_STORAGE_KEY)).accounts.map((account) => account.id)).toContain('backup-account')
+  })
+
+  it('keeps writing snapshots even when the previous backup list is corrupted', async () => {
+    const store = installLocalStorage({
+      'adreem-ledger-backups-v1': '{bad-json',
+    })
+
+    await saveMohammadPersistedState({
+      accounts: [{ id: 'fresh-backup', ownerName: 'جديد', subAccountName: 'كاش' }],
+      movements: [],
+    })
+
+    expect(JSON.parse(store.get('adreem-ledger-backups-v1'))[0].state.accounts.map((account) => account.id)).toEqual(['fresh-backup'])
   })
 
   it('does not enable direct Supabase persistence in production builds', () => {

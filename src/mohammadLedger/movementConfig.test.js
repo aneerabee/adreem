@@ -4,6 +4,8 @@ import {
   movementConfigFor,
   movementDefaultsFor,
   movementLabels,
+  movementNeedsSource,
+  movementSupportsDimension,
 } from './movementConfig.js'
 
 describe('mohammad movement config', () => {
@@ -19,5 +21,18 @@ describe('mohammad movement config', () => {
     expect(movementConfigFor(MOVEMENT_TYPES.TRUCK_INCOME).sourceLabel).toBe('مصدر خارجي')
     expect(movementConfigFor(MOVEMENT_TYPES.EXTERNAL_INCOME).sourceLabel).toBe('مصدر خارجي')
     expect(movementConfigFor(MOVEMENT_TYPES.CORRECTION).sourceLabel).toBe('تصحيح')
+    expect(movementNeedsSource(MOVEMENT_TYPES.EXTERNAL_INCOME)).toBe(false)
+    expect(movementNeedsSource(MOVEMENT_TYPES.CORRECTION)).toBe(false)
+    expect(movementNeedsSource(MOVEMENT_TYPES.TRANSFER)).toBe(true)
+  })
+
+  it('keeps operational dimensions for income and expense only', () => {
+    expect(movementSupportsDimension(MOVEMENT_TYPES.EXPENSE)).toBe(true)
+    expect(movementSupportsDimension(MOVEMENT_TYPES.EXTERNAL_INCOME)).toBe(true)
+    expect(movementSupportsDimension(MOVEMENT_TYPES.TRUCK_EXPENSE)).toBe(true)
+    expect(movementSupportsDimension(MOVEMENT_TYPES.TRUCK_INCOME)).toBe(true)
+    expect(movementSupportsDimension(MOVEMENT_TYPES.TRANSFER)).toBe(false)
+    expect(movementSupportsDimension(MOVEMENT_TYPES.USD_SALE)).toBe(false)
+    expect(movementSupportsDimension(MOVEMENT_TYPES.USD_PURCHASE)).toBe(false)
   })
 })
