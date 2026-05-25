@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOUNT_TYPES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
 import { createSessionStore } from '../sessionStore.js'
 import { handleAccountCallback, handleAccountText, startAccount } from './account.js'
 
@@ -67,14 +67,16 @@ describe('telegram account flow', () => {
     await handleAccountCallback(ctx, 'acct:type:person-cash')
     await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'سعيد')
     await handleAccountCallback(ctx, 'acct:detail:0')
+    await handleAccountCallback(ctx, 'acct:currency:USD')
     await handleAccountCallback(ctx, 'acct:confirm')
 
     expect(ctx.repository.state.accounts).toHaveLength(1)
     expect(ctx.repository.state.accounts[0]).toMatchObject({
       ownerName: 'سعيد',
-      subAccountName: 'كاش معه',
+      subAccountName: 'نقدي معه',
       type: ACCOUNT_TYPES.PERSON,
       valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
     })
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
   })
@@ -104,6 +106,7 @@ describe('telegram account flow', () => {
     await startAccount(ctx)
     await handleAccountCallback(ctx, 'acct:type:own-bank')
     await handleAccountText({ ...ctx, isCallback: false, messageId: 57 }, 'الجمهورية')
+    await handleAccountCallback(ctx, 'acct:currency:LYD')
     await handleAccountCallback(ctx, 'acct:confirm')
 
     expect(ctx.repository.state.accounts).toHaveLength(1)
@@ -112,6 +115,24 @@ describe('telegram account flow', () => {
       subAccountName: 'الجمهورية',
       type: ACCOUNT_TYPES.BANK,
       valueKind: VALUE_KINDS.BANK,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+    })
+  })
+
+  it('creates a project tracking account without treating it as a posting party yet', async () => {
+    const ctx = createCtx()
+
+    await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:type:project')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 58 }, 'شاحنة العمل')
+    await handleAccountCallback(ctx, 'acct:confirm')
+
+    expect(ctx.repository.state.accounts).toHaveLength(1)
+    expect(ctx.repository.state.accounts[0]).toMatchObject({
+      ownerName: 'شاحنة العمل',
+      subAccountName: 'مشروع',
+      type: ACCOUNT_TYPES.PROJECT,
+      valueKind: VALUE_KINDS.ASSET,
     })
   })
 

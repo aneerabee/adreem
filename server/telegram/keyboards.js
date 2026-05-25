@@ -42,6 +42,18 @@ export function accountDetailKeyboard(selectedDetail = '', detailOptions = []) {
   return { inline_keyboard: rows }
 }
 
+export function accountCurrencyKeyboard(selectedCurrency = CURRENCIES.DINAR) {
+  return {
+    inline_keyboard: [
+      [
+        { text: `${selectedCurrency === CURRENCIES.DINAR ? '✓ ' : ''}دينار`, callback_data: `acct:currency:${CURRENCIES.DINAR}`, style: selectedCurrency === CURRENCIES.DINAR ? 'success' : 'primary' },
+        { text: `${selectedCurrency === CURRENCIES.USD ? '✓ ' : ''}دولار`, callback_data: `acct:currency:${CURRENCIES.USD}`, style: selectedCurrency === CURRENCIES.USD ? 'success' : 'primary' },
+      ],
+      [{ text: '↩️ رجوع', callback_data: 'acct:back' }, { text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
+    ],
+  }
+}
+
 export function accountConfirmKeyboard() {
   return {
     inline_keyboard: [
@@ -64,6 +76,7 @@ function accountTypeIcon(key) {
   if (key === 'own-cash') return '💵'
   if (key === 'own-bank') return '🏦'
   if (key === 'asset') return '🟣'
+  if (key === 'project') return '📍'
   if (key === 'expense') return '🟠'
   return '◼'
 }

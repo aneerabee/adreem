@@ -1,5 +1,6 @@
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, buildAccountMap } from './accountCatalog.js'
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, buildAccountMap, inferAccountCurrencyKind, normalizeAccountCurrencyKind } from './accountCatalog.js'
 import {
+  accountSupportsTransferCurrency,
   areTransferAccountsCompatible,
   sameLogicalAccount,
   transferCompatibilityMessage,
@@ -143,6 +144,30 @@ export function validateMovement(movement, accounts = []) {
     }
     if (type === MOVEMENT_TYPES.TRANSFER && !areTransferAccountsCompatible(sourceAccount, destinationAccount, currency)) {
       errors.push({ field: 'destinationAccountId', message: transferCompatibilityMessage(sourceAccount, destinationAccount, currency) })
+    }
+  }
+  const sourceAccount = sourceId ? accountMap.get(sourceId) : null
+  const destinationAccount = destinationId ? accountMap.get(destinationId) : null
+  if ((type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) && sourceAccount && !accountSupportsTransferCurrency(sourceAccount, currency)) {
+    errors.push({ field: 'sourceAccountId', message: 'حساب المصروف لا يدعم عملة الحركة.' })
+  }
+  if ((type === MOVEMENT_TYPES.EXTERNAL_INCOME || type === MOVEMENT_TYPES.TRUCK_INCOME || type === MOVEMENT_TYPES.CORRECTION) && destinationAccount && !accountSupportsTransferCurrency(destinationAccount, currency)) {
+    errors.push({ field: 'destinationAccountId', message: 'حساب الوجهة لا يدعم عملة الحركة.' })
+  }
+  if (type === MOVEMENT_TYPES.USD_SALE) {
+    if (sourceAccount && !accountSupportsTransferCurrency(sourceAccount, CURRENCIES.USD)) {
+      errors.push({ field: 'sourceAccountId', message: 'بيع الدولار يحتاج حساب دولار كمصدر.' })
+    }
+    if (destinationAccount && !accountSupportsTransferCurrency(destinationAccount, CURRENCIES.DINAR)) {
+      errors.push({ field: 'destinationAccountId', message: 'بيع الدولار يحتاج حساب دينار للوجهة.' })
+    }
+  }
+  if (type === MOVEMENT_TYPES.USD_PURCHASE) {
+    if (sourceAccount && !accountSupportsTransferCurrency(sourceAccount, CURRENCIES.DINAR)) {
+      errors.push({ field: 'sourceAccountId', message: 'شراء الدولار يحتاج حساب دينار كمصدر.' })
+    }
+    if (destinationAccount && !accountSupportsTransferCurrency(destinationAccount, CURRENCIES.USD)) {
+      errors.push({ field: 'destinationAccountId', message: 'شراء الدولار يحتاج حساب دولار للوجهة.' })
     }
   }
   if ((type === MOVEMENT_TYPES.USD_SALE || type === MOVEMENT_TYPES.USD_PURCHASE) && (!Number.isFinite(movement?.rate) || movement.rate <= 0)) {
@@ -302,6 +327,7 @@ export function createAccount({
   valueKind,
   openingDinar = 0,
   openingUsd = 0,
+  currencyKind,
   notes = '',
   status = ACCOUNT_STATUSES.ACTIVE,
 }) {
@@ -313,9 +339,16 @@ export function createAccount({
     .trim()
     .replace(/\s+/g, '-')
     .replace(/[^\p{L}\p{N}-]+/gu, '')
+  const normalizedCurrencyKind = normalizeAccountCurrencyKind(currencyKind, inferAccountCurrencyKind({
+    ownerName: normalizedOwner,
+    subAccountName: normalizedSub,
+    openingDinar,
+    openingUsd,
+  }))
+  const stableCurrencySuffix = normalizedCurrencyKind === 'multi' ? 'multi' : normalizedCurrencyKind.toLowerCase()
 
   return {
-    id: id || `account-${stableBase || Date.now()}`,
+    id: id || `account-${stableBase || Date.now()}-${stableCurrencySuffix}`,
     legacyName: normalizedSub ? `${normalizedOwner} / ${normalizedSub}` : normalizedOwner,
     ownerName: normalizedOwner,
     subAccountName: normalizedSub || 'رئيسي',
@@ -323,6 +356,7 @@ export function createAccount({
     valueKind: normalizedValueKind,
     openingDinar: roundMoney(openingDinar),
     openingUsd: roundMoney(openingUsd),
+    currencyKind: normalizedCurrencyKind,
     status,
     notes,
     createdFrom: 'manual',
@@ -348,7 +382,8 @@ export function validateAccount(account, existingAccounts = []) {
     if (!item || item.status === ACCOUNT_STATUSES.INACTIVE) return false
     return (
       String(item.ownerName || '').trim() === ownerName &&
-      String(item.subAccountName || '').trim() === subAccountName
+      String(item.subAccountName || '').trim() === subAccountName &&
+      normalizeAccountCurrencyKind(item.currencyKind, inferAccountCurrencyKind(item)) === normalizeAccountCurrencyKind(account.currencyKind, inferAccountCurrencyKind(account))
     )
   })
   if (ownerName && subAccountName && hasDuplicateLogicalAccount) {

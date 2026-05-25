@@ -30,15 +30,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Test
+        run: npm run test
+
       - name: Build
         run: npm run build
         env:
           VITE_BASE_PATH: /mohammad-ledger/
           VITE_DEFAULT_APP: mohammad-ledger
-          VITE_APP_TITLE: دفتر محمد
-          VITE_APP_ICON: /mohammad-ledger/mohammad-ledger.svg
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_APP_TITLE: ADREEM
+          VITE_APP_ICON: /mohammad-ledger/adreem.svg
+          VITE_ADREEM_API_URL: ${{ secrets.VITE_ADREEM_API_URL }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

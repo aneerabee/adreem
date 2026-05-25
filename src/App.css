@@ -1,4 +1,4 @@
-/* Mohammad ledger app - command center rebuild */
+/* ADREEM ledger app */
 .ml3-app {
   min-height: 100vh;
   background:
@@ -349,6 +349,86 @@
 .ml3-alert--warning::before { background: #c58a13; }
 .ml3-alert--info { background: #e5f0f5; border-color: #aac9d8; }
 .ml3-alert--info::before { background: #2a79a0; }
+
+.ml3-ops-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.ml3-ops-card {
+  border: 1px solid #e2e8df;
+  border-radius: 12px;
+  background: #fbfcfb;
+  padding: 8px;
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.ml3-ops-head,
+.ml3-ops-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ml3-ops-head strong,
+.ml3-ops-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ml3-ops-head span {
+  border-radius: 999px;
+  background: #25352d;
+  color: #fff;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 950;
+}
+
+.ml3-ops-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-radius: 10px;
+  background: #fff;
+  padding: 7px;
+  border: 1px solid #e8eee6;
+}
+
+.ml3-ops-row small {
+  grid-column: 1 / -1;
+  color: #68756f;
+  overflow-wrap: anywhere;
+}
+
+.ml3-ops-row b.is-positive { color: #17613d; }
+.ml3-ops-row b.is-negative { color: #b8322b; }
+
+.ml3-ops-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.ml3-ops-actions button,
+.ml3-ops-row > button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: #25352d;
+  color: #fff;
+  padding: 4px 9px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 950;
+  cursor: pointer;
+}
 
 .ml3-tabs {
   display: grid;
@@ -856,6 +936,32 @@
   font-weight: 900;
   color: #39473f;
   font-size: 0.78rem;
+}
+
+.ml3-extra-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ml3-extra-grid label {
+  min-width: 0;
+}
+
+.ml3-extra-grid .ml3-checkline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  border-radius: 10px;
+  background: #f5f7f4;
+  padding: 6px 8px;
+}
+
+.ml3-extra-grid .ml3-checkline input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
 }
 
 .ml3-route-picker {
@@ -1691,6 +1797,25 @@
   box-shadow: 0 10px 22px rgba(31, 122, 84, 0.22);
 }
 
+.ml3-account-presets button::before {
+  content: "";
+  width: 20px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ml3-preset-tone, #25352d);
+}
+
+.ml3-account-preset--person-cash { --ml3-preset-tone: #c88600; }
+.ml3-account-preset--own-cash { --ml3-preset-tone: #0d8a54; }
+.ml3-account-preset--own-bank { --ml3-preset-tone: #116fab; }
+.ml3-account-preset--asset { --ml3-preset-tone: #7052bd; }
+.ml3-account-preset--project { --ml3-preset-tone: #4059ad; }
+.ml3-account-preset--expense { --ml3-preset-tone: #b8322b; }
+
+.ml3-account-presets button.is-active::before {
+  background: #ffffff;
+}
+
 .ml3-account-presets strong,
 .ml3-account-presets span,
 .ml3-account-summary strong,
@@ -1727,10 +1852,21 @@
   font-size: 0.8rem;
 }
 
+.ml3-choice-label {
+  margin-top: 1px;
+  color: #4d5b54;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
 .ml3-account-detail-choice {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
+}
+
+.ml3-account-detail-choice.is-currency {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .ml3-account-detail-choice button {
@@ -2651,7 +2787,7 @@
 .ml3-profile {
   width: min(390px, calc(100vw - 20px));
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 8px;
   border-radius: 14px;
   background: #fbfdf9;
@@ -2659,9 +2795,10 @@
   box-shadow: 0 24px 70px rgba(21, 33, 27, 0.24);
   padding: 10px;
   animation: ml3-rise 0.22s ease both;
-  overflow: hidden;
+  overflow: auto;
   height: calc(100vh - 20px);
   max-height: calc(100vh - 20px);
+  overscroll-behavior: contain;
 }
 
 .ml3-profile-head {
@@ -2730,7 +2867,6 @@
 .ml3-profile-balance strong,
 .ml3-profile-balance span {
   display: block;
-  direction: ltr;
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2762,6 +2898,7 @@
   white-space: nowrap;
 }
 
+.ml3-profile-reconcile,
 .ml3-profile-editor {
   display: grid;
   gap: 6px;
@@ -2771,6 +2908,12 @@
   padding: 8px;
 }
 
+.ml3-profile-reconcile {
+  background: #f1f8f4;
+  border-color: #c6e2cf;
+}
+
+.ml3-profile-reconcile h3,
 .ml3-profile-editor h3 {
   margin: 0;
 }
@@ -2785,6 +2928,7 @@
   min-width: 0;
 }
 
+.ml3-profile-reconcile label,
 .ml3-profile-editor label {
   display: grid;
   gap: 3px;
@@ -2792,6 +2936,7 @@
   color: #39473f;
 }
 
+.ml3-profile-reconcile input,
 .ml3-profile-editor input,
 .ml3-profile-editor select {
   width: 100%;
@@ -2804,6 +2949,7 @@
   font-weight: 760;
 }
 
+.ml3-profile-reconcile button,
 .ml3-profile-editor button {
   border: 0;
   border-radius: 999px;
@@ -2818,7 +2964,6 @@
 
 .ml3-profile-movements {
   min-height: 0;
-  overflow: auto;
   display: grid;
   gap: 5px;
   align-content: start;
@@ -3260,8 +3405,13 @@
   .ml3-home-grid,
   .ml3-entry-guide-grid,
   .ml3-account-sections,
-  .ml3-review-workspace {
+  .ml3-review-workspace,
+  .ml3-ops-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-extra-grid {
+    grid-template-columns: 1fr;
   }
 
   .ml3-review-workspace {
@@ -3269,7 +3419,8 @@
   }
 
   .ml3-account-sections,
-  .ml3-history-list {
+  .ml3-history-list,
+  .ml3-ops-grid {
     grid-template-columns: 1fr;
   }
 
@@ -3285,6 +3436,16 @@
   .ml3-picker-results,
   .ml3-account-presets {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-account-presets button {
+    min-height: 52px;
+    padding: 7px 5px;
+  }
+
+  .ml3-account-presets span {
+    white-space: normal;
+    line-height: 1.18;
   }
 
   .ml3-picker-results {

@@ -1,5 +1,5 @@
 {
-  "name": "mohammad-ledger",
+  "name": "adreem-ledger",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",
-    "bot:mohammad": "node server/telegram/bot.js"
+    "bot:mohammad": "node server/telegram/bot.js",
+    "bot:adreem": "node server/telegram/bot.js",
+    "api:adreem": "node server/adreemApi.js",
+    "verify:runtime": "node server/ops/verifyAdreemRuntime.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

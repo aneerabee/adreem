@@ -2,6 +2,7 @@ import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
 import {
   accountDisplayName,
   accountDraftSummary,
+  accountNeedsCurrency,
   accountKindLabel,
   accountNameValue,
   accountPresetFor,
@@ -96,7 +97,7 @@ function typeTag(account) {
 }
 
 export function mainMenuText(summary = null) {
-  const lines = ['<b>دفتر محمد</b>', '<blockquote>الحالة: متصل بالدفتر السحابي</blockquote>']
+  const lines = ['<b>ADREEM</b>', '<blockquote>الحالة: متصل بالدفتر السحابي</blockquote>']
   if (summary) {
     lines.push('')
     lines.push(htmlLine('اليوم', `${summary.todayCount} حركة`))
@@ -111,6 +112,7 @@ function accountStepTitle(session) {
   if (session?.step === 'type') return 'اختر التصنيف'
   if (session?.step === 'owner') return preset.nameLabel || 'اكتب الاسم'
   if (session?.step === 'detail') return preset.detailLabel || 'اختر التفصيل'
+  if (session?.step === 'currency') return 'اختر العملة'
   if (session?.step === 'review') return 'راجع الحساب'
   return 'حساب جديد'
 }
@@ -119,7 +121,8 @@ function accountStepHelp(session) {
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
   if (session?.step === 'type') return 'اختر ماذا تريد إضافته بالضبط.'
   if (session?.step === 'owner') return preset.namePlaceholder || 'اكتب الاسم فقط.'
-  if (session?.step === 'detail') return 'حدد شكل التعامل معه. الدينار والدولار يختاران عند الحركة.'
+  if (session?.step === 'detail') return 'حدد هل التعامل نقدي أو عبر حساب بنكي.'
+  if (session?.step === 'currency') return 'هذه العملة تحدد أين يظهر الحساب عند إدخال الحركات.'
   if (session?.step === 'review') return 'تأكد من الاسم والتصنيف قبل الحفظ.'
   return ''
 }
@@ -127,7 +130,7 @@ function accountStepHelp(session) {
 export function accountStepText(session) {
   const draft = session?.draft || {}
   const preset = accountPresetFor(draft.type, draft.valueKind)
-  const steps = ['type', 'owner', ...(preset.skipDetail ? [] : ['detail']), 'review']
+  const steps = ['type', 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), 'review']
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = steps.map((step, index) => (index <= currentIndex ? '●' : '○')).join('')
   const summary = []
@@ -137,13 +140,16 @@ export function accountStepText(session) {
   if (!preset.skipDetail && currentIndex > steps.indexOf('detail') && draft.subAccountName) {
     summary.push(htmlLine(preset.detailLabel || 'التفصيل', draft.subAccountName))
   }
+  if (accountNeedsCurrency(draft) && currentIndex > steps.indexOf('currency') && draft.currencyKind) {
+    summary.push(htmlLine('العملة', draft.currencyKind === CURRENCIES.USD ? 'دولار' : 'دينار'))
+  }
 
   const lines = [
     '<b>حساب جديد</b>',
     `<code>${progress}  ${currentIndex + 1}/${steps.length}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
-    '<b>السؤال الآن</b>',
+    '<b>الآن</b>',
     `<blockquote>${escapeHtml(accountStepTitle(session))}\n${escapeHtml(accountStepHelp(session))}</blockquote>`,
   ]
   return lines.join('\n')
@@ -216,12 +222,12 @@ export function movementStepText(session, accountsById = new Map()) {
   if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, accountLabel(destination)))
   if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
   const lines = [
-    '<b>دفتر محمد</b>',
+    '<b>ADREEM</b>',
     `<code>${progress}  ${currentIndex + 1}/${steps.length}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`] : []),
     ...(summary.length ? [''] : []),
-    `<b>السؤال الآن</b>`,
+    `<b>الآن</b>`,
     `<blockquote>${escapeHtml(currentStepTitle(session))}\n${escapeHtml(currentStepHelp(session))}</blockquote>`,
   ]
   return lines.join('\n')

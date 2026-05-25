@@ -1,6 +1,6 @@
 import { MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
+import { createLedgerRepository, parseTelegramLedgerMap, resolveTelegramLedgerId } from '../mohammadLedger/ledgerRepository.js'
 import { accountLabel, buildLedgerSnapshot, formatMoney } from '../mohammadLedger/ledgerService.js'
 import { mainMenuKeyboard } from './keyboards.js'
 import { accountBlockquote, escapeHtml, mainMenuText, movementBlockquote, movementLabels } from './messages.js'
@@ -11,30 +11,65 @@ import { handleMovementCallback, handleMovementText, startMovement } from './han
 
 const token = process.env.TELEGRAM_BOT_TOKEN
 if (!token) {
-  console.error('[mohammad-telegram-bot] missing TELEGRAM_BOT_TOKEN')
+  console.error('[adreem-telegram-bot] missing TELEGRAM_BOT_TOKEN')
   process.exit(1)
 }
-const allowedUserIds = String(process.env.MOHAMMAD_TELEGRAM_USER_IDS || process.env.MOHAMMAD_TELEGRAM_USER_ID || '')
+const allowedUserIds = String(
+  process.env.ADREEM_TELEGRAM_USER_IDS ||
+  process.env.ADREEM_TELEGRAM_USER_ID ||
+  process.env.MOHAMMAD_TELEGRAM_USER_IDS ||
+  process.env.MOHAMMAD_TELEGRAM_USER_ID ||
+  '',
+)
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean)
+const telegramLedgerMap = parseTelegramLedgerMap(process.env.ADREEM_TELEGRAM_LEDGER_IDS || process.env.MOHAMMAD_TELEGRAM_LEDGER_IDS)
+const ledgerMapProblem = validateTelegramLedgerMap(allowedUserIds, telegramLedgerMap)
+if (ledgerMapProblem) {
+  console.error('[adreem-telegram-bot] invalid ADREEM_TELEGRAM_LEDGER_IDS:', ledgerMapProblem)
+  process.exit(1)
+}
 
 const telegram = createTelegramClient(token)
-const repository = createLedgerRepository(process.env)
+const repositoriesByLedgerId = new Map()
 const sessions = createSessionStore()
 
 let offset = 0
 
-console.log('[mohammad-telegram-bot] starting', {
+console.log('[adreem-telegram-bot] starting', {
   allowedUsers: allowedUserIds.length,
+  mappedLedgers: telegramLedgerMap.size,
 })
+
+function repositoryForUser(userId) {
+  const ledgerId = resolveTelegramLedgerId(userId, process.env)
+  if (!repositoriesByLedgerId.has(ledgerId)) {
+    repositoriesByLedgerId.set(ledgerId, createLedgerRepository(process.env, { ledgerId }))
+  }
+  return repositoriesByLedgerId.get(ledgerId)
+}
+
+function validateTelegramLedgerMap(userIds, ledgerMap) {
+  if (userIds.length <= 1 && ledgerMap.size === 0) return ''
+  const missing = userIds.filter((userId) => !ledgerMap.has(String(userId)))
+  if (missing.length) return `missing ledger mapping for user id(s): ${missing.join(', ')}`
+  const seen = new Map()
+  for (const userId of userIds) {
+    const ledgerId = ledgerMap.get(String(userId))
+    const existingUserId = seen.get(ledgerId)
+    if (existingUserId) return `ledger "${ledgerId}" is assigned to both ${existingUserId} and ${userId}`
+    seen.set(ledgerId, userId)
+  }
+  return ''
+}
 
 async function skipOldUpdates() {
   if (process.env.TELEGRAM_SKIP_OLD_UPDATES === 'false') return
   const updates = await telegram.getUpdates({ offset: -1, timeout: 0, allowed_updates: ['message', 'callback_query'] })
   if (updates.length) {
     offset = updates[updates.length - 1].update_id + 1
-    console.log('[mohammad-telegram-bot] skipped old updates', { nextOffset: offset })
+    console.log('[adreem-telegram-bot] skipped old updates', { nextOffset: offset })
   }
 }
 
@@ -60,7 +95,7 @@ function contextFor(update) {
   const user = getUser(update)
   return {
     telegram,
-    repository,
+    repository: null,
     sessions,
     user,
     userId: user?.id,
@@ -103,7 +138,7 @@ async function deleteUserInput(ctx) {
 
 async function showMainMenu(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
-  const { state } = await repository.load()
+  const { state } = await ctx.repository.load()
   const today = movementsForToday(state).length
   const reviewCount = state.accounts.filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW).length +
     state.movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW).length
@@ -121,7 +156,7 @@ function movementsForToday(state) {
 
 async function showAccounts(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
-  const { state } = await repository.load()
+  const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
   const myMoney = snapshot.balances
     .filter((bucket) => bucket.account.status === ACCOUNT_STATUSES.ACTIVE)
@@ -143,7 +178,7 @@ async function showAccounts(ctx) {
 
 async function showToday(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
-  const { state } = await repository.load()
+  const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
   const rows = movementsForToday(state)
     .slice()
@@ -155,7 +190,7 @@ async function showToday(ctx) {
 
 async function showHistory(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
-  const { state } = await repository.load()
+  const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
   const rows = state.movements
     .filter((movement) => movement.status === MOVEMENT_STATUSES.POSTED && !movement.id?.startsWith('opening-'))
@@ -168,7 +203,7 @@ async function showHistory(ctx) {
 
 async function showReview(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
-  const { state } = await repository.load()
+  const { state } = await ctx.repository.load()
   const accounts = state.accounts.filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW)
   const movements = state.movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
   const lines = ['<b>المراجعة</b>']
@@ -192,7 +227,7 @@ async function startSearch(ctx) {
 async function handleSearchText(ctx, text) {
   const session = sessions.get(ctx.chatId, ctx.userId)
   if (session?.flow !== 'search') return false
-  const { state } = await repository.load()
+  const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
   const query = String(text || '').trim().toLowerCase()
   const rows = snapshot.balances
@@ -220,10 +255,9 @@ async function handleSearchText(ctx, text) {
   return telegram.sendMessage({ chat_id: ctx.chatId, text: textResult, parse_mode: 'HTML', reply_markup: mainMenuKeyboard() })
 }
 
-async function handleCallback(update) {
-  const ctx = contextFor(update)
+async function handleCallback(ctx, update) {
   const data = update.callback_query?.data || ''
-  console.log('[mohammad-telegram-bot] callback', {
+  console.log('[adreem-telegram-bot] callback', {
     userId: ctx.userId,
     data,
   })
@@ -241,10 +275,9 @@ async function handleCallback(update) {
   return sendScreen(ctx, 'أمر غير معروف.')
 }
 
-async function handleMessage(update) {
-  const ctx = contextFor(update)
+async function handleMessage(ctx, update) {
   const text = String(update.message?.text || '').trim()
-  console.log('[mohammad-telegram-bot] message', {
+  console.log('[adreem-telegram-bot] message', {
     userId: ctx.userId,
     text: text.slice(0, 32),
   })
@@ -275,8 +308,9 @@ async function handleUpdate(update) {
     }
     return
   }
-  if (update.callback_query) return handleCallback(update)
-  if (update.message) return handleMessage(update)
+  ctx.repository = repositoryForUser(ctx.userId)
+  if (update.callback_query) return handleCallback(ctx, update)
+  if (update.message) return handleMessage(ctx, update)
 }
 
 async function poll() {
@@ -289,7 +323,7 @@ async function poll() {
         await handleUpdate(update)
       }
     } catch (error) {
-      console.error('[mohammad-telegram-bot]', error?.message || error)
+      console.error('[adreem-telegram-bot]', error?.message || error)
       await new Promise((resolve) => setTimeout(resolve, 2500))
     }
   }

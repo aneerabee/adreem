@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   accountDetailOptionsFor,
+  accountNeedsCurrency,
   accountPresetFor,
   accountPresets,
   applyAccountName,
@@ -9,6 +10,7 @@ import {
 import { accountIdempotencyKey, appendTelegramAccount, validateAccountDraft } from '../../mohammadLedger/accountService.js'
 import {
   accountConfirmKeyboard,
+  accountCurrencyKeyboard,
   accountDetailKeyboard,
   accountTextStepKeyboard,
   accountTypeKeyboard,
@@ -20,6 +22,7 @@ const STEPS = {
   TYPE: 'type',
   OWNER: 'owner',
   DETAIL: 'detail',
+  CURRENCY: 'currency',
   REVIEW: 'review',
 }
 
@@ -87,6 +90,12 @@ async function sendStep(ctx, session, result = null) {
       ),
     })
   }
+  if (session.step === STEPS.CURRENCY) {
+    return upsertAccountMessage(ctx, session, {
+      text: accountStepText(session),
+      reply_markup: accountCurrencyKeyboard(session.draft.currencyKind),
+    })
+  }
   if (session.step === STEPS.REVIEW) {
     return upsertAccountMessage(ctx, session, {
       text: accountReviewText(session, result),
@@ -144,6 +153,7 @@ export async function handleAccountCallback(ctx, data) {
       type: preset.type,
       valueKind: preset.valueKind,
       subAccountName: preset.subAccountName,
+      currencyKind: session.draft.currencyKind,
     }
     session.step = STEPS.OWNER
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -156,18 +166,33 @@ export async function handleAccountCallback(ctx, data) {
     const detail = Number.isInteger(index) ? detailOptions[index] : ''
     if (!detail) return sendStep(ctx, session)
     session.draft.subAccountName = detail
+    session.step = accountNeedsCurrency(session.draft) ? STEPS.CURRENCY : STEPS.REVIEW
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    if (session.step === STEPS.CURRENCY) return sendStep(ctx, session)
+    try {
+      const current = await ctx.repository.load()
+      return sendStep(ctx, session, validateAccountDraft(session.draft, current.state.accounts))
+    } catch (error) {
+      console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
+      return sendAccountConnectionError(ctx, session)
+    }
+  }
+
+  if (data.startsWith('acct:currency:')) {
+    session.draft.currencyKind = data.slice('acct:currency:'.length)
     session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     try {
       const current = await ctx.repository.load()
       return sendStep(ctx, session, validateAccountDraft(session.draft, current.state.accounts))
     } catch (error) {
-      console.error('[mohammad-telegram-bot] account validation load failed', error?.message || error)
+      console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
       return sendAccountConnectionError(ctx, session)
     }
   }
 
   if (data === 'acct:confirm') {
+    if (session.step !== STEPS.REVIEW) return sendStep(ctx, session)
     let result
     try {
       result = await appendTelegramAccount(ctx.repository, session.draft, {
@@ -176,7 +201,7 @@ export async function handleAccountCallback(ctx, data) {
         telegramChatId: ctx.chatId,
       })
     } catch (error) {
-      console.error('[mohammad-telegram-bot] account save failed', error?.message || error)
+      console.error('[adreem-telegram-bot] account save failed', error?.message || error)
       return sendAccountConnectionError(ctx, session)
     }
     if (result.rejected) return sendStep(ctx, session, result)
@@ -237,14 +262,16 @@ export async function handleAccountText(ctx, text) {
     }
     session.draft = applyAccountName(session.draft, accountName)
     const preset = accountPresetFor(session.draft.type, session.draft.valueKind)
-    session.step = preset.skipDetail ? STEPS.REVIEW : STEPS.DETAIL
+    session.step = preset.skipDetail
+      ? (accountNeedsCurrency(session.draft) ? STEPS.CURRENCY : STEPS.REVIEW)
+      : STEPS.DETAIL
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     if (session.step === STEPS.REVIEW) {
       try {
         const current = await ctx.repository.load()
         await sendStep(ctx, session, validateAccountDraft(session.draft, current.state.accounts))
       } catch (error) {
-        console.error('[mohammad-telegram-bot] account validation load failed', error?.message || error)
+        console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
         await sendAccountConnectionError(ctx, session)
       }
     } else {
@@ -260,13 +287,17 @@ export async function handleAccountText(ctx, text) {
       return true
     }
     session.draft.subAccountName = subAccountName
-    session.step = STEPS.REVIEW
+    session.step = accountNeedsCurrency(session.draft) ? STEPS.CURRENCY : STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    if (session.step === STEPS.CURRENCY) {
+      await sendStep(ctx, session)
+      return true
+    }
     try {
       const current = await ctx.repository.load()
       await sendStep(ctx, session, validateAccountDraft(session.draft, current.state.accounts))
     } catch (error) {
-      console.error('[mohammad-telegram-bot] account validation load failed', error?.message || error)
+      console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
       await sendAccountConnectionError(ctx, session)
     }
     return true
@@ -280,6 +311,7 @@ function previousStep(session) {
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
   if (step === STEPS.OWNER) return STEPS.TYPE
   if (step === STEPS.DETAIL) return STEPS.OWNER
-  if (step === STEPS.REVIEW) return preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL
+  if (step === STEPS.CURRENCY) return preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL
+  if (step === STEPS.REVIEW) return accountNeedsCurrency(session?.draft) ? STEPS.CURRENCY : (preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL)
   return STEPS.TYPE
 }

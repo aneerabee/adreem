@@ -10,6 +10,7 @@ export function normalizeAccountDraft(draft = {}) {
     subAccountName: String(draft.subAccountName || preset.subAccountName || fallback.subAccountName).trim(),
     type: preset.type,
     valueKind: preset.valueKind,
+    currencyKind: draft.currencyKind || fallback.currencyKind,
     openingDinar: 0,
     openingUsd: 0,
     notes: String(draft.notes || '').trim(),

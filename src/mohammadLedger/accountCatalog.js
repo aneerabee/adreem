@@ -25,6 +25,28 @@ export const VALUE_KINDS = {
   REVIEW: 'review',
 }
 
+export const ACCOUNT_CURRENCY_KINDS = {
+  DINAR: 'LYD',
+  USD: 'USD',
+  MULTI: 'multi',
+}
+
+export function normalizeAccountCurrencyKind(value, fallback = ACCOUNT_CURRENCY_KINDS.DINAR) {
+  if (value === ACCOUNT_CURRENCY_KINDS.USD || value === 'usd' || value === '$') return ACCOUNT_CURRENCY_KINDS.USD
+  if (value === ACCOUNT_CURRENCY_KINDS.MULTI || value === 'both') return ACCOUNT_CURRENCY_KINDS.MULTI
+  if (value === ACCOUNT_CURRENCY_KINDS.DINAR || value === 'dinar' || value === 'lyd') return ACCOUNT_CURRENCY_KINDS.DINAR
+  return fallback
+}
+
+export function inferAccountCurrencyKind(account = {}) {
+  const openingDinar = Number(account.openingDinar || 0)
+  const openingUsd = Number(account.openingUsd || 0)
+  const text = `${account.ownerName || ''} ${account.subAccountName || ''} ${account.legacyName || ''}`.toLowerCase()
+  if (openingUsd && openingDinar) return ACCOUNT_CURRENCY_KINDS.MULTI
+  if (openingUsd || /دولار|usd|\$/.test(text)) return ACCOUNT_CURRENCY_KINDS.USD
+  return ACCOUNT_CURRENCY_KINDS.DINAR
+}
+
 function account({
   id,
   legacyName,
@@ -34,6 +56,7 @@ function account({
   valueKind,
   openingDinar = 0,
   openingUsd = 0,
+  currencyKind,
   status = ACCOUNT_STATUSES.ACTIVE,
   notes = '',
 }) {
@@ -46,6 +69,7 @@ function account({
     valueKind,
     openingDinar,
     openingUsd,
+    currencyKind: normalizeAccountCurrencyKind(currencyKind, inferAccountCurrencyKind({ legacyName, ownerName, subAccountName, openingDinar, openingUsd })),
     status,
     notes,
     createdFrom: 'numbers_table_1',

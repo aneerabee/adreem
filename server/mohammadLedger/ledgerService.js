@@ -92,7 +92,13 @@ export async function appendTelegramMovement(repository, draft, metadata) {
   return repository.update((state) => {
     const existing = state.movements.find((movement) => movement.source === 'telegram' && movement.idempotencyKey === idempotencyKey)
     if (existing) {
-      return { state, movement: existing, duplicate: true, preview: previewDraft(state, existing) }
+      return {
+        state,
+        movement: existing,
+        duplicate: true,
+        preview: previewDraft(state, existing),
+        needsReview: existing.status !== MOVEMENT_STATUSES.POSTED,
+      }
     }
 
     const movement = postMovement(
@@ -107,9 +113,6 @@ export async function appendTelegramMovement(repository, draft, metadata) {
       state.accounts,
     )
     const preview = previewDraft(state, movement)
-    if (movement.status !== MOVEMENT_STATUSES.POSTED) {
-      return { state, movement, preview, rejected: true }
-    }
     return {
       state: {
         ...state,
@@ -118,6 +121,7 @@ export async function appendTelegramMovement(repository, draft, metadata) {
       movement,
       preview,
       duplicate: false,
+      needsReview: movement.status !== MOVEMENT_STATUSES.POSTED,
     }
   })
 }
