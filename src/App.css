@@ -2697,7 +2697,7 @@
 
 .ml3-history-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.8fr) minmax(120px, 0.8fr);
+  grid-template-columns: minmax(0, 1.3fr) minmax(110px, 0.7fr) minmax(110px, 0.7fr) minmax(150px, 1fr);
   gap: 7px;
   margin-bottom: 8px;
 }

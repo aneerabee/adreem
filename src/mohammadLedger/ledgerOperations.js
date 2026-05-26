@@ -228,6 +228,7 @@ export function buildLedgerAlerts({
   reviewMovements = [],
   externalMissing = [],
   balances = [],
+  movements = [],
   totals = {},
   dueRecurringCount = 0,
   reconciliationDiffCount = 0,
@@ -237,6 +238,30 @@ export function buildLedgerAlerts({
     (bucket.account?.valueKind === VALUE_KINDS.CASH || bucket.account?.valueKind === VALUE_KINDS.BANK) &&
     Math.round(bucket.dinar || 0) < 0,
   )
+  const liveMovements = (Array.isArray(movements) ? movements : [])
+    .filter((movement) => movement?.status !== MOVEMENT_STATUSES.VOIDED)
+    .filter((movement) => movement?.type !== MOVEMENT_TYPES.OPENING_BALANCE)
+  const largeMovementCount = liveMovements.filter((movement) => {
+    const amount = Math.abs(Number(movement.amount || 0))
+    if (movement.currency === CURRENCIES.USD) return amount >= 10_000
+    return amount >= 100_000
+  }).length
+  const movementFrequency = new Map()
+  for (const movement of liveMovements) {
+    const day = String(movement.createdAt || movement.updatedAt || '').slice(0, 10)
+    if (!day) continue
+    const key = [
+      day,
+      movement.type,
+      movement.currency,
+      Math.round(Number(movement.amount || 0)),
+      movement.sourceAccountId || '',
+      movement.destinationAccountId || '',
+      movement.rate || '',
+    ].join('|')
+    movementFrequency.set(key, (movementFrequency.get(key) || 0) + 1)
+  }
+  const duplicateMovementCount = Array.from(movementFrequency.values()).filter((count) => count > 1).length
 
   if (reviewMovements.length) alerts.push({ tone: 'danger', title: 'حركات ناقصة', value: reviewMovements.length })
   if (reviewAccounts.length) alerts.push({ tone: 'warning', title: 'حسابات للتصنيف', value: reviewAccounts.length })
@@ -245,6 +270,8 @@ export function buildLedgerAlerts({
   if (Math.round(Number(totals.iOwePeople || 0)) > 0) alerts.push({ tone: 'warning', title: 'أدفع للناس', value: Math.round(Number(totals.iOwePeople || 0)), format: 'money' })
   if (dueRecurringCount) alerts.push({ tone: 'info', title: 'حركات متكررة', value: dueRecurringCount })
   if (reconciliationDiffCount) alerts.push({ tone: 'warning', title: 'فروق مطابقة', value: reconciliationDiffCount })
+  if (largeMovementCount) alerts.push({ tone: 'warning', title: 'حركة كبيرة', value: largeMovementCount })
+  if (duplicateMovementCount) alerts.push({ tone: 'info', title: 'تكرار محتمل', value: duplicateMovementCount })
   return alerts
 }
 

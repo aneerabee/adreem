@@ -1002,8 +1002,8 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
   )
 }
 
-function AlertBoard({ reviewAccounts, reviewMovements, externalMissing, balances, totals, dueRecurringCount = 0, reconciliationDiffCount = 0 }) {
-  const alerts = buildLedgerAlerts({ reviewAccounts, reviewMovements, externalMissing, balances, totals, dueRecurringCount, reconciliationDiffCount })
+function AlertBoard({ reviewAccounts, reviewMovements, externalMissing, balances, movements, totals, dueRecurringCount = 0, reconciliationDiffCount = 0 }) {
+  const alerts = buildLedgerAlerts({ reviewAccounts, reviewMovements, externalMissing, balances, movements, totals, dueRecurringCount, reconciliationDiffCount })
   if (!alerts.length) return null
 
   return (
@@ -1103,6 +1103,7 @@ export default function MohammadLedgerApp() {
   const [historyQuery, setHistoryQuery] = useState('')
   const [historyType, setHistoryType] = useState('')
   const [historyStatus, setHistoryStatus] = useState('')
+  const [historyAccountId, setHistoryAccountId] = useState('')
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -1190,6 +1191,7 @@ export default function MohammadLedgerApp() {
     return postedUserMovements.filter((movement) => {
       if (historyType && movement.type !== historyType) return false
       if (historyStatus && movement.status !== historyStatus) return false
+      if (historyAccountId && movement.sourceAccountId !== historyAccountId && movement.destinationAccountId !== historyAccountId) return false
       if (!normalizedQuery) return true
       const source = accountById.get(movement.sourceAccountId)
       const destination = accountById.get(movement.destinationAccountId)
@@ -1202,7 +1204,7 @@ export default function MohammadLedgerApp() {
       ].join(' ').toLowerCase()
       return haystack.includes(normalizedQuery)
     })
-  }, [accountById, historyQuery, historyStatus, historyType, postedUserMovements])
+  }, [accountById, historyAccountId, historyQuery, historyStatus, historyType, postedUserMovements])
   const todayMovements = postedUserMovements.filter((movement) => isToday(movement.createdAt || movement.updatedAt))
   const totals = useMemo(() => {
     return balances.reduce(
@@ -1947,6 +1949,12 @@ export default function MohammadLedgerApp() {
               <option value={MOVEMENT_STATUSES.NEEDS_REVIEW}>ناقص</option>
               <option value={MOVEMENT_STATUSES.VOIDED}>ملغي</option>
             </select>
+            <select value={historyAccountId} onChange={(event) => setHistoryAccountId(event.target.value)}>
+              <option value="">كل الحسابات</option>
+              {activeAccounts.map((account) => (
+                <option key={account.id} value={account.id}>{accountLabel(account)}</option>
+              ))}
+            </select>
           </div>
           <div className="ml3-history-list">
             {filteredHistoryMovements.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
@@ -2061,6 +2069,7 @@ export default function MohammadLedgerApp() {
               reviewMovements={reviewMovements}
               externalMissing={unresolvedExternalAccounts}
               balances={balances}
+              movements={postedUserMovements}
               totals={totals}
               dueRecurringCount={dueRules.length}
               reconciliationDiffCount={reconciliationDiffCount}

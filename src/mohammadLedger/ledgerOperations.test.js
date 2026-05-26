@@ -217,6 +217,35 @@ describe('adreem operational features', () => {
       totals: { iOwePeople: 250 },
       dueRecurringCount: 1,
       reconciliationDiffCount: 1,
+      movements: [
+        {
+          id: 'large-1',
+          type: MOVEMENT_TYPES.EXPENSE,
+          status: MOVEMENT_STATUSES.POSTED,
+          currency: CURRENCIES.DINAR,
+          amount: 150000,
+          sourceAccountId: 'me-cash',
+          createdAt: '2026-05-26T10:00:00.000Z',
+        },
+        {
+          id: 'dup-1',
+          type: MOVEMENT_TYPES.EXPENSE,
+          status: MOVEMENT_STATUSES.POSTED,
+          currency: CURRENCIES.DINAR,
+          amount: 300,
+          sourceAccountId: 'me-cash',
+          createdAt: '2026-05-26T11:00:00.000Z',
+        },
+        {
+          id: 'dup-2',
+          type: MOVEMENT_TYPES.EXPENSE,
+          status: MOVEMENT_STATUSES.POSTED,
+          currency: CURRENCIES.DINAR,
+          amount: 300,
+          sourceAccountId: 'me-cash',
+          createdAt: '2026-05-26T11:01:00.000Z',
+        },
+      ],
     })
 
     expect(alerts.map((alert) => alert.title)).toEqual([
@@ -225,6 +254,8 @@ describe('adreem operational features', () => {
       'أدفع للناس',
       'حركات متكررة',
       'فروق مطابقة',
+      'حركة كبيرة',
+      'تكرار محتمل',
     ])
   })
 })
