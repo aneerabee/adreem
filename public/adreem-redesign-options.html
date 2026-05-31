@@ -1,0 +1,1586 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADREEM Redesign Options</title>
+  <style>
+    :root {
+      --ink: #151d19;
+      --muted: #5a6760;
+      --paper: #f4f6ef;
+      --line: #d9e2d6;
+      --panel: #fffef8;
+      --green: #12724b;
+      --red: #c33f35;
+      --blue: #176da6;
+      --amber: #a56518;
+      --violet: #6650a4;
+      --deep: #20352b;
+      --shadow: 0 24px 70px rgba(21, 29, 25, .12);
+      font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(180deg, rgba(18, 114, 75, .09), transparent 300px),
+        var(--paper);
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    button, input { font: inherit; }
+
+    .page {
+      width: min(1260px, calc(100% - 24px));
+      margin: 0 auto;
+      padding: 18px 0 46px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: end;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(32, 53, 43, .12);
+    }
+
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .brand-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      color: #fffef8;
+      background: #20352b;
+      font-weight: 900;
+      box-shadow: 0 12px 28px rgba(32, 53, 43, .2);
+    }
+
+    h1 {
+      font-size: clamp(1.3rem, 3.2vw, 2.3rem);
+      line-height: 1.1;
+    }
+
+    .hero p {
+      margin-top: 6px;
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 880px;
+    }
+
+    .decision {
+      border: 1px solid var(--line);
+      background: rgba(255, 254, 248, .78);
+      border-radius: 9px;
+      padding: 10px;
+      display: grid;
+      gap: 4px;
+      min-width: 210px;
+    }
+
+    .decision strong { font-size: .86rem; }
+    .decision span { color: var(--muted); font-size: .76rem; line-height: 1.5; }
+
+    .chooser {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin: 14px 0;
+    }
+
+    .chooser a {
+      color: var(--ink);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: rgba(255, 254, 248, .82);
+      padding: 11px;
+      display: grid;
+      gap: 4px;
+      transition: transform .18s cubic-bezier(.22,1,.36,1), box-shadow .18s cubic-bezier(.22,1,.36,1);
+    }
+
+    .chooser a:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+
+    .chooser strong { font-size: .94rem; }
+    .chooser span { color: var(--muted); font-size: .76rem; line-height: 1.5; }
+
+    .option {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .option-head {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--theme) 11%, white), white 64%);
+    }
+
+    .option-head h2 {
+      font-size: 1.22rem;
+      margin-bottom: 5px;
+    }
+
+    .option-head p {
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 900px;
+    }
+
+    .rating {
+      display: grid;
+      grid-template-columns: repeat(2, auto);
+      gap: 6px;
+    }
+
+    .rating span {
+      border: 1px solid color-mix(in srgb, var(--theme) 22%, var(--line));
+      background: color-mix(in srgb, var(--theme) 8%, white);
+      color: color-mix(in srgb, var(--theme) 80%, black);
+      border-radius: 8px;
+      padding: 7px 9px;
+      font-size: .76rem;
+      white-space: nowrap;
+    }
+
+    .workbench { --theme: #20352b; }
+    .ledger-live { --theme: #12724b; }
+    .pocket-assist { --theme: #176da6; }
+
+    .mock {
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .mock-shell {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfcf7;
+      overflow: hidden;
+    }
+
+    .mock-top {
+      min-height: 44px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      background: #eef3eb;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .mini-mark {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--theme);
+      color: white;
+      font-weight: 900;
+      font-size: .76rem;
+    }
+
+    .mock-top h3 {
+      font-size: .96rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mock-top small {
+      color: var(--muted);
+      font-size: .72rem;
+    }
+
+    .status-row {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chip {
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: white;
+      padding: 5px 7px;
+      color: var(--muted);
+      font-size: .72rem;
+      white-space: nowrap;
+    }
+
+    .tone-green { --tone: var(--green); }
+    .tone-red { --tone: var(--red); }
+    .tone-blue { --tone: var(--blue); }
+    .tone-amber { --tone: var(--amber); }
+    .tone-violet { --tone: var(--violet); }
+    .tone-deep { --tone: var(--deep); }
+
+    .amount { color: color-mix(in srgb, var(--tone, var(--theme)) 85%, black); }
+
+    .btn {
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--tone, var(--theme));
+      color: white;
+      font-size: .78rem;
+      min-height: 38px;
+    }
+
+    .ghost {
+      border: 1px solid color-mix(in srgb, var(--tone, var(--theme)) 26%, var(--line));
+      background: color-mix(in srgb, var(--tone, var(--theme)) 8%, white);
+      color: color-mix(in srgb, var(--tone, var(--theme)) 82%, black);
+    }
+
+    .tiny-label {
+      display: inline-flex;
+      border-radius: 7px;
+      padding: 4px 6px;
+      background: color-mix(in srgb, var(--tone, var(--theme)) 10%, white);
+      color: color-mix(in srgb, var(--tone, var(--theme)) 82%, black);
+      font-size: .68rem;
+      width: max-content;
+    }
+
+    .account-line {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-inline-start: 5px solid var(--tone, var(--theme));
+      background: white;
+      border-radius: 9px;
+      padding: 8px;
+    }
+
+    .account-line strong {
+      font-size: .84rem;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .account-line small {
+      display: block;
+      color: var(--muted);
+      margin-top: 2px;
+      font-size: .72rem;
+    }
+
+    .value-pill {
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: .74rem;
+      background: color-mix(in srgb, var(--tone, var(--theme)) 10%, white);
+      color: color-mix(in srgb, var(--tone, var(--theme)) 82%, black);
+      white-space: nowrap;
+      font-weight: 800;
+    }
+
+    .bot-preview {
+      border: 1px solid #cad8e8;
+      border-radius: 12px;
+      background: #edf4fb;
+      padding: 11px;
+    }
+
+    .bot-card {
+      max-width: 560px;
+      margin-inline: auto;
+      border: 1px solid #d3deea;
+      background: white;
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      box-shadow: 0 14px 34px rgba(23, 58, 92, .1);
+    }
+
+    .bot-card code {
+      direction: ltr;
+      justify-self: start;
+      border-radius: 7px;
+      background: #edf4fb;
+      color: #385570;
+      padding: 4px 7px;
+    }
+
+    .quote {
+      border-inline-start: 4px solid var(--theme);
+      background: color-mix(in srgb, var(--theme) 8%, white);
+      border-radius: 8px;
+      padding: 8px;
+      line-height: 1.65;
+      font-size: .86rem;
+    }
+
+    .bot-buttons {
+      display: grid;
+      gap: 5px;
+    }
+
+    .bot-buttons span {
+      border: 1px solid #d8e2ee;
+      background: #f3f7fc;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: .82rem;
+    }
+
+    .analysis-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px;
+      border-top: 1px solid var(--line);
+      background: rgba(244, 246, 239, .72);
+    }
+
+    .analysis-card {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 9px;
+      padding: 9px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .analysis-card strong { font-size: .82rem; }
+    .analysis-card span { color: var(--muted); font-size: .74rem; line-height: 1.55; }
+
+    /* Option 1: Workbench */
+    .workbench-layout {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1.08fr) minmax(270px, .72fr);
+      min-height: 560px;
+    }
+
+    .rail {
+      background: #20352b;
+      color: white;
+      padding: 8px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .rail span {
+      height: 52px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,.1);
+      font-size: .72rem;
+      text-align: center;
+    }
+
+    .rail span:first-child {
+      background: white;
+      color: #20352b;
+      font-weight: 900;
+    }
+
+    .stage {
+      padding: 10px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 8px;
+      background: #f8faf4;
+    }
+
+    .stage-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .stage-head h3 { font-size: 1.05rem; }
+    .stage-head p { color: var(--muted); font-size: .76rem; margin-top: 3px; }
+
+    .flow-card {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .flow-step {
+      border: 1px solid color-mix(in srgb, var(--tone, var(--theme)) 28%, var(--line));
+      background: color-mix(in srgb, var(--tone, var(--theme)) 7%, white);
+      border-radius: 9px;
+      padding: 9px;
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .flow-step b {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--tone, var(--theme));
+      color: white;
+    }
+
+    .flow-step small { color: var(--muted); display: block; margin-top: 2px; }
+    .flow-step.done { opacity: .52; filter: saturate(.42); }
+
+    .side-ledger {
+      border-inline-start: 1px solid var(--line);
+      background: #f0f4ed;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .side-ledger h3 { font-size: .94rem; }
+
+    .effect-box {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 9px;
+      padding: 9px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .math-line {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 7px;
+      background: #f8faf6;
+      font-size: .78rem;
+    }
+
+    /* Option 2: Ledger live */
+    .live-layout {
+      min-height: 560px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: #fbfdf8;
+    }
+
+    .live-command {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      background: #eaf5ef;
+    }
+
+    .quick-types {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .quick-types button {
+      border: 1px solid color-mix(in srgb, var(--tone) 24%, var(--line));
+      background: color-mix(in srgb, var(--tone) 10%, white);
+      color: color-mix(in srgb, var(--tone) 82%, black);
+      border-radius: 9px;
+      padding: 8px 5px;
+      font-size: .78rem;
+      min-height: 44px;
+    }
+
+    .live-body {
+      display: grid;
+      grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr);
+      gap: 0;
+    }
+
+    .live-list {
+      border-inline-start: 1px solid var(--line);
+      padding: 10px;
+      display: grid;
+      gap: 7px;
+      align-content: start;
+      background: #f5f8f1;
+    }
+
+    .live-list h3,
+    .timeline h3 { font-size: .94rem; margin-bottom: 2px; }
+
+    .timeline {
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .movement {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 10px;
+      padding: 9px;
+      display: grid;
+      gap: 7px;
+    }
+
+    .movement-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .route {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .route span {
+      border-radius: 7px;
+      background: #f0f4ed;
+      padding: 5px 7px;
+      font-size: .72rem;
+      color: var(--muted);
+    }
+
+    /* Option 3: Pocket assist */
+    .phone-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 370px);
+      gap: 12px;
+      padding: 12px;
+      background: #f6f8f4;
+    }
+
+    .phone-frame {
+      width: min(100%, 360px);
+      justify-self: center;
+      background: #101713;
+      border-radius: 26px;
+      padding: 9px;
+      box-shadow: 0 28px 80px rgba(16, 23, 19, .26);
+    }
+
+    .phone-screen {
+      min-height: 650px;
+      border-radius: 18px;
+      background: #fbfdf8;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .phone-head {
+      padding: 10px;
+      background: #edf3fb;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      border-bottom: 1px solid #d4deea;
+    }
+
+    .phone-head strong { font-size: .98rem; }
+    .phone-head span { color: var(--muted); font-size: .74rem; }
+
+    .assistant-body {
+      padding: 9px;
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      overflow: auto;
+    }
+
+    .answer-stack {
+      display: grid;
+      gap: 5px;
+    }
+
+    .answer {
+      border-radius: 9px;
+      border: 1px solid color-mix(in srgb, var(--tone, var(--blue)) 26%, var(--line));
+      background: color-mix(in srgb, var(--tone, var(--blue)) 8%, white);
+      padding: 8px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      opacity: .62;
+    }
+
+    .question {
+      border: 2px solid var(--blue);
+      background: white;
+      border-radius: 12px;
+      padding: 12px;
+      display: grid;
+      gap: 9px;
+      box-shadow: 0 16px 34px rgba(23, 109, 166, .13);
+    }
+
+    .question h3 { font-size: 1.08rem; }
+    .question p { color: var(--muted); line-height: 1.5; font-size: .82rem; }
+
+    .search-tile {
+      border: 1px solid #cfddea;
+      background: #f5f9fd;
+      border-radius: 10px;
+      padding: 8px;
+      display: grid;
+      gap: 7px;
+    }
+
+    .fake-input {
+      border-radius: 8px;
+      background: white;
+      border: 1px solid #cfddea;
+      padding: 9px;
+      color: var(--muted);
+      font-size: .82rem;
+    }
+
+    .bottom-dock {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      padding: 7px;
+      background: #edf3fb;
+      border-top: 1px solid #d4deea;
+    }
+
+    .bottom-dock span {
+      border-radius: 8px;
+      padding: 7px 2px;
+      text-align: center;
+      font-size: .7rem;
+      color: #405368;
+    }
+
+    .bottom-dock span:first-child {
+      background: var(--blue);
+      color: white;
+    }
+
+    .explain-panel {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .large-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .large-card h3 { font-size: 1rem; }
+    .large-card p { color: var(--muted); line-height: 1.6; font-size: .84rem; }
+
+    .pocket-layout-v2 {
+      display: grid;
+      grid-template-columns: minmax(310px, .9fr) minmax(0, 1.1fr);
+      gap: 14px;
+      padding: 14px;
+      background:
+        linear-gradient(135deg, rgba(23, 109, 166, .08), transparent 42%),
+        linear-gradient(180deg, #f8faf3, #edf4eb);
+    }
+
+    .pocket-phone-v2 {
+      width: min(100%, 382px);
+      justify-self: center;
+      border-radius: 30px;
+      background: #111a16;
+      padding: 10px;
+      box-shadow: 0 32px 90px rgba(17, 26, 22, .32);
+    }
+
+    .pocket-screen-v2 {
+      min-height: 690px;
+      border-radius: 21px;
+      overflow: hidden;
+      background: #fbfcf6;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+    }
+
+    .pocket-status {
+      padding: 10px;
+      background: #20352b;
+      color: #fffef8;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .pocket-status strong {
+      font-size: 1rem;
+    }
+
+    .pocket-status span {
+      color: rgba(255, 254, 248, .72);
+      font-size: .74rem;
+    }
+
+    .pocket-save {
+      border-radius: 8px;
+      padding: 6px 8px;
+      background: rgba(255,255,255,.12);
+      font-size: .72rem;
+      color: #fffef8 !important;
+    }
+
+    .pocket-progress {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 4px;
+      padding: 7px;
+      background: #e9f0e5;
+      border-bottom: 1px solid #d5dfd2;
+    }
+
+    .pocket-progress span {
+      border-radius: 9px;
+      padding: 7px 3px;
+      text-align: center;
+      background: rgba(255,255,255,.68);
+      color: #607069;
+      font-size: .68rem;
+      line-height: 1.25;
+    }
+
+    .pocket-progress .is-done {
+      background: #e2f4e9;
+      color: #126b45;
+    }
+
+    .pocket-progress .is-now {
+      background: #176da6;
+      color: white;
+      box-shadow: 0 10px 20px rgba(23, 109, 166, .22);
+    }
+
+    .pocket-main-v2 {
+      padding: 10px;
+      display: grid;
+      gap: 9px;
+      align-content: start;
+      overflow: auto;
+    }
+
+    .pocket-summary-strip {
+      display: grid;
+      gap: 6px;
+    }
+
+    .pocket-summary-item {
+      border: 1px solid color-mix(in srgb, var(--tone) 22%, #d9e2d6);
+      background: color-mix(in srgb, var(--tone) 7%, white);
+      border-radius: 10px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      opacity: .66;
+      filter: saturate(.56);
+    }
+
+    .pocket-summary-item strong {
+      font-size: .84rem;
+    }
+
+    .pocket-summary-item small {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: .7rem;
+    }
+
+    .pocket-edit {
+      border: 0;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--tone) 16%, white);
+      color: color-mix(in srgb, var(--tone) 84%, black);
+      min-height: 32px;
+      padding: 5px 8px;
+      font-size: .7rem;
+    }
+
+    .pocket-question-v2 {
+      position: relative;
+      overflow: hidden;
+      border-radius: 16px;
+      background: #ffffff;
+      border: 2px solid #176da6;
+      box-shadow: 0 20px 44px rgba(23, 109, 166, .16);
+    }
+
+    .pocket-question-v2::before {
+      content: "";
+      position: absolute;
+      inset-inline-start: 0;
+      top: 0;
+      bottom: 0;
+      width: 7px;
+      background: #176da6;
+    }
+
+    .pocket-question-head {
+      padding: 12px 14px 8px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .pocket-question-head span {
+      width: max-content;
+      border-radius: 8px;
+      padding: 4px 7px;
+      background: #e7f1fa;
+      color: #176da6;
+      font-size: .72rem;
+      font-weight: 800;
+    }
+
+    .pocket-question-head h3 {
+      font-size: 1.15rem;
+      line-height: 1.25;
+    }
+
+    .pocket-question-head p {
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: .82rem;
+    }
+
+    .pocket-search {
+      margin: 0 10px 10px;
+      display: grid;
+      gap: 7px;
+      border-radius: 13px;
+      padding: 8px;
+      background: #f1f6fb;
+      border: 1px solid #ccdae9;
+    }
+
+    .pocket-search-box {
+      border-radius: 10px;
+      border: 1px solid #cadae8;
+      background: #fff;
+      color: #69766f;
+      padding: 10px;
+      font-size: .82rem;
+    }
+
+    .pocket-account-choice {
+      border: 1px solid color-mix(in srgb, var(--tone) 24%, #d9e2d6);
+      background: #fff;
+      border-radius: 11px;
+      padding: 9px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .pocket-account-choice strong {
+      font-size: .88rem;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .pocket-account-choice small {
+      color: var(--muted);
+      display: block;
+      margin-top: 2px;
+      font-size: .72rem;
+    }
+
+    .pocket-balance {
+      border-radius: 9px;
+      padding: 6px 8px;
+      background: color-mix(in srgb, var(--tone) 12%, white);
+      color: color-mix(in srgb, var(--tone) 82%, black);
+      white-space: nowrap;
+      font-size: .76rem;
+      font-weight: 900;
+    }
+
+    .pocket-primary {
+      margin: 0 10px 12px;
+      border: 0;
+      border-radius: 12px;
+      min-height: 46px;
+      background: #176da6;
+      color: white;
+      font-weight: 900;
+      box-shadow: 0 14px 26px rgba(23, 109, 166, .2);
+    }
+
+    .pocket-dock-v2 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+      padding: 8px;
+      background: #20352b;
+    }
+
+    .pocket-dock-v2 span {
+      border-radius: 10px;
+      padding: 8px 2px;
+      text-align: center;
+      color: rgba(255,255,255,.68);
+      font-size: .7rem;
+    }
+
+    .pocket-dock-v2 span:first-child {
+      background: #fffef8;
+      color: #20352b;
+      font-weight: 900;
+    }
+
+    .pocket-board-v2 {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 10px;
+      align-content: start;
+    }
+
+    .pocket-board-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border-radius: 14px;
+      background: #20352b;
+      color: white;
+      padding: 12px;
+    }
+
+    .pocket-board-head h3 {
+      font-size: 1.08rem;
+    }
+
+    .pocket-board-head p {
+      margin-top: 4px;
+      color: rgba(255,255,255,.72);
+      line-height: 1.5;
+      font-size: .82rem;
+    }
+
+    .pocket-board-head button {
+      border: 0;
+      border-radius: 10px;
+      background: #fffef8;
+      color: #20352b;
+      min-height: 40px;
+      padding: 8px 10px;
+      font-weight: 900;
+    }
+
+    .pocket-section-map {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .pocket-section {
+      min-height: 82px;
+      border-radius: 12px;
+      padding: 9px;
+      border: 1px solid color-mix(in srgb, var(--tone) 25%, var(--line));
+      background: color-mix(in srgb, var(--tone) 8%, white);
+      display: grid;
+      align-content: space-between;
+    }
+
+    .pocket-section strong {
+      font-size: .86rem;
+    }
+
+    .pocket-section span {
+      color: color-mix(in srgb, var(--tone) 80%, black);
+      font-size: .76rem;
+      font-weight: 900;
+    }
+
+    .pocket-desktop-grid {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+      gap: 9px;
+    }
+
+    .pocket-panel-v2 {
+      border-radius: 14px;
+      background: rgba(255,255,255,.86);
+      border: 1px solid var(--line);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .pocket-panel-v2 h3 {
+      font-size: .95rem;
+    }
+
+    .pocket-mini-flow {
+      display: grid;
+      gap: 6px;
+    }
+
+    .pocket-flow-row {
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--tone) 8%, white);
+      border: 1px solid color-mix(in srgb, var(--tone) 22%, var(--line));
+      padding: 8px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .pocket-flow-row b {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--tone);
+      color: white;
+    }
+
+    .pocket-flow-row small {
+      display: block;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .pocket-today-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .pocket-today-row {
+      border-radius: 10px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-inline-start: 5px solid var(--tone);
+      padding: 8px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+    }
+
+    .pocket-today-row strong {
+      font-size: .84rem;
+    }
+
+    .pocket-today-row small {
+      display: block;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .pocket-bot-v2 {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+      gap: 9px;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 980px) {
+      .hero,
+      .option-head,
+      .workbench-layout,
+      .live-body,
+      .phone-layout,
+      .analysis-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .rail span {
+        height: 42px;
+      }
+
+      .side-ledger {
+        border-inline-start: 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .chooser {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .page {
+        width: min(100%, calc(100% - 10px));
+        padding-top: 8px;
+      }
+
+      .decision { min-width: 0; }
+      .rating { grid-template-columns: 1fr; }
+      .mock { padding: 7px; }
+      .mock-top { grid-template-columns: auto minmax(0, 1fr); }
+      .status-row { grid-column: 1 / -1; justify-content: stretch; }
+      .status-row .chip { text-align: center; flex: 1; }
+      .stage-head,
+      .live-command,
+      .movement-head {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-types {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .flow-step,
+      .account-line,
+      .answer {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .phone-frame {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="brand">
+        <div class="brand-mark">A</div>
+        <div>
+          <h1>ADREEM: اختيارات تصميم مختلفة فعلًا</h1>
+          <p>هذه النسخة لا تغيّر ألوان الواجهة الحالية فقط. كل خيار هنا يغيّر طريقة التركيب وطريقة استعمال النظام: أين تبدأ، أين ترى الأرصدة، كيف تدخل الحركة، وكيف يظهر البوت.</p>
+        </div>
+      </div>
+      <div class="decision">
+        <strong>اختيارك سيحدد التنفيذ</strong>
+        <span>بعد اختيار الاتجاه، نطبقه على الويب والبوت بدون كسر المنطق المالي.</span>
+      </div>
+    </header>
+
+    <nav class="chooser" aria-label="اختيار اتجاه التصميم">
+      <a href="#workbench">
+        <strong>1. Workbench</strong>
+        <span>سطح عمل: إدخال في الوسط، الأرصدة والتأثير بجانبه.</span>
+      </a>
+      <a href="#live">
+        <strong>2. Ledger Live</strong>
+        <span>دفتر حي: الحركات والأرصدة معًا، مناسب للمتابعة اليومية.</span>
+      </a>
+      <a href="#pocket">
+        <strong>3. Pocket Ledger</strong>
+        <span>مساعد هاتف: خطوة واحدة، ثم أقسام واضحة بدون زحمة.</span>
+      </a>
+    </nav>
+
+    <section class="option workbench" id="workbench">
+      <div class="option-head">
+        <div>
+          <h2>1. Workbench - سطح عمل مالي</h2>
+          <p>الفكرة هنا ليست صفحة فيها تابات وكروت كثيرة. الشاشة تصبح مكان عمل: شريط جانبي للأقسام، وسط الشاشة للحركة الحالية، ويمين الشاشة للأرصدة والتأثير المباشر.</p>
+        </div>
+        <div class="rating">
+          <span>الأفضل للديسكتوب</span>
+          <span>قوي للمحاسبة</span>
+          <span>كثافة عالية</span>
+          <span>تعلم متوسط</span>
+        </div>
+      </div>
+
+      <div class="mock">
+        <div class="mock-shell">
+          <div class="mock-top">
+            <div class="mini-mark">A</div>
+            <div>
+              <h3>إدخال حركة</h3>
+              <small>كل شيء حول الحركة الحالية، بدون انتقال كثير بين الشاشات.</small>
+            </div>
+            <div class="status-row">
+              <span class="chip">سحابي</span>
+              <span class="chip">102 حساب</span>
+              <span class="chip">3 مراجعة</span>
+            </div>
+          </div>
+
+          <div class="workbench-layout">
+            <aside class="rail">
+              <span>إدخال</span>
+              <span>أرصدة</span>
+              <span>حركات</span>
+              <span>مراجعة</span>
+            </aside>
+
+            <section class="stage">
+              <div class="stage-head">
+                <div>
+                  <h3>تحويل</h3>
+                  <p>أدخل الحركة كمسار واضح، والخطوات السابقة تصغر ولا تزاحم الشاشة.</p>
+                </div>
+                <button class="btn tone-deep">حساب جديد</button>
+              </div>
+
+              <div class="flow-card">
+                <div class="flow-step done tone-green">
+                  <b>1</b>
+                  <div><strong>نوع الحركة</strong><small>تحويل</small></div>
+                  <button class="btn ghost tone-green">تعديل</button>
+                </div>
+                <div class="flow-step done tone-blue">
+                  <b>2</b>
+                  <div><strong>المبلغ</strong><small>12,500 د.ل</small></div>
+                  <button class="btn ghost tone-blue">تعديل</button>
+                </div>
+                <div class="flow-step tone-amber">
+                  <b>3</b>
+                  <div><strong>اختر الحساب الذي يخرج منه المال</strong><small>الأكثر استخدامًا يظهر أولًا، والبحث داخل نفس الكرت.</small></div>
+                  <button class="btn tone-amber">التالي</button>
+                </div>
+                <div class="account-line tone-green">
+                  <div><strong>أنا · كاش</strong><small>مالي عندي · دينار · مقترح</small></div>
+                  <span class="value-pill">موجود 48,000</span>
+                </div>
+                <div class="account-line tone-blue">
+                  <div><strong>الجمهورية</strong><small>حساب مصرفي · دينار</small></div>
+                  <span class="value-pill">ناقص 1,200</span>
+                </div>
+              </div>
+            </section>
+
+            <aside class="side-ledger">
+              <h3>التأثير المباشر</h3>
+              <div class="effect-box">
+                <span class="tiny-label tone-green">سيزيد</span>
+                <strong>سعيد · كاش</strong>
+                <div class="math-line"><span>قبل</span><b>18,000</b></div>
+                <div class="math-line"><span>+ الحركة</span><b class="amount tone-green">12,500</b></div>
+                <div class="math-line"><span>بعد</span><b>30,500</b></div>
+              </div>
+              <div class="effect-box">
+                <span class="tiny-label tone-red">سينقص</span>
+                <strong>أنا · كاش</strong>
+                <div class="math-line"><span>قبل</span><b>48,000</b></div>
+                <div class="math-line"><span>- الحركة</span><b class="amount tone-red">12,500</b></div>
+                <div class="math-line"><span>بعد</span><b>35,500</b></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <div class="bot-preview">
+          <div class="bot-card">
+            <strong>البوت بنفس المنطق</strong>
+            <code>3/7 · تحويل</code>
+            <div class="quote">✓ المبلغ: 12,500 د.ل<br><br><b>اختر الحساب الذي يخرج منه المال</b><br>الأقرب لك ظاهر أولًا.</div>
+            <div class="bot-buttons">
+              <span>🟢 أنا · كاش · موجود 48,000</span>
+              <span>🔵 الجمهورية · مصرفي · ناقص 1,200</span>
+              <span>🔎 اكتب للبحث</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="analysis-grid">
+        <div class="analysis-card"><strong>لماذا مختلف؟</strong><span>لا يعتمد على تابات علوية وكروت متشابهة. هو سطح عمل بثلاث مناطق ثابتة.</span></div>
+        <div class="analysis-card"><strong>مناسب لمن؟</strong><span>لك أنت أكثر، لأنه يعطيك رقابة قوية على الإدخال والتأثير.</span></div>
+        <div class="analysis-card"><strong>الهاتف</strong><span>يحتاج تحويل rail إلى dock سفلي حتى لا يزحم.</span></div>
+        <div class="analysis-card"><strong>الخطر</strong><span>قد يكون غنيًا أكثر من اللازم لصديق لا يعرف الكمبيوتر.</span></div>
+      </div>
+    </section>
+
+    <section class="option ledger-live" id="live">
+      <div class="option-head">
+        <div>
+          <h2>2. Ledger Live - دفتر حي</h2>
+          <p>الفكرة هنا أن الصفحة الرئيسية ليست إدخال فقط. هي دفتر حي: أزرار الحركة في الأعلى، الأرصدة المهمة بجانب السجل، وكل حركة تظهر كقصة صغيرة مفهومة.</p>
+        </div>
+        <div class="rating">
+          <span>الأوضح للمتابعة</span>
+          <span>عملي يوميًا</span>
+          <span>تمييز قوي</span>
+          <span>سرعة جيدة</span>
+        </div>
+      </div>
+
+      <div class="mock">
+        <div class="mock-shell">
+          <div class="mock-top">
+            <div class="mini-mark">A</div>
+            <div>
+              <h3>الدفتر اليوم</h3>
+              <small>كل ما يهمك الآن في شاشة واحدة: حركة، رصيد، سجل.</small>
+            </div>
+            <div class="status-row">
+              <span class="chip">اليوم 4</span>
+              <span class="chip">مراجعة 1</span>
+            </div>
+          </div>
+
+          <div class="live-layout">
+            <div class="live-command">
+              <div class="quick-types">
+                <button class="tone-blue">تحويل</button>
+                <button class="tone-red">مصروف</button>
+                <button class="tone-green">دخل</button>
+                <button class="tone-green">بعت دولار</button>
+                <button class="tone-amber">اشتريت دولار</button>
+              </div>
+              <button class="btn tone-deep">+ حساب</button>
+            </div>
+
+            <div class="live-body">
+              <aside class="live-list">
+                <h3>الأرصدة التي تحتاج عينك</h3>
+                <div class="account-line tone-green"><div><strong>محمد السويبغ</strong><small>أقبض منه</small></div><span class="value-pill">9,745</span></div>
+                <div class="account-line tone-red"><div><strong>دانيا</strong><small>أدفع لها</small></div><span class="value-pill">2,600</span></div>
+                <div class="account-line tone-blue"><div><strong>الجمهورية</strong><small>مصرفي</small></div><span class="value-pill">ناقص 1,200</span></div>
+                <div class="account-line tone-violet"><div><strong>الشاحنة</strong><small>مشروع / مركز تكلفة</small></div><span class="value-pill">صافي 4,200</span></div>
+              </aside>
+
+              <section class="timeline">
+                <h3>آخر الحركات</h3>
+                <article class="movement">
+                  <div class="movement-head">
+                    <strong class="amount tone-red">مصروف · 350 د.ل</strong>
+                    <span class="chip">10:42</span>
+                  </div>
+                  <div class="route"><span>أنا · كاش</span><span>وقود الشاحنة</span><span>مرفق</span></div>
+                </article>
+                <article class="movement">
+                  <div class="movement-head">
+                    <strong class="amount tone-green">دخل · 1,900 د.ل</strong>
+                    <span class="chip">09:15</span>
+                  </div>
+                  <div class="route"><span>دخل خارجي</span><span>الجمهورية</span><span>الشاحنة</span></div>
+                </article>
+                <article class="movement">
+                  <div class="movement-head">
+                    <strong class="amount tone-blue">تحويل · 12,500 د.ل</strong>
+                    <span class="chip">أمس</span>
+                  </div>
+                  <div class="route"><span>أنا · كاش</span><span>سعيد · كاش</span><span>قابل للإلغاء</span></div>
+                </article>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <div class="bot-preview">
+          <div class="bot-card">
+            <strong>البوت كدفتر حي</strong>
+            <code>اليوم · 4 حركات</code>
+            <div class="quote">🔴 مصروف 350 د.ل<br>من: أنا · كاش<br>ملف: وقود الشاحنة<br><br>🟢 دخل 1,900 د.ل<br>إلى: الجمهورية</div>
+            <div class="bot-buttons">
+              <span>➕ حركة جديدة</span>
+              <span>👥 الأرصدة المهمة</span>
+              <span>🔎 بحث</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="analysis-grid">
+        <div class="analysis-card"><strong>لماذا مختلف؟</strong><span>الصفحة الرئيسية تصبح سجلًا حيًا، وليس نموذج إدخال طويل.</span></div>
+        <div class="analysis-card"><strong>مناسب لمن؟</strong><span>للاستعمال اليومي السريع ومراجعة ما حدث اليوم.</span></div>
+        <div class="analysis-card"><strong>الهاتف</strong><span>قوي لأنه يعرض الحركات والأرصدة في نفس السياق.</span></div>
+        <div class="analysis-card"><strong>الخطر</strong><span>الإدخال متعدد الخطوات سيحتاج drawer أو شاشة فرعية حتى لا يزحم الصفحة.</span></div>
+      </div>
+    </section>
+
+    <section class="option pocket-assist" id="pocket">
+      <div class="option-head">
+        <div>
+          <h2>3. Pocket Ledger - دفتر الجيب</h2>
+          <p>هذا هو الاتجاه الأنسب: الواجهة تبدأ من الهاتف، وتسأل سؤالًا واحدًا واضحًا. الأقسام لا تظهر كصفحة مزدحمة، بل كمسارات قصيرة: إدخال، أرصدة، حركات، مراجعة.</p>
+        </div>
+        <div class="rating">
+          <span>الأفضل لصديقك</span>
+          <span>أقل كلام</span>
+          <span>هاتف أولًا</span>
+          <span>أخطاء أقل</span>
+        </div>
+      </div>
+
+      <div class="mock">
+        <div class="pocket-layout-v2">
+          <div class="pocket-phone-v2">
+            <div class="pocket-screen-v2">
+              <header class="pocket-status">
+                <div>
+                  <strong>ADREEM</strong>
+                  <span>إدخال حركة · تحويل</span>
+                </div>
+                <span class="pocket-save">سحابي</span>
+              </header>
+
+              <div class="pocket-progress">
+                <span class="is-done">1<br>الحركة</span>
+                <span class="is-done">2<br>المبلغ</span>
+                <span class="is-now">3<br>الحساب</span>
+                <span>4<br>حفظ</span>
+              </div>
+
+              <section class="pocket-main-v2">
+                <div class="pocket-summary-strip">
+                  <div class="pocket-summary-item tone-green">
+                    <div><strong>تحويل</strong><small>نوع الحركة</small></div>
+                    <button class="pocket-edit">غير</button>
+                  </div>
+                  <div class="pocket-summary-item tone-blue">
+                    <div><strong>12,500 د.ل</strong><small>المبلغ</small></div>
+                    <button class="pocket-edit">غير</button>
+                  </div>
+                </div>
+
+                <div class="pocket-question-v2">
+                  <div class="pocket-question-head">
+                    <span>الآن</span>
+                    <h3>من أين يخرج المال؟</h3>
+                    <p>الأقرب يظهر أولًا. البحث داخل نفس الخطوة، والاختيار يغلق القائمة مباشرة.</p>
+                  </div>
+                  <div class="pocket-search">
+                    <div class="pocket-search-box">ابحث باسم، كاش، مصرف...</div>
+                    <div class="pocket-account-choice tone-green">
+                      <div><strong>أنا · كاش</strong><small>مقترح · مالي عندي · دينار</small></div>
+                      <span class="pocket-balance">48,000</span>
+                    </div>
+                    <div class="pocket-account-choice tone-blue">
+                      <div><strong>الجمهورية</strong><small>مصرفي · دينار</small></div>
+                      <span class="pocket-balance">-1,200</span>
+                    </div>
+                  </div>
+                  <button class="pocket-primary">التالي</button>
+                </div>
+              </section>
+
+              <nav class="pocket-dock-v2">
+                <span>إدخال</span>
+                <span>أرصدة</span>
+                <span>حركات</span>
+                <span>مراجعة</span>
+              </nav>
+            </div>
+          </div>
+
+          <aside class="pocket-board-v2">
+            <div class="pocket-board-head">
+              <div>
+                <h3>التركيب الجديد</h3>
+                <p>الصفحة ليست لوحة ضخمة. هي مساعد إدخال، وحوله 4 مسارات واضحة لا تتداخل.</p>
+              </div>
+              <button>ابدأ حركة</button>
+            </div>
+
+            <div class="pocket-section-map">
+              <div class="pocket-section tone-blue"><strong>إدخال</strong><span>سؤال واحد</span></div>
+              <div class="pocket-section tone-green"><strong>أرصدة</strong><span>أقبض / مالي</span></div>
+              <div class="pocket-section tone-amber"><strong>حركات</strong><span>اليوم أولًا</span></div>
+              <div class="pocket-section tone-red"><strong>مراجعة</strong><span>حل واضح</span></div>
+            </div>
+
+            <div class="pocket-desktop-grid">
+              <div class="pocket-panel-v2">
+                <h3>الديسكتوب لا يعود للنموذج القديم</h3>
+                <div class="pocket-mini-flow">
+                  <div class="pocket-flow-row tone-green"><b>✓</b><div><strong>تحويل</strong><small>تم اختيار نوع الحركة</small></div><span class="value-pill">غير</span></div>
+                  <div class="pocket-flow-row tone-blue"><b>✓</b><div><strong>12,500 د.ل</strong><small>تم إدخال المبلغ</small></div><span class="value-pill">غير</span></div>
+                  <div class="pocket-flow-row tone-amber"><b>3</b><div><strong>اختر الحساب</strong><small>بحث سريع واختيارات مقترحة</small></div><span class="value-pill">الآن</span></div>
+                </div>
+              </div>
+
+              <div class="pocket-panel-v2">
+                <h3>اليوم والأرصدة بجانب الإدخال</h3>
+                <div class="pocket-today-list">
+                  <div class="pocket-today-row tone-red"><div><strong>مصروف</strong><small>أنا · كاش</small></div><span class="value-pill">-350</span></div>
+                  <div class="pocket-today-row tone-green"><div><strong>دخل</strong><small>الشاحنة → الجمهورية</small></div><span class="value-pill">+1,900</span></div>
+                  <div class="pocket-today-row tone-blue"><div><strong>تحويل</strong><small>أنا · كاش → سعيد</small></div><span class="value-pill">12,500</span></div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="bot-preview pocket-bot-v2">
+          <div class="bot-card">
+            <strong>البوت بنفس ترتيب الويب</strong>
+            <code>3/4 · الحساب</code>
+            <div class="quote">✓ تحويل<br>✓ 12,500 د.ل<br><br><b>من أين يخرج المال؟</b><br>الأقرب أولًا، أو اكتب للبحث.</div>
+            <div class="bot-buttons">
+              <span>🟢 أنا · كاش · 48,000</span>
+              <span>🔵 الجمهورية · مصرفي · -1,200</span>
+              <span>↩️ رجوع</span>
+            </div>
+          </div>
+          <div class="bot-card">
+            <strong>بعد الحفظ</strong>
+            <div class="quote">تم الحفظ<br><br>أنا · كاش<br>48,000 - 12,500 = 35,500<br><br>سعيد · كاش<br>18,000 + 12,500 = 30,500</div>
+            <div class="bot-buttons">
+              <span>➕ حركة جديدة</span>
+              <span>📒 حركات اليوم</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="analysis-grid">
+        <div class="analysis-card"><strong>لماذا صار أفضل؟</strong><span>بدأنا بالهاتف، ثم رتبنا الأقسام حوله بدل تكرار صفحة كروت.</span></div>
+        <div class="analysis-card"><strong>التركيب</strong><span>إدخال واضح، أرصدة مختصرة، حركات اليوم، مراجعة منفصلة.</span></div>
+        <div class="analysis-card"><strong>الألوان</strong><span>الأزرق للسؤال الحالي، الأخضر للزيادة، الأحمر للنقص، العنبر للانتباه.</span></div>
+        <div class="analysis-card"><strong>ملاحظة تنفيذ</strong><span>هذا يحتاج تطبيقه في الويب والبوت كنظام واحد، لا CSS فقط.</span></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -9,7 +9,6 @@
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",
-    "bot:mohammad": "node server/telegram/bot.js",
     "bot:adreem": "node server/telegram/bot.js",
     "api:adreem": "node server/adreemApi.js",
     "verify:runtime": "node server/ops/verifyAdreemRuntime.js"

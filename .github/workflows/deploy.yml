@@ -37,7 +37,7 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: /mohammad-ledger/
-          VITE_DEFAULT_APP: mohammad-ledger
+          VITE_DEFAULT_APP: adreem
           VITE_ADREEM_API_URL: ${{ secrets.VITE_ADREEM_API_URL }}
 
       - name: Upload artifact

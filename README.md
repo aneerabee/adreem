@@ -5,7 +5,10 @@
 ## الروابط
 
 - التطبيق: https://aneerabee.github.io/mohammad-ledger/
+- خيارات التصميم: https://aneerabee.github.io/mohammad-ledger/adreem-redesign-options.html
 - GitHub: https://github.com/aneerabee/mohammad-ledger
+
+ملاحظة: اسم المنتج داخل النظام هو ADREEM. مسار GitHub Pages الحالي يبقى `/mohammad-ledger/` لأنه تابع لاسم مستودع GitHub الحالي.
 
 ## التشغيل المحلي
 
