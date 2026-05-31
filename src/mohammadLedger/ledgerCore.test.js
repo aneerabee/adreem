@@ -4,6 +4,7 @@ import {
   CURRENCIES,
   MOVEMENT_STATUSES,
   MOVEMENT_TYPES,
+  buildPostingEntries,
   createAccount,
   createOpeningMovements,
   formatBalanceMeaning,
@@ -82,6 +83,7 @@ describe('mohammad ledger core', () => {
     )
 
     expect(badMovement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(buildPostingEntries(badMovement)).toEqual([])
     const balance = getAccountBalance('saeed-cash', mohammadAccountCatalog, [...openings, badMovement])
     expect(balance.dinar).toBe(18260)
   })
@@ -375,6 +377,24 @@ describe('mohammad ledger core', () => {
 
     expect(movement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
     expect(movement.validation.errors.some((error) => error.field === 'amount')).toBe(true)
+  })
+
+  it('requires a destination account for correction movements', () => {
+    const movement = postMovement(
+      {
+        type: MOVEMENT_TYPES.CORRECTION,
+        amount: 100,
+        currency: CURRENCIES.DINAR,
+        sourceAccountId: null,
+        destinationAccountId: '',
+        note: 'مطابقة',
+      },
+      mohammadAccountCatalog,
+    )
+
+    expect(movement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(movement.validation.errors.some((error) => error.field === 'destinationAccountId')).toBe(true)
+    expect(buildPostingEntries(movement)).toEqual([])
   })
 
   it('enforces the starting currency for usd sale and purchase', () => {

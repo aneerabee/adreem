@@ -50,6 +50,7 @@ const DESTINATION_REQUIRED_TYPES = new Set([
   MOVEMENT_TYPES.USD_SALE,
   MOVEMENT_TYPES.USD_PURCHASE,
   MOVEMENT_TYPES.EXTERNAL_INCOME,
+  MOVEMENT_TYPES.CORRECTION,
 ])
 
 function asNumber(value) {
@@ -211,7 +212,7 @@ export function buildPostingEntries(movement) {
   const amount = roundMoney(movement.amount)
   const currency = movement.currency
 
-  if (movement.status === MOVEMENT_STATUSES.VOIDED) return []
+  if (movement.status && movement.status !== MOVEMENT_STATUSES.POSTED) return []
 
   switch (movement.type) {
     case MOVEMENT_TYPES.OPENING_BALANCE:
