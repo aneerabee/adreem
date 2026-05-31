@@ -12,6 +12,7 @@ import {
   movementStepText,
   reviewMovementText,
 } from './messages.js'
+import { mainMenuKeyboard } from './keyboards.js'
 
 const receivable = {
   ownerName: 'سعيد',
@@ -52,7 +53,23 @@ describe('telegram account balance presentation', () => {
 
 describe('telegram movement presentation', () => {
   it('uses ADREEM as the bot ledger name', () => {
-    expect(mainMenuText()).toContain('<b>ADREEM</b>')
+    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('<b>ADREEM</b>')
+    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('Ledger OS · Telegram')
+    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('سجل اليوم: 2 حركة')
+  })
+
+  it('aligns the main bot menu with the web work areas', () => {
+    const labels = mainMenuKeyboard().inline_keyboard.flat().map((button) => button.text)
+
+    expect(labels).toEqual([
+      '+ إدخال حركة',
+      '+ حساب جديد',
+      '= الأرصدة',
+      'سجل اليوم',
+      '≡ السجل',
+      '! مراجعة',
+      'بحث عن حساب',
+    ])
   })
 
   it('uses a compact step counter instead of visual dot noise', () => {

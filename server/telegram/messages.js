@@ -99,12 +99,12 @@ function typeTag(account) {
 }
 
 export function mainMenuText(summary = null) {
-  const lines = ['<b>ADREEM</b>', '<code>دفتر جاهز</code>']
+  const lines = ['<b>ADREEM</b>', '<code>Ledger OS · Telegram</code>']
   if (summary) {
     lines.push('')
-    lines.push(`<blockquote>${escapeHtml(`اليوم: ${summary.todayCount} حركة\nمراجعة: ${summary.reviewCount}`)}</blockquote>`)
+    lines.push(`<blockquote>${escapeHtml(`إدخال سريع جاهز\nسجل اليوم: ${summary.todayCount} حركة\nمراجعة: ${summary.reviewCount}`)}</blockquote>`)
   }
-  lines.push('', '<b>ماذا تريد الآن؟</b>')
+  lines.push('', '<b>اختر منطقة العمل</b>')
   return lines.join('\n')
 }
 
@@ -146,11 +146,11 @@ export function accountStepText(session) {
   }
 
   const lines = [
-    '<b>حساب جديد</b>',
+    '<b>ADREEM · حساب جديد</b>',
     `<code>${progress}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
-    '<b>الآن</b>',
+    '<b>الخطوة الحالية</b>',
     `<blockquote>${escapeHtml(accountStepTitle(session))}\n${escapeHtml(accountStepHelp(session))}</blockquote>`,
   ]
   return lines.join('\n')
@@ -161,6 +161,7 @@ export function accountReviewText(session, result = null) {
   const preset = accountPresetFor(draft.type, draft.valueKind)
   const lines = [
     '<b>تأكيد الحساب</b>',
+    '<code>راجع قبل الحفظ</code>',
     '',
     '<blockquote>',
     escapeHtml(accountDraftSummary(draft)),
@@ -223,12 +224,12 @@ export function movementStepText(session, accountsById = new Map()) {
   if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, accountLabel(destination)))
   if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
   const lines = [
-    '<b>ADREEM</b>',
+    '<b>ADREEM · إدخال</b>',
     `<code>${progress}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`] : []),
     ...(summary.length ? [''] : []),
-    `<b>الآن</b>`,
+    `<b>الخطوة الحالية</b>`,
     `<blockquote>${escapeHtml(currentStepTitle(session))}\n${escapeHtml(currentStepHelp(session))}</blockquote>`,
   ]
   return lines.join('\n')
@@ -362,6 +363,7 @@ export function reviewMovementText(session, preview) {
   const config = movementConfigFor(draft.type)
   const lines = [
     '<b>تأكيد الحركة</b>',
+    '<code>راجع التأثير قبل الحفظ</code>',
     '',
     `<blockquote>${escapeHtml(`${movementLabels[draft.type] || draft.type} ${formatMoney(draft.amount, draft.currency)}`)}</blockquote>`,
   ]

@@ -175,7 +175,7 @@ async function showAccounts(ctx) {
   if (receivables.length) {
     sections.push(`<b>الناس والجهات</b>\n${receivables.map((bucket) => accountBlockquote(bucket.account, bucket)).join('\n')}`)
   }
-  return sendScreen(ctx, sections.length ? `<b>الأرصدة</b>\n\n${sections.join('\n\n')}` : '<b>لا توجد حسابات.</b>\n<blockquote>ابدأ من زر حساب جديد.</blockquote>')
+  return sendScreen(ctx, sections.length ? `<b>ADREEM · الأرصدة</b>\n<code>${myMoney.length + receivables.length} حساب ظاهر</code>\n\n${sections.join('\n\n')}` : '<b>ADREEM · الأرصدة</b>\n<blockquote>لا توجد حسابات.\nابدأ من زر + حساب جديد.</blockquote>')
 }
 
 async function showToday(ctx) {
@@ -187,7 +187,7 @@ async function showToday(ctx) {
     .reverse()
     .slice(0, 10)
     .map((movement) => movementBlockquote(movement, snapshot.accountById))
-  return sendScreen(ctx, rows.length ? `<b>اليوم</b>\n<code>${rows.length} حركة</code>\n\n${rows.join('\n')}` : '<b>اليوم</b>\n<blockquote>لا توجد حركات.</blockquote>')
+  return sendScreen(ctx, rows.length ? `<b>ADREEM · سجل اليوم</b>\n<code>${rows.length} حركة</code>\n\n${rows.join('\n')}` : '<b>ADREEM · سجل اليوم</b>\n<blockquote>لا توجد حركات اليوم.</blockquote>')
 }
 
 async function showHistory(ctx) {
@@ -200,7 +200,7 @@ async function showHistory(ctx) {
     .reverse()
     .slice(0, 14)
     .map((movement) => movementBlockquote(movement, snapshot.accountById, { includeDate: true }))
-  return sendScreen(ctx, rows.length ? `<b>آخر الحركات</b>\n<code>${rows.length} حركة</code>\n\n${rows.join('\n')}` : '<b>السجل</b>\n<blockquote>لا توجد حركات.</blockquote>')
+  return sendScreen(ctx, rows.length ? `<b>ADREEM · السجل</b>\n<code>${rows.length} حركة أخيرة</code>\n\n${rows.join('\n')}` : '<b>ADREEM · السجل</b>\n<blockquote>لا توجد حركات.</blockquote>')
 }
 
 async function showReview(ctx) {
@@ -208,7 +208,7 @@ async function showReview(ctx) {
   const { state } = await ctx.repository.load()
   const accounts = state.accounts.filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW)
   const movements = state.movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
-  const lines = ['<b>المراجعة</b>', `<code>${accounts.length + movements.length} عنصر</code>`]
+  const lines = ['<b>ADREEM · مراجعة</b>', `<code>${accounts.length + movements.length} عنصر</code>`]
   if (!accounts.length && !movements.length) lines.push('', '<blockquote>لا شيء معلق.</blockquote>')
   if (accounts.length) {
     lines.push('', '<b>حسابات</b>')
@@ -223,7 +223,7 @@ async function showReview(ctx) {
 
 async function startSearch(ctx) {
   sessions.set(ctx.chatId, ctx.userId, { flow: 'search', uiMessageId: ctx.isCallback ? ctx.messageId : null })
-  return sendScreen(ctx, '<b>بحث</b>\n<blockquote>اكتب اسم شخص، مصرف، كاش، أو جزءًا من الاسم.</blockquote>')
+  return sendScreen(ctx, '<b>ADREEM · بحث</b>\n<blockquote>اكتب اسم شخص، جهة، كاش، أو مصرف.</blockquote>')
 }
 
 async function handleSearchText(ctx, text) {
@@ -240,7 +240,7 @@ async function handleSearchText(ctx, text) {
   const targetMessageId = session.uiMessageId
   sessions.clear(ctx.chatId, ctx.userId)
   await deleteUserInput(ctx)
-  const textResult = rows.length ? `<b>نتائج البحث</b>\n<code>${rows.length} نتيجة</code>\n\n${rows.join('\n')}` : '<b>بحث</b>\n<blockquote>لا توجد نتيجة.</blockquote>'
+  const textResult = rows.length ? `<b>ADREEM · نتائج البحث</b>\n<code>${rows.length} نتيجة</code>\n\n${rows.join('\n')}` : '<b>ADREEM · بحث</b>\n<blockquote>لا توجد نتيجة.</blockquote>'
   if (targetMessageId) {
     try {
       return await telegram.editMessageText({
@@ -296,7 +296,7 @@ async function handleMessage(ctx, update) {
   if (await handleSearchText(ctx, text)) return null
   return telegram.sendMessage({
     chat_id: ctx.chatId,
-    text: '<b>اكتب /start لفتح القائمة.</b>',
+    text: '<b>افتح ADREEM من /start</b>',
     parse_mode: 'HTML',
     reply_markup: mainMenuKeyboard(),
   })
