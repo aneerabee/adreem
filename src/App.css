@@ -5074,3 +5074,169 @@
     width: 100%;
   }
 }
+
+/* ADREEM navigation refinement: one clear working surface, no hidden route jumps. */
+.ml3-pocket-app .ml3-tabs {
+  isolation: isolate;
+}
+
+.ml3-pocket-app .ml3-tabs button {
+  position: relative;
+}
+
+.ml3-pocket-app .ml3-tabs button:not(.is-active) {
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.ml3-pocket-app .ml3-tabs button.is-active::after {
+  content: "";
+  position: absolute;
+  inset-inline: 12px;
+  bottom: 4px;
+  height: 3px;
+  border-radius: 999px;
+  background: #38b66b;
+}
+
+.ml3-pocket-app .ml3-entry {
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.75fr);
+  grid-auto-flow: row dense;
+  align-items: start;
+}
+
+.ml3-pocket-app .ml3-pocket-status {
+  order: 1;
+  grid-column: 1 / -1;
+}
+
+.ml3-pocket-app .ml3-pocket-status button {
+  position: relative;
+  overflow: hidden;
+}
+
+.ml3-pocket-app .ml3-pocket-status button:nth-child(2) {
+  background: #edf7ff;
+  border-color: #b7d7ef;
+}
+
+.ml3-pocket-app .ml3-pocket-status button:nth-child(3) {
+  background: #fff1ec;
+  border-color: #efc0b7;
+}
+
+.ml3-pocket-app .ml3-pocket-status button::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 5px;
+  background: rgba(20, 35, 28, 0.24);
+}
+
+.ml3-pocket-app .ml3-pocket-status button.is-primary::before {
+  background: #38b66b;
+}
+
+.ml3-pocket-app .ml3-entry-mode {
+  order: 2;
+  grid-column: 1 / -1;
+  max-width: 520px;
+  width: 100%;
+}
+
+.ml3-pocket-app .ml3-entry-card {
+  order: 3;
+  grid-column: 1;
+}
+
+.ml3-pocket-app .ml3-add-account {
+  order: 3;
+  grid-column: 1 / -1;
+}
+
+.ml3-pocket-app .ml3-today-panel {
+  order: 4;
+  grid-column: 2;
+  position: sticky;
+  top: 154px;
+  scroll-margin-top: 88px;
+}
+
+.ml3-pocket-app .ml3-today-head {
+  border-radius: 13px;
+  background: #f4f8f3;
+  padding: 7px;
+}
+
+.ml3-pocket-app .ml3-today-row {
+  box-shadow: none;
+}
+
+.ml3-pocket-app .ml3-panel-head h2,
+.ml3-pocket-app .ml3-today-head h2 {
+  letter-spacing: 0;
+}
+
+@media (max-width: 1120px) {
+  .ml3-pocket-app .ml3-entry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ml3-pocket-app .ml3-entry-card,
+  .ml3-pocket-app .ml3-today-panel {
+    grid-column: 1 / -1;
+  }
+
+  .ml3-pocket-app .ml3-today-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .ml3-pocket-app .ml3-tabs {
+    gap: 4px;
+    padding: 5px;
+  }
+
+  .ml3-pocket-app .ml3-tabs button.is-active::after {
+    inset-inline: 18px;
+    bottom: 3px;
+  }
+
+  .ml3-pocket-app .ml3-pocket-status {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .ml3-pocket-app .ml3-pocket-status button {
+    min-height: 38px;
+    grid-template-columns: 1fr;
+    align-content: center;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 6px;
+    padding-inline-start: 10px;
+    border-radius: 13px;
+  }
+
+  .ml3-pocket-app .ml3-pocket-status span,
+  .ml3-pocket-app .ml3-pocket-status strong {
+    text-align: center;
+  }
+
+  .ml3-pocket-app .ml3-pocket-status span {
+    font-size: 0.68rem;
+  }
+
+  .ml3-pocket-app .ml3-pocket-status strong {
+    font-size: 0.92rem;
+  }
+
+  .ml3-pocket-app .ml3-entry-mode {
+    max-width: none;
+  }
+
+  .ml3-pocket-app .ml3-today-list {
+    max-height: none;
+  }
+}

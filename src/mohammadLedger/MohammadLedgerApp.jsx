@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ACCOUNT_STATUSES,
   ACCOUNT_CURRENCY_KINDS,
@@ -81,7 +81,7 @@ import {
 const sectionTabs = [
   { key: 'entry', label: 'إدخال', mark: '+' },
   { key: 'accounts', label: 'الأرصدة', mark: '=' },
-  { key: 'history', label: 'الحركات', mark: '≡' },
+  { key: 'history', label: 'السجل', mark: '≡' },
   { key: 'review', label: 'مراجعة', mark: '!' },
 ]
 
@@ -99,7 +99,7 @@ const accountGroupTabs = [
 const sectionTitles = {
   entry: 'إدخال سريع',
   accounts: 'الأرصدة',
-  history: 'الحركات',
+  history: 'السجل',
   review: 'مراجعة',
 }
 
@@ -1127,6 +1127,7 @@ export default function MohammadLedgerApp() {
   const [historyType, setHistoryType] = useState('')
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyAccountId, setHistoryAccountId] = useState('')
+  const todayPanelRef = useRef(null)
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -1381,6 +1382,13 @@ export default function MohammadLedgerApp() {
         next.destinationAccountId = ''
       }
       return next
+    })
+  }
+
+  function focusTodayMovements() {
+    setActiveEntryMode('movement')
+    window.requestAnimationFrame(() => {
+      todayPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }
 
@@ -1945,8 +1953,8 @@ export default function MohammadLedgerApp() {
         <section className="ml3-panel">
           <div className="ml3-panel-head">
             <div>
-            <h2>الحركات</h2>
-            <p>بحث وفلترة</p>
+            <h2>السجل</h2>
+            <p>كل الحركات والبحث</p>
             </div>
             <span>{formatCount(filteredHistoryMovements.length)}</span>
           </div>
@@ -2119,7 +2127,7 @@ export default function MohammadLedgerApp() {
                 <span>الآن</span>
                 <strong>{movementProgressText}</strong>
               </button>
-              <button type="button" onClick={() => setActiveSection('history')}>
+              <button type="button" onClick={focusTodayMovements}>
                 <span>اليوم</span>
                 <strong>{formatCount(todayMovements.length)}</strong>
               </button>
@@ -2463,9 +2471,9 @@ export default function MohammadLedgerApp() {
             ) : null}
 
             {activeEntryMode === 'movement' ? (
-              <section className="ml3-today-panel">
+              <section className="ml3-today-panel" ref={todayPanelRef}>
                 <div className="ml3-today-head">
-                  <h2>اليوم</h2>
+                  <h2>سجل اليوم</h2>
                   <span>{formatCount(todayMovements.length)}</span>
                 </div>
                 <div className="ml3-today-list">
