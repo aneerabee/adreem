@@ -30,7 +30,7 @@ describe('telegram account balance presentation', () => {
     const bucket = { dinar: 12500, usd: 0 }
 
     expect(formatAccountBalance(receivable, bucket)).toBe('أقبض منه 12,500 د.ل')
-    expect(accountChoiceButtonText(receivable, bucket)).toBe('🟢 سعيد · كاش · دينار · أقبض منه 12,500 د.ل')
+    expect(accountChoiceButtonText(receivable, bucket)).toBe('🟢 سعيد · كاش · دينار | أقبض منه 12,500 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('success')
     expect(accountBlockquote(receivable, bucket)).toContain('🟢 سعيد · كاش')
   })
@@ -39,7 +39,7 @@ describe('telegram account balance presentation', () => {
     const bucket = { dinar: -3200, usd: 0 }
 
     expect(formatAccountBalance(receivable, bucket)).toBe('أدفع له 3,200 د.ل')
-    expect(accountChoiceButtonText(receivable, bucket)).toBe('🔴 سعيد · كاش · دينار · أدفع له 3,200 د.ل')
+    expect(accountChoiceButtonText(receivable, bucket)).toBe('🔴 سعيد · كاش · دينار | أدفع له 3,200 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('danger')
     expect(accountBlockquote(receivable, bucket)).toContain('🔴 سعيد · كاش')
   })
@@ -96,8 +96,7 @@ describe('telegram movement presentation', () => {
 
     expect(card).toContain('<blockquote>')
     expect(card).toContain('🔁 تحويل · 1,250 د.ل')
-    expect(card).toContain('من: كاش: كاش')
-    expect(card).toContain('إلى: سعيد · كاش')
+    expect(card).toContain('كاش: كاش ← سعيد · كاش')
     expect(card).toContain('ملاحظة: تجربة &lt;مهمة&gt;')
   })
 

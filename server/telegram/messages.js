@@ -99,13 +99,12 @@ function typeTag(account) {
 }
 
 export function mainMenuText(summary = null) {
-  const lines = ['<b>ADREEM</b>', '<blockquote>الحالة: متصل بالدفتر السحابي</blockquote>']
+  const lines = ['<b>ADREEM</b>', '<code>دفتر جاهز</code>']
   if (summary) {
     lines.push('')
-    lines.push(htmlLine('اليوم', `${summary.todayCount} حركة`))
-    lines.push(htmlLine('مراجعة', summary.reviewCount))
+    lines.push(`<blockquote>${escapeHtml(`اليوم: ${summary.todayCount} حركة\nمراجعة: ${summary.reviewCount}`)}</blockquote>`)
   }
-  lines.push('', '<b>اختر العملية</b>')
+  lines.push('', '<b>ماذا تريد الآن؟</b>')
   return lines.join('\n')
 }
 
@@ -258,7 +257,7 @@ export function compactAccountChoiceText(account, bucket) {
 
 export function accountChoiceButtonText(account, bucket) {
   const presentation = accountBalancePresentation(account, bucket)
-  return `${presentation.icon} ${accountDisplayName(account)} · ${presentation.text}`
+  return `${presentation.icon} ${accountDisplayName(account)} | ${presentation.text}`
 }
 
 export function accountChoiceButtonStyle(account, bucket) {
@@ -269,7 +268,7 @@ export function accountBlockquote(account, bucket) {
   const presentation = accountBalancePresentation(account, bucket)
   return [
     '<blockquote>',
-    escapeHtml(`${presentation.icon} ${accountLabel(account)}`),
+    escapeHtml(`${presentation.icon} ${accountDisplayName(account)}`),
     '\n',
     escapeHtml(presentation.text),
     '\n',
@@ -295,8 +294,7 @@ export function movementBlockquote(movement, accountsById = new Map(), options =
   if (movementNeedsRate(movement?.type) && movement?.rate) lines.push(`السعر: ${formatRate(movement.rate)}`)
 
   if (source && destination) {
-    lines.push(`من: ${accountLabel(source)}`)
-    lines.push(`إلى: ${accountLabel(destination)}`)
+    lines.push(`${accountLabel(source)} ← ${accountLabel(destination)}`)
   } else if (source) {
     lines.push(`${config.sourceLabel || 'من'}: ${accountLabel(source)}`)
   } else if (destination) {

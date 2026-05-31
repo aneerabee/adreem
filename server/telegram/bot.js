@@ -168,12 +168,14 @@ async function showAccounts(ctx) {
     .filter((bucket) => bucket.account.valueKind === VALUE_KINDS.RECEIVABLE)
     .sort((a, b) => Math.abs(b.dinar) - Math.abs(a.dinar) || Math.abs(b.usd) - Math.abs(a.usd))
     .slice(0, 10)
-  const rows = [
-    ...myMoney.map((bucket) => accountBlockquote(bucket.account, bucket)),
-    ...(myMoney.length && receivables.length ? [''] : []),
-    ...receivables.map((bucket) => accountBlockquote(bucket.account, bucket)),
-  ]
-  return sendScreen(ctx, rows.length ? `<b>الحسابات الأهم</b>\n\n${rows.join('\n')}` : '<b>لا توجد حسابات.</b>')
+  const sections = []
+  if (myMoney.length) {
+    sections.push(`<b>مالي عندي</b>\n${myMoney.map((bucket) => accountBlockquote(bucket.account, bucket)).join('\n')}`)
+  }
+  if (receivables.length) {
+    sections.push(`<b>الناس والجهات</b>\n${receivables.map((bucket) => accountBlockquote(bucket.account, bucket)).join('\n')}`)
+  }
+  return sendScreen(ctx, sections.length ? `<b>الأرصدة</b>\n\n${sections.join('\n\n')}` : '<b>لا توجد حسابات.</b>\n<blockquote>ابدأ من زر حساب جديد.</blockquote>')
 }
 
 async function showToday(ctx) {
@@ -185,7 +187,7 @@ async function showToday(ctx) {
     .reverse()
     .slice(0, 10)
     .map((movement) => movementBlockquote(movement, snapshot.accountById))
-  return sendScreen(ctx, rows.length ? `<b>حركات اليوم</b>\n\n${rows.join('\n')}` : '<b>لا توجد حركات اليوم.</b>')
+  return sendScreen(ctx, rows.length ? `<b>اليوم</b>\n<code>${rows.length} حركة</code>\n\n${rows.join('\n')}` : '<b>اليوم</b>\n<blockquote>لا توجد حركات.</blockquote>')
 }
 
 async function showHistory(ctx) {
@@ -198,7 +200,7 @@ async function showHistory(ctx) {
     .reverse()
     .slice(0, 14)
     .map((movement) => movementBlockquote(movement, snapshot.accountById, { includeDate: true }))
-  return sendScreen(ctx, rows.length ? `<b>آخر الحركات</b>\n\n${rows.join('\n')}` : '<b>لا توجد حركات.</b>')
+  return sendScreen(ctx, rows.length ? `<b>آخر الحركات</b>\n<code>${rows.length} حركة</code>\n\n${rows.join('\n')}` : '<b>السجل</b>\n<blockquote>لا توجد حركات.</blockquote>')
 }
 
 async function showReview(ctx) {
@@ -206,22 +208,22 @@ async function showReview(ctx) {
   const { state } = await ctx.repository.load()
   const accounts = state.accounts.filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW)
   const movements = state.movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
-  const lines = ['<b>المراجعة</b>']
-  if (!accounts.length && !movements.length) lines.push('', 'لا توجد عناصر معلقة.')
+  const lines = ['<b>المراجعة</b>', `<code>${accounts.length + movements.length} عنصر</code>`]
+  if (!accounts.length && !movements.length) lines.push('', '<blockquote>لا شيء معلق.</blockquote>')
   if (accounts.length) {
-    lines.push('', '<b>حسابات:</b>')
-    accounts.slice(0, 8).forEach((account) => lines.push(`- ${escapeHtml(accountLabel(account))}`))
+    lines.push('', '<b>حسابات</b>')
+    accounts.slice(0, 8).forEach((account) => lines.push(`<blockquote>${escapeHtml(accountLabel(account))}</blockquote>`))
   }
   if (movements.length) {
-    lines.push('', '<b>حركات:</b>')
-    movements.slice(0, 8).forEach((movement) => lines.push(`- ${escapeHtml(`${movementLabels[movement.type] || movement.type} ${formatMoney(movement.amount, movement.currency)}`)}`))
+    lines.push('', '<b>حركات</b>')
+    movements.slice(0, 8).forEach((movement) => lines.push(`<blockquote>${escapeHtml(`${movementLabels[movement.type] || movement.type} · ${formatMoney(movement.amount, movement.currency)}`)}</blockquote>`))
   }
   return sendScreen(ctx, lines.join('\n'))
 }
 
 async function startSearch(ctx) {
   sessions.set(ctx.chatId, ctx.userId, { flow: 'search', uiMessageId: ctx.isCallback ? ctx.messageId : null })
-  return sendScreen(ctx, '<b>البحث</b>\n<blockquote>اكتب الاسم أو جزءًا منه.</blockquote>')
+  return sendScreen(ctx, '<b>بحث</b>\n<blockquote>اكتب اسم شخص، مصرف، كاش، أو جزءًا من الاسم.</blockquote>')
 }
 
 async function handleSearchText(ctx, text) {
@@ -238,7 +240,7 @@ async function handleSearchText(ctx, text) {
   const targetMessageId = session.uiMessageId
   sessions.clear(ctx.chatId, ctx.userId)
   await deleteUserInput(ctx)
-  const textResult = rows.length ? `<b>نتائج البحث</b>\n\n${rows.join('\n')}` : '<b>لا توجد نتيجة.</b>'
+  const textResult = rows.length ? `<b>نتائج البحث</b>\n<code>${rows.length} نتيجة</code>\n\n${rows.join('\n')}` : '<b>بحث</b>\n<blockquote>لا توجد نتيجة.</blockquote>'
   if (targetMessageId) {
     try {
       return await telegram.editMessageText({

@@ -103,6 +103,16 @@ const sectionTitles = {
   review: 'مراجعة',
 }
 
+function accountPresetMark(key) {
+  if (key === 'person-cash') return 'ش'
+  if (key === 'own-cash') return 'ك'
+  if (key === 'own-bank') return 'م'
+  if (key === 'asset') return 'أ'
+  if (key === 'project') return 'ع'
+  if (key === 'expense') return 'ص'
+  return 'ح'
+}
+
 function loadInitialLedgerState() {
   const fallback = createMohammadFallbackState()
   const localState = loadLocalMohammadState(fallback)
@@ -371,7 +381,7 @@ function formatDisplayMeaning(account, amount) {
   return rounded > 0 ? `أقبض منه ${money(rounded)}` : `أدفع له ${money(Math.abs(rounded))}`
 }
 
-function AccountList({ title, subtitle, rows, emptyText = 'لا توجد عناصر في هذا القسم.', onConfirm, onDisable, onOpen, embedded = false }) {
+function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfirm, onDisable, onOpen, embedded = false }) {
   const Tag = embedded ? 'div' : 'section'
   return (
     <Tag className={embedded ? 'ml3-list-block' : 'ml3-panel'}>
@@ -1825,7 +1835,7 @@ export default function MohammadLedgerApp() {
         <div className="ml3-panel-head">
           <div>
             <h2>الأرصدة</h2>
-            <p>{activeGroup.title}</p>
+            <p>{formatCount(rows.length)} عنصر</p>
           </div>
           <span>{formatCount(balances.length)}</span>
         </div>
@@ -1872,6 +1882,7 @@ export default function MohammadLedgerApp() {
           <div className="ml3-panel-head">
             <div>
               <h2>مراجعة</h2>
+              <p>حل أو إلغاء</p>
             </div>
             <span>{formatCount(reviewItems.length)}</span>
           </div>
@@ -1935,6 +1946,7 @@ export default function MohammadLedgerApp() {
           <div className="ml3-panel-head">
             <div>
             <h2>الحركات</h2>
+            <p>بحث وفلترة</p>
             </div>
             <span>{formatCount(filteredHistoryMovements.length)}</span>
           </div>
@@ -2478,7 +2490,12 @@ export default function MohammadLedgerApp() {
                   <span>حساب جديد</span>
                   <h2>{selectedAccountPreset.title}</h2>
                 </div>
-                <b>{selectedAccountPreset.detail}</b>
+                <b>{accountDraftSummary(accountDraft)}</b>
+              </div>
+              <div className="ml3-account-build-steps" aria-label="خطوات إنشاء الحساب">
+                <span className="is-done">1 التصنيف</span>
+                <span className={accountDraftNameValue ? 'is-done' : 'is-current'}>2 الاسم</span>
+                <span className={accountNeedsCurrency(accountDraft) ? 'is-current' : 'is-muted'}>3 العملة</span>
               </div>
               <div className="ml3-account-presets">
                 {accountPresets.map((preset) => (
@@ -2488,6 +2505,7 @@ export default function MohammadLedgerApp() {
                     className={`ml3-account-preset--${preset.key} ${accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'is-active' : ''}`}
                     onClick={() => chooseAccountPreset(preset)}
                   >
+                    <i aria-hidden="true">{accountPresetMark(preset.key)}</i>
                     <strong>{preset.title}</strong>
                     <span>{preset.detail}</span>
                   </button>
