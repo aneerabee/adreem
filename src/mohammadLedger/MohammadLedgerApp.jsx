@@ -721,7 +721,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
           </div>
         </div>
 
-        <form className="ml3-profile-reconcile" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
+        <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
           <h3>مطابقة</h3>
           {lastReconciliation ? (
             <p className="ml3-profile-note">
@@ -745,7 +745,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
           <button type="submit">إنشاء تصحيح</button>
         </form>
 
-        <form className="ml3-profile-reconcile" onSubmit={(event) => onAddAttachment(event, account.id)}>
+        <form className="ml3-profile-reconcile ml3-profile-reconcile--attachment" onSubmit={(event) => onAddAttachment(event, account.id)}>
           <h3>مرفقات</h3>
           <div className="ml3-profile-editor-grid">
             <label>
