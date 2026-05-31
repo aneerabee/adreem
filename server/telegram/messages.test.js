@@ -5,9 +5,11 @@ import {
   accountBlockquote,
   accountChoiceButtonStyle,
   accountChoiceButtonText,
+  accountStepText,
   formatAccountBalance,
   mainMenuText,
   movementBlockquote,
+  movementStepText,
   reviewMovementText,
 } from './messages.js'
 
@@ -53,6 +55,30 @@ describe('telegram movement presentation', () => {
     expect(mainMenuText()).toContain('<b>ADREEM</b>')
   })
 
+  it('uses a compact step counter instead of visual dot noise', () => {
+    const movementText = movementStepText({
+      step: 'source',
+      draft: {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 1250,
+        currency: CURRENCIES.DINAR,
+        currencyConfirmed: true,
+      },
+    })
+    const accountText = accountStepText({
+      step: 'owner',
+      draft: {
+        type: 'person',
+        valueKind: VALUE_KINDS.RECEIVABLE,
+      },
+    })
+
+    expect(movementText).toContain('<code>4/7</code>')
+    expect(movementText).not.toContain('●')
+    expect(accountText).toContain('<code>2/5</code>')
+    expect(accountText).not.toContain('○')
+  })
+
   it('renders each movement as a clear standalone card', () => {
     const accounts = new Map([
       ['me-cash', { ownerName: 'أنا', subAccountName: 'كاش' }],
@@ -70,7 +96,7 @@ describe('telegram movement presentation', () => {
 
     expect(card).toContain('<blockquote>')
     expect(card).toContain('🔁 تحويل · 1,250 د.ل')
-    expect(card).toContain('من: كاش عندي: كاش')
+    expect(card).toContain('من: كاش: كاش')
     expect(card).toContain('إلى: سعيد · كاش')
     expect(card).toContain('ملاحظة: تجربة &lt;مهمة&gt;')
   })
@@ -108,7 +134,7 @@ describe('telegram movement presentation', () => {
     )
 
     expect(text).toContain('<b>تأكيد الحركة</b>')
-    expect(text).toContain('🔴 من: كاش عندي: كاش')
+    expect(text).toContain('🔴 من: كاش: كاش')
     expect(text).toContain('قبل: 2,000 د.ل')
     expect(text).toContain('التغيير: -500 د.ل')
     expect(text).toContain('بعد: 1,500 د.ل')

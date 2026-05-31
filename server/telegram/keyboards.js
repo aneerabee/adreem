@@ -10,11 +10,11 @@ import {
 export function mainMenuKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '➕ إدخال حركة', callback_data: 'main:movement', style: 'success' }],
-      [{ text: '➕ حساب جديد', callback_data: 'main:account', style: 'primary' }],
-      [{ text: '👥 الحسابات', callback_data: 'main:accounts', style: 'primary' }, { text: '📊 اليوم', callback_data: 'main:today', style: 'primary' }],
-      [{ text: '📒 السجل', callback_data: 'main:history' }, { text: '⚠️ مراجعة', callback_data: 'main:review' }],
-      [{ text: '🔎 بحث', callback_data: 'main:search' }],
+      [{ text: 'إدخال حركة', callback_data: 'main:movement', style: 'success' }],
+      [{ text: 'حساب جديد', callback_data: 'main:account', style: 'primary' }],
+      [{ text: 'الأرصدة', callback_data: 'main:accounts', style: 'primary' }, { text: 'اليوم', callback_data: 'main:today', style: 'primary' }],
+      [{ text: 'السجل', callback_data: 'main:history' }, { text: 'مراجعة', callback_data: 'main:review' }],
+      [{ text: 'بحث', callback_data: 'main:search' }],
     ],
   }
 }
@@ -96,11 +96,11 @@ export function movementTypeKeyboard() {
 }
 
 function movementTypeButtonText(option) {
-  if (option.tone === 'transfer') return `🔁 ${option.label} · ${option.detail}`
-  if (option.tone === 'expense') return `🔴 ${option.label} · يخصم من حساب واحد`
-  if (option.tone === 'income') return `🟢 ${option.label} · يدخل إلى حساب واحد`
-  if (option.tone === 'sale') return `🟢 ${option.label} · دولار يخرج ودينار يدخل`
-  if (option.tone === 'purchase') return `🔵 ${option.label} · دينار يخرج ودولار يدخل`
+  if (option.tone === 'transfer') return `🔁 ${option.label} · بين حسابين`
+  if (option.tone === 'expense') return `🔴 ${option.label} · خروج مال`
+  if (option.tone === 'income') return `🟢 ${option.label} · دخول مال`
+  if (option.tone === 'sale') return `🟢 ${option.label} · دولار إلى دينار`
+  if (option.tone === 'purchase') return `🔵 ${option.label} · دينار إلى دولار`
   return option.label
 }
 

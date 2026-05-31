@@ -80,14 +80,14 @@ function currentStepTitle(session) {
 }
 
 function currentStepHelp(session) {
-  if (session?.step === 'type') return 'اختر العملية التي تريد تسجيلها.'
-  if (session?.step === 'amount') return 'اكتب الرقم فقط. مثال: 1250'
-  if (session?.step === 'currency') return 'اختر العملة حتى تظهر الحسابات المناسبة فقط.'
-  if (session?.step === 'rate') return 'اكتب سعر الصرف بالأرقام. مثال: 7.45'
-  if (session?.step === 'source') return 'اضغط الحساب المناسب من الأزرار.'
-  if (session?.step === 'destination') return 'اضغط الحساب المناسب من الأزرار.'
-  if (session?.step === 'note') return 'اختياري. اكتب سببًا قصيرًا أو اضغط بدون ملاحظة.'
-  if (session?.step === 'review') return 'تأكد من التأثير على الأرصدة قبل الحفظ.'
+  if (session?.step === 'type') return 'زر واحد فقط.'
+  if (session?.step === 'amount') return 'اكتب الرقم فقط.'
+  if (session?.step === 'currency') return 'الحسابات ستتفلتر حسب العملة.'
+  if (session?.step === 'rate') return 'مثال: 7.45'
+  if (session?.step === 'source') return 'اختر من أين تخرج القيمة.'
+  if (session?.step === 'destination') return 'اختر أين تدخل القيمة.'
+  if (session?.step === 'note') return 'اختياري.'
+  if (session?.step === 'review') return 'تأكد ثم احفظ.'
   return ''
 }
 
@@ -121,11 +121,11 @@ function accountStepTitle(session) {
 
 function accountStepHelp(session) {
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
-  if (session?.step === 'type') return 'اختر ماذا تريد إضافته بالضبط.'
+  if (session?.step === 'type') return 'اختر التصنيف المناسب.'
   if (session?.step === 'owner') return preset.namePlaceholder || 'اكتب الاسم فقط.'
-  if (session?.step === 'detail') return 'حدد هل التعامل نقدي أو عبر حساب بنكي.'
-  if (session?.step === 'currency') return 'هذه العملة تحدد أين يظهر الحساب عند إدخال الحركات.'
-  if (session?.step === 'review') return 'تأكد من الاسم والتصنيف قبل الحفظ.'
+  if (session?.step === 'detail') return 'كاش أو مصرفي.'
+  if (session?.step === 'currency') return 'دينار أو دولار.'
+  if (session?.step === 'review') return 'تأكد ثم احفظ.'
   return ''
 }
 
@@ -134,7 +134,7 @@ export function accountStepText(session) {
   const preset = accountPresetFor(draft.type, draft.valueKind)
   const steps = ['type', 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), 'review']
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
-  const progress = steps.map((step, index) => (index <= currentIndex ? '●' : '○')).join('')
+  const progress = `${currentIndex + 1}/${steps.length}`
   const summary = []
   if (currentIndex > steps.indexOf('type') && draft.type) summary.push(htmlLine('التصنيف', preset.title))
   const nameValue = accountNameValue(draft)
@@ -148,7 +148,7 @@ export function accountStepText(session) {
 
   const lines = [
     '<b>حساب جديد</b>',
-    `<code>${progress}  ${currentIndex + 1}/${steps.length}</code>`,
+    `<code>${progress}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
     '<b>الآن</b>',
@@ -214,7 +214,7 @@ export function movementStepText(session, accountsById = new Map()) {
     'review',
   ]
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
-  const progress = steps.map((step, index) => (index <= currentIndex ? '●' : '○')).join('')
+  const progress = `${currentIndex + 1}/${steps.length}`
   const summary = []
   if (draft.type) summary.push(htmlLine('الحركة', movementLabels[draft.type] || draft.type))
   if (amountText) summary.push(htmlLine('المبلغ', amountText))
@@ -225,7 +225,7 @@ export function movementStepText(session, accountsById = new Map()) {
   if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
   const lines = [
     '<b>ADREEM</b>',
-    `<code>${progress}  ${currentIndex + 1}/${steps.length}</code>`,
+    `<code>${progress}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`] : []),
     ...(summary.length ? [''] : []),

@@ -79,10 +79,10 @@ import {
 } from './ledgerOperations'
 
 const sectionTabs = [
-  { key: 'entry', label: 'إدخال' },
-  { key: 'accounts', label: 'الأرصدة' },
-  { key: 'history', label: 'الحركات' },
-  { key: 'review', label: 'مراجعة' },
+  { key: 'entry', label: 'إدخال', mark: '+' },
+  { key: 'accounts', label: 'الأرصدة', mark: '=' },
+  { key: 'history', label: 'الحركات', mark: '≡' },
+  { key: 'review', label: 'مراجعة', mark: '!' },
 ]
 
 
@@ -242,6 +242,19 @@ function storageTextForStatus(saveStatus, storageMode) {
     local: 'هذا الجهاز',
     'local-only': 'سحابة ناقصة',
   }[saveStatus] || 'محلي'
+}
+
+function movementVisibleSteps(config, needsSource) {
+  return [
+    MOVEMENT_ENTRY_STEPS.TYPE,
+    MOVEMENT_ENTRY_STEPS.AMOUNT,
+    config.currencyLocked ? null : MOVEMENT_ENTRY_STEPS.CURRENCY,
+    config.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : null,
+    needsSource ? MOVEMENT_ENTRY_STEPS.SOURCE : null,
+    config.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : null,
+    MOVEMENT_ENTRY_STEPS.NOTE,
+    MOVEMENT_ENTRY_STEPS.REVIEW,
+  ].filter(Boolean)
 }
 
 function nonZero(bucket) {
@@ -1408,17 +1421,12 @@ export default function MohammadLedgerApp() {
     return movementPreferredAccountIds(movementDraft.type, role)
   }
 
+  const visibleMovementSteps = movementVisibleSteps(movementConfig, movementSourceRequired)
+  const currentMovementStepIndex = Math.max(0, visibleMovementSteps.indexOf(movementStep))
+  const movementProgressText = `${formatCount(currentMovementStepIndex + 1)}/${formatCount(visibleMovementSteps.length)}`
+
   function movementStepNumber(step) {
-    const visibleSteps = [
-      MOVEMENT_ENTRY_STEPS.TYPE,
-      MOVEMENT_ENTRY_STEPS.AMOUNT,
-      MOVEMENT_ENTRY_STEPS.CURRENCY,
-      movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : null,
-      movementSourceRequired ? MOVEMENT_ENTRY_STEPS.SOURCE : null,
-      movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : null,
-      MOVEMENT_ENTRY_STEPS.NOTE,
-      MOVEMENT_ENTRY_STEPS.REVIEW,
-    ].filter(Boolean)
+    const visibleSteps = visibleMovementSteps
     const index = visibleSteps.indexOf(step)
     return index >= 0 ? index + 1 : step
   }
@@ -2030,7 +2038,7 @@ export default function MohammadLedgerApp() {
   const activeSectionTitle = sectionTitles[activeSection] || 'ADREEM'
 
   return (
-    <main className="ml3-app" dir="rtl">
+    <main className="ml3-app ml3-pocket-app" dir="rtl">
       <section className="ml3-shell">
         <header className="ml3-topbar">
           <div className="ml3-brand">
@@ -2049,7 +2057,7 @@ export default function MohammadLedgerApp() {
           <div className="ml3-top-actions">
             <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
             <b>{formatCount(activeAccounts.length)} حساب</b>
-            <b>{formatCount(reviewMovements.length)} مراجعة</b>
+            <b>{formatCount(reviewItems.length)} مراجعة</b>
           </div>
         </header>
 
@@ -2085,7 +2093,8 @@ export default function MohammadLedgerApp() {
               key={tab.key}
               onClick={() => setActiveSection(tab.key)}
             >
-              {tab.label}
+              <span aria-hidden="true">{tab.mark}</span>
+              <strong>{tab.label}</strong>
             </button>
           ))}
         </nav>
@@ -2093,6 +2102,20 @@ export default function MohammadLedgerApp() {
         <section className={`ml3-layout ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
           {activeSection === 'entry' ? (
           <aside className="ml3-entry">
+            <section className="ml3-pocket-status" aria-label="ملخص سريع">
+              <button type="button" className="is-primary" onClick={() => setActiveEntryMode('movement')}>
+                <span>الآن</span>
+                <strong>{movementProgressText}</strong>
+              </button>
+              <button type="button" onClick={() => setActiveSection('history')}>
+                <span>اليوم</span>
+                <strong>{formatCount(todayMovements.length)}</strong>
+              </button>
+              <button type="button" onClick={() => setActiveSection('review')}>
+                <span>مراجعة</span>
+                <strong>{formatCount(reviewItems.length)}</strong>
+              </button>
+            </section>
             {feedback ? <div className="ml3-feedback">{feedback}</div> : null}
             {pendingUndo ? (
               <div className="ml3-undo-banner">
@@ -2126,9 +2149,18 @@ export default function MohammadLedgerApp() {
             <form className={`ml3-entry-card ml3-entry-card--movement ml3-entry-card--${movementTone(movementDraft.type)}`} onSubmit={saveMovement}>
               <div className="ml3-entry-head">
                 <div>
+                  <span>إدخال حركة · {movementProgressText}</span>
                   <h2>{movementLabels[movementDraft.type]}</h2>
                 </div>
                 <b>{preview.validation.ok ? 'جاهزة' : 'ناقصة'}</b>
+              </div>
+              <div className="ml3-step-meter" aria-label="تقدم الإدخال">
+                {visibleMovementSteps.map((step) => (
+                  <span
+                    key={step}
+                    className={step < movementStep ? 'is-done' : step === movementStep ? 'is-current' : ''}
+                  />
+                ))}
               </div>
 
               {movementStep > MOVEMENT_ENTRY_STEPS.TYPE ? (
