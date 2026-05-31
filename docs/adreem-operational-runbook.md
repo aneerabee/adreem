@@ -32,7 +32,7 @@ chmod 600 /home/argaz/apps/adreem/adreem.env
 يحتاج الريبو إلى secret واحد للويب:
 
 ```bash
-gh secret set VITE_ADREEM_API_URL -R aneerabee/mohammad-ledger --body "https://your-adreem-api.example.com"
+gh secret set VITE_ADREEM_API_URL -R aneerabee/adreem --body "https://your-adreem-api.example.com"
 ```
 
 لا تضف `VITE_SUPABASE_URL` أو `VITE_SUPABASE_ANON_KEY` في build الإنتاج.
@@ -86,7 +86,7 @@ systemctl --user status adreem-bot.service --no-pager
 يفتح الويب الدفتر السحابي فقط عند وجود token:
 
 ```text
-https://aneerabee.github.io/mohammad-ledger/#ledger_token=YOUR_TOKEN
+https://aneerabee.github.io/adreem/#ledger_token=YOUR_TOKEN
 ```
 
 بدون token يعمل الويب محليًا فقط ولا يقرأ من Supabase.

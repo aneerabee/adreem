@@ -4,11 +4,11 @@
 
 ## الروابط
 
-- التطبيق: https://aneerabee.github.io/mohammad-ledger/
-- خيارات التصميم: https://aneerabee.github.io/mohammad-ledger/adreem-redesign-options.html
-- GitHub: https://github.com/aneerabee/mohammad-ledger
+- التطبيق: https://aneerabee.github.io/adreem/
+- خيارات التصميم: https://aneerabee.github.io/adreem/adreem-redesign-options.html
+- GitHub: https://github.com/aneerabee/adreem
 
-ملاحظة: اسم المنتج داخل النظام هو ADREEM. مسار GitHub Pages الحالي يبقى `/mohammad-ledger/` لأنه تابع لاسم مستودع GitHub الحالي.
+ملاحظة: اسم المنتج داخل النظام هو ADREEM. مسار GitHub Pages الحالي يبقى `/adreem/` لأنه تابع لاسم مستودع GitHub الحالي.
 
 ## التشغيل المحلي
 
@@ -63,7 +63,7 @@ https://aneerabee.github.io
 عند ضبط `VITE_ADREEM_API_URL` في الويب، يستخدم التطبيق API فقط إذا فتح المستخدم الرابط برمز خاص في hash:
 
 ```text
-https://aneerabee.github.io/mohammad-ledger/#ledger_token=token-rabee
+https://aneerabee.github.io/adreem/#ledger_token=token-rabee
 ```
 
 إذا كان `VITE_ADREEM_API_URL` موجودًا ولا يوجد token، لا يرجع الويب إلى Supabase anon؛ يعمل محليًا فقط إلى أن يدخل token صحيح.
