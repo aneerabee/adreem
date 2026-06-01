@@ -9981,3 +9981,69 @@
     justify-content: start;
   }
 }
+
+/* ADREEM consistency pass: keep cards stable and prevent text from changing layout size. */
+.adreem-app .ml3-balance-ledger button,
+.adreem-app .ml3-account-switcher button {
+  min-height: 64px;
+  display: grid;
+  align-content: center;
+}
+
+.adreem-app .ml3-account-presets {
+  grid-auto-rows: minmax(92px, auto);
+}
+
+.adreem-app .ml3-account-presets button {
+  min-height: 92px;
+  height: 100%;
+}
+
+.adreem-app .ml3-account-row {
+  min-height: 72px;
+  align-items: center;
+}
+
+.adreem-app .ml3-review-ticket {
+  min-height: 68px;
+  align-content: center;
+}
+
+.adreem-app .ml3-review-card {
+  min-height: 260px;
+}
+
+.adreem-app .ml3-today-row,
+.adreem-app .ml3-history-row {
+  min-height: 68px;
+  align-items: center;
+}
+
+.adreem-app .ml3-account-main strong,
+.adreem-app .ml3-account-main span,
+.adreem-app .ml3-review-ticket strong,
+.adreem-app .ml3-review-ticket b,
+.adreem-app .ml3-picker-results button strong,
+.adreem-app .ml3-picker-results button span {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media (max-width: 540px) {
+  .adreem-app .ml3-balance-ledger button,
+  .adreem-app .ml3-account-switcher button {
+    min-height: 58px;
+  }
+
+  .adreem-app .ml3-account-presets {
+    grid-auto-rows: minmax(88px, auto);
+  }
+
+  .adreem-app .ml3-account-presets button {
+    min-height: 88px;
+  }
+
+  .adreem-app .ml3-review-card {
+    min-height: 220px;
+  }
+}

@@ -6,6 +6,7 @@ import {
   accountKindLabel,
   accountNameValue,
   accountPresetFor,
+  displaySubAccountName,
 } from '../../src/mohammadLedger/accountConfig.js'
 import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { transferAccountKind } from '../../src/mohammadLedger/accountCompatibility.js'
@@ -122,7 +123,7 @@ function accountStepHelp(session) {
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
   if (session?.step === 'type') return 'اختر التصنيف المناسب.'
   if (session?.step === 'owner') return preset.namePlaceholder || 'اكتب الاسم فقط.'
-  if (session?.step === 'detail') return 'كاش أو مصرفي.'
+  if (session?.step === 'detail') return 'كاش أو شيك بيننا.'
   if (session?.step === 'currency') return 'دينار أو دولار.'
   if (session?.step === 'review') return 'تأكد ثم احفظ.'
   return ''
@@ -139,7 +140,7 @@ export function accountStepText(session) {
   const nameValue = accountNameValue(draft)
   if (currentIndex > steps.indexOf('owner') && nameValue) summary.push(htmlLine(preset.nameLabel || 'الاسم', nameValue))
   if (!preset.skipDetail && currentIndex > steps.indexOf('detail') && draft.subAccountName) {
-    summary.push(htmlLine(preset.detailLabel || 'التفصيل', draft.subAccountName))
+    summary.push(htmlLine(preset.detailLabel || 'التفصيل', displaySubAccountName(draft.subAccountName)))
   }
   if (accountNeedsCurrency(draft) && currentIndex > steps.indexOf('currency') && draft.currencyKind) {
     summary.push(htmlLine('العملة', draft.currencyKind === CURRENCIES.USD ? 'دولار' : 'دينار'))

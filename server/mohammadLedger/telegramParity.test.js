@@ -59,7 +59,7 @@ describe('telegram and web movement parity', () => {
       note: '',
     }
 
-    const webMovement = postMovement(draft, state.accounts)
+    const webMovement = postMovement(draft, state.accounts, state.movements)
     const telegramMovement = await telegramMovementFor(draft)
 
     expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
@@ -77,7 +77,7 @@ describe('telegram and web movement parity', () => {
       note: '',
     }
 
-    const webMovement = postMovement(draft, state.accounts)
+    const webMovement = postMovement(draft, state.accounts, state.movements)
     const telegramMovement = await telegramMovementFor(draft)
 
     expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
@@ -95,7 +95,7 @@ describe('telegram and web movement parity', () => {
       note: '',
     }
 
-    const webMovement = postMovement(draft, state.accounts)
+    const webMovement = postMovement(draft, state.accounts, state.movements)
     const telegramMovement = await telegramMovementFor(draft, state)
 
     expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
@@ -112,7 +112,7 @@ describe('telegram and web movement parity', () => {
       note: 'وقود',
     }
 
-    const webMovement = postMovement(draft, state.accounts)
+    const webMovement = postMovement(draft, state.accounts, state.movements)
     const telegramMovement = await telegramMovementFor(draft, state)
 
     expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
@@ -145,7 +145,7 @@ describe('telegram and web movement parity', () => {
       note: '',
     }
 
-    const webMovement = postMovement(draft, state.accounts)
+    const webMovement = postMovement(draft, state.accounts, state.movements)
     const telegramMovement = await telegramMovementFor(draft, state)
 
     expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
@@ -162,7 +162,7 @@ describe('telegram and web movement parity', () => {
       note: '',
     }
 
-    const webMovement = postMovement(draft, state.accounts)
+    const webMovement = postMovement(draft, state.accounts, state.movements)
     const telegramMovement = await telegramMovementFor(draft)
 
     expect(telegramMovement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)

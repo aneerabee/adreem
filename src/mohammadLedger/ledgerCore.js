@@ -1,7 +1,8 @@
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, buildAccountMap, inferAccountCurrencyKind, normalizeAccountCurrencyKind } from './accountCatalog.js'
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS, buildAccountMap, inferAccountCurrencyKind, normalizeAccountCurrencyKind } from './accountCatalog.js'
 import {
   accountSupportsTransferCurrency,
   areTransferAccountsCompatible,
+  canonicalAccountDetail,
   sameLogicalAccount,
   transferCompatibilityMessage,
 } from './accountCompatibility.js'
@@ -100,7 +101,40 @@ export function createOpeningMovements(accounts = [], createdAt = isoNow()) {
   })
 }
 
-export function validateMovement(movement, accounts = []) {
+function balanceValueForCurrency(bucket, currency) {
+  return currency === CURRENCIES.USD ? Number(bucket?.usd || 0) : Number(bucket?.dinar || 0)
+}
+
+function cannotGoNegative(account) {
+  return account?.valueKind === VALUE_KINDS.CASH ||
+    account?.valueKind === VALUE_KINDS.BANK ||
+    account?.valueKind === VALUE_KINDS.ASSET
+}
+
+function validateNonNegativeOwnBalances(movement, accounts = [], movements = [], accountMap = buildAccountMap(accounts)) {
+  const errors = []
+  const balances = summarizeBalances(accounts, movements)
+  const balanceById = new Map(balances.map((bucket) => [bucket.account.id, bucket]))
+  const entries = buildPostingEntries({ ...movement, status: MOVEMENT_STATUSES.POSTED })
+
+  for (const entry of entries) {
+    if (!entry.accountId || entry.delta >= 0) continue
+    const account = accountMap.get(entry.accountId)
+    if (!cannotGoNegative(account)) continue
+    const before = balanceValueForCurrency(balanceById.get(entry.accountId), entry.currency)
+    const after = roundMoney(before + entry.delta)
+    if (after >= 0) continue
+    const field = entry.accountId === movement?.sourceAccountId ? 'sourceAccountId' : 'destinationAccountId'
+    errors.push({
+      field,
+      message: 'لا يمكن أن يصبح حساب فلوسك أو الأصل بالسالب. الرصيد المتاح أقل من قيمة الحركة.',
+    })
+  }
+
+  return errors
+}
+
+export function validateMovement(movement, accounts = [], movements = []) {
   const accountMap = buildAccountMap(accounts)
   const errors = []
   const warnings = []
@@ -200,6 +234,10 @@ export function validateMovement(movement, accounts = []) {
     errors.push({ field: 'note', message: 'التصحيح يحتاج ملاحظة توضح السبب.' })
   }
 
+  if (errors.length === 0) {
+    errors.push(...validateNonNegativeOwnBalances(movement, accounts, movements, accountMap))
+  }
+
   return {
     ok: errors.length === 0,
     status: errors.length ? MOVEMENT_STATUSES.NEEDS_REVIEW : MOVEMENT_STATUSES.POSTED,
@@ -284,7 +322,7 @@ export function getAccountBalance(accountId, accounts = [], movements = []) {
 }
 
 export function previewMovement(movement, accounts = [], movements = []) {
-  const validation = validateMovement(movement, accounts)
+  const validation = validateMovement(movement, accounts, movements)
   const before = summarizeBalances(accounts, movements)
   const beforeById = new Map(before.map((bucket) => [bucket.account.id, bucket]))
   const postingEntries = validation.ok ? buildPostingEntries({ ...movement, status: MOVEMENT_STATUSES.POSTED }) : []
@@ -307,8 +345,8 @@ export function previewMovement(movement, accounts = [], movements = []) {
   }
 }
 
-export function postMovement(movement, accounts = []) {
-  const validation = validateMovement(movement, accounts)
+export function postMovement(movement, accounts = [], movements = []) {
+  const validation = validateMovement(movement, accounts, movements)
   const now = isoNow()
   return {
     ...movement,
@@ -333,7 +371,7 @@ export function createAccount({
   status = ACCOUNT_STATUSES.ACTIVE,
 }) {
   const normalizedOwner = String(ownerName || '').trim()
-  const normalizedSub = String(subAccountName || '').trim()
+  const normalizedSub = canonicalAccountDetail(subAccountName)
   const normalizedType = type || ACCOUNT_TYPES.PERSON
   const normalizedValueKind = valueKind || 'receivable'
   const stableBase = `${normalizedOwner}-${normalizedSub || normalizedType}`
@@ -368,7 +406,7 @@ export function createAccount({
 export function validateAccount(account, existingAccounts = []) {
   const errors = []
   const ownerName = String(account?.ownerName || '').trim()
-  const subAccountName = String(account?.subAccountName || '').trim()
+  const subAccountName = canonicalAccountDetail(account?.subAccountName)
   if (!account?.ownerName?.trim()) errors.push({ field: 'ownerName', message: 'الاسم الرئيسي مطلوب.' })
   if (!account?.subAccountName?.trim()) {
     errors.push({ field: 'subAccountName', message: 'نوع/اسم الحساب الفرعي مطلوب.' })
@@ -383,7 +421,7 @@ export function validateAccount(account, existingAccounts = []) {
     if (!item || item.status === ACCOUNT_STATUSES.INACTIVE) return false
     return (
       String(item.ownerName || '').trim() === ownerName &&
-      String(item.subAccountName || '').trim() === subAccountName &&
+      canonicalAccountDetail(item.subAccountName) === subAccountName &&
       normalizeAccountCurrencyKind(item.currencyKind, inferAccountCurrencyKind(item)) === normalizeAccountCurrencyKind(account.currencyKind, inferAccountCurrencyKind(account))
     )
   })

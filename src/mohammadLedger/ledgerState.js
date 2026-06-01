@@ -35,6 +35,12 @@ function normalizeEventList(value) {
   }))
 }
 
+function normalizeStringList(value) {
+  return Array.isArray(value)
+    ? Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean)))
+    : []
+}
+
 function normalizeLedgerIdentity(state = {}, fallbackState = {}) {
   return createLedgerIdentity({
     appId: state.appId || fallbackState.appId,
@@ -85,6 +91,7 @@ export function createMohammadFallbackState(createdAt = new Date().toISOString()
     attachments: [],
     recurringRules: [],
     reconciliations: [],
+    ignoredExternalAccounts: [],
     auditEvents: [],
     version: MOHAMMAD_LEDGER_VERSION,
     savedAt: createdAt,
@@ -106,6 +113,7 @@ export function normalizeLedgerState(state, fallbackState = createMohammadFallba
     attachments: normalizeList(safeState.attachments || fallbackState.attachments),
     recurringRules: normalizeList(safeState.recurringRules || fallbackState.recurringRules),
     reconciliations: normalizeList(safeState.reconciliations || fallbackState.reconciliations),
+    ignoredExternalAccounts: normalizeStringList(safeState.ignoredExternalAccounts || fallbackState.ignoredExternalAccounts),
     auditEvents: normalizeEventList(safeState.auditEvents || fallbackState.auditEvents),
     version: MOHAMMAD_LEDGER_VERSION,
     savedAt: safeState.savedAt || new Date().toISOString(),
@@ -163,6 +171,10 @@ export function mergeLedgerStates(localState, remoteState, fallbackState = creat
     attachments: mergeRecordsById(local.attachments, remote.attachments),
     recurringRules: mergeRecordsById(local.recurringRules, remote.recurringRules),
     reconciliations: mergeRecordsById(local.reconciliations, remote.reconciliations),
+    ignoredExternalAccounts: Array.from(new Set([
+      ...(local.ignoredExternalAccounts || []),
+      ...(remote.ignoredExternalAccounts || []),
+    ])),
     auditEvents: mergeRecordsById(local.auditEvents, remote.auditEvents),
   }
 }

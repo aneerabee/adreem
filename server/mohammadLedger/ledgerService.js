@@ -111,6 +111,7 @@ export async function appendTelegramMovement(repository, draft, metadata) {
         telegramChatId: metadata.telegramChatId,
       },
       state.accounts,
+      state.movements,
     )
     const preview = previewDraft(state, movement)
     return {

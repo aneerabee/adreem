@@ -4,12 +4,18 @@ const DINAR = 'LYD'
 const USD = 'USD'
 const MULTI = 'multi'
 
+export function canonicalAccountDetail(value = '') {
+  const text = String(value || '').trim()
+  if (text === 'مصرفي بيننا') return 'شيك بيننا'
+  return text
+}
+
 export function sameLogicalAccount(left, right) {
   if (!left || !right) return false
   const leftOwner = String(left.ownerName || '').trim()
-  const leftDetail = String(left.subAccountName || '').trim()
+  const leftDetail = canonicalAccountDetail(left.subAccountName)
   const rightOwner = String(right.ownerName || '').trim()
-  const rightDetail = String(right.subAccountName || '').trim()
+  const rightDetail = canonicalAccountDetail(right.subAccountName)
   const leftCurrency = accountCurrencyKind(left)
   const rightCurrency = accountCurrencyKind(right)
   return (
@@ -26,7 +32,7 @@ export function sameLogicalAccount(left, right) {
 export function transferAccountKind(account) {
   const text = `${account?.subAccountName || ''} ${account?.legacyName || ''}`.toLowerCase()
   if (account?.valueKind === VALUE_KINDS.CASH || /كاش|نقد|cash/.test(text)) return 'cash'
-  if (account?.valueKind === VALUE_KINDS.BANK || /مصرف|مصرفي|حساب|الجمهورية|الوحدة|تركيا|bank/.test(text)) return 'bank'
+  if (account?.valueKind === VALUE_KINDS.BANK || /مصرف|مصرفي|شيك|حساب|الجمهورية|الوحدة|تركيا|bank/.test(text)) return 'bank'
   return account?.valueKind || 'account'
 }
 

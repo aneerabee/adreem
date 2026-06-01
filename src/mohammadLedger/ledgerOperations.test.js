@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createOpeningMovements } from './ledgerCore.js'
 import {
   buildDimensionReports,
   buildLedgerAlerts,
@@ -160,7 +160,7 @@ describe('adreem operational features', () => {
     }
     const rule = createRecurringRuleFromMovement(movement)
     const date = new Date('2026-05-25T12:00:00.000Z')
-    const run = runRecurringRule(rule, accounts, date)
+    const run = runRecurringRule(rule, accounts, createOpeningMovements([{ ...accounts[0], openingDinar: 500 }]), date)
 
     expect(run.movement.id).toContain('2026-05')
     expect(run.rule.lastRunKey).toBe('2026-05')

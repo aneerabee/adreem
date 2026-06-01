@@ -42,4 +42,12 @@ describe('mohammad account compatibility', () => {
 
     expect(sameLogicalAccount(dinar, usd)).toBe(false)
   })
+
+  it('treats legacy "مصرفي بيننا" and new "شيك بيننا" as the same route', () => {
+    const legacy = { id: 'old-bank-person', ownerName: 'سعيد', subAccountName: 'مصرفي بيننا', valueKind: VALUE_KINDS.RECEIVABLE }
+    const next = { id: 'new-bank-person', ownerName: 'سعيد', subAccountName: 'شيك بيننا', valueKind: VALUE_KINDS.RECEIVABLE }
+
+    expect(sameLogicalAccount(legacy, next)).toBe(true)
+    expect(areTransferAccountsCompatible(legacy, next, CURRENCIES.DINAR)).toBe(true)
+  })
 })

@@ -13,7 +13,7 @@ export const accountPresets = [
     nameLabel: 'اسم الشخص أو الجهة',
     namePlaceholder: 'مثال: سعيد، المقر، شركة',
     detailLabel: 'طريقة الرصيد',
-    detailOptions: ['كاش بيننا', 'مصرفي بيننا'],
+    detailOptions: ['كاش بيننا', 'شيك بيننا'],
   },
   {
     key: 'own-cash',
@@ -106,6 +106,12 @@ export function accountDetailOptionsFor(type, valueKind) {
   return preset.detailOptions || [preset.subAccountName].filter(Boolean)
 }
 
+export function displaySubAccountName(value = '') {
+  const text = String(value || '').trim()
+  if (text === 'مصرفي بيننا') return 'شيك بيننا'
+  return text
+}
+
 export function accountNeedsCurrency(draftOrPreset = {}) {
   const valueKind = draftOrPreset.valueKind
   return valueKind === VALUE_KINDS.CASH || valueKind === VALUE_KINDS.BANK || valueKind === VALUE_KINDS.RECEIVABLE
@@ -141,7 +147,7 @@ export function applyAccountName(draft = {}, value = '') {
 
 export function accountDisplayName(account = {}) {
   const ownerName = String(account.ownerName || '').trim()
-  const subAccountName = String(account.subAccountName || '').trim()
+  const subAccountName = displaySubAccountName(account.subAccountName)
   const isMine = /^أنا$|^انا$/i.test(ownerName)
   const currencySuffix = accountNeedsCurrency(account) ? ` · ${accountCurrencyLabel(account)}` : ''
   if (account.valueKind === VALUE_KINDS.CASH || (isMine && /كاش|نقد|خزنة|cash/i.test(subAccountName))) return `كاش: ${subAccountName || ownerName || 'كاش'}${currencySuffix}`
@@ -173,7 +179,7 @@ export function accountDraftSummary(draft = {}) {
   if (draft.type === ACCOUNT_TYPES.PROJECT) return `مشروع: ${nameValue || 'بدون اسم'}`
   if (draft.valueKind === VALUE_KINDS.ASSET) return `أصل أملكه: ${nameValue || 'بدون اسم'}`
   if (draft.valueKind === VALUE_KINDS.EXPENSE) return `مصروف: ${nameValue || 'بدون اسم'}`
-  return `${nameValue || 'بدون اسم'} · ${draft.subAccountName || preset.subAccountName}${currencySuffix}`
+  return `${nameValue || 'بدون اسم'} · ${displaySubAccountName(draft.subAccountName || preset.subAccountName)}${currencySuffix}`
 }
 
 export function classificationValueFor(account) {

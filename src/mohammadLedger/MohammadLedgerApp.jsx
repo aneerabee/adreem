@@ -19,6 +19,7 @@ import {
   accountPresets,
   applyAccountName,
   classificationValueFor as classificationValue,
+  displaySubAccountName,
   emptyAccountDraft,
   parseAccountClassification as parseClassification,
 } from './accountConfig'
@@ -133,6 +134,7 @@ function ledgerExtrasFromState(state) {
     attachments: normalized.attachments,
     recurringRules: normalized.recurringRules,
     reconciliations: normalized.reconciliations,
+    ignoredExternalAccounts: normalized.ignoredExternalAccounts,
     auditEvents: normalized.auditEvents,
   }
 }
@@ -272,6 +274,10 @@ function nonZero(bucket) {
   return Math.round(Math.abs(bucket.dinar)) !== 0 || Math.round(Math.abs(bucket.usd)) !== 0
 }
 
+function externalAccountKey(account = {}) {
+  return String(account.id || `${account.ownerName || ''}:${account.subAccountName || ''}`).trim()
+}
+
 function MetricChip({ label, value, tone = 'neutral', currency = CURRENCIES.DINAR }) {
   return (
     <article className={`ml3-metric ml3-metric--${tone}`}>
@@ -287,7 +293,7 @@ function visualKind(account) {
   if (account.valueKind === VALUE_KINDS.BANK) return 'bank'
   if (account.valueKind === VALUE_KINDS.EXPENSE) return 'expense'
   if (account.valueKind === VALUE_KINDS.ASSET) return 'asset'
-  if (account.valueKind === VALUE_KINDS.RECEIVABLE && /مصرف|بنك|حساب/i.test(account.subAccountName || '')) return 'person-bank'
+  if (account.valueKind === VALUE_KINDS.RECEIVABLE && /مصرف|بنك|شيك|حساب/i.test(account.subAccountName || '')) return 'person-bank'
   if (account.valueKind === VALUE_KINDS.RECEIVABLE && /دولار|usd/i.test(account.subAccountName || '')) return 'person-usd'
   return 'person'
 }
@@ -338,12 +344,13 @@ function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
   const { account, dinar, usd } = bucket
   const balanceTone = dinar > 0 ? 'is-positive' : dinar < 0 ? 'is-negative' : 'is-zero'
   const kindText = accountKindText(account)
-  const showKind = kindText && kindText !== account.subAccountName
+  const detailText = displaySubAccountName(account.subAccountName)
+  const showKind = kindText && kindText !== detailText
   return (
     <article className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
         <strong>{account.ownerName}</strong>
-        <span>{account.subAccountName}</span>
+        <span>{detailText}</span>
       </button>
       <div className="ml3-account-meta">
         {showKind ? <span>{kindText}</span> : null}
@@ -443,7 +450,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
     if (quickFilter === 'active') return hasVisibleBalance(account)
     if (quickFilter === 'owner:أنا') return account.ownerName === normalizedPreferredOwner
     if (quickFilter === 'kind:cash') return account.valueKind === VALUE_KINDS.CASH || account.subAccountName === 'كاش'
-    if (quickFilter === 'kind:bank') return account.valueKind === VALUE_KINDS.BANK || /مصرف|بنك|حساب/i.test(account.subAccountName || '')
+    if (quickFilter === 'kind:bank') return account.valueKind === VALUE_KINDS.BANK || /مصرف|بنك|شيك|حساب/i.test(account.subAccountName || '')
     return true
   }
   const rankAccount = (account) => {
@@ -460,7 +467,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   }
   const filteredAccounts = accounts
     .filter((account) => {
-      const haystack = `${account.ownerName} ${account.subAccountName} ${account.legacyName || ''}`.toLowerCase()
+      const haystack = `${account.ownerName} ${account.subAccountName} ${displaySubAccountName(account.subAccountName)} ${account.legacyName || ''}`.toLowerCase()
       if (normalizedQuery) return haystack.includes(normalizedQuery)
       return matchesQuickFilter(account)
     })
@@ -514,7 +521,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
                   onClick={() => chooseAccount(account.id)}
                 >
                   <strong>{account.ownerName}</strong>
-                  <span>{account.subAccountName}</span>
+                  <span>{displaySubAccountName(account.subAccountName)}</span>
                 </button>
               ))}
             </div>
@@ -544,7 +551,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
                 >
                   <span className={`ml3-picker-dot ml3-picker-dot--${visualKind(account)}`} aria-hidden="true" />
                   <strong>{account.ownerName}</strong>
-                  <span>{account.subAccountName}</span>
+                  <span>{displaySubAccountName(account.subAccountName)}</span>
                   <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
                   {account.id === value ? <em>مختار</em> : null}
                 </button>
@@ -777,7 +784,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
             </label>
             <label>
               الوصف
-              <input name="subAccountName" defaultValue={account.subAccountName} />
+              <input name="subAccountName" defaultValue={displaySubAccountName(account.subAccountName)} />
             </label>
             <label>
               التصنيف
@@ -845,7 +852,7 @@ function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisab
         </label>
         <label>
           الوصف
-          <input name="subAccountName" defaultValue={account.subAccountName} />
+          <input name="subAccountName" defaultValue={displaySubAccountName(account.subAccountName)} />
         </label>
         <label>
           التصنيف
@@ -879,7 +886,7 @@ function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisab
   )
 }
 
-function ExternalAccountCard({ account, onCreate }) {
+function ExternalAccountCard({ account, onCreate, onIgnore }) {
   return (
     <article className="ml3-review-card">
       <div className="ml3-review-card-head">
@@ -892,7 +899,7 @@ function ExternalAccountCard({ account, onCreate }) {
       <form className="ml3-decision-grid" onSubmit={(event) => onCreate(event, account)}>
         <label>
           الوصف
-          <input name="subAccountName" defaultValue={account.subAccountName} />
+          <input name="subAccountName" defaultValue={displaySubAccountName(account.subAccountName)} />
         </label>
         <label>
           التصنيف
@@ -904,6 +911,7 @@ function ExternalAccountCard({ account, onCreate }) {
         </label>
         <div className="ml3-decision-actions">
           <button type="submit" className="ml3-mini-action is-confirm">إنشاء بهذا التصنيف</button>
+          <button type="button" className="ml3-mini-action is-muted" onClick={() => onIgnore(account)}>تجاهل الاسم</button>
         </div>
       </form>
     </article>
@@ -1175,21 +1183,22 @@ export default function MohammadLedgerApp() {
   }, [balances])
 
   const reviewMovements = movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
-  const unresolvedExternalAccounts = knownExternalAccounts.filter(
-    (externalAccount) =>
-      !accounts.some(
+  const unresolvedExternalAccounts = knownExternalAccounts.filter((externalAccount) => {
+    const ignored = ledgerExtras.ignoredExternalAccounts || []
+    if (ignored.includes(externalAccountKey(externalAccount))) return false
+    return !accounts.some(
         (account) =>
           account.ownerName === externalAccount.ownerName &&
           account.subAccountName === externalAccount.subAccountName &&
           account.status !== ACCOUNT_STATUSES.INACTIVE,
-      ),
-  )
+      )
+  })
   const reviewItems = useMemo(() => {
     const accountItems = (balancesByKind.review || []).map((bucket) => ({
       key: `account:${bucket.account.id}`,
       type: 'account',
       label: bucket.account.ownerName,
-      detail: bucket.account.subAccountName,
+      detail: displaySubAccountName(bucket.account.subAccountName),
       tone: 'danger',
       bucket,
     }))
@@ -1197,7 +1206,7 @@ export default function MohammadLedgerApp() {
       key: `external:${account.id}`,
       type: 'external',
       label: account.ownerName,
-      detail: account.subAccountName,
+      detail: displaySubAccountName(account.subAccountName),
       tone: 'info',
       account,
     }))
@@ -1459,6 +1468,9 @@ export default function MohammadLedgerApp() {
   function saveMovement(event) {
     event.preventDefault()
     const originalMovement = editingMovementId ? movements.find((movement) => movement.id === editingMovementId) : null
+    const validationMovements = originalMovement
+      ? movements.filter((movementItem) => movementItem.id !== originalMovement.id)
+      : movements
     const movement = postMovement(
       {
         ...originalMovement,
@@ -1469,6 +1481,7 @@ export default function MohammadLedgerApp() {
         dimensionId: movementSupportsDimension(movementDraft.type) ? movementDraft.dimensionId || '' : '',
       },
       accounts,
+      validationMovements,
     )
     setMovements((current) =>
       originalMovement
@@ -1636,7 +1649,13 @@ export default function MohammadLedgerApp() {
       expectedUsd: currentUsd,
       note,
     })
-    const nextMovements = buildReconciliationCorrectionDrafts(record).map((draft) => postMovement(draft, accounts))
+    const nextMovements = []
+    let validationMovements = movements
+    for (const draft of buildReconciliationCorrectionDrafts(record)) {
+      const movement = postMovement(draft, accounts, validationMovements)
+      nextMovements.push(movement)
+      validationMovements = [...validationMovements, movement]
+    }
     if (nextMovements.length) {
       setMovements((current) => [...current, ...nextMovements])
     }
@@ -1682,7 +1701,7 @@ export default function MohammadLedgerApp() {
   function runRecurring(ruleId) {
     const rule = (ledgerExtras.recurringRules || []).find((item) => item.id === ruleId)
     if (!rule) return
-    const result = runRecurringRule(rule, accounts)
+    const result = runRecurringRule(rule, accounts, movements)
     setMovements((current) => {
       if (current.some((movement) => movement.id === result.movement.id)) return current
       return [...current, result.movement]
@@ -1769,7 +1788,28 @@ export default function MohammadLedgerApp() {
       return
     }
     setAccounts((current) => [...current, account])
+    setLedgerExtras((current) => ({
+      ...current,
+      ignoredExternalAccounts: Array.from(new Set([...(current.ignoredExternalAccounts || []), externalAccountKey(externalAccount)])),
+      auditEvents: [
+        ...(current.auditEvents || []),
+        createAuditEvent('external_account.created', { accountId: account.id, externalAccountId: externalAccount.id }),
+      ],
+    }))
     setFeedback(`تم إنشاء حساب ${externalAccount.ownerName}.`)
+  }
+
+  function ignoreExternalAccount(externalAccount) {
+    const key = externalAccountKey(externalAccount)
+    setLedgerExtras((current) => ({
+      ...current,
+      ignoredExternalAccounts: Array.from(new Set([...(current.ignoredExternalAccounts || []), key])),
+      auditEvents: [
+        ...(current.auditEvents || []),
+        createAuditEvent('external_account.ignored', { externalAccountId: key }),
+      ],
+    }))
+    setFeedback('تم إخفاء الاسم من المراجعة.')
   }
 
   function editReviewMovement(movement) {
@@ -1815,6 +1855,7 @@ export default function MohammadLedgerApp() {
         dimensionId: movementSupportsDimension(reviewDraft.type) ? movement.dimensionId || '' : '',
       },
       accounts,
+      movements.filter((item) => item.id !== movement.id),
     )
     setMovements((current) => current.map((item) => (item.id === movement.id ? candidate : item)))
     setFeedback(candidate.status === MOVEMENT_STATUSES.POSTED ? 'تم إصلاح الحركة.' : 'ما زالت ناقصة.')
@@ -1827,7 +1868,7 @@ export default function MohammadLedgerApp() {
     const normalizedAccountQuery = accountQuery.trim().toLowerCase()
     const accountMatchesQuery = (bucket) => {
       if (!normalizedAccountQuery) return true
-      const haystack = `${bucket.account.ownerName} ${bucket.account.subAccountName} ${bucket.account.legacyName || ''}`.toLowerCase()
+      const haystack = `${bucket.account.ownerName} ${bucket.account.subAccountName} ${displaySubAccountName(bucket.account.subAccountName)} ${bucket.account.legacyName || ''}`.toLowerCase()
       return haystack.includes(normalizedAccountQuery)
     }
     const filterRows = (rows) => rows.filter(accountMatchesQuery)
@@ -1965,7 +2006,7 @@ export default function MohammadLedgerApp() {
                 />
               ) : null}
               {activeReviewItem?.type === 'external' ? (
-                <ExternalAccountCard key={activeReviewItem.account.id} account={activeReviewItem.account} onCreate={addExternalAccount} />
+                <ExternalAccountCard key={activeReviewItem.account.id} account={activeReviewItem.account} onCreate={addExternalAccount} onIgnore={ignoreExternalAccount} />
               ) : null}
               {activeReviewItem?.type === 'movement' ? (
                 <ReviewMovementCard

@@ -69,6 +69,63 @@ describe('mohammad ledger core', () => {
     ])
   })
 
+  it('prevents own cash, bank, and assets from going below zero', () => {
+    const accounts = [
+      createAccount({ id: 'my-cash', ownerName: 'أنا', subAccountName: 'كاش', type: ACCOUNT_TYPES.CASH, valueKind: 'cash', openingDinar: 100 }),
+      createAccount({ id: 'my-asset', ownerName: 'شاحنة', subAccountName: 'أصل', type: ACCOUNT_TYPES.ASSET, valueKind: 'asset', openingDinar: 100 }),
+    ]
+    const openings = createOpeningMovements(accounts)
+    const expense = postMovement(
+      {
+        type: MOVEMENT_TYPES.EXPENSE,
+        amount: 150,
+        currency: CURRENCIES.DINAR,
+        sourceAccountId: 'my-cash',
+        destinationAccountId: null,
+      },
+      accounts,
+      openings,
+    )
+    const correction = postMovement(
+      {
+        type: MOVEMENT_TYPES.CORRECTION,
+        amount: -150,
+        currency: CURRENCIES.DINAR,
+        sourceAccountId: null,
+        destinationAccountId: 'my-asset',
+        note: 'مطابقة',
+      },
+      accounts,
+      openings,
+    )
+
+    expect(expense.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(expense.validation.errors.some((error) => error.message.includes('السالب'))).toBe(true)
+    expect(correction.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(correction.validation.errors.some((error) => error.message.includes('السالب'))).toBe(true)
+    expect(buildPostingEntries(expense)).toEqual([])
+  })
+
+  it('still allows person balances to become negative because that means I owe them', () => {
+    const accounts = [
+      createAccount({ id: 'person-a', ownerName: 'سعيد', subAccountName: 'كاش بيننا', type: ACCOUNT_TYPES.PERSON, valueKind: 'receivable' }),
+      createAccount({ id: 'person-b', ownerName: 'ربيع', subAccountName: 'كاش بيننا', type: ACCOUNT_TYPES.PERSON, valueKind: 'receivable' }),
+    ]
+    const movement = postMovement(
+      {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 100,
+        currency: CURRENCIES.DINAR,
+        sourceAccountId: 'person-a',
+        destinationAccountId: 'person-b',
+      },
+      accounts,
+      [],
+    )
+
+    expect(movement.status).toBe(MOVEMENT_STATUSES.POSTED)
+  })
+
   it('keeps incomplete movements out of posted balances', () => {
     const openings = createOpeningMovements(mohammadAccountCatalog)
     const badMovement = postMovement(
@@ -141,16 +198,21 @@ describe('mohammad ledger core', () => {
   })
 
   it('keeps currency exchange flows available for cash-to-bank conversion', () => {
+    const accounts = [
+      createAccount({ id: 'usd-cash', ownerName: 'أنا', subAccountName: 'خزنة دولار', type: ACCOUNT_TYPES.CASH, valueKind: 'cash', currencyKind: CURRENCIES.USD, openingUsd: 200 }),
+      createAccount({ id: 'dinar-bank', ownerName: 'أنا', subAccountName: 'الجمهورية', type: ACCOUNT_TYPES.BANK, valueKind: 'bank', currencyKind: CURRENCIES.DINAR }),
+    ]
     const sale = postMovement(
       {
         type: MOVEMENT_TYPES.USD_SALE,
         amount: 100,
         currency: CURRENCIES.USD,
         rate: 7.5,
-        sourceAccountId: 'me-cash',
-        destinationAccountId: 'me-jumhouria',
+        sourceAccountId: 'usd-cash',
+        destinationAccountId: 'dinar-bank',
       },
-      mohammadAccountCatalog,
+      accounts,
+      createOpeningMovements(accounts),
     )
 
     expect(sale.status).toBe(MOVEMENT_STATUSES.POSTED)
@@ -181,6 +243,7 @@ describe('mohammad ledger core', () => {
         type: ACCOUNT_TYPES.CASH,
         valueKind: 'cash',
         currencyKind: CURRENCIES.USD,
+        openingUsd: 150,
       }),
       createAccount({
         id: 'saeed-usd-cash',
@@ -200,6 +263,7 @@ describe('mohammad ledger core', () => {
         destinationAccountId: 'saeed-usd-cash',
       },
       accounts,
+      createOpeningMovements(accounts),
     )
 
     expect(movement.status).toBe(MOVEMENT_STATUSES.POSTED)
@@ -253,6 +317,7 @@ describe('mohammad ledger core', () => {
         destinationAccountId: 'omar-gold',
       },
       mohammadAccountCatalog,
+      openings,
     )
     const withMovement = getAccountBalance('omar-gold', mohammadAccountCatalog, [...openings, movement])
     expect(withMovement.dinar).toBe(25500)
@@ -265,23 +330,29 @@ describe('mohammad ledger core', () => {
   })
 
   it('calculates usd sale and purchase as different currency effects', () => {
+    const accounts = [
+      createAccount({ id: 'cash-usd', ownerName: 'أنا', subAccountName: 'خزنة دولار', type: ACCOUNT_TYPES.CASH, valueKind: 'cash', currencyKind: CURRENCIES.USD, openingUsd: 200 }),
+      createAccount({ id: 'bank-lyd', ownerName: 'أنا', subAccountName: 'الجمهورية', type: ACCOUNT_TYPES.BANK, valueKind: 'bank', currencyKind: CURRENCIES.DINAR, openingDinar: 2000 }),
+      createAccount({ id: 'cash-usd-2', ownerName: 'أنا', subAccountName: 'خزنة دولار ثانية', type: ACCOUNT_TYPES.CASH, valueKind: 'cash', currencyKind: CURRENCIES.USD, openingUsd: 0 }),
+    ]
+    const openings = createOpeningMovements(accounts)
     const salePreview = previewMovement(
       {
         type: MOVEMENT_TYPES.USD_SALE,
         amount: 100,
         currency: CURRENCIES.USD,
         rate: 7.5,
-        sourceAccountId: 'me-cash',
-        destinationAccountId: 'me-jumhouria',
+        sourceAccountId: 'cash-usd',
+        destinationAccountId: 'bank-lyd',
       },
-      mohammadAccountCatalog,
-      createOpeningMovements(mohammadAccountCatalog),
+      accounts,
+      openings,
     )
 
     expect(salePreview.validation.ok).toBe(true)
     expect(salePreview.effects).toEqual([
-      expect.objectContaining({ accountId: 'me-cash', currency: CURRENCIES.USD, delta: -100 }),
-      expect.objectContaining({ accountId: 'me-jumhouria', currency: CURRENCIES.DINAR, delta: 750 }),
+      expect.objectContaining({ accountId: 'cash-usd', currency: CURRENCIES.USD, delta: -100 }),
+      expect.objectContaining({ accountId: 'bank-lyd', currency: CURRENCIES.DINAR, delta: 750 }),
     ])
 
     const purchasePreview = previewMovement(
@@ -290,17 +361,17 @@ describe('mohammad ledger core', () => {
         amount: 750,
         currency: CURRENCIES.DINAR,
         rate: 7.5,
-        sourceAccountId: 'me-jumhouria',
-        destinationAccountId: 'me-cash',
+        sourceAccountId: 'bank-lyd',
+        destinationAccountId: 'cash-usd-2',
       },
-      mohammadAccountCatalog,
-      createOpeningMovements(mohammadAccountCatalog),
+      accounts,
+      openings,
     )
 
     expect(purchasePreview.validation.ok).toBe(true)
     expect(purchasePreview.effects).toEqual([
-      expect.objectContaining({ accountId: 'me-jumhouria', currency: CURRENCIES.DINAR, delta: -750 }),
-      expect.objectContaining({ accountId: 'me-cash', currency: CURRENCIES.USD, delta: 100 }),
+      expect.objectContaining({ accountId: 'bank-lyd', currency: CURRENCIES.DINAR, delta: -750 }),
+      expect.objectContaining({ accountId: 'cash-usd-2', currency: CURRENCIES.USD, delta: 100 }),
     ])
   })
 

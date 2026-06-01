@@ -275,8 +275,10 @@ export function buildLedgerAlerts({
   return alerts
 }
 
-export function runRecurringRule(rule, accounts = [], date = new Date()) {
-  const runKey = monthKey(date)
+export function runRecurringRule(rule, accounts = [], movementsOrDate = [], date = new Date()) {
+  const movements = Array.isArray(movementsOrDate) ? movementsOrDate : []
+  const runDate = Array.isArray(movementsOrDate) ? date : movementsOrDate
+  const runKey = monthKey(runDate)
   const movement = postMovement(
     {
       ...(rule?.template || {}),
@@ -286,6 +288,7 @@ export function runRecurringRule(rule, accounts = [], date = new Date()) {
       recurringRunKey: runKey,
     },
     accounts,
+    movements,
   )
   return {
     movement,
