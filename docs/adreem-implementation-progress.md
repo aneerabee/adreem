@@ -24,6 +24,7 @@
 - إضافة أداة `npm run ops:create-ledger-access` لتوليد دفتر مستقل لكل مستخدم: `ledgerId`، رابط ويب خاص، hash للـ env، وربط Telegram اختياري.
 - إضافة سجل مستخدمي Telegram ديناميكي: صاحب النظام يستطيع إضافة مستخدم مستقل من البوت عبر `/adduser TELEGRAM_ID LEDGER_ID` بدون تعديل env في كل مرة.
 - المستخدم غير المضاف لا يدخل الدفتر، لكنه يرى Telegram ID الخاص به فقط ليرسله لصاحب النظام.
+- تحديث Contabo إلى commit `f025c06` وتفعيل `ADREEM_TELEGRAM_ADMIN_IDS` و`ADREEM_TELEGRAM_USERS_FILE`، مع restart ناجح للبوت والـ API.
 - توسيع اختبارات توازي الويب والبوت:
   - تحويل دينار.
   - تحويل دولار.
@@ -54,7 +55,7 @@
 ## نتائج التحقق المؤكدة
 
 - فحص عزل API بعد دعم hashed tokens: `23` اختبارًا ناجحًا للـ API/repository/persistence.
-- `npm test`: نجح، `113` اختبارًا.
+- `npm test`: نجح، `116` اختبارًا.
 - `npm run lint`: نجح.
 - `npm run build`: نجح.
 - فحص Playwright للهاتف والكمبيوتر: لا يوجد horizontal overflow أو clipping في الإدخال/السجل، وفلاتر السجل ظاهرة، وربط المشروع/الأصل لا يظهر في التحويل.
