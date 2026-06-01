@@ -153,6 +153,6 @@ describe('telegram movement flow safety', () => {
     const session = ctx.sessions.get(ctx.chatId, ctx.userId)
     expect(session.step).toBe('destination')
     expect(session.draft.sourceAccountId).toBe('')
-    expect(ctx.telegram.calls.at(-1).payload.text).toContain('أين دخل المال')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('أين دخلت الفلوس')
   })
 })

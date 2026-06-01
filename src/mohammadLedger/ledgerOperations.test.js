@@ -250,7 +250,7 @@ describe('adreem operational features', () => {
 
     expect(alerts.map((alert) => alert.title)).toEqual([
       'حركات ناقصة',
-      'مال ناقص',
+      'فلوس ناقصة',
       'أدفع',
       'حركات متكررة',
       'فروق مطابقة',

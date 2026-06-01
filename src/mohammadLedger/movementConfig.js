@@ -15,19 +15,19 @@ export const movementTypeOptions = [
   {
     type: MOVEMENT_TYPES.TRANSFER,
     label: 'تحويل',
-    detail: 'نقل مال بين حسابين متطابقين',
+    detail: 'نقل فلوس بين حسابين متطابقين',
     tone: 'transfer',
   },
   {
     type: MOVEMENT_TYPES.EXPENSE,
     label: 'مصروف',
-    detail: 'خروج مال من حساب واحد',
+    detail: 'خروج فلوس من حساب واحد',
     tone: 'expense',
   },
   {
     type: MOVEMENT_TYPES.EXTERNAL_INCOME,
     label: 'دخل',
-    detail: 'مال يدخل من خارج الدفتر',
+    detail: 'فلوس تدخل من خارج الدفتر',
     tone: 'income',
   },
   {
@@ -52,8 +52,8 @@ export const movementConfigs = {
     needsRate: false,
     sourceLabel: 'من',
     destinationLabel: 'إلى',
-    sourceQuestion: 'من أين سيخرج المال؟',
-    destinationQuestion: 'أين سيدخل المال؟',
+    sourceQuestion: 'من أين تخرج الفلوس؟',
+    destinationQuestion: 'أين تدخل الفلوس؟',
     routeTitle: 'الأطراف',
   },
   [MOVEMENT_TYPES.EXPENSE]: {
@@ -83,7 +83,7 @@ export const movementConfigs = {
     sourceLabel: 'مصدر خارجي',
     destinationLabel: 'يدخل إلى',
     sourceQuestion: 'لا يحتاج مصدر داخل الدفتر.',
-    destinationQuestion: 'أين دخل المال؟',
+    destinationQuestion: 'أين دخلت الفلوس؟',
     routeTitle: 'الدخل',
   },
   [MOVEMENT_TYPES.USD_SALE]: {
@@ -123,7 +123,7 @@ export const movementConfigs = {
     sourceLabel: 'مصدر خارجي',
     destinationLabel: 'يدخل إلى',
     sourceQuestion: 'لا يحتاج مصدر داخل الدفتر.',
-    destinationQuestion: 'أين دخل المال؟',
+    destinationQuestion: 'أين دخلت الفلوس؟',
     routeTitle: 'الدخل',
   },
   [MOVEMENT_TYPES.CORRECTION]: {

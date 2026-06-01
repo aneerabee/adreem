@@ -170,7 +170,7 @@ async function showAccounts(ctx) {
     .slice(0, 10)
   const sections = []
   if (myMoney.length) {
-    sections.push(`<b>مالي عندي</b>\n${myMoney.map((bucket) => accountBlockquote(bucket.account, bucket)).join('\n')}`)
+    sections.push(`<b>فلوسي عندي</b>\n${myMoney.map((bucket) => accountBlockquote(bucket.account, bucket)).join('\n')}`)
   }
   if (receivables.length) {
     sections.push(`<b>الناس والجهات</b>\n${receivables.map((bucket) => accountBlockquote(bucket.account, bucket)).join('\n')}`)

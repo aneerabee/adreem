@@ -91,7 +91,7 @@ const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
 
 const accountGroupTabs = [
   { key: 'people', label: 'الناس', title: 'الناس' },
-  { key: 'money', label: 'مالي', title: 'مالي' },
+  { key: 'money', label: 'فلوسي', title: 'فلوسي' },
   { key: 'assets', label: 'أصول', title: 'الأصول' },
   { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
   { key: 'review', label: 'مراجعة', title: 'مراجعة' },
@@ -1854,7 +1854,7 @@ export default function MohammadLedgerApp() {
 
         <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة">
           <button type="button" className="is-money" onClick={() => setActiveAccountGroup('money')}>
-            <span>مالي</span>
+            <span>فلوسي</span>
             <strong>{money(totals.cash + totals.bank)}</strong>
           </button>
           <button type="button" className="is-positive" onClick={() => setActiveAccountGroup('people')}>
@@ -1909,7 +1909,7 @@ export default function MohammadLedgerApp() {
             {showZeroAccounts ? <AccountList title="صفر" rows={peopleZero} onOpen={setSelectedAccountId} embedded /> : null}
           </div>
         ) : activeGroup.key === 'money' ? (
-          <AccountList title="مالي عندي" rows={rows} onOpen={setSelectedAccountId} embedded />
+          <AccountList title="فلوسي عندي" rows={rows} onOpen={setSelectedAccountId} embedded />
         ) : (
           <AccountList
             title={activeGroup.title}
@@ -2070,7 +2070,7 @@ export default function MohammadLedgerApp() {
             <strong>{money(totals.iOwePeople)}</strong>
           </button>
           <button type="button" className="ml3-home-card is-money" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('money') }}>
-            <span>أماكن المال</span>
+            <span>أماكن الفلوس</span>
             <strong>{formatCount(balancesByKind.money.length)} حساب</strong>
           </button>
           <button type="button" className="ml3-home-card is-review" onClick={() => setActiveSection('review')}>

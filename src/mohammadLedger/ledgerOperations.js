@@ -266,7 +266,7 @@ export function buildLedgerAlerts({
   if (reviewMovements.length) alerts.push({ tone: 'danger', title: 'حركات ناقصة', value: reviewMovements.length })
   if (reviewAccounts.length) alerts.push({ tone: 'warning', title: 'تصنيف', value: reviewAccounts.length })
   if (externalMissing.length) alerts.push({ tone: 'info', title: 'أسماء', value: externalMissing.length })
-  if (negativeMoneyAccounts.length) alerts.push({ tone: 'danger', title: 'مال ناقص', value: negativeMoneyAccounts.length })
+  if (negativeMoneyAccounts.length) alerts.push({ tone: 'danger', title: 'فلوس ناقصة', value: negativeMoneyAccounts.length })
   if (Math.round(Number(totals.iOwePeople || 0)) > 0) alerts.push({ tone: 'warning', title: 'أدفع', value: Math.round(Number(totals.iOwePeople || 0)), format: 'money' })
   if (dueRecurringCount) alerts.push({ tone: 'info', title: 'حركات متكررة', value: dueRecurringCount })
   if (reconciliationDiffCount) alerts.push({ tone: 'warning', title: 'فروق مطابقة', value: reconciliationDiffCount })

@@ -17,8 +17,8 @@ export const accountPresets = [
   },
   {
     key: 'own-cash',
-    title: 'مكان كاش',
-    detail: 'مال في اليد',
+    title: 'فلوسي كاش',
+    detail: 'كاش عندي',
     type: ACCOUNT_TYPES.CASH,
     valueKind: VALUE_KINDS.CASH,
     ownerName: 'أنا',
@@ -30,8 +30,8 @@ export const accountPresets = [
   },
   {
     key: 'own-bank',
-    title: 'مصرف / بطاقة',
-    detail: 'مصرف / بطاقة / محفظة',
+    title: 'فلوسي في مصرف',
+    detail: 'بنك / بطاقة / محفظة',
     type: ACCOUNT_TYPES.BANK,
     valueKind: VALUE_KINDS.BANK,
     ownerName: 'أنا',
