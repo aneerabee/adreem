@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createTelegramUserAccess, loadTelegramUserRegistry, parseIdList } from './userRegistry.js'
+import { createTelegramUserAccess, loadTelegramUserRegistry, parseIdList, registryWebTokenMap, webTokenHash } from './userRegistry.js'
 
 let tempDir = null
 
@@ -37,11 +37,17 @@ describe('telegram user registry', () => {
 
     expect(result.ok).toBe(true)
     expect(result.entry.ledgerId).toBe('saeed-book')
+    expect(result.entry.webTokenHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(result.webToken).toBeTruthy()
+    expect(result.webUrl).toMatch(/^https:\/\/aneerabee\.github\.io\/adreem\/#ledger_token=/)
     expect(result.rowId).toBe('adreem:adreem:saeed-book')
     expect(access.isAllowed('555')).toBe(true)
     expect(access.ledgerIdForUser('555')).toBe('saeed-book')
     expect(access.ledgerIdForUser('278516861')).toBe('main')
     expect(loadTelegramUserRegistry(filePath).users).toHaveLength(1)
+    expect(loadTelegramUserRegistry(filePath).users[0].webTokenHash).toBe(webTokenHash(result.webToken))
+    expect(JSON.stringify(loadTelegramUserRegistry(filePath))).not.toContain(result.webToken)
+    expect(registryWebTokenMap({}, filePath).get(webTokenHash(result.webToken))).toBe('saeed-book')
   })
 
   it('blocks assigning one ledger to two different telegram users', () => {

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { createLedgerRepository } from './mohammadLedger/ledgerRepository.js'
 import { mergeLedgerStates } from '../src/mohammadLedger/ledgerState.js'
+import { registryWebTokenMap } from './telegram/userRegistry.js'
 
 const DEFAULT_PORT = 8787
 
@@ -91,7 +92,8 @@ export function createAdreemApiHandler(env = process.env) {
   let testRepositoryFactory = null
 
   function repositoryForToken(token) {
-    const ledgerId = tokenHashMap.get(tokenHash(token)) || tokenMap.get(token)
+    const hash = tokenHash(token)
+    const ledgerId = tokenHashMap.get(hash) || registryWebTokenMap(env).get(hash) || tokenMap.get(token)
     if (!ledgerId) return null
     if (testRepository) return testRepository
     if (testRepositoryFactory) return testRepositoryFactory(ledgerId)

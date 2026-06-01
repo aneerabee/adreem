@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   createAdreemApiHandler,
   parseLedgerTokenHashMap,
@@ -6,6 +9,20 @@ import {
   tokenFromAuthHeader,
   tokenHash,
 } from './adreemApi.js'
+
+let tempDir = null
+
+function tempRegistry(users) {
+  tempDir = mkdtempSync(join(tmpdir(), 'adreem-api-users-'))
+  const file = join(tempDir, 'users.json')
+  writeFileSync(file, `${JSON.stringify({ users }, null, 2)}\n`)
+  return file
+}
+
+afterEach(() => {
+  if (tempDir) rmSync(tempDir, { recursive: true, force: true })
+  tempDir = null
+})
 
 function createMockResponse() {
   return {
@@ -132,6 +149,37 @@ describe('ADREEM web API auth helpers', () => {
     }
 
     expect(requestedLedgers).toEqual(['rabee', 'saeed'])
+  })
+
+  it('routes registry web tokens without requiring an API restart', async () => {
+    const token = 'dynamic-user-token'
+    const api = createAdreemApiHandler({
+      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
+      ADREEM_TELEGRAM_USERS_FILE: tempRegistry([
+        { telegramUserId: '555', ledgerId: 'saeed-book', webTokenHash: tokenHash(token) },
+      ]),
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const requestedLedgers = []
+    api.__setRepositoryFactoryForTest?.((ledgerId) => {
+      requestedLedgers.push(ledgerId)
+      return {
+        async load() {
+          return { state: { ledgerId, accounts: [], movements: [] }, source: 'test' }
+        },
+      }
+    })
+    const response = createMockResponse()
+
+    await api({
+      method: 'GET',
+      url: '/api/ledger',
+      headers: { authorization: `Bearer ${token}` },
+    }, response)
+
+    expect(response.statusCode).toBe(200)
+    expect(requestedLedgers).toEqual(['saeed-book'])
   })
 
   it('merges PUT state with the latest repository state instead of replacing arrays', async () => {

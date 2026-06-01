@@ -1,7 +1,10 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { randomBytes, createHash } from 'node:crypto'
 import { dirname } from 'node:path'
 import { createLedgerIdentity, adreemStateRowId } from '../../src/mohammadLedger/ledgerState.js'
 import { parseTelegramLedgerMap } from '../mohammadLedger/ledgerRepository.js'
+
+const HASH_PATTERN = /^[a-f0-9]{64}$/i
 
 export function parseIdList(value = '') {
   return String(value || '')
@@ -14,13 +17,31 @@ export function defaultRegistryPath(env = process.env) {
   return env.ADREEM_TELEGRAM_USERS_FILE || env.ADREEM_TELEGRAM_REGISTRY_PATH || './adreem-telegram-users.json'
 }
 
+export function webBaseUrl(env = process.env) {
+  return env.ADREEM_WEB_APP_URL || env.ADREEM_WEB_URL || 'https://aneerabee.github.io/adreem/'
+}
+
+export function webTokenHash(token = '') {
+  return createHash('sha256').update(String(token || '').trim()).digest('hex')
+}
+
+export function createPrivateWebToken() {
+  return randomBytes(32).toString('base64url')
+}
+
+export function webUrlForToken(token, env = process.env) {
+  return `${webBaseUrl(env).replace(/#.*$/, '').replace(/\/?$/, '/') }#ledger_token=${token}`
+}
+
 export function normalizeTelegramUserEntry(entry = {}) {
   const telegramUserId = String(entry.telegramUserId || entry.userId || entry.id || '').trim()
   const identity = createLedgerIdentity({ ledgerId: entry.ledgerId })
   if (!telegramUserId || !identity.ledgerId) return null
+  const hash = String(entry.webTokenHash || '').trim().toLowerCase()
   return {
     telegramUserId,
     ledgerId: identity.ledgerId,
+    webTokenHash: HASH_PATTERN.test(hash) ? hash : '',
     addedAt: entry.addedAt || new Date().toISOString(),
     addedBy: entry.addedBy ? String(entry.addedBy) : '',
     firstName: entry.firstName ? String(entry.firstName).slice(0, 80) : '',
@@ -75,7 +96,15 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
   }
 
   function addUser({ telegramUserId, ledgerId, addedBy, firstName = '', username = '' }) {
-    const entry = normalizeTelegramUserEntry({ telegramUserId, ledgerId, addedBy, firstName, username })
+    const webToken = createPrivateWebToken()
+    const entry = normalizeTelegramUserEntry({
+      telegramUserId,
+      ledgerId,
+      addedBy,
+      firstName,
+      username,
+      webTokenHash: webTokenHash(webToken),
+    })
     if (!entry) return { ok: false, error: 'invalid-user-or-ledger' }
     const registry = loadTelegramUserRegistry(filePath)
     const envLedgerOwner = [...envLedgerMap.entries()].find(([userId, mappedLedgerId]) =>
@@ -92,7 +121,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     nextUsers.push(entry)
     nextUsers.sort((a, b) => a.telegramUserId.localeCompare(b.telegramUserId))
     saveTelegramUserRegistry(filePath, { users: nextUsers })
-    return { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }) }
+    return { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }), webToken, webUrl: webUrlForToken(webToken, env) }
   }
 
   function listUsers() {
@@ -117,4 +146,11 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     addUser,
     listUsers,
   }
+}
+
+export function registryWebTokenMap(env = process.env, filePath = defaultRegistryPath(env)) {
+  const registry = loadTelegramUserRegistry(filePath)
+  return new Map(registry.users
+    .filter((user) => user.webTokenHash)
+    .map((user) => [user.webTokenHash, user.ledgerId]))
 }
