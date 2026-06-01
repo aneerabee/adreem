@@ -79,10 +79,10 @@ import {
 } from './ledgerOperations'
 
 const sectionTabs = [
-  { key: 'entry', label: 'إدخال', mark: '+' },
-  { key: 'accounts', label: 'الأرصدة', mark: '=' },
-  { key: 'history', label: 'السجل', mark: '≡' },
-  { key: 'review', label: 'مراجعة', mark: '!' },
+  { key: 'entry', label: 'عملية', mark: '+' },
+  { key: 'accounts', label: 'أرصدة', mark: '=' },
+  { key: 'history', label: 'حركات', mark: '≡' },
+  { key: 'review', label: 'حل', mark: '!' },
 ]
 
 
@@ -98,10 +98,10 @@ const accountGroupTabs = [
 ]
 
 const sectionTitles = {
-  entry: 'إدخال سريع',
+  entry: 'عملية جديدة',
   accounts: 'الأرصدة',
-  history: 'السجل',
-  review: 'مراجعة',
+  history: 'الحركات',
+  review: 'حل ومراجعة',
 }
 
 function accountPresetMark(key) {
@@ -2114,10 +2114,10 @@ export default function MohammadLedgerApp() {
   ]
 
   return (
-    <main className="ml3-app ml3-pocket-app" dir="rtl">
-      <section className="ml3-shell">
-        <header className="ml3-topbar">
-          <div className="ml3-brand">
+    <main className={`ml3-app ml3-pocket-app ml3-flow-app ml3-flow-app--${activeSection}`} dir="rtl">
+      <section className="ml3-shell ml3-flow-shell">
+        <header className="ml3-topbar ml3-flow-hero">
+          <div className="ml3-brand ml3-flow-brand">
             <span className="ml3-brand-mark" aria-hidden="true">
               <svg viewBox="0 0 32 32">
                 <rect x="7" y="5" width="18" height="22" rx="4" />
@@ -2126,42 +2126,37 @@ export default function MohammadLedgerApp() {
               </svg>
             </span>
             <div>
-            <span>ADREEM</span>
-            <h1>{activeSectionTitle}</h1>
+              <span>ADREEM</span>
+              <h1>{activeSectionTitle}</h1>
             </div>
           </div>
-          <div className="ml3-top-actions">
+          <div className="ml3-top-actions ml3-flow-status">
             <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
-            <b>{formatCount(activeAccounts.length)} حساب</b>
-            <b>{formatCount(reviewItems.length)} مراجعة</b>
+            <b>{formatCount(todayMovements.length)} اليوم</b>
+            <b>{formatCount(reviewItems.length)} حل</b>
           </div>
         </header>
 
-        {activeSection !== 'entry' ? (
-          <>
-            <section className="ml3-metrics">
-              <MetricChip label="كاش" value={totals.cash} tone="cash" />
-              <MetricChip label="مصرفي" value={totals.bank} tone="bank" />
-              <MetricChip label="أقبض" value={totals.peopleOweMe} tone="positive" />
-              <MetricChip label="أدفع" value={totals.iOwePeople} tone="negative" />
-              <MetricChip label="أصول" value={totals.assets} tone="asset" />
-              <MetricChip label="مصروف" value={totals.expenses} tone="expense" />
-            </section>
+        <section className="ml3-flow-command" aria-label="اختصارات الدفتر">
+          <button type="button" className="ml3-flow-command-main" onClick={() => setActiveSection('entry')}>
+            <span>المهمة الآن</span>
+            <strong>{activeEntryMode === 'movement' ? `${movementLabels[movementDraft.type]} · ${movementProgressText}` : 'حساب جديد'}</strong>
+          </button>
+          <button type="button" className="is-positive" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('people') }}>
+            <span>أقبض</span>
+            <strong>{money(totals.peopleOweMe)}</strong>
+          </button>
+          <button type="button" className="is-negative" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('people') }}>
+            <span>أدفع</span>
+            <strong>{money(totals.iOwePeople)}</strong>
+          </button>
+          <button type="button" className="is-money" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('money') }}>
+            <span>مالي</span>
+            <strong>{money(totals.cash + totals.bank)}</strong>
+          </button>
+        </section>
 
-            <AlertBoard
-              reviewAccounts={balancesByKind.review}
-              reviewMovements={reviewMovements}
-              externalMissing={unresolvedExternalAccounts}
-              balances={balances}
-              movements={postedUserMovements}
-              totals={totals}
-              dueRecurringCount={dueRules.length}
-              reconciliationDiffCount={reconciliationDiffCount}
-            />
-          </>
-        ) : null}
-
-        <nav className="ml3-tabs" aria-label="أقسام الدفتر">
+        <nav className="ml3-tabs ml3-flow-nav" aria-label="أقسام الدفتر">
           {sectionTabs.map((tab) => (
             <button
               type="button"
@@ -2175,10 +2170,23 @@ export default function MohammadLedgerApp() {
           ))}
         </nav>
 
+        {activeSection !== 'entry' ? (
+          <AlertBoard
+            reviewAccounts={balancesByKind.review}
+            reviewMovements={reviewMovements}
+            externalMissing={unresolvedExternalAccounts}
+            balances={balances}
+            movements={postedUserMovements}
+            totals={totals}
+            dueRecurringCount={dueRules.length}
+            reconciliationDiffCount={reconciliationDiffCount}
+          />
+        ) : null}
+
         <section className={`ml3-layout ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
           {activeSection === 'entry' ? (
-          <aside className="ml3-entry">
-            <section className="ml3-pocket-status" aria-label="ملخص سريع">
+          <aside className="ml3-entry ml3-flow-entry">
+            <section className="ml3-pocket-status ml3-flow-entry-rail" aria-label="ملخص سريع">
               <button type="button" className="is-primary" onClick={() => setActiveEntryMode('movement')}>
                 <span>الآن</span>
                 <strong>{movementProgressText}</strong>
@@ -2192,7 +2200,7 @@ export default function MohammadLedgerApp() {
                 <strong>{formatCount(reviewItems.length)}</strong>
               </button>
             </section>
-            <section className="ml3-receipt-strip" aria-label="إيصال الحركة الحالي">
+            <section className="ml3-receipt-strip ml3-flow-receipt" aria-label="إيصال الحركة الحالي">
               {activeEntryMode === 'movement' ? (
                 movementReceipt.map((item) => (
                   <button

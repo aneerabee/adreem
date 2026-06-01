@@ -6931,3 +6931,1557 @@
     transition: none !important;
   }
 }
+
+/* ADREEM Pocket Flow v5: full interface redesign */
+.ml3-flow-app {
+  --pf-ink: #18211d;
+  --pf-ink-soft: #536159;
+  --pf-paper: #fbf4e5;
+  --pf-paper-2: #fffaf0;
+  --pf-surface: #fffdf7;
+  --pf-line: #d7ccb7;
+  --pf-line-strong: #8b7e67;
+  --pf-green: #167a4a;
+  --pf-green-soft: #e0f3e5;
+  --pf-red: #c84038;
+  --pf-red-soft: #fae5df;
+  --pf-blue: #1f6f8f;
+  --pf-blue-soft: #dff1f3;
+  --pf-amber: #b16c18;
+  --pf-amber-soft: #f7ead1;
+  --pf-violet: #6a557c;
+  --pf-violet-soft: #eee7f2;
+  --pf-shadow: 0 18px 50px rgba(48, 37, 20, 0.12);
+  --pf-fast: 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  --pf-slow: 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 100dvh;
+  color: var(--pf-ink);
+  background:
+    linear-gradient(90deg, rgba(24, 33, 29, 0.045) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(24, 33, 29, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 100% 0%, rgba(22, 122, 74, 0.10), transparent 28rem),
+    linear-gradient(135deg, #f5ead4, #f9f2e2 44%, #edf3ea);
+  background-size: 28px 28px, 28px 28px, auto, auto;
+  font-family: "Avenir Next", "DIN Alternate", "SF Pro Display", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.ml3-flow-app *,
+.ml3-flow-app *::before,
+.ml3-flow-app *::after {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+
+.ml3-flow-shell {
+  width: min(1180px, calc(100vw - 24px));
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 12px 0 24px;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  grid-template-areas:
+    "hero hero"
+    "nav command"
+    "nav alerts"
+    "nav layout";
+  align-content: start;
+  gap: 10px;
+}
+
+.ml3-flow-hero {
+  grid-area: hero;
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  min-height: 78px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 18px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  background: color-mix(in srgb, var(--pf-paper-2) 94%, transparent);
+  box-shadow: 0 8px 0 rgba(24, 33, 29, 0.11);
+  backdrop-filter: blur(12px);
+}
+
+.ml3-flow-brand {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.ml3-flow-brand .ml3-brand-mark {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--pf-paper-2);
+  background: var(--pf-ink);
+  box-shadow: 5px 5px 0 var(--pf-amber);
+}
+
+.ml3-flow-brand svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+}
+
+.ml3-flow-brand span {
+  display: block;
+  color: var(--pf-ink-soft);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.ml3-flow-brand h1 {
+  margin: 2px 0 0;
+  color: var(--pf-ink);
+  font-size: 1.42rem;
+  line-height: 1.05;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-status {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.ml3-flow-status b {
+  min-width: 74px;
+  border: 1px solid var(--pf-ink);
+  border-radius: 999px;
+  padding: 8px 10px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  font-size: 0.76rem;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.ml3-flow-status .ml3-save-state--saved {
+  color: #fffdf7;
+  background: var(--pf-green);
+}
+
+.ml3-flow-status .ml3-save-state--local-only,
+.ml3-flow-status .ml3-save-state--local {
+  color: #fffdf7;
+  background: var(--pf-red);
+}
+
+.ml3-flow-command {
+  grid-area: command;
+  display: grid;
+  grid-template-columns: minmax(1.35fr, 1.6fr) repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ml3-flow-command button {
+  min-width: 0;
+  min-height: 78px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 16px;
+  padding: 10px 12px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 5px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  box-shadow: 0 7px 0 rgba(24, 33, 29, 0.10);
+  cursor: pointer;
+  transition: transform var(--pf-fast), box-shadow var(--pf-fast), background var(--pf-fast);
+}
+
+.ml3-flow-command button:active {
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 rgba(24, 33, 29, 0.12);
+}
+
+.ml3-flow-command span {
+  color: var(--pf-ink-soft);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.ml3-flow-command strong {
+  max-width: 100%;
+  font-size: 1rem;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-command-main {
+  color: #fffdf7 !important;
+  background: var(--pf-ink) !important;
+}
+
+.ml3-flow-command-main span,
+.ml3-flow-command-main strong {
+  color: inherit !important;
+}
+
+.ml3-flow-command .is-positive {
+  border-color: var(--pf-green);
+  background: var(--pf-green-soft);
+}
+
+.ml3-flow-command .is-negative {
+  border-color: var(--pf-red);
+  background: var(--pf-red-soft);
+}
+
+.ml3-flow-command .is-money {
+  border-color: var(--pf-blue);
+  background: var(--pf-blue-soft);
+}
+
+.ml3-flow-nav {
+  grid-area: nav;
+  position: sticky;
+  top: 102px;
+  align-self: start;
+  border: 2px solid var(--pf-ink);
+  border-radius: 18px;
+  padding: 7px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+  background: var(--pf-ink);
+  box-shadow: 0 10px 0 rgba(24, 33, 29, 0.10);
+}
+
+.ml3-flow-nav button {
+  min-height: 70px;
+  border: 0;
+  border-radius: 13px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  justify-items: start;
+  gap: 8px;
+  color: #fffdf7;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--pf-fast), color var(--pf-fast), transform var(--pf-fast);
+}
+
+.ml3-flow-nav button span {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--pf-ink);
+  background: var(--pf-paper);
+  font-weight: 950;
+}
+
+.ml3-flow-nav button strong {
+  color: inherit;
+  font-size: 0.92rem;
+  font-weight: 950;
+}
+
+.ml3-flow-nav button.is-active {
+  color: var(--pf-ink);
+  background: var(--pf-paper);
+}
+
+.ml3-flow-nav button.is-active span {
+  color: #fffdf7;
+  background: var(--pf-green);
+}
+
+.ml3-flow-shell > .ml3-alert-board {
+  grid-area: alerts;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 16px;
+  padding: 8px;
+  background: var(--pf-amber-soft);
+  box-shadow: none;
+}
+
+.ml3-flow-shell > .ml3-alert-board .ml3-alert-title {
+  margin-bottom: 7px;
+}
+
+.ml3-flow-shell > .ml3-alert-board .ml3-alert-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 7px;
+}
+
+.ml3-flow-shell > .ml3-alert-board .ml3-alert {
+  min-height: 48px;
+  border-radius: 12px;
+  padding: 8px 10px;
+  box-shadow: none;
+}
+
+.ml3-flow-app .ml3-layout {
+  grid-area: layout;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ml3-flow-app .ml3-layout.is-entry {
+  display: grid;
+}
+
+.ml3-flow-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-areas:
+    "rail today"
+    "receipt today"
+    "banners today"
+    "modes today"
+    "form today";
+  align-items: start;
+  gap: 10px;
+}
+
+.ml3-flow-entry-rail {
+  grid-area: rail;
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr 0.9fr;
+  gap: 7px;
+}
+
+.ml3-flow-entry-rail button {
+  min-height: 62px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 16px;
+  padding: 8px 10px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  box-shadow: 0 6px 0 rgba(24, 33, 29, 0.10);
+}
+
+.ml3-flow-entry-rail button.is-primary {
+  color: #fffdf7;
+  background: var(--pf-green);
+}
+
+.ml3-flow-entry-rail span {
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: inherit;
+  opacity: 0.78;
+}
+
+.ml3-flow-entry-rail strong {
+  font-size: 1rem;
+  line-height: 1;
+  color: inherit;
+}
+
+.ml3-flow-receipt {
+  grid-area: receipt;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ml3-flow-receipt button {
+  min-height: 64px;
+  border: 1px dashed var(--pf-line-strong);
+  border-radius: 14px;
+  padding: 8px 10px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  text-align: start;
+  color: var(--pf-ink);
+  background: color-mix(in srgb, var(--pf-surface) 86%, var(--pf-paper));
+}
+
+.ml3-flow-receipt span {
+  color: var(--pf-ink-soft);
+  font-size: 0.7rem;
+  font-weight: 950;
+}
+
+.ml3-flow-receipt strong {
+  color: var(--pf-ink);
+  font-size: 0.86rem;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-feedback,
+.ml3-flow-app .ml3-undo-banner,
+.ml3-flow-app .ml3-edit-banner {
+  grid-area: banners;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 14px;
+  padding: 9px 11px;
+  color: var(--pf-ink);
+  background: var(--pf-amber-soft);
+}
+
+.ml3-flow-app .ml3-entry-mode {
+  grid-area: modes;
+  width: fit-content;
+  min-width: min(100%, 310px);
+  border: 2px solid var(--pf-ink);
+  border-radius: 999px;
+  padding: 4px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  background: var(--pf-surface);
+}
+
+.ml3-flow-app .ml3-entry-mode button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: var(--pf-ink);
+  background: transparent;
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.ml3-flow-app .ml3-entry-mode button.is-active {
+  color: #fffdf7;
+  background: var(--pf-ink);
+}
+
+.ml3-flow-app .ml3-entry-card,
+.ml3-flow-app .ml3-add-account {
+  grid-area: form;
+  border: 2px solid var(--pf-ink);
+  border-radius: 22px;
+  padding: 12px;
+  background: var(--pf-paper-2);
+  box-shadow: var(--pf-shadow);
+}
+
+.ml3-flow-app .ml3-entry-head,
+.ml3-flow-app .ml3-panel-head,
+.ml3-flow-app .ml3-today-head,
+.ml3-flow-app .ml3-ops-head {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ml3-flow-app .ml3-entry-head h2,
+.ml3-flow-app .ml3-panel-head h2,
+.ml3-flow-app .ml3-today-head h2 {
+  margin: 0;
+  color: var(--pf-ink);
+  font-size: 1.1rem;
+  line-height: 1.1;
+  font-weight: 950;
+}
+
+.ml3-flow-app .ml3-entry-head span,
+.ml3-flow-app .ml3-panel-head p {
+  color: var(--pf-ink-soft);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.ml3-flow-app .ml3-entry-head b,
+.ml3-flow-app .ml3-panel-head > span,
+.ml3-flow-app .ml3-today-head span {
+  border: 1px solid var(--pf-ink);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.ml3-flow-app .ml3-step-meter {
+  height: 9px;
+  margin-bottom: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18px, 1fr));
+  gap: 5px;
+}
+
+.ml3-flow-app .ml3-step-meter span {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pf-line) 75%, #fff);
+}
+
+.ml3-flow-app .ml3-step-meter span.is-done {
+  background: var(--pf-green);
+}
+
+.ml3-flow-app .ml3-step-meter span.is-current {
+  background: var(--pf-ink);
+}
+
+.ml3-flow-app .ml3-step {
+  position: relative;
+  border: 1px solid var(--pf-line);
+  border-inline-start: 8px solid var(--ml3-step-tone, var(--pf-green));
+  border-radius: 18px;
+  padding: 11px;
+  background: var(--pf-surface);
+  box-shadow: none;
+  transition: opacity var(--pf-slow), transform var(--pf-slow), border-color var(--pf-slow);
+}
+
+.ml3-flow-app .ml3-step + .ml3-step {
+  margin-top: 8px;
+}
+
+.ml3-flow-app .ml3-step.is-done {
+  opacity: 0.55;
+  background: color-mix(in srgb, var(--pf-surface) 86%, var(--pf-line));
+}
+
+.ml3-flow-app .ml3-step.is-open {
+  border-color: var(--pf-ink);
+  border-inline-start-color: var(--ml3-step-tone, var(--pf-green));
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--ml3-step-tone, var(--pf-green)) 14%, transparent);
+}
+
+.ml3-flow-app .ml3-step-head {
+  margin-bottom: 9px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.ml3-flow-app .ml3-step-head span {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  color: #fffdf7;
+  background: var(--ml3-step-tone, var(--pf-green));
+  font-weight: 950;
+}
+
+.ml3-flow-app .ml3-step-head strong {
+  min-width: 0;
+  color: var(--pf-ink);
+  font-size: 1rem;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-step-head button,
+.ml3-flow-app .ml3-step-next,
+.ml3-flow-app .ml3-save,
+.ml3-flow-app .ml3-add-account > button,
+.ml3-flow-app .ml3-mini-action {
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: #fffdf7;
+  background: var(--pf-ink);
+  font-size: 0.86rem;
+  font-weight: 950;
+  cursor: pointer;
+  transition: transform var(--pf-fast), opacity var(--pf-fast), background var(--pf-fast);
+}
+
+.ml3-flow-app .ml3-step-head button {
+  background: var(--pf-blue);
+}
+
+.ml3-flow-app .ml3-step-next,
+.ml3-flow-app .ml3-save {
+  width: 100%;
+  margin-top: 9px;
+  background: var(--pf-green);
+}
+
+.ml3-flow-app button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.ml3-flow-app button:not(:disabled):active {
+  transform: translateY(2px);
+}
+
+.ml3-flow-app .ml3-step-summary {
+  display: block;
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: var(--pf-ink);
+  background: color-mix(in srgb, var(--ml3-step-tone, var(--pf-green)) 10%, #fff);
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-quick-actions,
+.ml3-flow-app .ml3-account-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+  gap: 8px;
+}
+
+.ml3-flow-app .ml3-action-choice,
+.ml3-flow-app .ml3-account-presets button {
+  min-height: 58px;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 16px;
+  padding: 9px 10px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  text-align: start;
+  box-shadow: none;
+}
+
+.ml3-flow-app .ml3-action-choice.is-active,
+.ml3-flow-app .ml3-account-presets button.is-active {
+  border-color: var(--pf-ink);
+  color: #fffdf7;
+  background: var(--pf-ink);
+}
+
+.ml3-flow-app label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: var(--pf-ink-soft);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.ml3-flow-app input,
+.ml3-flow-app select,
+.ml3-flow-app textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 12px;
+  padding: 11px 12px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  font: inherit;
+  font-size: 0.94rem;
+}
+
+.ml3-flow-app textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.ml3-flow-app input:focus,
+.ml3-flow-app select:focus,
+.ml3-flow-app textarea:focus {
+  outline: 3px solid color-mix(in srgb, var(--pf-blue) 28%, transparent);
+  border-color: var(--pf-blue);
+}
+
+.ml3-flow-app .ml3-number-display {
+  min-height: 74px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 18px;
+  padding: 10px 12px;
+  display: grid;
+  align-content: center;
+  background: var(--pf-ink);
+}
+
+.ml3-flow-app .ml3-number-display span {
+  color: #d9e4d9;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.ml3-flow-app .ml3-number-display strong {
+  color: #fffdf7;
+  font-size: 1.95rem;
+  line-height: 1.05;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-number-pad {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ml3-flow-app .ml3-number-pad button {
+  min-height: 48px;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 14px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.ml3-flow-app .ml3-account-picker {
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 18px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--pf-surface) 78%, var(--pf-paper));
+}
+
+.ml3-flow-app .ml3-picked-account {
+  border: 2px solid var(--pf-line-strong);
+  border-radius: 16px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  background: var(--pf-surface);
+}
+
+.ml3-flow-app .ml3-picked-account.is-selected {
+  border-color: var(--pf-ink);
+  background: var(--pf-ink);
+}
+
+.ml3-flow-app .ml3-picked-account strong {
+  color: var(--pf-ink);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-picked-account.is-selected strong {
+  color: #fffdf7;
+}
+
+.ml3-flow-app .ml3-picked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.ml3-flow-app .ml3-picked-actions button,
+.ml3-flow-app .ml3-picker-chips button {
+  min-height: 34px;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.ml3-flow-app .ml3-search-box {
+  margin-top: 8px;
+}
+
+.ml3-flow-app .ml3-picker-favorites,
+.ml3-flow-app .ml3-picker-chips,
+.ml3-flow-app .ml3-picker-results {
+  margin-top: 8px;
+  display: grid;
+  gap: 7px;
+}
+
+.ml3-flow-app .ml3-picker-favorites {
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+}
+
+.ml3-flow-app .ml3-picker-favorites button,
+.ml3-flow-app .ml3-picker-results button {
+  min-width: 0;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 14px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  text-align: start;
+}
+
+.ml3-flow-app .ml3-picker-favorites button {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 56px;
+}
+
+.ml3-flow-app .ml3-picker-results button.is-selected {
+  border-color: var(--pf-ink);
+  background: var(--pf-green-soft);
+}
+
+.ml3-flow-app .ml3-picker-results strong,
+.ml3-flow-app .ml3-picker-results span,
+.ml3-flow-app .ml3-picker-results b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-balance-chip {
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--pf-ink);
+  background: var(--pf-paper);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.ml3-flow-app .ml3-balance-chip.is-positive { color: #fffdf7; background: var(--pf-green); }
+.ml3-flow-app .ml3-balance-chip.is-negative { color: #fffdf7; background: var(--pf-red); }
+.ml3-flow-app .ml3-balance-chip.is-expense { color: #fffdf7; background: var(--pf-amber); }
+.ml3-flow-app .ml3-balance-chip.is-asset { color: #fffdf7; background: var(--pf-violet); }
+
+.ml3-flow-app .ml3-today-panel {
+  grid-area: today;
+  position: sticky;
+  top: 112px;
+  max-height: calc(100dvh - 124px);
+  overflow: auto;
+  border: 2px solid var(--pf-ink);
+  border-radius: 22px;
+  padding: 10px;
+  background: var(--pf-surface);
+  box-shadow: var(--pf-shadow);
+}
+
+.ml3-flow-app .ml3-today-list,
+.ml3-flow-app .ml3-history-list,
+.ml3-flow-app .ml3-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ml3-flow-app .ml3-today-row,
+.ml3-flow-app .ml3-history-row,
+.ml3-flow-app .ml3-account-row {
+  min-width: 0;
+  border: 1px solid var(--pf-line);
+  border-radius: 16px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  box-shadow: none;
+}
+
+.ml3-flow-app .ml3-account-row.is-positive {
+  border-inline-start: 7px solid var(--pf-green);
+}
+
+.ml3-flow-app .ml3-account-row.is-negative {
+  border-inline-start: 7px solid var(--pf-red);
+}
+
+.ml3-flow-app .ml3-account-row.is-zero {
+  border-inline-start: 7px solid var(--pf-line-strong);
+}
+
+.ml3-flow-app .ml3-account-main {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  color: inherit;
+  background: transparent;
+  text-align: start;
+}
+
+.ml3-flow-app .ml3-account-main strong,
+.ml3-flow-app .ml3-history-main strong,
+.ml3-flow-app .ml3-today-main strong {
+  color: var(--pf-ink);
+  font-size: 0.96rem;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-account-main span,
+.ml3-flow-app .ml3-history-main span,
+.ml3-flow-app .ml3-today-main span {
+  color: var(--pf-ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-account-values {
+  display: grid;
+  justify-items: end;
+  align-content: center;
+  gap: 4px;
+}
+
+.ml3-flow-app .ml3-account-values strong,
+.ml3-flow-app .ml3-account-values span {
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 0.76rem;
+  line-height: 1.15;
+  white-space: normal;
+  text-align: center;
+}
+
+.ml3-flow-app .ml3-account-values.is-positive strong {
+  color: #fffdf7;
+  background: var(--pf-green);
+}
+
+.ml3-flow-app .ml3-account-values.is-negative strong {
+  color: #fffdf7;
+  background: var(--pf-red);
+}
+
+.ml3-flow-app .ml3-account-values.is-zero span {
+  color: var(--pf-ink-soft);
+  background: var(--pf-paper);
+}
+
+.ml3-flow-app .ml3-panel,
+.ml3-flow-app .ml3-list-block,
+.ml3-flow-app .ml3-ops-card {
+  border: 2px solid var(--pf-ink);
+  border-radius: 22px;
+  padding: 12px;
+  background: var(--pf-paper-2);
+  box-shadow: var(--pf-shadow);
+}
+
+.ml3-flow-app .ml3-balance-ledger {
+  margin-bottom: 9px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ml3-flow-app .ml3-balance-ledger button {
+  min-height: 64px;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 16px;
+  padding: 8px 10px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+}
+
+.ml3-flow-app .ml3-balance-ledger .is-positive { border-color: var(--pf-green); background: var(--pf-green-soft); }
+.ml3-flow-app .ml3-balance-ledger .is-negative { border-color: var(--pf-red); background: var(--pf-red-soft); }
+.ml3-flow-app .ml3-balance-ledger .is-money { border-color: var(--pf-blue); background: var(--pf-blue-soft); }
+.ml3-flow-app .ml3-balance-ledger .is-review { border-color: var(--pf-amber); background: var(--pf-amber-soft); }
+
+.ml3-flow-app .ml3-account-toolbar,
+.ml3-flow-app .ml3-history-filters {
+  margin-bottom: 9px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.ml3-flow-app .ml3-history-filters {
+  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(120px, 0.8fr));
+}
+
+.ml3-flow-app .ml3-account-toolbar button {
+  min-height: 43px;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  font-weight: 950;
+}
+
+.ml3-flow-app .ml3-account-toolbar button.is-active {
+  color: #fffdf7;
+  background: var(--pf-ink);
+}
+
+.ml3-flow-app .ml3-account-switcher {
+  margin-bottom: 9px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ml3-flow-app .ml3-account-switcher button {
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 13px;
+  padding: 7px 5px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+}
+
+.ml3-flow-app .ml3-account-switcher button.is-active {
+  color: #fffdf7;
+  background: var(--pf-ink);
+}
+
+.ml3-flow-app .ml3-account-switcher strong,
+.ml3-flow-app .ml3-account-switcher span {
+  color: inherit;
+  font-size: 0.74rem;
+}
+
+.ml3-flow-app .ml3-review-workspace {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.ml3-flow-app .ml3-review-queue {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.ml3-flow-app .ml3-review-ticket {
+  min-height: 62px;
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 16px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 7px;
+  color: var(--pf-ink);
+  background: var(--pf-surface);
+  text-align: start;
+}
+
+.ml3-flow-app .ml3-review-ticket.is-active {
+  border-color: var(--pf-ink);
+  color: #fffdf7;
+  background: var(--pf-ink);
+}
+
+.ml3-flow-app .ml3-review-ticket span,
+.ml3-flow-app .ml3-review-ticket strong,
+.ml3-flow-app .ml3-review-ticket b {
+  min-width: 0;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-preview {
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 16px;
+  padding: 8px;
+  display: grid;
+  gap: 7px;
+  background: var(--pf-surface);
+}
+
+.ml3-flow-app .ml3-effect {
+  border: 1px solid var(--pf-line);
+  border-radius: 14px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) repeat(3, minmax(78px, auto));
+  gap: 7px;
+  align-items: center;
+  color: var(--pf-ink);
+  background: var(--pf-paper-2);
+}
+
+.ml3-flow-app .ml3-effect span,
+.ml3-flow-app .ml3-effect b,
+.ml3-flow-app .ml3-effect i,
+.ml3-flow-app .ml3-effect strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ml3-flow-app .ml3-effect i {
+  color: var(--pf-green);
+  font-style: normal;
+  font-weight: 950;
+}
+
+.ml3-flow-app .ml3-ops-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ml3-flow-app .ml3-profile-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  padding: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(24, 33, 29, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.ml3-flow-app .ml3-profile {
+  width: min(620px, 100%);
+  max-height: calc(100dvh - 20px);
+  overflow: auto;
+  border: 2px solid var(--pf-ink);
+  border-radius: 24px;
+  padding: 12px;
+  background: var(--pf-paper-2);
+}
+
+.ml3-flow-app .ml3-empty {
+  margin: 0;
+  border: 1px dashed var(--pf-line-strong);
+  border-radius: 14px;
+  padding: 12px;
+  color: var(--pf-ink-soft);
+  background: var(--pf-surface);
+  font-weight: 850;
+}
+
+@keyframes pf-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ml3-flow-app .ml3-layout,
+.ml3-flow-app .ml3-panel,
+.ml3-flow-app .ml3-entry-card,
+.ml3-flow-app .ml3-add-account,
+.ml3-flow-app .ml3-today-panel {
+  animation: pf-enter 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (max-width: 960px) {
+  .ml3-flow-shell {
+    width: min(100vw - 14px, 760px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "hero"
+      "command"
+      "alerts"
+      "layout"
+      "nav";
+    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+
+  .ml3-flow-hero {
+    min-height: 66px;
+    border-radius: 16px;
+  }
+
+  .ml3-flow-status {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ml3-flow-status b {
+    min-width: 0;
+    padding: 7px 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ml3-flow-command {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-flow-command-main {
+    grid-column: 1 / -1;
+  }
+
+  .ml3-flow-nav {
+    position: fixed;
+    inset-inline: 7px;
+    top: auto;
+    bottom: calc(7px + env(safe-area-inset-bottom));
+    z-index: 120;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-radius: 20px;
+    padding: 6px;
+  }
+
+  .ml3-flow-nav button {
+    min-height: 58px;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 4px;
+    padding: 6px 3px;
+  }
+
+  .ml3-flow-nav button span {
+    width: 27px;
+    height: 27px;
+    border-radius: 9px;
+  }
+
+  .ml3-flow-nav button strong {
+    font-size: 0.72rem;
+  }
+
+  .ml3-flow-entry {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "rail"
+      "receipt"
+      "banners"
+      "modes"
+      "form"
+      "today";
+  }
+
+  .ml3-flow-app .ml3-today-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .ml3-flow-receipt,
+  .ml3-flow-app .ml3-balance-ledger {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-flow-app .ml3-history-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ml3-flow-app .ml3-review-workspace,
+  .ml3-flow-app .ml3-ops-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .ml3-flow-app {
+    background-size: 22px 22px, 22px 22px, auto, auto;
+  }
+
+  .ml3-flow-shell {
+    width: 100%;
+    padding-inline: 6px;
+  }
+
+  .ml3-flow-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .ml3-flow-brand {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .ml3-flow-brand .ml3-brand-mark {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    box-shadow: 4px 4px 0 var(--pf-amber);
+  }
+
+  .ml3-flow-brand h1 {
+    font-size: 1.18rem;
+  }
+
+  .ml3-flow-command button {
+    min-height: 64px;
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  .ml3-flow-command strong {
+    font-size: 0.88rem;
+  }
+
+  .ml3-flow-entry-rail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ml3-flow-entry-rail button {
+    min-height: 54px;
+    padding: 7px 5px;
+  }
+
+  .ml3-flow-app .ml3-entry-card,
+  .ml3-flow-app .ml3-add-account,
+  .ml3-flow-app .ml3-panel,
+  .ml3-flow-app .ml3-today-panel {
+    border-radius: 18px;
+    padding: 9px;
+  }
+
+  .ml3-flow-app .ml3-step {
+    border-radius: 15px;
+    padding: 9px;
+  }
+
+  .ml3-flow-app .ml3-step-head {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+  }
+
+  .ml3-flow-app .ml3-step-head span {
+    width: 30px;
+    height: 30px;
+  }
+
+  .ml3-flow-app .ml3-step-head button {
+    min-height: 34px;
+    padding: 6px 8px;
+  }
+
+  .ml3-flow-app .ml3-number-display {
+    min-height: 64px;
+  }
+
+  .ml3-flow-app .ml3-number-display strong {
+    font-size: 1.55rem;
+  }
+
+  .ml3-flow-app .ml3-number-pad button {
+    min-height: 44px;
+  }
+
+  .ml3-flow-app .ml3-picked-account,
+  .ml3-flow-app .ml3-today-row,
+  .ml3-flow-app .ml3-history-row,
+  .ml3-flow-app .ml3-account-row,
+  .ml3-flow-app .ml3-effect {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ml3-flow-app .ml3-picked-actions,
+  .ml3-flow-app .ml3-account-values {
+    justify-content: start;
+    justify-items: start;
+  }
+
+  .ml3-flow-app .ml3-account-toolbar,
+  .ml3-flow-app .ml3-history-filters,
+  .ml3-flow-app .ml3-account-switcher {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ml3-flow-app .ml3-account-switcher {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ml3-flow-app .ml3-profile-layer {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .ml3-flow-app .ml3-profile {
+    width: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .ml3-flow-command,
+  .ml3-flow-receipt,
+  .ml3-flow-entry-rail,
+  .ml3-flow-app .ml3-balance-ledger {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ml3-flow-app *,
+  .ml3-flow-app *::before,
+  .ml3-flow-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Pocket Flow structural lock: outrank legacy ADREEM selectors */
+.ml3-flow-app .ml3-flow-shell {
+  width: min(1180px, calc(100vw - 24px));
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 12px 0 24px;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  grid-template-areas:
+    "hero hero"
+    "nav command"
+    "nav alerts"
+    "nav layout";
+  align-content: start;
+  gap: 10px;
+}
+
+.ml3-flow-app .ml3-flow-hero {
+  grid-area: hero;
+}
+
+.ml3-flow-app .ml3-flow-command {
+  grid-area: command;
+}
+
+.ml3-flow-app .ml3-flow-nav {
+  grid-area: nav;
+  position: sticky;
+  top: 102px;
+  align-self: start;
+  width: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: row;
+}
+
+.ml3-flow-app .ml3-flow-nav button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.ml3-flow-app .ml3-flow-status {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: none;
+}
+
+.ml3-flow-app .ml3-flow-status b {
+  display: inline-grid;
+  place-items: center;
+}
+
+.ml3-flow-app .ml3-flow-status b:nth-child(2) {
+  display: inline-grid;
+}
+
+.ml3-flow-app .ml3-layout {
+  grid-area: layout;
+  width: 100%;
+}
+
+.ml3-flow-app .ml3-layout.is-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ml3-flow-app .ml3-flow-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-areas:
+    "rail today"
+    "receipt today"
+    "banners today"
+    "modes today"
+    "form today";
+  align-items: start;
+  gap: 10px;
+}
+
+.ml3-flow-app .ml3-flow-entry-rail { grid-area: rail; }
+.ml3-flow-app .ml3-flow-receipt { grid-area: receipt; }
+.ml3-flow-app .ml3-entry-mode { grid-area: modes; }
+.ml3-flow-app .ml3-entry-card,
+.ml3-flow-app .ml3-add-account { grid-area: form; }
+.ml3-flow-app .ml3-today-panel { grid-area: today; }
+
+@media (max-width: 960px) {
+  .ml3-flow-app .ml3-flow-shell {
+    width: min(100vw - 14px, 760px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "hero"
+      "command"
+      "alerts"
+      "layout"
+      "nav";
+    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+
+  .ml3-flow-app .ml3-flow-status {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .ml3-flow-app .ml3-flow-nav {
+    position: fixed;
+    inset-inline: 7px;
+    top: auto;
+    bottom: calc(7px + env(safe-area-inset-bottom));
+    z-index: 120;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-flow: column;
+  }
+
+  .ml3-flow-app .ml3-flow-nav button {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ml3-flow-app .ml3-flow-entry {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "rail"
+      "receipt"
+      "banners"
+      "modes"
+      "form"
+      "today";
+  }
+}
+
+@media (max-width: 560px) {
+  .ml3-flow-app .ml3-flow-shell {
+    width: 100%;
+    padding-inline: 6px;
+  }
+
+  .ml3-flow-app.ml3-flow-app--entry .ml3-flow-command {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ml3-flow-app.ml3-flow-app--entry .ml3-flow-command button:not(.ml3-flow-command-main) {
+    display: none;
+  }
+
+  .ml3-flow-app .ml3-flow-status {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ml3-flow-app .ml3-flow-status b {
+    min-width: 0;
+  }
+}
