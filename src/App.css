@@ -8506,7 +8506,7 @@
   min-height: 100dvh;
   color: var(--ad6-ink);
   background: var(--ad6-bg);
-  font-family: "Avenir Next", "SF Pro Text", system-ui, sans-serif;
+  font-family: "SF Arabic", "Geeza Pro", "SF Pro Text", Tahoma, system-ui, sans-serif;
   letter-spacing: 0;
 }
 
@@ -8613,6 +8613,7 @@
   font-size: 0.76rem;
   font-weight: 900;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .adreem-status .ml3-save-state--saved {
@@ -8690,6 +8691,51 @@
   padding: 10px;
   background: var(--ad6-surface);
   box-shadow: none;
+}
+
+.adreem-app .ml3-alert-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.adreem-app .ml3-alert {
+  min-width: 0;
+  min-height: 50px;
+  border: 1px solid var(--ad6-line);
+  border-radius: 16px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.adreem-app .ml3-alert strong,
+.adreem-app .ml3-alert span {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.15;
+}
+
+.adreem-app .ml3-alert strong {
+  color: var(--ad6-ink);
+  font-size: 0.84rem;
+  font-weight: 950;
+}
+
+.adreem-app .ml3-alert span {
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--ad6-ink);
+  background: #f0eee7;
+  font-size: 0.78rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
 }
 
 .adreem-app--entry .ml3-alert-board {
@@ -9292,6 +9338,35 @@
   font-weight: 950;
 }
 
+.adreem-app .ml3-balance-ledger button {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 5px;
+}
+
+.adreem-app .ml3-balance-ledger button span,
+.adreem-app .ml3-balance-ledger button strong {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.adreem-app .ml3-balance-ledger button span {
+  color: var(--ad6-muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.adreem-app .ml3-balance-ledger button strong {
+  color: var(--ad6-ink);
+  font-size: 0.96rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
 .adreem-app .ml3-account-switcher button.is-active,
 .adreem-app .ml3-account-toolbar button.is-active {
   color: #fff;
@@ -9428,13 +9503,16 @@
       "alerts"
       "body"
       "nav";
-    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    gap: 10px;
+    padding-bottom: calc(74px + env(safe-area-inset-bottom));
   }
 
   .adreem-header {
-    border-radius: 20px;
+    border-radius: 18px;
+    padding: 9px;
     align-items: stretch;
     flex-direction: column;
+    gap: 9px;
   }
 
   .adreem-status {
@@ -9445,6 +9523,9 @@
 
   .adreem-status b {
     min-width: 0;
+    min-height: 30px;
+    padding: 6px 8px;
+    font-size: 0.72rem;
   }
 
   .adreem-nav {
@@ -9454,24 +9535,25 @@
     bottom: calc(8px + env(safe-area-inset-bottom));
     z-index: 120;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    border-radius: 22px;
+    border-radius: 20px;
+    padding: 6px;
   }
 
   .adreem-nav button {
-    min-height: 56px;
+    min-height: 48px;
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
     gap: 4px;
-    padding: 7px 4px;
+    padding: 5px 4px;
   }
 
   .adreem-nav button span {
-    width: 25px;
-    height: 25px;
+    width: 23px;
+    height: 23px;
   }
 
   .adreem-nav button strong {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
   }
 
   .adreem-entry {
@@ -9491,7 +9573,7 @@
   }
 
   .adreem-receipt {
-    order: 2;
+    order: 3;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -9505,7 +9587,7 @@
 
   .adreem-app .ml3-entry-card,
   .adreem-app .ml3-add-account {
-    order: 3;
+    order: 2;
   }
 
   .adreem-app .ml3-today-panel {
@@ -9551,6 +9633,10 @@
 
   .adreem-app .ml3-account-switcher {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .adreem-app .ml3-alert-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .adreem-app .ml3-entry-card,

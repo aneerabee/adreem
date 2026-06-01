@@ -82,7 +82,7 @@ const sectionTabs = [
   { key: 'entry', label: 'عملية', mark: '+' },
   { key: 'accounts', label: 'أرصدة', mark: '=' },
   { key: 'history', label: 'حركات', mark: '≡' },
-  { key: 'review', label: 'حل', mark: '!' },
+  { key: 'review', label: 'مراجعة', mark: '!' },
 ]
 
 
@@ -101,7 +101,7 @@ const sectionTitles = {
   entry: 'عملية جديدة',
   accounts: 'الأرصدة',
   history: 'الحركات',
-  review: 'حل ومراجعة',
+  review: 'المراجعة',
 }
 
 function accountPresetMark(key) {
@@ -1475,7 +1475,7 @@ export default function MohammadLedgerApp() {
         ? current.map((item) => (item.id === originalMovement.id ? movement : item))
         : [...current, movement],
     )
-    setFeedback(movement.status === MOVEMENT_STATUSES.POSTED ? (originalMovement ? 'تم تعديل الحركة وتحديث الأرصدة.' : 'تم الحفظ وتحديث الأرصدة.') : 'الحركة ناقصة وتحتاج حل.')
+    setFeedback(movement.status === MOVEMENT_STATUSES.POSTED ? (originalMovement ? 'تم تعديل الحركة وتحديث الأرصدة.' : 'تم الحفظ وتحديث الأرصدة.') : 'الحركة ناقصة وتحتاج مراجعة.')
     const attachment = createAttachment({
       movementId: movement.id,
       label: movementDraft.attachmentLabel,
@@ -1933,7 +1933,7 @@ export default function MohammadLedgerApp() {
           <div className="ml3-panel-head">
             <div>
               <h2>مراجعة</h2>
-              <p>حل أو إلغاء</p>
+              <p>راجع أو ألغ</p>
             </div>
             <span>{formatCount(reviewItems.length)}</span>
           </div>
@@ -2066,10 +2066,10 @@ export default function MohammadLedgerApp() {
             <strong>{money(totals.peopleOweMe)}</strong>
           </button>
           <button type="button" className="ml3-home-card is-negative" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('people') }}>
-            <span>أدفع للناس</span>
+            <span>أدفع لهم</span>
             <strong>{money(totals.iOwePeople)}</strong>
           </button>
-          <button type="button" className="ml3-home-card is-money" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('people') }}>
+          <button type="button" className="ml3-home-card is-money" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('money') }}>
             <span>أماكن المال</span>
             <strong>{formatCount(balancesByKind.money.length)} حساب</strong>
           </button>
@@ -2125,8 +2125,8 @@ export default function MohammadLedgerApp() {
           </div>
           <div className="adreem-status">
             <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
-            <b>{formatCount(todayMovements.length)} اليوم</b>
-            <b>{formatCount(reviewItems.length)} حل</b>
+            <b>اليوم {formatCount(todayMovements.length)}</b>
+            <b>مراجعة {formatCount(reviewItems.length)}</b>
           </div>
         </header>
 
