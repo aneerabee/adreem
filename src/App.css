@@ -10150,11 +10150,12 @@
 
 .adreem-app .ml3-today-row,
 .adreem-app .ml3-history-row {
-  min-height: 86px;
-  height: 86px;
+  min-height: 132px;
+  height: 132px;
   overflow: hidden;
   grid-template-columns: minmax(0, 1.05fr) minmax(96px, 0.72fr) auto;
   grid-auto-rows: min-content;
+  align-content: start;
 }
 
 .adreem-app .ml3-account-row {
@@ -10262,6 +10263,36 @@
   max-height: 34px;
 }
 
+.adreem-app .ml3-history-route,
+.adreem-app .ml3-today-route {
+  max-height: 48px;
+}
+
+.adreem-app .ml3-history-route {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.adreem-app .ml3-history-route b {
+  max-width: min(132px, 48%);
+  line-height: 1.15;
+}
+
+.adreem-app .ml3-history-row small {
+  -webkit-line-clamp: 1;
+  line-height: 1.18;
+}
+
+.adreem-app .ml3-history-row button,
+.adreem-app .ml3-today-row button {
+  min-width: 48px;
+  max-width: 74px;
+  min-height: 36px;
+  align-self: start;
+}
+
 @media (max-width: 540px) {
   .adreem-shell {
     padding-bottom: calc(104px + env(safe-area-inset-bottom));
@@ -10310,8 +10341,8 @@
 
   .adreem-app .ml3-today-row,
   .adreem-app .ml3-history-row {
-    min-height: 84px;
-    height: 84px;
+    min-height: 150px;
+    height: 150px;
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
@@ -10322,6 +10353,15 @@
   .adreem-app .ml3-history-route,
   .adreem-app .ml3-today-route {
     justify-items: end;
+    max-height: 24px;
+  }
+
+  .adreem-app .ml3-history-route {
+    justify-content: flex-end;
+  }
+
+  .adreem-app .ml3-history-route b {
+    max-width: 49%;
   }
 
   .adreem-app .ml3-history-effects,
@@ -10329,6 +10369,16 @@
   .adreem-app .ml3-history-row small,
   .adreem-app .ml3-today-row small {
     grid-column: 1 / -1;
+  }
+
+  .adreem-app .ml3-history-effects,
+  .adreem-app .ml3-today-effects {
+    max-height: 22px;
+  }
+
+  .adreem-app .ml3-history-row small,
+  .adreem-app .ml3-today-row small {
+    max-height: 18px;
   }
 
   .adreem-app .ml3-review-ticket {
