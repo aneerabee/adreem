@@ -1,6 +1,7 @@
 import { MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { createLedgerRepository, parseTelegramLedgerMap, resolveTelegramLedgerId } from '../mohammadLedger/ledgerRepository.js'
+import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
+import { createLedgerIdentity } from '../../src/mohammadLedger/ledgerState.js'
 import { accountLabel, buildLedgerSnapshot, formatMoney } from '../mohammadLedger/ledgerService.js'
 import { mainMenuKeyboard } from './keyboards.js'
 import { accountBlockquote, escapeHtml, mainMenuText, movementBlockquote, movementLabels } from './messages.js'
@@ -8,24 +9,15 @@ import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
 import { handleAccountCallback, handleAccountText, startAccount } from './handlers/account.js'
 import { handleMovementCallback, handleMovementText, startMovement } from './handlers/movement.js'
+import { createTelegramUserAccess } from './userRegistry.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
 if (!token) {
   console.error('[adreem-telegram-bot] missing TELEGRAM_BOT_TOKEN')
   process.exit(1)
 }
-const allowedUserIds = String(
-  process.env.ADREEM_TELEGRAM_USER_IDS ||
-  process.env.ADREEM_TELEGRAM_USER_ID ||
-  process.env.MOHAMMAD_TELEGRAM_USER_IDS ||
-  process.env.MOHAMMAD_TELEGRAM_USER_ID ||
-  '',
-)
-  .split(',')
-  .map((item) => item.trim())
-  .filter(Boolean)
-const telegramLedgerMap = parseTelegramLedgerMap(process.env.ADREEM_TELEGRAM_LEDGER_IDS || process.env.MOHAMMAD_TELEGRAM_LEDGER_IDS)
-const ledgerMapProblem = validateTelegramLedgerMap(allowedUserIds, telegramLedgerMap)
+const userAccess = createTelegramUserAccess(process.env)
+const ledgerMapProblem = validateTelegramLedgerMap(userAccess)
 if (ledgerMapProblem) {
   console.error('[adreem-telegram-bot] invalid ADREEM_TELEGRAM_LEDGER_IDS:', ledgerMapProblem)
   process.exit(1)
@@ -38,25 +30,25 @@ const sessions = createSessionStore()
 let offset = 0
 
 console.log('[adreem-telegram-bot] starting', {
-  allowedUsers: allowedUserIds.length,
-  mappedLedgers: telegramLedgerMap.size,
+  admins: userAccess.adminIds.length,
+  envUsers: userAccess.envUserIds.length,
+  envMappedLedgers: userAccess.envLedgerMap.size,
+  registry: userAccess.filePath,
 })
 
 function repositoryForUser(userId) {
-  const ledgerId = resolveTelegramLedgerId(userId, process.env)
+  const ledgerId = userAccess.ledgerIdForUser(userId) || createLedgerIdentity({
+    ledgerId: process.env.ADREEM_LEDGER_ID || process.env.VITE_ADREEM_LEDGER_ID,
+  }).ledgerId
   if (!repositoriesByLedgerId.has(ledgerId)) {
     repositoriesByLedgerId.set(ledgerId, createLedgerRepository(process.env, { ledgerId }))
   }
   return repositoriesByLedgerId.get(ledgerId)
 }
 
-function validateTelegramLedgerMap(userIds, ledgerMap) {
-  if (userIds.length <= 1 && ledgerMap.size === 0) return ''
-  const missing = userIds.filter((userId) => !ledgerMap.has(String(userId)))
-  if (missing.length) return `missing ledger mapping for user id(s): ${missing.join(', ')}`
+function validateTelegramLedgerMap(access) {
   const seen = new Map()
-  for (const userId of userIds) {
-    const ledgerId = ledgerMap.get(String(userId))
+  for (const [userId, ledgerId] of access.envLedgerMap.entries()) {
     const existingUserId = seen.get(ledgerId)
     if (existingUserId) return `ledger "${ledgerId}" is assigned to both ${existingUserId} and ${userId}`
     seen.set(ledgerId, userId)
@@ -87,8 +79,7 @@ function getMessageId(update) {
 
 function isAllowed(user) {
   if (!user?.id) return false
-  if (!allowedUserIds.length) return false
-  return allowedUserIds.includes(String(user.id))
+  return userAccess.isAllowed(user.id)
 }
 
 function contextFor(update) {
@@ -257,6 +248,83 @@ async function handleSearchText(ctx, text) {
   return telegram.sendMessage({ chat_id: ctx.chatId, text: textResult, parse_mode: 'HTML', reply_markup: mainMenuKeyboard() })
 }
 
+function helpAdminText() {
+  return [
+    '<b>ADREEM · إدارة المستخدمين</b>',
+    '<blockquote>الأوامر:',
+    '/myid',
+    '/users',
+    '/adduser TELEGRAM_ID LEDGER_ID',
+    '',
+    'مثال:',
+    '/adduser 555 saeed-book</blockquote>',
+  ].join('\n')
+}
+
+function parseAddUserCommand(text) {
+  const parts = String(text || '').trim().split(/\s+/).filter(Boolean)
+  if (parts.length < 3) return null
+  return {
+    telegramUserId: parts[1],
+    ledgerId: parts[2],
+  }
+}
+
+async function handleAdminCommand(ctx, text) {
+  if (text === '/myid') {
+    return telegram.sendMessage({
+      chat_id: ctx.chatId,
+      text: `<b>Telegram ID</b>\n<blockquote>${escapeHtml(String(ctx.userId || ''))}</blockquote>`,
+      parse_mode: 'HTML',
+    })
+  }
+  if (!userAccess.isAdmin(ctx.userId)) return false
+  if (text === '/admin' || text === '/helpadmin') {
+    return telegram.sendMessage({ chat_id: ctx.chatId, text: helpAdminText(), parse_mode: 'HTML' })
+  }
+  if (text === '/users') {
+    const users = userAccess.listUsers()
+    const rows = users.length
+      ? users.map((user) => `${user.source === 'env' ? 'ثابت' : 'مضاف'} · ${user.telegramUserId} · ${user.ledgerId}`).join('\n')
+      : 'لا يوجد مستخدمون.'
+    return telegram.sendMessage({
+      chat_id: ctx.chatId,
+      text: `<b>ADREEM · المستخدمون</b>\n<blockquote>${escapeHtml(rows)}</blockquote>`,
+      parse_mode: 'HTML',
+    })
+  }
+  if (text.startsWith('/adduser')) {
+    const parsed = parseAddUserCommand(text)
+    if (!parsed) {
+      return telegram.sendMessage({ chat_id: ctx.chatId, text: helpAdminText(), parse_mode: 'HTML' })
+    }
+    const result = userAccess.addUser({
+      ...parsed,
+      addedBy: ctx.userId,
+      firstName: ctx.user?.first_name,
+      username: ctx.user?.username,
+    })
+    if (!result.ok) {
+      const message = result.error === 'ledger-used'
+        ? `هذا الدفتر مستخدم بالفعل للمستخدم ${result.existingUserId}. اختر ledgerId آخر.`
+        : 'لم أستطع إضافة المستخدم. تأكد من Telegram ID واسم الدفتر.'
+      return telegram.sendMessage({ chat_id: ctx.chatId, text: `<b>لم تتم الإضافة</b>\n<blockquote>${escapeHtml(message)}</blockquote>`, parse_mode: 'HTML' })
+    }
+    return telegram.sendMessage({
+      chat_id: ctx.chatId,
+      text: [
+        '<b>تمت إضافة مستخدم مستقل</b>',
+        `<blockquote>Telegram: ${escapeHtml(result.entry.telegramUserId)}`,
+        `Ledger: ${escapeHtml(result.entry.ledgerId)}`,
+        `Row: ${escapeHtml(result.rowId)}`,
+        'يمكنه الآن فتح /start وسيعمل داخل دفتره فقط.</blockquote>',
+      ].join('\n'),
+      parse_mode: 'HTML',
+    })
+  }
+  return false
+}
+
 async function handleCallback(ctx, update) {
   const data = update.callback_query?.data || ''
   console.log('[adreem-telegram-bot] callback', {
@@ -284,6 +352,7 @@ async function handleMessage(ctx, update) {
     text: text.slice(0, 32),
   })
   if (!text) return null
+  if (await handleAdminCommand(ctx, text)) return null
   if (text === '/start' || text === 'القائمة') return showMainMenu(ctx)
   if (await handleMovementText(ctx, text)) {
     await deleteUserInput(ctx)
@@ -306,7 +375,11 @@ async function handleUpdate(update) {
   const ctx = contextFor(update)
   if (!isAllowed(ctx.user)) {
     if (ctx.chatId) {
-      await telegram.sendMessage({ chat_id: ctx.chatId, text: '<b>هذا الدفتر خاص وغير مسموح لهذا المستخدم.</b>', parse_mode: 'HTML' })
+      await telegram.sendMessage({
+        chat_id: ctx.chatId,
+        text: `<b>هذا الدفتر خاص.</b>\n<blockquote>أرسل هذا الرقم لصاحب النظام ليضيفك:\n${escapeHtml(String(ctx.user?.id || ''))}</blockquote>`,
+        parse_mode: 'HTML',
+      })
     }
     return
   }

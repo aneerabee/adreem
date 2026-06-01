@@ -71,6 +71,31 @@ npm run ops:create-ledger-access -- --ledger=saeed-book --telegram=555
 
 قاعدة العزل: كل مستخدم يحصل على `ledgerId` خاص، وسطر hash خاص في `ADREEM_WEB_LEDGER_TOKEN_HASHES`، وربط Telegram خاص في `ADREEM_TELEGRAM_LEDGER_IDS`. لا تعطي مستخدمين مختلفين نفس `ledgerId`.
 
+## إضافة مستخدم Telegram من البوت
+
+اضبط في `adreem.env`:
+
+```text
+ADREEM_TELEGRAM_ADMIN_IDS=YOUR_TELEGRAM_ID
+ADREEM_TELEGRAM_USERS_FILE=/home/argaz/apps/adreem/adreem-telegram-users.json
+```
+
+الأوامر من داخل البوت:
+
+```text
+/myid
+/users
+/adduser TELEGRAM_ID LEDGER_ID
+```
+
+مثال:
+
+```text
+/adduser 555 saeed-book
+```
+
+أي مستخدم غير مضاف لا يستطيع الدخول للدفتر، لكنه يرى Telegram ID الخاص به فقط حتى يرسله لك. لا تفعّل وضع "الجميع مسموح" للدفتر المالي؛ هذا يكسر العزل.
+
 ## systemd
 
 المسارات القياسية المقترحة:

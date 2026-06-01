@@ -22,6 +22,8 @@
 - تحديث env الحقيقي على Contabo: تحويل `ADREEM_WEB_LEDGER_TOKENS` إلى تعليق، وإضافة `ADREEM_WEB_LEDGER_TOKEN_HASHES` و`ADREEM_RUNTIME_TEST_TOKEN` مع backup.
 - تصحيح remote السيرفر إلى `https://github.com/aneerabee/adreem.git`.
 - إضافة أداة `npm run ops:create-ledger-access` لتوليد دفتر مستقل لكل مستخدم: `ledgerId`، رابط ويب خاص، hash للـ env، وربط Telegram اختياري.
+- إضافة سجل مستخدمي Telegram ديناميكي: صاحب النظام يستطيع إضافة مستخدم مستقل من البوت عبر `/adduser TELEGRAM_ID LEDGER_ID` بدون تعديل env في كل مرة.
+- المستخدم غير المضاف لا يدخل الدفتر، لكنه يرى Telegram ID الخاص به فقط ليرسله لصاحب النظام.
 - توسيع اختبارات توازي الويب والبوت:
   - تحويل دينار.
   - تحويل دولار.
@@ -126,6 +128,7 @@
 - [x] فصل web tokens عن الدفاتر عبر API، ودعم hash بدل التوكن الخام.
 - [x] تحويل env الحقيقي على السيرفر إلى `ADREEM_WEB_LEDGER_TOKEN_HASHES` بدل `ADREEM_WEB_LEDGER_TOKENS`.
 - [x] إضافة أداة توليد وصول دفتر مستقل حتى لا تتم إضافة المستخدمين يدويًا بشكل عشوائي.
+- [x] إضافة أوامر بوت لإدارة المستخدمين المستقلين: `/myid` و`/users` و`/adduser`.
 - [ ] اختبار قبول نهائي من الويب والبوت والهاتف بحركة حقيقية.
 - [ ] Release tag وbackup قبل الاستخدام الحقيقي.
 - [ ] مراقبة أول 24 ساعة بعد أول حركة حقيقية.

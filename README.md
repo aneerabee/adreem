@@ -37,9 +37,27 @@ npm run bot:adreem
 
 - `TELEGRAM_BOT_TOKEN`
 - `ADREEM_TELEGRAM_USER_IDS` أو `ADREEM_TELEGRAM_USER_ID`
+- `ADREEM_TELEGRAM_ADMIN_IDS` حتى يستطيع صاحب النظام إضافة مستخدمين مستقلين من داخل البوت
 - `ADREEM_TELEGRAM_LEDGER_IDS` عند وجود أكثر من مستخدم، مثل `user-id=main,user-id-2=second-book`
+- `ADREEM_TELEGRAM_USERS_FILE` لحفظ المستخدمين المضافين من البوت، مثل `/home/argaz/apps/adreem/adreem-telegram-users.json`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+
+أوامر إدارة المستخدمين داخل البوت:
+
+```text
+/myid
+/users
+/adduser TELEGRAM_ID LEDGER_ID
+```
+
+مثال:
+
+```text
+/adduser 555 saeed-book
+```
+
+لا تجعل البوت مفتوحًا للجميع. أي مستخدم غير مضاف يرى رقمه فقط، وأنت تضيفه إلى دفتر مستقل من الأمر أعلاه.
 
 ## API الويب المعزول
 
