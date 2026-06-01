@@ -10,11 +10,10 @@ import {
 export function mainMenuKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '+ إدخال حركة', callback_data: 'main:movement', style: 'success' }],
-      [{ text: '+ حساب جديد', callback_data: 'main:account', style: 'primary' }],
-      [{ text: '= الأرصدة', callback_data: 'main:accounts', style: 'primary' }, { text: 'سجل اليوم', callback_data: 'main:today', style: 'primary' }],
+      [{ text: '+ إدخال', callback_data: 'main:movement', style: 'success' }, { text: '= الأرصدة', callback_data: 'main:accounts', style: 'primary' }],
       [{ text: '≡ السجل', callback_data: 'main:history' }, { text: '! مراجعة', callback_data: 'main:review' }],
-      [{ text: 'بحث عن حساب', callback_data: 'main:search' }],
+      [{ text: '+ حساب جديد', callback_data: 'main:account', style: 'primary' }],
+      [{ text: 'سجل اليوم', callback_data: 'main:today' }, { text: 'بحث عن حساب', callback_data: 'main:search' }],
     ],
   }
 }
@@ -152,7 +151,7 @@ export function noteKeyboard() {
 export function confirmKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: 'تأكيد وحفظ', callback_data: 'mv:confirm', style: 'success' }],
+      [{ text: 'تأكيد وحفظ الحركة', callback_data: 'mv:confirm', style: 'success' }],
       [{ text: '↩️ تعديل', callback_data: 'mv:back', style: 'primary' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }],
     ],
   }

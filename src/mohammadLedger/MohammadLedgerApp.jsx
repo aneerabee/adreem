@@ -90,7 +90,8 @@ const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
 
 const accountGroupTabs = [
-  { key: 'people', label: 'مالي والناس', title: 'مالي والناس' },
+  { key: 'people', label: 'الناس', title: 'الناس' },
+  { key: 'money', label: 'مالي', title: 'مالي' },
   { key: 'assets', label: 'أصول', title: 'الأصول' },
   { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
   { key: 'review', label: 'مراجعة', title: 'مراجعة' },
@@ -1127,6 +1128,8 @@ export default function MohammadLedgerApp() {
   const [historyType, setHistoryType] = useState('')
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyAccountId, setHistoryAccountId] = useState('')
+  const [accountQuery, setAccountQuery] = useState('')
+  const [showZeroAccounts, setShowZeroAccounts] = useState(false)
   const todayPanelRef = useRef(null)
 
   useEffect(() => {
@@ -1828,25 +1831,71 @@ export default function MohammadLedgerApp() {
     const activeGroup = accountGroupTabs.find((group) => group.key === activeAccountGroup) || accountGroupTabs[0]
     const moneyRows = balancesByKind.money || []
     const peopleRows = balancesByKind.people || []
-    const peoplePositive = peopleRows.filter((bucket) => Math.round(bucket.dinar) > 0).sort(compareBalanceBuckets)
-    const peopleNegative = peopleRows.filter((bucket) => Math.round(bucket.dinar) < 0).sort(compareBalanceBuckets)
-    const peopleZero = peopleRows.filter((bucket) => !nonZero(bucket)).sort(compareBalanceBuckets)
+    const normalizedAccountQuery = accountQuery.trim().toLowerCase()
+    const accountMatchesQuery = (bucket) => {
+      if (!normalizedAccountQuery) return true
+      const haystack = `${bucket.account.ownerName} ${bucket.account.subAccountName} ${bucket.account.legacyName || ''}`.toLowerCase()
+      return haystack.includes(normalizedAccountQuery)
+    }
+    const filterRows = (rows) => rows.filter(accountMatchesQuery)
+    const peoplePositive = filterRows(peopleRows).filter((bucket) => Math.round(bucket.dinar) > 0).sort(compareBalanceBuckets)
+    const peopleNegative = filterRows(peopleRows).filter((bucket) => Math.round(bucket.dinar) < 0).sort(compareBalanceBuckets)
+    const peopleZero = filterRows(peopleRows).filter((bucket) => !nonZero(bucket)).sort(compareBalanceBuckets)
     const accountRowsByGroup = {
-      people: [...moneyRows, ...peoplePositive, ...peopleNegative, ...peopleZero],
-      assets: balancesByKind.assets || [],
-      expenses: balancesByKind.expenses || [],
-      review: balancesByKind.review || [],
+      people: [...peoplePositive, ...peopleNegative, ...(showZeroAccounts ? peopleZero : [])],
+      money: filterRows(moneyRows),
+      assets: filterRows(balancesByKind.assets || []),
+      expenses: filterRows(balancesByKind.expenses || []),
+      review: filterRows(balancesByKind.review || []),
     }
     const rows = accountRowsByGroup[activeGroup.key] || []
     return (
-      <section className="ml3-panel">
+      <section className="ml3-panel ml3-balances-surface">
         <div className="ml3-panel-head">
           <div>
             <h2>الأرصدة</h2>
-            <p>{formatCount(rows.length)} عنصر</p>
+            <p>{activeGroup.title} · {formatCount(rows.length)} عنصر</p>
           </div>
           <span>{formatCount(balances.length)}</span>
         </div>
+
+        <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة">
+          <button type="button" className="is-money" onClick={() => setActiveAccountGroup('money')}>
+            <span>مالي</span>
+            <strong>{money(totals.cash + totals.bank)}</strong>
+          </button>
+          <button type="button" className="is-positive" onClick={() => setActiveAccountGroup('people')}>
+            <span>أقبض</span>
+            <strong>{money(totals.peopleOweMe)}</strong>
+          </button>
+          <button type="button" className="is-negative" onClick={() => setActiveAccountGroup('people')}>
+            <span>أدفع</span>
+            <strong>{money(totals.iOwePeople)}</strong>
+          </button>
+          <button type="button" className="is-review" onClick={() => setActiveAccountGroup('review')}>
+            <span>مراجعة</span>
+            <strong>{formatCount(accountRowsByGroup.review.length)}</strong>
+          </button>
+        </div>
+
+        <div className="ml3-account-toolbar">
+          <label>
+            بحث
+            <input
+              value={accountQuery}
+              onChange={(event) => setAccountQuery(event.target.value)}
+              placeholder="اسم، كاش، مصرف..."
+            />
+          </label>
+          <button
+            type="button"
+            className={showZeroAccounts ? 'is-active' : ''}
+            onClick={() => setShowZeroAccounts((current) => !current)}
+          >
+            صفر · {formatCount(peopleZero.length)}
+          </button>
+        </div>
+
         <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
           {accountGroupTabs.map((group) => (
             <button
@@ -1862,11 +1911,12 @@ export default function MohammadLedgerApp() {
         </div>
         {activeGroup.key === 'people' ? (
           <div className="ml3-account-sections">
-            <AccountList title="مالي" rows={moneyRows} onOpen={setSelectedAccountId} embedded />
             <AccountList title="أقبض منهم" rows={peoplePositive} onOpen={setSelectedAccountId} embedded />
             <AccountList title="أدفع لهم" rows={peopleNegative} onOpen={setSelectedAccountId} embedded />
-            <AccountList title="صفر" rows={peopleZero} onOpen={setSelectedAccountId} embedded />
+            {showZeroAccounts ? <AccountList title="صفر" rows={peopleZero} onOpen={setSelectedAccountId} embedded /> : null}
           </div>
+        ) : activeGroup.key === 'money' ? (
+          <AccountList title="مالي عندي" rows={rows} onOpen={setSelectedAccountId} embedded />
         ) : (
           <AccountList
             title={activeGroup.title}
@@ -2056,6 +2106,12 @@ export default function MohammadLedgerApp() {
 
   const storageText = storageTextForStatus(saveStatus, storageMode)
   const activeSectionTitle = sectionTitles[activeSection] || 'ADREEM'
+  const movementReceipt = [
+    { key: 'type', label: 'الحركة', value: movementLabels[movementDraft.type] },
+    { key: 'amount', label: 'المبلغ', value: movementDraft.amount ? money(movementDraft.amount, movementConfig.currency || movementDraft.currency) : 'لم يدخل' },
+    { key: 'source', label: movementConfig.sourceLabel || 'من', value: draftSourceAccount ? accountLabel(draftSourceAccount) : (movementSourceRequired ? 'اختر' : 'بدون') },
+    { key: 'destination', label: movementConfig.destinationLabel || 'إلى', value: draftDestinationAccount ? accountLabel(draftDestinationAccount) : (movementConfig.needsDestination ? 'اختر' : 'بدون') },
+  ]
 
   return (
     <main className="ml3-app ml3-pocket-app" dir="rtl">
@@ -2135,6 +2191,40 @@ export default function MohammadLedgerApp() {
                 <span>مراجعة</span>
                 <strong>{formatCount(reviewItems.length)}</strong>
               </button>
+            </section>
+            <section className="ml3-receipt-strip" aria-label="إيصال الحركة الحالي">
+              {activeEntryMode === 'movement' ? (
+                movementReceipt.map((item) => (
+                  <button
+                    type="button"
+                    key={item.key}
+                    onClick={() => {
+                      const targetStep = {
+                        type: MOVEMENT_ENTRY_STEPS.TYPE,
+                        amount: MOVEMENT_ENTRY_STEPS.AMOUNT,
+                        source: MOVEMENT_ENTRY_STEPS.SOURCE,
+                        destination: MOVEMENT_ENTRY_STEPS.DESTINATION,
+                      }[item.key]
+                      const targetIndex = visibleMovementSteps.indexOf(targetStep)
+                      if (targetIndex >= 0 && targetIndex <= currentMovementStepIndex) editMovementStep(targetStep)
+                    }}
+                  >
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </button>
+                ))
+              ) : (
+                <>
+                  <button type="button">
+                    <span>التصنيف</span>
+                    <strong>{selectedAccountPreset.title}</strong>
+                  </button>
+                  <button type="button">
+                    <span>الاسم</span>
+                    <strong>{accountDraftNameValue || 'اكتب الاسم'}</strong>
+                  </button>
+                </>
+              )}
             </section>
             {feedback ? <div className="ml3-feedback">{feedback}</div> : null}
             {pendingUndo ? (

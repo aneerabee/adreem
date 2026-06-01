@@ -99,7 +99,7 @@ function typeTag(account) {
 }
 
 export function mainMenuText(summary = null) {
-  const lines = ['<b>ADREEM</b>', '<code>Ledger OS · Telegram</code>']
+  const lines = ['<b>ADREEM</b>', '<code>إدخال سريع · أرصدة · سجل · مراجعة</code>']
   if (summary) {
     lines.push('')
     lines.push(`<blockquote>${escapeHtml(`إدخال سريع جاهز\nسجل اليوم: ${summary.todayCount} حركة\nمراجعة: ${summary.reviewCount}`)}</blockquote>`)

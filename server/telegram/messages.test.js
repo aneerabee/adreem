@@ -54,7 +54,7 @@ describe('telegram account balance presentation', () => {
 describe('telegram movement presentation', () => {
   it('uses ADREEM as the bot ledger name', () => {
     expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('<b>ADREEM</b>')
-    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('Ledger OS · Telegram')
+    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('إدخال سريع · أرصدة · سجل · مراجعة')
     expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('سجل اليوم: 2 حركة')
   })
 
@@ -62,12 +62,12 @@ describe('telegram movement presentation', () => {
     const labels = mainMenuKeyboard().inline_keyboard.flat().map((button) => button.text)
 
     expect(labels).toEqual([
-      '+ إدخال حركة',
-      '+ حساب جديد',
+      '+ إدخال',
       '= الأرصدة',
-      'سجل اليوم',
       '≡ السجل',
       '! مراجعة',
+      '+ حساب جديد',
+      'سجل اليوم',
       'بحث عن حساب',
     ])
   })
