@@ -8485,3 +8485,1122 @@
     min-width: 0;
   }
 }
+
+/* ADREEM Clarity v6: hard reset from Pocket/Flow visual systems */
+.adreem-app {
+  --ad6-bg: #f7f6f1;
+  --ad6-surface: #fffefa;
+  --ad6-ink: #151715;
+  --ad6-muted: #6f746f;
+  --ad6-line: #dedbd2;
+  --ad6-line-strong: #a5a093;
+  --ad6-green: #147342;
+  --ad6-green-soft: #e8f4ec;
+  --ad6-red: #b63d35;
+  --ad6-red-soft: #fae9e6;
+  --ad6-blue: #246b82;
+  --ad6-blue-soft: #e8f2f4;
+  --ad6-amber: #9c6a1d;
+  --ad6-amber-soft: #f5eddf;
+  --ad6-shadow: 0 18px 44px rgba(21, 23, 21, 0.08);
+  min-height: 100dvh;
+  color: var(--ad6-ink);
+  background: var(--ad6-bg);
+  font-family: "Avenir Next", "SF Pro Text", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.adreem-app *,
+.adreem-app *::before,
+.adreem-app *::after {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+
+.adreem-app button,
+.adreem-app input,
+.adreem-app select,
+.adreem-app textarea {
+  font: inherit;
+}
+
+.adreem-shell {
+  width: min(1120px, calc(100vw - 28px));
+  margin: 0 auto;
+  padding: 14px 0 28px;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-areas:
+    "header header"
+    "nav alerts"
+    "nav body";
+  gap: 14px;
+}
+
+.adreem-header {
+  grid-area: header;
+  min-height: 74px;
+  border: 1px solid var(--ad6-line);
+  border-radius: 22px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: rgba(255, 254, 250, 0.92);
+  box-shadow: var(--ad6-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.adreem-brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.adreem-mark {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ad6-surface);
+  background: var(--ad6-ink);
+  flex: 0 0 auto;
+}
+
+.adreem-mark svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.adreem-brand span {
+  display: block;
+  color: var(--ad6-muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.adreem-brand h1 {
+  margin: 1px 0 0;
+  color: var(--ad6-ink);
+  font-size: 1.38rem;
+  line-height: 1.05;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.adreem-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.adreem-status b {
+  min-height: 34px;
+  border: 1px solid var(--ad6-line);
+  border-radius: 999px;
+  padding: 8px 12px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--ad6-ink);
+  background: var(--ad6-surface);
+  font-size: 0.76rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.adreem-status .ml3-save-state--saved {
+  color: #fff;
+  background: var(--ad6-green);
+}
+
+.adreem-status .ml3-save-state--local,
+.adreem-status .ml3-save-state--local-only {
+  color: #fff;
+  background: var(--ad6-red);
+}
+
+.adreem-nav {
+  grid-area: nav;
+  position: sticky;
+  top: 14px;
+  align-self: start;
+  border: 1px solid var(--ad6-line);
+  border-radius: 24px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  background: var(--ad6-surface);
+  box-shadow: var(--ad6-shadow);
+}
+
+.adreem-nav button {
+  min-width: 0;
+  min-height: 58px;
+  border: 0;
+  border-radius: 18px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--ad6-muted);
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+}
+
+.adreem-nav button span {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ad6-muted);
+  background: #f0eee7;
+  font-weight: 950;
+}
+
+.adreem-nav button strong {
+  color: inherit;
+  font-size: 0.85rem;
+  font-weight: 950;
+}
+
+.adreem-nav button.is-active {
+  color: #fff;
+  background: var(--ad6-ink);
+}
+
+.adreem-nav button.is-active span {
+  color: var(--ad6-ink);
+  background: var(--ad6-surface);
+}
+
+.adreem-app .ml3-alert-board {
+  grid-area: alerts;
+  border: 1px solid var(--ad6-line);
+  border-radius: 22px;
+  padding: 10px;
+  background: var(--ad6-surface);
+  box-shadow: none;
+}
+
+.adreem-app--entry .ml3-alert-board {
+  display: none;
+}
+
+.adreem-app .ml3-alert-title,
+.adreem-app .ml3-panel-head,
+.adreem-app .ml3-entry-head,
+.adreem-app .ml3-today-head,
+.adreem-app .ml3-ops-head {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adreem-app .ml3-alert-title strong,
+.adreem-app .ml3-panel-head h2,
+.adreem-app .ml3-entry-head h2,
+.adreem-app .ml3-today-head h2 {
+  margin: 0;
+  color: var(--ad6-ink);
+  font-size: 1.08rem;
+  line-height: 1.12;
+  font-weight: 950;
+}
+
+.adreem-app .ml3-panel-head p,
+.adreem-app .ml3-entry-head span,
+.adreem-app .ml3-alert-title span {
+  color: var(--ad6-muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.adreem-app .ml3-panel-head > span,
+.adreem-app .ml3-entry-head b,
+.adreem-app .ml3-today-head span {
+  border: 1px solid var(--ad6-line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--ad6-ink);
+  background: #f4f2eb;
+  font-size: 0.76rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.adreem-app .ml3-layout {
+  grid-area: body;
+  min-width: 0;
+  width: 100%;
+}
+
+.adreem-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 286px;
+  align-items: start;
+  gap: 14px;
+}
+
+.adreem-entry > .adreem-receipt {
+  grid-column: 2;
+  grid-row: 1 / span 5;
+}
+
+.adreem-entry > .ml3-entry-mode,
+.adreem-entry > .ml3-entry-card,
+.adreem-entry > .ml3-add-account,
+.adreem-entry > .ml3-today-panel,
+.adreem-entry > .ml3-feedback,
+.adreem-entry > .ml3-undo-banner,
+.adreem-entry > .ml3-edit-banner {
+  grid-column: 1;
+}
+
+.adreem-receipt {
+  border: 1px solid var(--ad6-line);
+  border-radius: 24px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  background: var(--ad6-surface);
+  box-shadow: var(--ad6-shadow);
+}
+
+.adreem-receipt-head {
+  border-bottom: 1px solid var(--ad6-line);
+  padding-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.adreem-receipt-head span {
+  color: var(--ad6-muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.adreem-receipt-head strong {
+  color: var(--ad6-ink);
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.adreem-receipt button {
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid var(--ad6-line);
+  border-radius: 0;
+  padding: 10px 2px;
+  display: grid;
+  gap: 4px;
+  color: var(--ad6-ink);
+  background: transparent;
+  text-align: start;
+}
+
+.adreem-receipt button:last-child {
+  border-bottom: 0;
+}
+
+.adreem-receipt button span {
+  color: var(--ad6-muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.adreem-receipt button strong {
+  color: var(--ad6-ink);
+  font-size: 0.92rem;
+  line-height: 1.2;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.adreem-app .ml3-entry-mode {
+  width: min(360px, 100%);
+  border: 1px solid var(--ad6-line);
+  border-radius: 999px;
+  padding: 5px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  background: var(--ad6-surface);
+}
+
+.adreem-app .ml3-entry-mode button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--ad6-muted);
+  background: transparent;
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.adreem-app .ml3-entry-mode button.is-active {
+  color: #fff;
+  background: var(--ad6-ink);
+}
+
+.adreem-app .ml3-entry-card,
+.adreem-app .ml3-add-account,
+.adreem-app .ml3-panel,
+.adreem-app .ml3-today-panel,
+.adreem-app .ml3-list-block,
+.adreem-app .ml3-review-card,
+.adreem-app .ml3-ops-card {
+  border: 1px solid var(--ad6-line);
+  border-radius: 24px;
+  padding: 14px;
+  background: var(--ad6-surface);
+  box-shadow: var(--ad6-shadow);
+}
+
+.adreem-app .ml3-step-meter {
+  height: 6px;
+  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20px, 1fr));
+  gap: 5px;
+}
+
+.adreem-app .ml3-step-meter span {
+  border-radius: 999px;
+  background: #e4e0d5;
+}
+
+.adreem-app .ml3-step-meter span.is-done {
+  background: color-mix(in srgb, var(--ad6-green) 42%, #e4e0d5);
+}
+
+.adreem-app .ml3-step-meter span.is-current {
+  background: var(--ad6-ink);
+}
+
+.adreem-app .ml3-step.is-done {
+  display: none;
+}
+
+.adreem-app .ml3-step {
+  border: 1px solid var(--ad6-line);
+  border-radius: 22px;
+  padding: 14px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.adreem-app .ml3-step.is-open {
+  border-color: var(--ad6-ink);
+}
+
+.adreem-app .ml3-step-head {
+  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.adreem-app .ml3-step-head span {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--ad6-ink);
+  font-size: 0.88rem;
+  font-weight: 950;
+}
+
+.adreem-app .ml3-step-head strong {
+  min-width: 0;
+  color: var(--ad6-ink);
+  font-size: 1.06rem;
+  line-height: 1.15;
+  font-weight: 950;
+}
+
+.adreem-app .ml3-step-head button,
+.adreem-app .ml3-step-next,
+.adreem-app .ml3-save,
+.adreem-app .ml3-add-account > button,
+.adreem-app .ml3-mini-action {
+  min-height: 42px;
+  border: 0;
+  border-radius: 14px;
+  padding: 9px 13px;
+  color: #fff;
+  background: var(--ad6-ink);
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.adreem-app .ml3-step-next,
+.adreem-app .ml3-save {
+  width: 100%;
+  margin-top: 10px;
+  background: var(--ad6-green);
+}
+
+.adreem-app button:disabled {
+  opacity: 0.45;
+}
+
+.adreem-app .ml3-quick-actions,
+.adreem-app .ml3-account-presets,
+.adreem-app .ml3-account-detail-choice,
+.adreem-app .ml3-extra-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 9px;
+}
+
+.adreem-app .ml3-action-choice,
+.adreem-app .ml3-account-presets button,
+.adreem-app .ml3-account-detail-choice button {
+  min-height: 54px;
+  border: 1px solid var(--ad6-line-strong);
+  border-radius: 18px;
+  padding: 10px 12px;
+  color: var(--ad6-ink);
+  background: #fff;
+  text-align: center;
+  box-shadow: none;
+}
+
+.adreem-app .ml3-action-choice.is-active,
+.adreem-app .ml3-account-presets button.is-active,
+.adreem-app .ml3-account-detail-choice button.is-active {
+  border-color: var(--ad6-ink);
+  color: #fff;
+  background: var(--ad6-ink);
+}
+
+.adreem-app .ml3-action-choice--expense:not(.is-active) {
+  border-color: color-mix(in srgb, var(--ad6-red) 55%, var(--ad6-line));
+}
+
+.adreem-app .ml3-action-choice--income:not(.is-active),
+.adreem-app .ml3-action-choice--transfer:not(.is-active) {
+  border-color: color-mix(in srgb, var(--ad6-green) 45%, var(--ad6-line));
+}
+
+.adreem-app label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: var(--ad6-muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.adreem-app input,
+.adreem-app select,
+.adreem-app textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--ad6-line-strong);
+  border-radius: 16px;
+  padding: 12px 13px;
+  color: var(--ad6-ink);
+  background: #fff;
+  font-size: 0.94rem;
+}
+
+.adreem-app textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.adreem-app input:focus,
+.adreem-app select:focus,
+.adreem-app textarea:focus {
+  outline: 3px solid color-mix(in srgb, var(--ad6-blue) 22%, transparent);
+  border-color: var(--ad6-blue);
+}
+
+.adreem-app .ml3-number-display {
+  min-height: 82px;
+  border: 1px solid var(--ad6-ink);
+  border-radius: 22px;
+  padding: 12px 14px;
+  display: grid;
+  align-content: center;
+  background: var(--ad6-ink);
+}
+
+.adreem-app .ml3-number-display span {
+  color: #d9ddd7;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.adreem-app .ml3-number-display strong {
+  color: #fff;
+  font-size: 2rem;
+  line-height: 1.05;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.adreem-app .ml3-number-pad {
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.adreem-app .ml3-number-pad button {
+  min-height: 48px;
+  border: 1px solid var(--ad6-line);
+  border-radius: 16px;
+  color: var(--ad6-ink);
+  background: #fff;
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.adreem-app .ml3-account-picker {
+  border: 1px solid var(--ad6-line);
+  border-radius: 22px;
+  padding: 10px;
+  background: #faf8f1;
+}
+
+.adreem-app .ml3-picked-account {
+  border: 1px solid var(--ad6-line-strong);
+  border-radius: 18px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  background: #fff;
+}
+
+.adreem-app .ml3-picked-account.is-selected {
+  border-color: var(--ad6-ink);
+  background: var(--ad6-ink);
+}
+
+.adreem-app .ml3-picked-account strong {
+  min-width: 0;
+  color: var(--ad6-ink);
+  font-size: 0.96rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.adreem-app .ml3-picked-account.is-selected strong {
+  color: #fff;
+}
+
+.adreem-app .ml3-picked-actions,
+.adreem-app .ml3-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.adreem-app .ml3-picked-actions button,
+.adreem-app .ml3-picker-chips button {
+  min-height: 34px;
+  border: 1px solid var(--ad6-line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--ad6-ink);
+  background: #fff;
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
+.adreem-app .ml3-picker-favorites,
+.adreem-app .ml3-picker-results {
+  margin-top: 9px;
+  display: grid;
+  gap: 7px;
+}
+
+.adreem-app .ml3-picker-favorites {
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+}
+
+.adreem-app .ml3-picker-favorites button,
+.adreem-app .ml3-picker-results button {
+  min-width: 0;
+  border: 1px solid var(--ad6-line);
+  border-radius: 16px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  color: var(--ad6-ink);
+  background: #fff;
+  text-align: start;
+}
+
+.adreem-app .ml3-picker-favorites button {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.adreem-app .ml3-picker-results button.is-selected {
+  border-color: var(--ad6-ink);
+  background: var(--ad6-green-soft);
+}
+
+.adreem-app .ml3-balance-chip,
+.adreem-app .ml3-account-values strong,
+.adreem-app .ml3-account-values span {
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 0.76rem;
+  font-weight: 950;
+  white-space: normal;
+  text-align: center;
+}
+
+.adreem-app .ml3-balance-chip.is-positive,
+.adreem-app .ml3-account-values.is-positive strong {
+  color: #fff;
+  background: var(--ad6-green);
+}
+
+.adreem-app .ml3-balance-chip.is-negative,
+.adreem-app .ml3-account-values.is-negative strong {
+  color: #fff;
+  background: var(--ad6-red);
+}
+
+.adreem-app .ml3-account-values.is-zero span {
+  color: var(--ad6-muted);
+  background: #f0eee7;
+}
+
+.adreem-app .ml3-today-panel {
+  margin-top: 14px;
+}
+
+.adreem-app .ml3-today-list,
+.adreem-app .ml3-history-list,
+.adreem-app .ml3-list {
+  display: grid;
+  gap: 8px;
+}
+
+.adreem-app .ml3-today-row,
+.adreem-app .ml3-history-row,
+.adreem-app .ml3-account-row {
+  min-width: 0;
+  border: 1px solid var(--ad6-line);
+  border-radius: 18px;
+  padding: 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  color: var(--ad6-ink);
+  background: #fff;
+  box-shadow: none;
+}
+
+.adreem-app .ml3-account-row.is-positive {
+  border-inline-start: 5px solid var(--ad6-green);
+}
+
+.adreem-app .ml3-account-row.is-negative {
+  border-inline-start: 5px solid var(--ad6-red);
+}
+
+.adreem-app .ml3-account-main {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  color: inherit;
+  background: transparent;
+  text-align: start;
+}
+
+.adreem-app .ml3-account-main strong,
+.adreem-app .ml3-history-main strong,
+.adreem-app .ml3-today-main strong {
+  color: var(--ad6-ink);
+  font-size: 0.96rem;
+  line-height: 1.2;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.adreem-app .ml3-account-main span,
+.adreem-app .ml3-history-main span,
+.adreem-app .ml3-today-main span,
+.adreem-app .ml3-history-row small,
+.adreem-app .ml3-today-row small {
+  color: var(--ad6-muted);
+  font-size: 0.76rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.adreem-app .ml3-account-values {
+  min-width: 94px;
+  display: grid;
+  justify-items: end;
+  align-content: center;
+  gap: 5px;
+}
+
+.adreem-app .ml3-balance-ledger,
+.adreem-app .ml3-account-switcher {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.adreem-app .ml3-account-switcher {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.adreem-app .ml3-balance-ledger button,
+.adreem-app .ml3-account-switcher button,
+.adreem-app .ml3-account-toolbar button {
+  min-height: 46px;
+  border: 1px solid var(--ad6-line);
+  border-radius: 16px;
+  padding: 8px 10px;
+  color: var(--ad6-ink);
+  background: #fff;
+  font-weight: 950;
+}
+
+.adreem-app .ml3-account-switcher button.is-active,
+.adreem-app .ml3-account-toolbar button.is-active {
+  color: #fff;
+  background: var(--ad6-ink);
+}
+
+.adreem-app .ml3-account-toolbar,
+.adreem-app .ml3-history-filters {
+  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.adreem-app .ml3-history-filters {
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(120px, 0.8fr));
+}
+
+.adreem-app .ml3-review-workspace {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.adreem-app .ml3-review-queue {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.adreem-app .ml3-review-ticket {
+  min-height: 58px;
+  border: 1px solid var(--ad6-line);
+  border-radius: 18px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 8px;
+  color: var(--ad6-ink);
+  background: #fff;
+  text-align: start;
+}
+
+.adreem-app .ml3-review-ticket.is-active {
+  border-color: var(--ad6-ink);
+  color: #fff;
+  background: var(--ad6-ink);
+}
+
+.adreem-app .ml3-review-ticket span,
+.adreem-app .ml3-review-ticket strong,
+.adreem-app .ml3-review-ticket b {
+  min-width: 0;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+
+.adreem-app .ml3-preview,
+.adreem-app .ml3-effect {
+  border: 1px solid var(--ad6-line);
+  border-radius: 18px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  background: #fff;
+}
+
+.adreem-app .ml3-effect {
+  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(78px, auto));
+  align-items: center;
+}
+
+.adreem-app .ml3-effect i {
+  color: var(--ad6-green);
+  font-style: normal;
+  font-weight: 950;
+}
+
+.adreem-app .ml3-ops-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.adreem-app .ml3-profile-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  padding: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(21, 23, 21, 0.56);
+  backdrop-filter: blur(8px);
+}
+
+.adreem-app .ml3-profile {
+  width: min(620px, 100%);
+  max-height: calc(100dvh - 28px);
+  overflow: auto;
+  border: 1px solid var(--ad6-line);
+  border-radius: 28px;
+  padding: 14px;
+  background: var(--ad6-surface);
+}
+
+.adreem-app .ml3-empty {
+  margin: 0;
+  border: 1px dashed var(--ad6-line-strong);
+  border-radius: 18px;
+  padding: 14px;
+  color: var(--ad6-muted);
+  background: #fff;
+  font-weight: 850;
+}
+
+.adreem-app .ml3-feedback,
+.adreem-app .ml3-undo-banner,
+.adreem-app .ml3-edit-banner {
+  border: 1px solid var(--ad6-line);
+  border-radius: 18px;
+  padding: 11px 13px;
+  color: var(--ad6-ink);
+  background: var(--ad6-amber-soft);
+}
+
+@media (max-width: 900px) {
+  .adreem-shell {
+    width: min(100vw - 16px, 720px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "alerts"
+      "body"
+      "nav";
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .adreem-header {
+    border-radius: 20px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .adreem-status {
+    justify-content: stretch;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .adreem-status b {
+    min-width: 0;
+  }
+
+  .adreem-nav {
+    position: fixed;
+    inset-inline: 8px;
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    z-index: 120;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-radius: 22px;
+  }
+
+  .adreem-nav button {
+    min-height: 56px;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 4px;
+    padding: 7px 4px;
+  }
+
+  .adreem-nav button span {
+    width: 25px;
+    height: 25px;
+  }
+
+  .adreem-nav button strong {
+    font-size: 0.72rem;
+  }
+
+  .adreem-entry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adreem-entry > .adreem-receipt,
+  .adreem-entry > .ml3-entry-mode,
+  .adreem-entry > .ml3-entry-card,
+  .adreem-entry > .ml3-add-account,
+  .adreem-entry > .ml3-today-panel,
+  .adreem-entry > .ml3-feedback,
+  .adreem-entry > .ml3-undo-banner,
+  .adreem-entry > .ml3-edit-banner {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .adreem-receipt {
+    order: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .adreem-receipt-head {
+    grid-column: 1 / -1;
+  }
+
+  .adreem-app .ml3-entry-mode {
+    order: 1;
+  }
+
+  .adreem-app .ml3-entry-card,
+  .adreem-app .ml3-add-account {
+    order: 3;
+  }
+
+  .adreem-app .ml3-today-panel {
+    order: 4;
+  }
+
+  .adreem-app .ml3-history-filters,
+  .adreem-app .ml3-review-workspace,
+  .adreem-app .ml3-ops-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 540px) {
+  .adreem-shell {
+    width: 100%;
+    padding-inline: 6px;
+  }
+
+  .adreem-header {
+    padding: 10px;
+  }
+
+  .adreem-brand h1 {
+    font-size: 1.18rem;
+  }
+
+  .adreem-mark {
+    width: 40px;
+    height: 40px;
+  }
+
+  .adreem-receipt,
+  .adreem-app .ml3-balance-ledger,
+  .adreem-app .ml3-account-switcher,
+  .adreem-app .ml3-account-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adreem-app .ml3-balance-ledger {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .adreem-app .ml3-account-switcher {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .adreem-app .ml3-entry-card,
+  .adreem-app .ml3-add-account,
+  .adreem-app .ml3-panel,
+  .adreem-app .ml3-today-panel,
+  .adreem-app .ml3-list-block {
+    border-radius: 20px;
+    padding: 11px;
+  }
+
+  .adreem-app .ml3-step {
+    border-radius: 18px;
+    padding: 11px;
+  }
+
+  .adreem-app .ml3-step-head {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+  }
+
+  .adreem-app .ml3-step-head span {
+    width: 32px;
+    height: 32px;
+  }
+
+  .adreem-app .ml3-step-head button {
+    min-height: 34px;
+    padding: 6px 8px;
+  }
+
+  .adreem-app .ml3-number-display {
+    min-height: 68px;
+  }
+
+  .adreem-app .ml3-number-display strong {
+    font-size: 1.55rem;
+  }
+
+  .adreem-app .ml3-picked-account,
+  .adreem-app .ml3-today-row,
+  .adreem-app .ml3-history-row,
+  .adreem-app .ml3-account-row,
+  .adreem-app .ml3-effect {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adreem-app .ml3-account-values,
+  .adreem-app .ml3-picked-actions {
+    min-width: 0;
+    justify-items: start;
+    justify-content: start;
+  }
+}

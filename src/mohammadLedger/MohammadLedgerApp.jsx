@@ -1388,13 +1388,6 @@ export default function MohammadLedgerApp() {
     })
   }
 
-  function focusTodayMovements() {
-    setActiveEntryMode('movement')
-    window.requestAnimationFrame(() => {
-      todayPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }
-
   function chooseMovementType(type) {
     const config = movementConfigFor(type)
     const defaults = movementDefaultsFor(type)
@@ -2114,11 +2107,11 @@ export default function MohammadLedgerApp() {
   ]
 
   return (
-    <main className={`ml3-app ml3-pocket-app ml3-flow-app ml3-flow-app--${activeSection}`} dir="rtl">
-      <section className="ml3-shell ml3-flow-shell">
-        <header className="ml3-topbar ml3-flow-hero">
-          <div className="ml3-brand ml3-flow-brand">
-            <span className="ml3-brand-mark" aria-hidden="true">
+    <main className={`adreem-app adreem-app--${activeSection}`} dir="rtl">
+      <section className="adreem-shell">
+        <header className="adreem-header">
+          <div className="adreem-brand">
+            <span className="adreem-mark" aria-hidden="true">
               <svg viewBox="0 0 32 32">
                 <rect x="7" y="5" width="18" height="22" rx="4" />
                 <path d="M12 12h8M12 16h8M12 20h5" />
@@ -2130,33 +2123,14 @@ export default function MohammadLedgerApp() {
               <h1>{activeSectionTitle}</h1>
             </div>
           </div>
-          <div className="ml3-top-actions ml3-flow-status">
+          <div className="adreem-status">
             <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
             <b>{formatCount(todayMovements.length)} اليوم</b>
             <b>{formatCount(reviewItems.length)} حل</b>
           </div>
         </header>
 
-        <section className="ml3-flow-command" aria-label="اختصارات الدفتر">
-          <button type="button" className="ml3-flow-command-main" onClick={() => setActiveSection('entry')}>
-            <span>المهمة الآن</span>
-            <strong>{activeEntryMode === 'movement' ? `${movementLabels[movementDraft.type]} · ${movementProgressText}` : 'حساب جديد'}</strong>
-          </button>
-          <button type="button" className="is-positive" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('people') }}>
-            <span>أقبض</span>
-            <strong>{money(totals.peopleOweMe)}</strong>
-          </button>
-          <button type="button" className="is-negative" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('people') }}>
-            <span>أدفع</span>
-            <strong>{money(totals.iOwePeople)}</strong>
-          </button>
-          <button type="button" className="is-money" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('money') }}>
-            <span>مالي</span>
-            <strong>{money(totals.cash + totals.bank)}</strong>
-          </button>
-        </section>
-
-        <nav className="ml3-tabs ml3-flow-nav" aria-label="أقسام الدفتر">
+        <nav className="adreem-nav" aria-label="أقسام الدفتر">
           {sectionTabs.map((tab) => (
             <button
               type="button"
@@ -2185,22 +2159,12 @@ export default function MohammadLedgerApp() {
 
         <section className={`ml3-layout ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
           {activeSection === 'entry' ? (
-          <aside className="ml3-entry ml3-flow-entry">
-            <section className="ml3-pocket-status ml3-flow-entry-rail" aria-label="ملخص سريع">
-              <button type="button" className="is-primary" onClick={() => setActiveEntryMode('movement')}>
-                <span>الآن</span>
-                <strong>{movementProgressText}</strong>
-              </button>
-              <button type="button" onClick={focusTodayMovements}>
-                <span>اليوم</span>
-                <strong>{formatCount(todayMovements.length)}</strong>
-              </button>
-              <button type="button" onClick={() => setActiveSection('review')}>
-                <span>مراجعة</span>
-                <strong>{formatCount(reviewItems.length)}</strong>
-              </button>
-            </section>
-            <section className="ml3-receipt-strip ml3-flow-receipt" aria-label="إيصال الحركة الحالي">
+          <aside className="adreem-entry">
+            <section className="adreem-receipt" aria-label="ملخص الحركة الحالي">
+              <div className="adreem-receipt-head">
+                <span>{activeEntryMode === 'movement' ? 'ملخص الحركة' : 'ملخص الحساب'}</span>
+                <strong>{activeEntryMode === 'movement' ? movementProgressText : 'جديد'}</strong>
+              </div>
               {activeEntryMode === 'movement' ? (
                 movementReceipt.map((item) => (
                   <button
