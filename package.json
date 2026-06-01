@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "bot:adreem": "node server/telegram/bot.js",
     "api:adreem": "node server/adreemApi.js",
-    "verify:runtime": "node server/ops/verifyAdreemRuntime.js"
+    "verify:runtime": "node server/ops/verifyAdreemRuntime.js",
+    "ops:create-ledger-access": "node server/ops/createLedgerAccess.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

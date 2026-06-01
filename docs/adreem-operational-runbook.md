@@ -63,6 +63,14 @@ ADREEM_RUNTIME_TEST_TOKEN=YOUR_LONG_TOKEN
 node -e "const {createHash}=require('crypto'); console.log(createHash('sha256').update('YOUR_LONG_TOKEN').digest('hex'))"
 ```
 
+أو استخدم أداة ADREEM لتوليد دفتر مستقل كامل:
+
+```bash
+npm run ops:create-ledger-access -- --ledger=saeed-book --telegram=555
+```
+
+قاعدة العزل: كل مستخدم يحصل على `ledgerId` خاص، وسطر hash خاص في `ADREEM_WEB_LEDGER_TOKEN_HASHES`، وربط Telegram خاص في `ADREEM_TELEGRAM_LEDGER_IDS`. لا تعطي مستخدمين مختلفين نفس `ledgerId`.
+
 ## systemd
 
 المسارات القياسية المقترحة:

@@ -21,6 +21,7 @@
 - تقوية API حتى لا يستطيع test repository تجاوز التحقق من token أثناء الاختبارات.
 - تحديث env الحقيقي على Contabo: تحويل `ADREEM_WEB_LEDGER_TOKENS` إلى تعليق، وإضافة `ADREEM_WEB_LEDGER_TOKEN_HASHES` و`ADREEM_RUNTIME_TEST_TOKEN` مع backup.
 - تصحيح remote السيرفر إلى `https://github.com/aneerabee/adreem.git`.
+- إضافة أداة `npm run ops:create-ledger-access` لتوليد دفتر مستقل لكل مستخدم: `ledgerId`، رابط ويب خاص، hash للـ env، وربط Telegram اختياري.
 - توسيع اختبارات توازي الويب والبوت:
   - تحويل دينار.
   - تحويل دولار.
@@ -51,7 +52,7 @@
 ## نتائج التحقق المؤكدة
 
 - فحص عزل API بعد دعم hashed tokens: `23` اختبارًا ناجحًا للـ API/repository/persistence.
-- `npm test`: نجح، `112` اختبارًا.
+- `npm test`: نجح، `113` اختبارًا.
 - `npm run lint`: نجح.
 - `npm run build`: نجح.
 - فحص Playwright للهاتف والكمبيوتر: لا يوجد horizontal overflow أو clipping في الإدخال/السجل، وفلاتر السجل ظاهرة، وربط المشروع/الأصل لا يظهر في التحويل.
@@ -124,6 +125,7 @@
 - [x] تطبيق التصميم الجديد المختار Pocket Ledger في الويب والبوت.
 - [x] فصل web tokens عن الدفاتر عبر API، ودعم hash بدل التوكن الخام.
 - [x] تحويل env الحقيقي على السيرفر إلى `ADREEM_WEB_LEDGER_TOKEN_HASHES` بدل `ADREEM_WEB_LEDGER_TOKENS`.
+- [x] إضافة أداة توليد وصول دفتر مستقل حتى لا تتم إضافة المستخدمين يدويًا بشكل عشوائي.
 - [ ] اختبار قبول نهائي من الويب والبوت والهاتف بحركة حقيقية.
 - [ ] Release tag وbackup قبل الاستخدام الحقيقي.
 - [ ] مراقبة أول 24 ساعة بعد أول حركة حقيقية.

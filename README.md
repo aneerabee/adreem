@@ -62,6 +62,14 @@ node -e "const {createHash}=require('crypto'); console.log(createHash('sha256').
 
 `ADREEM_WEB_LEDGER_TOKENS` ما زال مدعومًا مؤقتًا للتوافق، لكنه ليس الصيغة المعتمدة للدفاتر الجديدة.
 
+لإنشاء دفتر مستقل جديد مع رابط ويب خاص وخريطة Telegram آمنة:
+
+```bash
+npm run ops:create-ledger-access -- --ledger=saeed-book --telegram=555
+```
+
+الناتج يعطيك رابط الويب الخاص مرة واحدة، وسطر `ADREEM_WEB_LEDGER_TOKEN_HASHES` الذي يوضع في `adreem.env`، وسطر `ADREEM_TELEGRAM_LEDGER_IDS` عند وجود Telegram user id.
+
 في الإنتاج يجب ضبط `ADREEM_WEB_ALLOWED_ORIGIN` على رابط GitHub Pages الفعلي، مثل:
 
 ```text
