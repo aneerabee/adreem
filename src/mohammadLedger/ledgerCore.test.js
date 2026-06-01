@@ -5,6 +5,7 @@ import {
   MOVEMENT_STATUSES,
   MOVEMENT_TYPES,
   buildPostingEntries,
+  canCommitMovementEdit,
   createAccount,
   createOpeningMovements,
   formatBalanceMeaning,
@@ -327,6 +328,45 @@ describe('mohammad ledger core', () => {
     const afterVoid = getAccountBalance('omar-gold', mohammadAccountCatalog, [...openings, result.movement])
     expect(afterVoid.dinar).toBe(24500)
     expect(result.movement.status).toBe(MOVEMENT_STATUSES.VOIDED)
+  })
+
+  it('blocks replacing a posted movement with a review movement during edit', () => {
+    const accounts = [
+      createAccount({ id: 'cash', ownerName: 'أنا', subAccountName: 'كاش', type: ACCOUNT_TYPES.CASH, valueKind: 'cash', openingDinar: 1000 }),
+      createAccount({ id: 'person', ownerName: 'سعيد', subAccountName: 'كاش بيننا', type: ACCOUNT_TYPES.PERSON, valueKind: 'receivable' }),
+    ]
+    const openings = createOpeningMovements(accounts)
+    const posted = postMovement(
+      {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 400,
+        currency: CURRENCIES.DINAR,
+        sourceAccountId: 'cash',
+        destinationAccountId: 'person',
+      },
+      accounts,
+      openings,
+    )
+    const invalidEdit = postMovement(
+      {
+        ...posted,
+        amount: 5000,
+      },
+      accounts,
+      openings,
+    )
+    const validEdit = postMovement(
+      {
+        ...posted,
+        amount: 300,
+      },
+      accounts,
+      openings,
+    )
+
+    expect(invalidEdit.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(canCommitMovementEdit(posted, invalidEdit)).toBe(false)
+    expect(canCommitMovementEdit(posted, validEdit)).toBe(true)
   })
 
   it('calculates usd sale and purchase as different currency effects', () => {

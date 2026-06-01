@@ -453,6 +453,14 @@ export function voidMovement(movement, reason = '', voidedAt = isoNow()) {
   }
 }
 
+export function canCommitMovementEdit(originalMovement, candidateMovement) {
+  if (!originalMovement) return true
+  if (originalMovement.status === MOVEMENT_STATUSES.POSTED) {
+    return candidateMovement?.status === MOVEMENT_STATUSES.POSTED
+  }
+  return originalMovement.status === MOVEMENT_STATUSES.NEEDS_REVIEW
+}
+
 export function formatBalanceMeaning(account, amount) {
   const value = Math.round(asNumber(amount))
   const formatted = Math.abs(value).toLocaleString('en-US')

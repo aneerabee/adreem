@@ -28,11 +28,13 @@ import {
   MOVEMENT_STATUSES,
   MOVEMENT_TYPES,
   buildPostingEntries,
+  canCommitMovementEdit,
   createAccount,
   postMovement,
   previewMovement,
   summarizeBalances,
   validateAccount,
+  validateMovement,
   voidMovement,
 } from './ledgerCore'
 import {
@@ -1483,6 +1485,10 @@ export default function MohammadLedgerApp() {
       accounts,
       validationMovements,
     )
+    if (!canCommitMovementEdit(originalMovement, movement)) {
+      setFeedback(`لم يتم حفظ التعديل. أصلح الحركة أولًا حتى لا يتغير الرصيد: ${movement.validation.errors.map((error) => error.message).join(' ')}`)
+      return
+    }
     setMovements((current) =>
       originalMovement
         ? current.map((item) => (item.id === originalMovement.id ? movement : item))
@@ -1753,20 +1759,31 @@ export default function MohammadLedgerApp() {
 
   function mergeReviewAccount(sourceAccountId, targetAccountId) {
     if (!targetAccountId || sourceAccountId === targetAccountId) return
+    const candidateMovements = movements.map((movement) => ({
+      ...movement,
+      sourceAccountId: movement.sourceAccountId === sourceAccountId ? targetAccountId : movement.sourceAccountId,
+      destinationAccountId: movement.destinationAccountId === sourceAccountId ? targetAccountId : movement.destinationAccountId,
+      mergedFromAccountId: movement.sourceAccountId === sourceAccountId || movement.destinationAccountId === sourceAccountId ? sourceAccountId : movement.mergedFromAccountId,
+    }))
+    const candidateAccounts = accounts.map((account) =>
+      account.id === sourceAccountId
+        ? { ...account, status: ACCOUNT_STATUSES.INACTIVE, mergedIntoAccountId: targetAccountId, updatedAt: new Date().toISOString() }
+        : account,
+    )
+    const invalidMovement = candidateMovements.find((movement) => {
+      if (movement.status !== MOVEMENT_STATUSES.POSTED) return false
+      if (movement.sourceAccountId !== targetAccountId && movement.destinationAccountId !== targetAccountId) return false
+      return !validateMovement(movement, candidateAccounts, candidateMovements.filter((item) => item.id !== movement.id)).ok
+    })
+    if (invalidMovement) {
+      setFeedback('لم يتم الدمج. الحساب المختار لا يناسب عملة أو نوع بعض الحركات المرتبطة.')
+      return
+    }
     setMovements((current) =>
-      current.map((movement) => ({
-        ...movement,
-        sourceAccountId: movement.sourceAccountId === sourceAccountId ? targetAccountId : movement.sourceAccountId,
-        destinationAccountId: movement.destinationAccountId === sourceAccountId ? targetAccountId : movement.destinationAccountId,
-        mergedFromAccountId: movement.sourceAccountId === sourceAccountId || movement.destinationAccountId === sourceAccountId ? sourceAccountId : movement.mergedFromAccountId,
-      })),
+      current.map((movement) => candidateMovements.find((candidate) => candidate.id === movement.id) || movement),
     )
     setAccounts((current) =>
-      current.map((account) =>
-        account.id === sourceAccountId
-          ? { ...account, status: ACCOUNT_STATUSES.INACTIVE, mergedIntoAccountId: targetAccountId, updatedAt: new Date().toISOString() }
-          : account,
-      ),
+      current.map((account) => candidateAccounts.find((candidate) => candidate.id === account.id) || account),
     )
     setFeedback('تم دمج الحساب.')
   }
