@@ -51,8 +51,16 @@ npm run api:adreem
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `ADREEM_WEB_LEDGER_TOKENS` بصيغة `token-rabee=main,token-saeed=saeed-book`
+- `ADREEM_WEB_LEDGER_TOKEN_HASHES` بصيغة `sha256-token-rabee=main,sha256-token-saeed=saeed-book`
 - اختياريًا: `ADREEM_API_PORT` و `ADREEM_WEB_ALLOWED_ORIGIN`
+
+لإنشاء hash للتوكن:
+
+```bash
+node -e "const {createHash}=require('crypto'); console.log(createHash('sha256').update('token-rabee').digest('hex'))"
+```
+
+`ADREEM_WEB_LEDGER_TOKENS` ما زال مدعومًا مؤقتًا للتوافق، لكنه ليس الصيغة المعتمدة للدفاتر الجديدة.
 
 في الإنتاج يجب ضبط `ADREEM_WEB_ALLOWED_ORIGIN` على رابط GitHub Pages الفعلي، مثل:
 
@@ -73,7 +81,7 @@ https://aneerabee.github.io/adreem/#ledger_token=token-rabee
 - شغّل API خلف HTTPS فقط.
 - شغّله بـ `NODE_ENV=production`.
 - لا تضع token داخل `VITE_ADREEM_API_URL`; هذا المتغير URL عام فقط.
-- استخدم tokens طويلة وعشوائية في `ADREEM_WEB_LEDGER_TOKENS` وغيّرها عند مشاركة الرابط مع جهاز غير موثوق.
+- استخدم tokens طويلة وعشوائية، وضع hash فقط داخل `ADREEM_WEB_LEDGER_TOKEN_HASHES`.
 - ضع rate limiting في طبقة reverse proxy أو firewall أمام API.
 
 ## التخزين

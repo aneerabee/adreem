@@ -18,6 +18,9 @@
 - إبقاء `ADREEM_WEB_LEDGER_TOKENS` مؤقتًا للتوافق فقط، وليس كصيغة معتمدة للدفاتر الجديدة.
 - تحديث فحص التشغيل `verify:runtime` ليستوعب التوكنات المشفرة، مع `ADREEM_RUNTIME_TEST_TOKEN` لاختبار `/api/ledger` من السيرفر.
 - إضافة اختبار يثبت أن توكنين مختلفين يذهبان إلى دفترين منفصلين قبل الوصول إلى repository.
+- تقوية API حتى لا يستطيع test repository تجاوز التحقق من token أثناء الاختبارات.
+- تحديث env الحقيقي على Contabo: تحويل `ADREEM_WEB_LEDGER_TOKENS` إلى تعليق، وإضافة `ADREEM_WEB_LEDGER_TOKEN_HASHES` و`ADREEM_RUNTIME_TEST_TOKEN` مع backup.
+- تصحيح remote السيرفر إلى `https://github.com/aneerabee/adreem.git`.
 - توسيع اختبارات توازي الويب والبوت:
   - تحويل دينار.
   - تحويل دولار.
@@ -37,7 +40,7 @@
 - إضافة فلترة السجل بالحساب.
 - إضافة تنبيه حركة كبيرة وتنبيه تكرار محتمل من core قابل للاختبار.
 - إضافة snapshot قبل ترحيل legacy وجعل النسخ المحلية تعمل حتى لو كانت قائمة النسخ القديمة فاسدة.
-- نشر الويب على GitHub Pages. آخر نسخة ويب مؤكدة الآن `ffc7588`، وآخر نسخة سيرفر مؤكدة من فحص سابق `758cfeb` إلى أن يتم دخول SSH صحيح وتحديث Contabo.
+- نشر الويب على GitHub Pages. آخر نسخة سيرفر مؤكدة الآن `59a56ff` بعد دخول SSH وتحديث Contabo.
 - تحديث Command Center بعد تحقق الروابط والسيرفر.
 - تثبيت هوية ADREEM بعد فصل الريبو: `/Users/rabeeshaban/Developer/adreem` و `aneerabee/adreem` و GitHub Pages `/adreem/`.
 - تطبيق اتجاه Pocket Ledger: الهاتف أولًا، إدخال خطوة واحدة، كروت مختصرة، نص أقل، وتمييز بصري أوضح للحسابات والحركات.
@@ -47,14 +50,14 @@
 
 ## نتائج التحقق المؤكدة
 
-- فحص عزل API بعد دعم hashed tokens: `22` اختبارًا ناجحًا للـ API/repository/persistence.
-- `npm test`: آخر فحص شامل سابق نجح، ويجب إعادة تشغيله كاملًا قبل release.
+- فحص عزل API بعد دعم hashed tokens: `23` اختبارًا ناجحًا للـ API/repository/persistence.
+- `npm test`: نجح، `112` اختبارًا.
 - `npm run lint`: نجح.
 - `npm run build`: نجح.
 - فحص Playwright للهاتف والكمبيوتر: لا يوجد horizontal overflow أو clipping في الإدخال/السجل، وفلاتر السجل ظاهرة، وربط المشروع/الأصل لا يظهر في التحويل.
 - فحص Playwright بعد فلتر الحساب: 4 عناصر فلترة ظاهرة، ولا يوجد overflow أو clipping على الهاتف والكمبيوتر.
 - فحص Chrome/CDP للهاتف بعرض 390px: الإدخال، الأرصدة، الحركات، المراجعة بدون horizontal overflow.
-- فحص السيرفر: `adreem-api.service` و `adreem-bot.service` يعملان، و`npm run verify:runtime` نجح بعد تحميل `adreem.env`.
+- فحص السيرفر: `adreem-api.service` و `adreem-bot.service` يعملان، و`npm run verify:runtime` نجح بعد تحميل `adreem.env` بصيغة hashed web tokens.
 - محاولة تشغيل وكيلين مراجعة مستقلين لم تنجح بسبب امتلاء حد الوكلاء في الجلسة؛ التعويض الحالي يكون بفحوصات مستقلة محلية وبصرية.
 
 ## To-Do التنفيذ المتبقي
@@ -120,7 +123,7 @@
 - [x] تحديث Command Center بعد التحقق الحقيقي.
 - [x] تطبيق التصميم الجديد المختار Pocket Ledger في الويب والبوت.
 - [x] فصل web tokens عن الدفاتر عبر API، ودعم hash بدل التوكن الخام.
-- [ ] تحويل env الحقيقي على السيرفر إلى `ADREEM_WEB_LEDGER_TOKEN_HASHES` بدل `ADREEM_WEB_LEDGER_TOKENS` بعد دخول SSH.
+- [x] تحويل env الحقيقي على السيرفر إلى `ADREEM_WEB_LEDGER_TOKEN_HASHES` بدل `ADREEM_WEB_LEDGER_TOKENS`.
 - [ ] اختبار قبول نهائي من الويب والبوت والهاتف بحركة حقيقية.
 - [ ] Release tag وbackup قبل الاستخدام الحقيقي.
 - [ ] مراقبة أول 24 ساعة بعد أول حركة حقيقية.

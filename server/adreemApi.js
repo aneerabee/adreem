@@ -91,9 +91,9 @@ export function createAdreemApiHandler(env = process.env) {
   let testRepositoryFactory = null
 
   function repositoryForToken(token) {
-    if (testRepository) return testRepository
     const ledgerId = tokenHashMap.get(tokenHash(token)) || tokenMap.get(token)
     if (!ledgerId) return null
+    if (testRepository) return testRepository
     if (testRepositoryFactory) return testRepositoryFactory(ledgerId)
     if (!repositories.has(ledgerId)) {
       repositories.set(ledgerId, createLedgerRepository(env, { ledgerId }))
