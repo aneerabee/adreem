@@ -39,14 +39,29 @@ gh secret set VITE_ADREEM_API_URL -R aneerabee/adreem --body "https://your-adree
 
 `VITE_ADREEM_API_URL` يجب أن يكون رابط API فقط، بدون token وبدون أي مفتاح.
 
+لتمكين فحص التشغيل الكامل من السيرفر بدون وضع التوكن الخام في خريطة الدفاتر، ضع التوكن الحقيقي في:
+
+```text
+ADREEM_RUNTIME_TEST_TOKEN=YOUR_LONG_TOKEN
+```
+
+هذا المتغير يبقى على السيرفر فقط، ويستخدمه `npm run verify:runtime` لاختبار `/api/ledger`.
+
 ## الأمان أمام API
 
 - شغّل API بـ `NODE_ENV=production`.
 - اضبط `ADREEM_WEB_ALLOWED_ORIGIN=https://aneerabee.github.io`.
 - اجعل API خلف HTTPS فقط.
-- استخدم token طويل وعشوائي لكل دفتر داخل `ADREEM_WEB_LEDGER_TOKENS`.
+- استخدم token طويل وعشوائي لكل دفتر، وضع hash فقط داخل `ADREEM_WEB_LEDGER_TOKEN_HASHES`.
+- صيغة `ADREEM_WEB_LEDGER_TOKENS` ما زالت مدعومة مؤقتًا للتوافق، لكنها ليست الصيغة المعتمدة للدفاتر الجديدة.
 - ضع rate limiting في reverse proxy أو firewall لأن API نفسه بسيط ومباشر.
-- عند فقدان رابط token، غيّره في `ADREEM_WEB_LEDGER_TOKENS` وأعد تشغيل `adreem-api.service`.
+- عند فقدان رابط token، أنشئ token جديدًا، ضع hash الجديد في `ADREEM_WEB_LEDGER_TOKEN_HASHES`، وأعد تشغيل `adreem-api.service`.
+
+إنشاء hash للتوكن:
+
+```bash
+node -e "const {createHash}=require('crypto'); console.log(createHash('sha256').update('YOUR_LONG_TOKEN').digest('hex'))"
+```
 
 ## systemd
 

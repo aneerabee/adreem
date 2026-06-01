@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { createLedgerRepository } from './mohammadLedger/ledgerRepository.js'
 import { mergeLedgerStates } from '../src/mohammadLedger/ledgerState.js'
@@ -21,6 +22,22 @@ export function parseLedgerTokenMap(value = '') {
     .reduce((map, item) => {
       const [token, ledgerId] = item.split('=').map((part) => part?.trim())
       if (token && ledgerId) map.set(token, ledgerId)
+      return map
+    }, new Map())
+}
+
+export function tokenHash(token = '') {
+  return createHash('sha256').update(String(token || '').trim()).digest('hex')
+}
+
+export function parseLedgerTokenHashMap(value = '') {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .reduce((map, item) => {
+      const [hash, ledgerId] = item.split('=').map((part) => part?.trim())
+      if (/^[a-f0-9]{64}$/i.test(hash || '') && ledgerId) map.set(hash.toLowerCase(), ledgerId)
       return map
     }, new Map())
 }
@@ -67,14 +84,17 @@ function readJsonBody(req) {
 
 export function createAdreemApiHandler(env = process.env) {
   const tokenMap = parseLedgerTokenMap(env.ADREEM_WEB_LEDGER_TOKENS)
+  const tokenHashMap = parseLedgerTokenHashMap(env.ADREEM_WEB_LEDGER_TOKEN_HASHES)
   const repositories = new Map()
   const allowedOrigin = env.ADREEM_WEB_ALLOWED_ORIGIN || '*'
   let testRepository = null
+  let testRepositoryFactory = null
 
   function repositoryForToken(token) {
     if (testRepository) return testRepository
-    const ledgerId = tokenMap.get(token)
+    const ledgerId = tokenHashMap.get(tokenHash(token)) || tokenMap.get(token)
     if (!ledgerId) return null
+    if (testRepositoryFactory) return testRepositoryFactory(ledgerId)
     if (!repositories.has(ledgerId)) {
       repositories.set(ledgerId, createLedgerRepository(env, { ledgerId }))
     }
@@ -127,13 +147,16 @@ export function createAdreemApiHandler(env = process.env) {
   adreemApiHandler.__setRepositoryForTest = (repository) => {
     testRepository = repository
   }
+  adreemApiHandler.__setRepositoryFactoryForTest = (factory) => {
+    testRepositoryFactory = factory
+  }
 
   return adreemApiHandler
 }
 
 export function startAdreemApi(env = process.env) {
-  if (!env.ADREEM_WEB_LEDGER_TOKENS) {
-    throw new Error('Missing ADREEM_WEB_LEDGER_TOKENS. Example: token-for-rabee=main,token-for-user2=saeed-book')
+  if (!env.ADREEM_WEB_LEDGER_TOKEN_HASHES && !env.ADREEM_WEB_LEDGER_TOKENS) {
+    throw new Error('Missing ADREEM_WEB_LEDGER_TOKEN_HASHES. Example: sha256-token-hash=main')
   }
   if (!env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('ADREEM web API requires SUPABASE_SERVICE_ROLE_KEY.')

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { createAdreemApiHandler, parseLedgerTokenMap, tokenFromAuthHeader } from './adreemApi.js'
+import {
+  createAdreemApiHandler,
+  parseLedgerTokenHashMap,
+  parseLedgerTokenMap,
+  tokenFromAuthHeader,
+  tokenHash,
+} from './adreemApi.js'
 
 function createMockResponse() {
   return {
@@ -43,6 +49,15 @@ describe('ADREEM web API auth helpers', () => {
     expect(map.get('saeed-secret')).toBe('saeed-book')
   })
 
+  it('parses hashed web tokens without storing the raw token in config', () => {
+    const rabeeHash = tokenHash('rabee-secret')
+    const map = parseLedgerTokenHashMap(`${rabeeHash}=main,not-a-real-hash=ignored`)
+
+    expect(map.get(rabeeHash)).toBe('main')
+    expect([...map.keys()].join(',')).not.toContain('rabee-secret')
+    expect(map.has('not-a-real-hash')).toBe(false)
+  })
+
   it('extracts bearer tokens safely', () => {
     expect(tokenFromAuthHeader('Bearer abc123')).toBe('abc123')
     expect(tokenFromAuthHeader('bearer token with spaces')).toBe('token with spaces')
@@ -51,7 +66,7 @@ describe('ADREEM web API auth helpers', () => {
 
   it('rejects unknown web tokens before any ledger access', async () => {
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKENS: 'token-a=main',
+      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -66,6 +81,35 @@ describe('ADREEM web API auth helpers', () => {
 
     expect(response.statusCode).toBe(401)
     expect(JSON.parse(response.body).error).toMatch(/Invalid ledger token/)
+  })
+
+  it('routes different hashed web tokens to isolated repositories', async () => {
+    const api = createAdreemApiHandler({
+      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=rabee,${tokenHash('token-b')}=saeed`,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const requestedLedgers = []
+    api.__setRepositoryFactoryForTest?.((ledgerId) => {
+      requestedLedgers.push(ledgerId)
+      return {
+        async load() {
+          return { state: { ledgerId, accounts: [], movements: [] }, source: 'test' }
+        },
+      }
+    })
+
+    for (const token of ['token-a', 'token-b']) {
+      const response = createMockResponse()
+      await api({
+        method: 'GET',
+        url: '/api/ledger',
+        headers: { authorization: `Bearer ${token}` },
+      }, response)
+      expect(response.statusCode).toBe(200)
+    }
+
+    expect(requestedLedgers).toEqual(['rabee', 'saeed'])
   })
 
   it('merges PUT state with the latest repository state instead of replacing arrays', async () => {

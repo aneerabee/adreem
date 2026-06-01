@@ -5,12 +5,17 @@ const required = [
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
   'ADREEM_WEB_ALLOWED_ORIGIN',
-  'ADREEM_WEB_LEDGER_TOKENS',
   'TELEGRAM_BOT_TOKEN',
 ]
 
 function envStatus() {
-  return required.map((key) => ({ key, ok: Boolean(process.env[key]) }))
+  return [
+    ...required.map((key) => ({ key, ok: Boolean(process.env[key]) })),
+    {
+      key: 'ADREEM_WEB_LEDGER_TOKEN_HASHES or ADREEM_WEB_LEDGER_TOKENS',
+      ok: Boolean(process.env.ADREEM_WEB_LEDGER_TOKEN_HASHES || process.env.ADREEM_WEB_LEDGER_TOKENS),
+    },
+  ]
 }
 
 function requestJson(url, options = {}) {
@@ -39,6 +44,7 @@ function requestJson(url, options = {}) {
 }
 
 function firstLedgerToken() {
+  if (process.env.ADREEM_RUNTIME_TEST_TOKEN) return process.env.ADREEM_RUNTIME_TEST_TOKEN
   const raw = String(process.env.ADREEM_WEB_LEDGER_TOKENS || '')
   const first = raw.split(',').map((item) => item.trim()).filter(Boolean)[0] || ''
   return first.split('=')[0] || ''
@@ -58,6 +64,8 @@ async function main() {
         authorization: `Bearer ${token}`,
       },
     })
+  } else {
+    checks.ledgerRead = { ok: true, skipped: true, reason: 'Set ADREEM_RUNTIME_TEST_TOKEN to test ledger read with hashed web tokens.' }
   }
   const failedEnv = checks.env.filter((item) => !item.ok).map((item) => item.key)
   const ok = !failedEnv.length && checks.apiHealth.ok && (!checks.ledgerRead || checks.ledgerRead.ok)
