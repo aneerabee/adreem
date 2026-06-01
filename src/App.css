@@ -10047,3 +10047,292 @@
     min-height: 220px;
   }
 }
+
+/* ADREEM stability pass: active/hover states must not resize or visually jump cards. */
+.adreem-app button {
+  transition:
+    border-color 160ms var(--ad6-ease),
+    background-color 160ms var(--ad6-ease),
+    color 160ms var(--ad6-ease),
+    box-shadow 160ms var(--ad6-ease),
+    opacity 160ms var(--ad6-ease);
+}
+
+.adreem-app button:not(:disabled):active,
+.adreem-nav button.is-active,
+.adreem-app .ml3-entry-mode button.is-active,
+.adreem-app .ml3-action-choice.is-active,
+.adreem-app .ml3-account-presets button.is-active,
+.adreem-app .ml3-account-detail-choice button.is-active,
+.adreem-app .ml3-picked-account.is-selected,
+.adreem-app .ml3-review-ticket.is-active {
+  transform: none;
+  animation: none;
+}
+
+.adreem-nav button,
+.adreem-app .ml3-entry-mode button,
+.adreem-app .ml3-action-choice,
+.adreem-app .ml3-account-presets button,
+.adreem-app .ml3-account-detail-choice button,
+.adreem-app .ml3-balance-ledger button,
+.adreem-app .ml3-account-switcher button,
+.adreem-app .ml3-picker-favorites button,
+.adreem-app .ml3-picker-results button,
+.adreem-app .ml3-today-row,
+.adreem-app .ml3-history-row,
+.adreem-app .ml3-account-row,
+.adreem-app .ml3-review-ticket {
+  flex-shrink: 0;
+}
+
+.adreem-app .ml3-action-choice:not(.is-active):hover,
+.adreem-app .ml3-account-presets button:not(.is-active):hover,
+.adreem-app .ml3-account-detail-choice button:not(.is-active):hover,
+.adreem-app .ml3-today-row:hover,
+.adreem-app .ml3-history-row:hover,
+.adreem-app .ml3-account-row:hover {
+  transform: none;
+}
+
+.adreem-nav button {
+  height: 58px;
+}
+
+.adreem-app .ml3-entry-mode {
+  height: 54px;
+}
+
+.adreem-app .ml3-entry-mode button {
+  height: 42px;
+}
+
+.adreem-app .ml3-quick-actions {
+  grid-auto-rows: 56px;
+}
+
+.adreem-app .ml3-action-choice {
+  min-height: 56px;
+  height: 56px;
+  overflow: hidden;
+  align-content: center;
+}
+
+.adreem-app .ml3-account-presets {
+  grid-auto-rows: 94px;
+}
+
+.adreem-app .ml3-account-presets button {
+  min-height: 94px;
+  height: 94px;
+}
+
+.adreem-app .ml3-account-detail-choice button {
+  min-height: 50px;
+  height: 50px;
+}
+
+.adreem-app .ml3-balance-ledger button,
+.adreem-app .ml3-account-switcher button {
+  min-height: 64px;
+  height: 64px;
+  overflow: hidden;
+}
+
+.adreem-app .ml3-picked-account {
+  min-height: 74px;
+}
+
+.adreem-app .ml3-picker-favorites button,
+.adreem-app .ml3-picker-results button {
+  min-height: 62px;
+}
+
+.adreem-app .ml3-today-row,
+.adreem-app .ml3-history-row {
+  min-height: 86px;
+  height: 86px;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1.05fr) minmax(96px, 0.72fr) auto;
+  grid-auto-rows: min-content;
+}
+
+.adreem-app .ml3-account-row {
+  min-height: 96px;
+  overflow: hidden;
+}
+
+.adreem-app .ml3-review-ticket {
+  min-height: 70px;
+  height: 70px;
+  overflow: hidden;
+}
+
+.adreem-app .ml3-account-main strong,
+.adreem-app .ml3-account-main span,
+.adreem-app .ml3-history-main strong,
+.adreem-app .ml3-history-main span,
+.adreem-app .ml3-today-main strong,
+.adreem-app .ml3-today-main span,
+.adreem-app .ml3-today-row small,
+.adreem-app .ml3-history-row small,
+.adreem-app .ml3-review-ticket strong,
+.adreem-app .ml3-review-ticket b,
+.adreem-app .ml3-picker-results button strong,
+.adreem-app .ml3-picker-results button span,
+.adreem-app .ml3-account-presets button strong,
+.adreem-app .ml3-account-presets button span,
+.adreem-app .ml3-action-choice strong,
+.adreem-app .ml3-action-choice span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.adreem-app .ml3-account-main strong,
+.adreem-app .ml3-history-main strong,
+.adreem-app .ml3-today-main strong,
+.adreem-app .ml3-review-ticket strong,
+.adreem-app .ml3-picker-results button strong,
+.adreem-app .ml3-account-presets button strong,
+.adreem-app .ml3-action-choice strong {
+  -webkit-line-clamp: 1;
+}
+
+.adreem-app .ml3-account-main span,
+.adreem-app .ml3-history-main span,
+.adreem-app .ml3-today-main span,
+.adreem-app .ml3-today-row small,
+.adreem-app .ml3-history-row small,
+.adreem-app .ml3-review-ticket b,
+.adreem-app .ml3-picker-results button span,
+.adreem-app .ml3-account-presets button span,
+.adreem-app .ml3-action-choice span {
+  -webkit-line-clamp: 2;
+}
+
+.adreem-app .ml3-account-meta {
+  min-height: 22px;
+  overflow: hidden;
+}
+
+.adreem-app .ml3-account-values {
+  min-width: 104px;
+}
+
+.adreem-app .ml3-account-main,
+.adreem-app .ml3-account-meta,
+.adreem-app .ml3-account-values,
+.adreem-app .ml3-history-main,
+.adreem-app .ml3-history-route,
+.adreem-app .ml3-history-effects,
+.adreem-app .ml3-today-main,
+.adreem-app .ml3-today-route,
+.adreem-app .ml3-today-effects {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.adreem-app .ml3-history-route,
+.adreem-app .ml3-today-route,
+.adreem-app .ml3-history-effects,
+.adreem-app .ml3-today-effects {
+  overflow: hidden;
+}
+
+.adreem-app .ml3-history-route b,
+.adreem-app .ml3-today-route b,
+.adreem-app .ml3-history-effects span,
+.adreem-app .ml3-today-effects span {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-app .ml3-history-effects,
+.adreem-app .ml3-today-effects {
+  max-height: 24px;
+  flex-wrap: nowrap;
+}
+
+.adreem-app .ml3-history-row small,
+.adreem-app .ml3-today-row small {
+  max-height: 34px;
+}
+
+@media (max-width: 540px) {
+  .adreem-shell {
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+  }
+
+  .adreem-nav button {
+    height: 53px;
+  }
+
+  .adreem-app .ml3-entry-mode {
+    height: 53px;
+  }
+
+  .adreem-app .ml3-entry-mode button {
+    height: 41px;
+  }
+
+  .adreem-app .ml3-quick-actions {
+    grid-auto-rows: 54px;
+  }
+
+  .adreem-app .ml3-action-choice {
+    min-height: 54px;
+    height: 54px;
+  }
+
+  .adreem-app .ml3-account-presets {
+    grid-auto-rows: 90px;
+  }
+
+  .adreem-app .ml3-account-presets button {
+    min-height: 90px;
+    height: 90px;
+  }
+
+  .adreem-app .ml3-balance-ledger button,
+  .adreem-app .ml3-account-switcher button {
+    min-height: 60px;
+    height: 60px;
+  }
+
+  .adreem-app .ml3-picker-favorites button,
+  .adreem-app .ml3-picker-results button {
+    min-height: 64px;
+  }
+
+  .adreem-app .ml3-today-row,
+  .adreem-app .ml3-history-row {
+    min-height: 84px;
+    height: 84px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .adreem-app .ml3-account-row {
+    min-height: 98px;
+  }
+
+  .adreem-app .ml3-history-route,
+  .adreem-app .ml3-today-route {
+    justify-items: end;
+  }
+
+  .adreem-app .ml3-history-effects,
+  .adreem-app .ml3-today-effects,
+  .adreem-app .ml3-history-row small,
+  .adreem-app .ml3-today-row small {
+    grid-column: 1 / -1;
+  }
+
+  .adreem-app .ml3-review-ticket {
+    min-height: 70px;
+    height: 70px;
+  }
+}
