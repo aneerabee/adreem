@@ -184,6 +184,7 @@ describe('telegram movement flow safety', () => {
     await handleMovementCallback(ctx, `mv:account:destination:${choiceTokenFor(ctx, 'destination', 'saeed-cash')}`)
     await handleMovementCallback(ctx, 'mv:note:skip')
     await handleMovementCallback(ctx, 'mv:attachment:skip')
+    await handleMovementCallback(ctx, 'mv:recurring:no')
     await handleMovementCallback(ctx, 'mv:confirm')
 
     const saved = ctx.repository.state.movements.filter((movement) => movement.id === 'review-transfer')
@@ -229,6 +230,7 @@ describe('telegram movement flow safety', () => {
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('dimension')
     await handleMovementCallback(ctx, `mv:dimension:${choiceTokenFor(ctx, 'dimension', dimensionId)}`)
     await handleMovementCallback(ctx, 'mv:attachment:skip')
+    await handleMovementCallback(ctx, 'mv:recurring:no')
     await handleMovementCallback(ctx, 'mv:confirm')
 
     const saved = ctx.repository.state.movements.find((movement) => movement.source === 'telegram')
@@ -251,6 +253,7 @@ describe('telegram movement flow safety', () => {
     await handleMovementText({ ...ctx, isCallback: false, messageId: 57 }, 'وقود')
     await handleMovementCallback(ctx, 'mv:dimension:skip')
     await handleMovementCallback(ctx, 'mv:attachment:skip')
+    await handleMovementCallback(ctx, 'mv:recurring:no')
     await handleMovementCallback(ctx, 'mv:confirm')
 
     expect(ctx.repository.state.attachments || []).toHaveLength(0)
@@ -263,6 +266,7 @@ describe('telegram movement flow safety', () => {
     await handleMovementText({ ...ctx, isCallback: false, messageId: 59 }, 'ديزل')
     await handleMovementCallback(ctx, 'mv:dimension:skip')
     await handleMovementText({ ...ctx, isCallback: false, messageId: 60 }, 'https://example.com/receipt.jpg')
+    await handleMovementCallback(ctx, 'mv:recurring:monthly')
     await handleMovementCallback(ctx, 'mv:confirm')
 
     const movement = ctx.repository.state.movements.find((item) => item.note === 'ديزل')
@@ -272,6 +276,8 @@ describe('telegram movement flow safety', () => {
       url: 'https://example.com/receipt.jpg',
       source: 'telegram',
     })
+    expect(ctx.repository.state.recurringRules).toHaveLength(1)
+    expect(ctx.repository.state.recurringRules[0].template.note).toBe('ديزل')
   })
 })
 

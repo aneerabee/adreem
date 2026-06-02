@@ -79,6 +79,7 @@ function currentStepTitle(session) {
   if (session?.step === 'note') return 'أضف ملاحظة'
   if (session?.step === 'dimension') return 'اربط مشروعًا'
   if (session?.step === 'attachment') return 'أضف مرفقًا'
+  if (session?.step === 'recurring') return 'هل تتكرر؟'
   if (session?.step === 'review') return 'راجع قبل الحفظ'
   return 'إدخال حركة'
 }
@@ -93,6 +94,7 @@ function currentStepHelp(session) {
   if (session?.step === 'note') return 'اختياري.'
   if (session?.step === 'dimension') return 'اختياري.'
   if (session?.step === 'attachment') return 'اختياري.'
+  if (session?.step === 'recurring') return 'اختياري.'
   if (session?.step === 'review') return 'تأكد ثم احفظ.'
   return ''
 }
@@ -224,6 +226,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
     'note',
     ...(movementSupportsDimension(draft.type) ? ['dimension'] : []),
     'attachment',
+    'recurring',
     'review',
   ]
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
@@ -238,6 +241,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
   if (dimension) summary.push(htmlLine('مشروع', dimension.name))
   if (draft.attachmentLabel || draft.attachmentUrl) summary.push(htmlLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
+  if (draft.recurringEnabled) summary.push(htmlLine('تكرار', 'شهري'))
   const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : 'ADREEM · إدخال'
   const lines = [
     `<b>${title}</b>`,
@@ -260,6 +264,7 @@ export function stepPromptText(session) {
   if (session?.step === 'note') return 'اكتب ملاحظة قصيرة أو اضغط بدون ملاحظة.'
   if (session?.step === 'dimension') return 'اختر مشروعًا أو اضغط بدون مشروع.'
   if (session?.step === 'attachment') return 'اكتب وصف المرفق أو رابطه، أو اضغط بدون مرفق.'
+  if (session?.step === 'recurring') return 'اختر هل هذه الحركة شهرية.'
   if (session?.step === 'review') return 'راجع التأثير، ثم اضغط تأكيد الحفظ.'
   return 'اختر من الأزرار.'
 }
@@ -388,6 +393,7 @@ export function reviewMovementText(session, preview) {
   if (draft.rate) lines.push(htmlLine('السعر', formatRate(draft.rate)))
   if (draft.note) lines.push(htmlLine('ملاحظة', draft.note))
   if (draft.attachmentLabel || draft.attachmentUrl) lines.push(htmlLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
+  if (draft.recurringEnabled) lines.push(htmlLine('تكرار', 'شهري'))
   lines.push('')
 
   if (!preview.validation.ok) {

@@ -9,7 +9,7 @@ import {
   previewMovement,
   summarizeBalances,
 } from '../../src/mohammadLedger/ledgerCore.js'
-import { createAttachment } from '../../src/mohammadLedger/ledgerOperations.js'
+import { createAttachment, createRecurringRuleFromMovement } from '../../src/mohammadLedger/ledgerOperations.js'
 import {
   getMovementAccounts as getSharedMovementAccounts,
   rankMovementAccounts,
@@ -116,11 +116,13 @@ export async function appendTelegramMovement(repository, draft, metadata) {
     )
     const preview = previewDraft(state, movement)
     const attachments = appendTelegramAttachment(state.attachments, movement, draft)
+    const recurringRules = appendTelegramRecurringRule(state.recurringRules, movement, draft)
     return {
       state: {
         ...state,
         movements: [...state.movements, movement],
         attachments,
+        recurringRules,
       },
       movement,
       preview,
@@ -166,11 +168,13 @@ export async function resolveTelegramReviewMovement(repository, movementId, draf
       movement,
     )
     const attachments = appendTelegramAttachment(state.attachments, movement, draft)
+    const recurringRules = appendTelegramRecurringRule(state.recurringRules, movement, draft)
     return {
       state: {
         ...state,
         movements: state.movements.map((item) => (item.id === id ? movement : item)),
         attachments,
+        recurringRules,
       },
       movement,
       preview,
@@ -195,6 +199,23 @@ function appendTelegramAttachment(attachments = [], movement, draft = {}) {
     item?.source === attachment.source,
   )
   return hasSameAttachment ? attachments : [...(Array.isArray(attachments) ? attachments : []), attachment]
+}
+
+function appendTelegramRecurringRule(recurringRules = [], movement, draft = {}) {
+  if (!draft.recurringEnabled) return recurringRules
+  const rule = createRecurringRuleFromMovement(movement, { name: draft.recurringName || '' })
+  if (!rule) return recurringRules
+  const existingRules = Array.isArray(recurringRules) ? recurringRules : []
+  const hasSameRule = existingRules.some((item) =>
+    item?.template?.type === rule.template.type &&
+    item?.template?.amount === rule.template.amount &&
+    item?.template?.currency === rule.template.currency &&
+    item?.template?.sourceAccountId === rule.template.sourceAccountId &&
+    item?.template?.destinationAccountId === rule.template.destinationAccountId &&
+    item?.template?.dimensionId === rule.template.dimensionId &&
+    item?.template?.note === rule.template.note,
+  )
+  return hasSameRule ? recurringRules : [...existingRules, { ...rule, source: 'telegram' }]
 }
 
 export function movementEffectsText(state, movement) {

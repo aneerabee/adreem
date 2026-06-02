@@ -93,6 +93,42 @@ describe('telegram ledger service', () => {
     })
   })
 
+  it('creates a monthly recurring rule only once for posted telegram movements', async () => {
+    const repository = memoryRepository()
+    const draft = {
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 75,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      note: 'اشتراك شهري',
+      recurringEnabled: true,
+    }
+
+    await appendTelegramMovement(repository, draft, {
+      idempotencyKey: 'user-session-recurring',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+    await appendTelegramMovement(repository, draft, {
+      idempotencyKey: 'user-session-recurring',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    expect(repository.state.recurringRules).toHaveLength(1)
+    expect(repository.state.recurringRules[0]).toMatchObject({
+      source: 'telegram',
+      status: 'active',
+      frequency: 'monthly',
+      template: {
+        type: MOVEMENT_TYPES.EXPENSE,
+        amount: 75,
+        currency: CURRENCIES.DINAR,
+        sourceAccountId: 'me-cash',
+      },
+    })
+  })
+
   it('saves incomplete telegram movements into review instead of rejecting them', async () => {
     const repository = memoryRepository()
     const draft = {

@@ -168,6 +168,16 @@ export function attachmentKeyboard() {
   }
 }
 
+export function recurringKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: 'ليست متكررة', callback_data: 'mv:recurring:no', style: 'primary' }],
+      [{ text: 'حركة شهرية', callback_data: 'mv:recurring:monthly', style: 'success' }],
+      [{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }],
+    ],
+  }
+}
+
 export function confirmKeyboard() {
   return {
     inline_keyboard: [

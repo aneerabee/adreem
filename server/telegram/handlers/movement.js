@@ -31,6 +31,7 @@ import {
   mainMenuKeyboard,
   movementTypeKeyboard,
   noteKeyboard,
+  recurringKeyboard,
 } from '../keyboards.js'
 import { escapeHtml, movementStepText, reviewMovementText, stepPromptText } from '../messages.js'
 
@@ -44,6 +45,7 @@ const STEPS = {
   NOTE: 'note',
   DIMENSION: 'dimension',
   ATTACHMENT: 'attachment',
+  RECURRING: 'recurring',
   REVIEW: 'review',
 }
 
@@ -66,6 +68,7 @@ function createMovementSession(options = {}) {
       dimensionId: '',
       attachmentLabel: '',
       attachmentUrl: '',
+      recurringEnabled: false,
     },
     choices: {},
     uiMessageId: null,
@@ -143,6 +146,12 @@ async function sendStep(ctx, session, textPrefix = '') {
     return upsertFlowMessage(ctx, session, {
       text: `${text}\n\n${stepPromptText(session)}`,
       reply_markup: attachmentKeyboard(),
+    })
+  }
+  if (session.step === STEPS.RECURRING) {
+    return upsertFlowMessage(ctx, session, {
+      text: `${text}\n\n${stepPromptText(session)}`,
+      reply_markup: recurringKeyboard(),
     })
   }
   if (session.step === STEPS.REVIEW) {
@@ -245,6 +254,7 @@ export async function startReviewMovement(ctx, movementId) {
       dimensionId: movement.dimensionId || '',
       attachmentLabel: '',
       attachmentUrl: '',
+      recurringEnabled: false,
     },
   })
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -292,6 +302,7 @@ export async function handleMovementCallback(ctx, data) {
       dimensionId: movementSupportsDimension(type) ? session.draft.dimensionId || '' : '',
       attachmentLabel: session.draft.attachmentLabel || '',
       attachmentUrl: session.draft.attachmentUrl || '',
+      recurringEnabled: Boolean(session.draft.recurringEnabled),
     }
     session.step = STEPS.AMOUNT
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -343,6 +354,13 @@ export async function handleMovementCallback(ctx, data) {
   if (data === 'mv:attachment:skip') {
     session.draft.attachmentLabel = ''
     session.draft.attachmentUrl = ''
+    session.step = STEPS.RECURRING
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
+  if (data.startsWith('mv:recurring:')) {
+    session.draft.recurringEnabled = data.endsWith(':monthly')
     session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -492,7 +510,7 @@ export async function handleMovementText(ctx, text) {
     const attachment = parseAttachmentText(text)
     session.draft.attachmentLabel = attachment.label
     session.draft.attachmentUrl = attachment.url
-    session.step = STEPS.REVIEW
+    session.step = STEPS.RECURRING
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     await sendStep(ctx, session)
     return true
@@ -510,7 +528,8 @@ function previousStep(session) {
   if (session.step === STEPS.NOTE) return movementNeedsDestination(session.draft.type) ? STEPS.DESTINATION : (movementNeedsSource(session.draft.type) ? STEPS.SOURCE : STEPS.CURRENCY)
   if (session.step === STEPS.DIMENSION) return STEPS.NOTE
   if (session.step === STEPS.ATTACHMENT) return movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.NOTE
-  if (session.step === STEPS.REVIEW) return STEPS.ATTACHMENT
+  if (session.step === STEPS.RECURRING) return STEPS.ATTACHMENT
+  if (session.step === STEPS.REVIEW) return STEPS.RECURRING
   return STEPS.TYPE
 }
 
