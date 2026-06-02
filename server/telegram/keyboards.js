@@ -156,3 +156,18 @@ export function confirmKeyboard() {
     ],
   }
 }
+
+export function reviewKeyboard(reviewSession) {
+  const rows = []
+  const movementTokens = Object.keys(reviewSession?.choices?.movements || {})
+  const accountTokens = Object.keys(reviewSession?.choices?.accounts || {})
+
+  movementTokens.forEach((token) => {
+    rows.push([{ text: `إلغاء حركة #${Number(token) + 1}`, callback_data: `review:movement:cancel:${token}`, style: 'danger' }])
+  })
+  accountTokens.forEach((token) => {
+    rows.push([{ text: `إخفاء حساب صفري #${Number(token) + 1}`, callback_data: `review:account:hide:${token}`, style: 'primary' }])
+  })
+  rows.push([{ text: '↩️ القائمة', callback_data: 'main:home', style: 'primary' }])
+  return { inline_keyboard: rows }
+}

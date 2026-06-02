@@ -3,8 +3,9 @@ import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountC
 import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
 import { createLedgerIdentity } from '../../src/mohammadLedger/ledgerState.js'
 import { accountLabel, buildLedgerSnapshot, formatMoney } from '../mohammadLedger/ledgerService.js'
-import { mainMenuKeyboard } from './keyboards.js'
+import { mainMenuKeyboard, reviewKeyboard } from './keyboards.js'
 import { accountBlockquote, escapeHtml, mainMenuText, movementBlockquote, movementLabels } from './messages.js'
+import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountInState } from './reviewActions.js'
 import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
 import { handleAccountCallback, handleAccountText, startAccount } from './handlers/account.js'
@@ -194,22 +195,47 @@ async function showHistory(ctx) {
   return sendScreen(ctx, rows.length ? `<b>ADREEM · السجل</b>\n<code>${rows.length} حركة أخيرة</code>\n\n${rows.join('\n')}` : '<b>ADREEM · السجل</b>\n<blockquote>لا توجد حركات.</blockquote>')
 }
 
-async function showReview(ctx) {
+async function showReview(ctx, notice = '') {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
   const accounts = state.accounts.filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW)
   const movements = state.movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
+  const reviewSession = buildReviewSession(state)
+  sessions.set(ctx.chatId, ctx.userId, { ...reviewSession, uiMessageId: ctx.isCallback ? ctx.messageId : null })
   const lines = ['<b>ADREEM · مراجعة</b>', `<code>${accounts.length + movements.length} عنصر</code>`]
+  if (notice) lines.push('', `<blockquote>${escapeHtml(notice)}</blockquote>`)
   if (!accounts.length && !movements.length) lines.push('', '<blockquote>لا شيء معلق.</blockquote>')
   if (accounts.length) {
     lines.push('', '<b>حسابات</b>')
-    accounts.slice(0, 8).forEach((account) => lines.push(`<blockquote>${escapeHtml(accountLabel(account))}</blockquote>`))
+    accounts.slice(0, 8).forEach((account, index) => lines.push(`<blockquote>${escapeHtml(`#${index + 1} · ${accountLabel(account)}`)}</blockquote>`))
   }
   if (movements.length) {
     lines.push('', '<b>حركات</b>')
-    movements.slice(0, 8).forEach((movement) => lines.push(`<blockquote>${escapeHtml(`${movementLabels[movement.type] || movement.type} · ${formatMoney(movement.amount, movement.currency)}`)}</blockquote>`))
+    movements.slice(0, 8).forEach((movement, index) => lines.push(`<blockquote>${escapeHtml(`#${index + 1} · ${movementLabels[movement.type] || movement.type} · ${formatMoney(movement.amount, movement.currency)}`)}</blockquote>`))
   }
-  return sendScreen(ctx, lines.join('\n'))
+  return sendScreen(ctx, lines.join('\n'), reviewKeyboard(reviewSession))
+}
+
+async function handleReviewCallback(ctx, data) {
+  const session = sessions.get(ctx.chatId, ctx.userId)
+  if (session?.flow !== 'review') {
+    return showReview(ctx, 'هذه أزرار مراجعة قديمة. فتحت لك القائمة الأحدث.')
+  }
+
+  const [, kind, action, token] = data.split(':')
+  if (kind === 'movement' && action === 'cancel') {
+    const movementId = session.choices?.movements?.[token]
+    if (!movementId) return showReview(ctx, 'هذا العنصر لم يعد موجودًا في القائمة.')
+    const result = await ctx.repository.update((state) => cancelReviewMovementInState(state, movementId))
+    return showReview(ctx, result.message)
+  }
+  if (kind === 'account' && action === 'hide') {
+    const accountId = session.choices?.accounts?.[token]
+    if (!accountId) return showReview(ctx, 'هذا الحساب لم يعد موجودًا في القائمة.')
+    const result = await ctx.repository.update((state) => hideZeroReviewAccountInState(state, accountId))
+    return showReview(ctx, result.message)
+  }
+  return showReview(ctx, 'أمر المراجعة غير معروف.')
 }
 
 async function startSearch(ctx) {
@@ -338,12 +364,14 @@ async function handleCallback(ctx, update) {
   await telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
 
   if (data === 'main:movement') return startMovement(ctx)
+  if (data === 'main:home') return showMainMenu(ctx)
   if (data === 'main:account') return startAccount(ctx)
   if (data === 'main:accounts') return showAccounts(ctx)
   if (data === 'main:today') return showToday(ctx)
   if (data === 'main:history') return showHistory(ctx)
   if (data === 'main:review') return showReview(ctx)
   if (data === 'main:search') return startSearch(ctx)
+  if (data.startsWith('review:')) return handleReviewCallback(ctx, data)
   if (data.startsWith('acct:')) return handleAccountCallback(ctx, data)
   if (data.startsWith('mv:')) return handleMovementCallback(ctx, data)
   return sendScreen(ctx, 'أمر غير معروف.')
