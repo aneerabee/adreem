@@ -16,6 +16,7 @@ import {
   movementNeedsDestination,
   movementNeedsRate,
   movementNeedsSource,
+  movementSupportsDimension,
   movementTone,
 } from '../../src/mohammadLedger/movementConfig.js'
 import { accountLabel, formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
@@ -76,6 +77,7 @@ function currentStepTitle(session) {
   if (session?.step === 'source') return config.sourceQuestion || `اختر ${config.sourceLabel}`
   if (session?.step === 'destination') return config.destinationQuestion || `اختر ${config.destinationLabel}`
   if (session?.step === 'note') return 'أضف ملاحظة'
+  if (session?.step === 'dimension') return 'اربط مشروعًا'
   if (session?.step === 'review') return 'راجع قبل الحفظ'
   return 'إدخال حركة'
 }
@@ -88,6 +90,7 @@ function currentStepHelp(session) {
   if (session?.step === 'source') return 'اختر من أين تخرج القيمة.'
   if (session?.step === 'destination') return 'اختر أين تدخل القيمة.'
   if (session?.step === 'note') return 'اختياري.'
+  if (session?.step === 'dimension') return 'اختياري.'
   if (session?.step === 'review') return 'تأكد ثم احفظ.'
   return ''
 }
@@ -199,7 +202,7 @@ export function accountCreatedText(account, { duplicate = false, reviewed = fals
   ].join('')
 }
 
-export function movementStepText(session, accountsById = new Map()) {
+export function movementStepText(session, accountsById = new Map(), dimensionsById = new Map()) {
   const draft = session?.draft || {}
   const config = movementConfigFor(draft.type)
   const amountCurrency = draft.currencyConfirmed ? draft.currency : config.currency
@@ -208,6 +211,7 @@ export function movementStepText(session, accountsById = new Map()) {
     : ''
   const source = accountsById.get(draft.sourceAccountId)
   const destination = accountsById.get(draft.destinationAccountId)
+  const dimension = dimensionsById.get(draft.dimensionId)
   const steps = [
     'type',
     'amount',
@@ -216,6 +220,7 @@ export function movementStepText(session, accountsById = new Map()) {
     ...(movementNeedsSource(draft.type) ? ['source'] : []),
     ...(movementNeedsDestination(draft.type) ? ['destination'] : []),
     'note',
+    ...(movementSupportsDimension(draft.type) ? ['dimension'] : []),
     'review',
   ]
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
@@ -228,6 +233,7 @@ export function movementStepText(session, accountsById = new Map()) {
   if (source) summary.push(htmlLine(config.sourceLabel, accountLabel(source)))
   if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, accountLabel(destination)))
   if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
+  if (dimension) summary.push(htmlLine('مشروع', dimension.name))
   const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : 'ADREEM · إدخال'
   const lines = [
     `<b>${title}</b>`,
@@ -248,6 +254,7 @@ export function stepPromptText(session) {
   if (session?.step === 'source') return `اضغط على الحساب الذي ستخرج منه القيمة.`
   if (session?.step === 'destination') return `اضغط على الحساب الذي ستدخل إليه القيمة.`
   if (session?.step === 'note') return 'اكتب ملاحظة قصيرة أو اضغط بدون ملاحظة.'
+  if (session?.step === 'dimension') return 'اختر مشروعًا أو اضغط بدون مشروع.'
   if (session?.step === 'review') return 'راجع التأثير، ثم اضغط تأكيد الحفظ.'
   return 'اختر من الأزرار.'
 }

@@ -8,7 +8,9 @@ import {
   movementNeedsRate,
   movementNeedsSource,
   movementPreferredAccountIds,
+  movementSupportsDimension,
 } from '../../../src/mohammadLedger/movementConfig.js'
+import { dimensionsFromAccounts } from '../../../src/mohammadLedger/ledgerOperations.js'
 import {
   appendTelegramMovement,
   buildLedgerSnapshot,
@@ -24,6 +26,7 @@ import {
   accountChoiceToken,
   confirmKeyboard,
   currencyKeyboard,
+  dimensionKeyboard,
   mainMenuKeyboard,
   movementTypeKeyboard,
   noteKeyboard,
@@ -38,6 +41,7 @@ const STEPS = {
   SOURCE: 'source',
   DESTINATION: 'destination',
   NOTE: 'note',
+  DIMENSION: 'dimension',
   REVIEW: 'review',
 }
 
@@ -57,6 +61,7 @@ function createMovementSession(options = {}) {
       destinationAccountId: '',
       rate: undefined,
       note: '',
+      dimensionId: '',
     },
     choices: {},
     uiMessageId: null,
@@ -91,7 +96,9 @@ async function sendStep(ctx, session, textPrefix = '') {
     })
   }
   const snapshot = buildLedgerSnapshot(state)
-  const header = movementStepText(session, snapshot.accountById)
+  const dimensions = dimensionsFromAccounts(state.accounts, state.dimensions)
+  const dimensionById = new Map(dimensions.map((dimension) => [dimension.id, dimension]))
+  const header = movementStepText(session, snapshot.accountById, dimensionById)
   const text = textPrefix ? `${header}\n\n${textPrefix}` : header
 
   if (session.step === STEPS.TYPE) {
@@ -111,6 +118,22 @@ async function sendStep(ctx, session, textPrefix = '') {
   }
   if (session.step === STEPS.NOTE) {
     return upsertFlowMessage(ctx, session, { text: `${text}\n\n${stepPromptText(session)}`, reply_markup: noteKeyboard() })
+  }
+  if (session.step === STEPS.DIMENSION) {
+    if (!movementSupportsDimension(session.draft.type) || !dimensions.length) {
+      session.step = STEPS.REVIEW
+      ctx.sessions.set(ctx.chatId, ctx.userId, session)
+      return sendStep(ctx, session)
+    }
+    session.choices = {
+      ...session.choices,
+      dimension: Object.fromEntries(dimensions.slice(0, 8).map((dimension, index) => [String(index), dimension.id])),
+    }
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return upsertFlowMessage(ctx, session, {
+      text: `${text}\n\n${stepPromptText(session)}`,
+      reply_markup: dimensionKeyboard(dimensions),
+    })
   }
   if (session.step === STEPS.REVIEW) {
     const preview = previewDraft(state, session.draft)
@@ -168,7 +191,9 @@ async function sendAccountChoices(ctx, session, state, role, query = '') {
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
 
   const snapshot = buildLedgerSnapshot(state)
-  const lines = [movementStepText(session, snapshot.accountById), '']
+  const dimensions = dimensionsFromAccounts(state.accounts, state.dimensions)
+  const dimensionById = new Map(dimensions.map((dimension) => [dimension.id, dimension]))
+  const lines = [movementStepText(session, snapshot.accountById, dimensionById), '']
   lines.push(stepPromptText(session))
   if (query) lines.push(`<b>بحث:</b> ${escapeHtml(query)}`)
   lines.push(ranked.length ? `<b>${ranked.length} اختيارات مناسبة.</b> اضغط الاسم المطلوب.` : '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
@@ -207,6 +232,7 @@ export async function startReviewMovement(ctx, movementId) {
       destinationAccountId: movement.destinationAccountId || '',
       rate: movement.rate,
       note: movement.note || '',
+      dimensionId: movement.dimensionId || '',
     },
   })
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -251,6 +277,7 @@ export async function handleMovementCallback(ctx, data) {
       sourceAccountId: '',
       destinationAccountId: '',
       rate: movementNeedsRate(type) ? session.draft.rate : undefined,
+      dimensionId: movementSupportsDimension(type) ? session.draft.dimensionId || '' : '',
     }
     session.step = STEPS.AMOUNT
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -286,6 +313,14 @@ export async function handleMovementCallback(ctx, data) {
 
   if (data === 'mv:note:skip') {
     session.draft.note = ''
+    session.step = movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.REVIEW
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
+  if (data.startsWith('mv:dimension:')) {
+    const token = data.slice('mv:dimension:'.length)
+    session.draft.dimensionId = token === 'skip' ? '' : session.choices?.dimension?.[token] || ''
     session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -425,7 +460,7 @@ export async function handleMovementText(ctx, text) {
 
   if (session.step === STEPS.NOTE) {
     session.draft.note = String(text || '').trim()
-    session.step = STEPS.REVIEW
+    session.step = movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     await sendStep(ctx, session)
     return true
@@ -441,6 +476,7 @@ function previousStep(session) {
   if (session.step === STEPS.SOURCE) return movementNeedsRate(session.draft.type) ? STEPS.RATE : (movementConfigFor(session.draft.type).currencyLocked ? STEPS.AMOUNT : STEPS.CURRENCY)
   if (session.step === STEPS.DESTINATION) return movementNeedsSource(session.draft.type) ? STEPS.SOURCE : (movementNeedsRate(session.draft.type) ? STEPS.RATE : (movementConfigFor(session.draft.type).currencyLocked ? STEPS.AMOUNT : STEPS.CURRENCY))
   if (session.step === STEPS.NOTE) return movementNeedsDestination(session.draft.type) ? STEPS.DESTINATION : (movementNeedsSource(session.draft.type) ? STEPS.SOURCE : STEPS.CURRENCY)
+  if (session.step === STEPS.DIMENSION) return STEPS.NOTE
   if (session.step === STEPS.REVIEW) return STEPS.NOTE
   return STEPS.TYPE
 }

@@ -148,6 +148,17 @@ export function noteKeyboard() {
   }
 }
 
+export function dimensionKeyboard(dimensions = []) {
+  const rows = dimensions.slice(0, 8).map((dimension, index) => ([{
+    text: `📍 ${dimension.name}`,
+    callback_data: `mv:dimension:${index}`,
+    style: 'primary',
+  }]))
+  rows.push([{ text: 'بدون مشروع', callback_data: 'mv:dimension:skip', style: 'primary' }])
+  rows.push([{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
+  return { inline_keyboard: rows }
+}
+
 export function confirmKeyboard() {
   return {
     inline_keyboard: [

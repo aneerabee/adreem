@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
-import { handleMovementCallback, handleMovementText, startReviewMovement } from './movement.js'
+import { handleMovementCallback, handleMovementText, startMovement, startReviewMovement } from './movement.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
   let state = initialState
@@ -194,6 +194,48 @@ describe('telegram movement flow safety', () => {
     })
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم إصلاح الحركة')
+  })
+
+  it('links supported movements to a project dimension when selected', async () => {
+    const base = createMohammadFallbackState()
+    const meCash = base.accounts.find((account) => account.id === 'me-cash')
+    const truckProject = {
+      id: 'truck-project',
+      ownerName: 'شاحنة العمل',
+      subAccountName: 'مشروع',
+      type: 'project',
+      valueKind: 'asset',
+      currencyKind: CURRENCIES.DINAR,
+      status: 'active',
+    }
+    const ctx = createCtx()
+    ctx.repository = memoryRepository({
+      ...base,
+      accounts: [meCash, truckProject],
+      movements: base.movements.filter((movement) =>
+        movement.sourceAccountId === 'me-cash' || movement.destinationAccountId === 'me-cash',
+      ),
+    })
+
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, 'mv:type:expense')
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '250')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+    await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
+    await handleMovementCallback(ctx, 'mv:note:skip')
+
+    const dimensionId = 'dimension-account-truck-project'
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('dimension')
+    await handleMovementCallback(ctx, `mv:dimension:${choiceTokenFor(ctx, 'dimension', dimensionId)}`)
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const saved = ctx.repository.state.movements.find((movement) => movement.source === 'telegram')
+    expect(saved).toMatchObject({
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      sourceAccountId: 'me-cash',
+      dimensionId,
+    })
   })
 })
 
