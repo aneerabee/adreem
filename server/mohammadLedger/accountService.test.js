@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { appendTelegramAccount, validateAccountDraft } from './accountService.js'
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { appendTelegramAccount, resolveTelegramReviewAccount, validateAccountDraft } from './accountService.js'
 
 function emptyState() {
   return {
@@ -87,5 +87,42 @@ describe('telegram account service', () => {
 
     expect(result.validation.ok).toBe(false)
     expect(result.validation.errors.map((error) => error.field)).toContain('ownerName')
+  })
+
+  it('resolves an existing review account instead of creating a duplicate', async () => {
+    const repository = memoryRepository({
+      ...emptyState(),
+      accounts: [
+        {
+          id: 'review-person',
+          ownerName: 'محمد',
+          subAccountName: 'حساب',
+          type: ACCOUNT_TYPES.REVIEW,
+          valueKind: VALUE_KINDS.REVIEW,
+          status: ACCOUNT_STATUSES.NEEDS_REVIEW,
+        },
+      ],
+    })
+
+    const result = await resolveTelegramReviewAccount(repository, 'review-person', {
+      ownerName: 'محمد',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: 'LYD',
+    }, {
+      telegramUserId: 278516861,
+      telegramChatId: 278516861,
+    })
+
+    expect(result.rejected).toBeFalsy()
+    expect(repository.state.accounts).toHaveLength(1)
+    expect(repository.state.accounts[0]).toMatchObject({
+      id: 'review-person',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      status: ACCOUNT_STATUSES.ACTIVE,
+      reviewSource: 'telegram',
+    })
   })
 })

@@ -8,7 +8,7 @@ import { accountBlockquote, escapeHtml, mainMenuText, movementBlockquote, moveme
 import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountInState } from './reviewActions.js'
 import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
-import { handleAccountCallback, handleAccountText, startAccount } from './handlers/account.js'
+import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './handlers/account.js'
 import { handleMovementCallback, handleMovementText, startMovement } from './handlers/movement.js'
 import { createTelegramUserAccess } from './userRegistry.js'
 
@@ -234,6 +234,11 @@ async function handleReviewCallback(ctx, data) {
     if (!accountId) return showReview(ctx, 'هذا الحساب لم يعد موجودًا في القائمة.')
     const result = await ctx.repository.update((state) => hideZeroReviewAccountInState(state, accountId))
     return showReview(ctx, result.message)
+  }
+  if (kind === 'account' && action === 'fix') {
+    const accountId = session.choices?.accounts?.[token]
+    if (!accountId) return showReview(ctx, 'هذا الحساب لم يعد موجودًا في القائمة.')
+    return startReviewAccount(ctx, accountId)
   }
   return showReview(ctx, 'أمر المراجعة غير معروف.')
 }

@@ -7,7 +7,13 @@ import {
   applyAccountName,
   emptyAccountDraft,
 } from '../../../src/mohammadLedger/accountConfig.js'
-import { accountIdempotencyKey, appendTelegramAccount, validateAccountDraft } from '../../mohammadLedger/accountService.js'
+import {
+  accountIdempotencyKey,
+  appendTelegramAccount,
+  resolveTelegramReviewAccount,
+  validateAccountDraft,
+} from '../../mohammadLedger/accountService.js'
+import { accountLabel } from '../../mohammadLedger/ledgerService.js'
 import {
   accountConfirmKeyboard,
   accountCurrencyKeyboard,
@@ -26,12 +32,15 @@ const STEPS = {
   REVIEW: 'review',
 }
 
-function createAccountSession() {
+function createAccountSession(options = {}) {
   return {
     flow: 'account',
+    mode: options.mode || 'create',
     step: STEPS.TYPE,
     sessionId: randomUUID(),
-    draft: emptyAccountDraft(),
+    draft: options.draft || emptyAccountDraft(),
+    reviewAccountId: options.reviewAccountId || '',
+    reviewOriginalLabel: options.reviewOriginalLabel || '',
     uiMessageId: null,
   }
 }
@@ -118,23 +127,50 @@ export async function startAccount(ctx) {
   return sendStep(ctx, session)
 }
 
+export async function startReviewAccount(ctx, accountId) {
+  const { state } = await ctx.repository.load()
+  const account = state.accounts.find((item) => item.id === accountId)
+  if (!account) {
+    return ctx.telegram.sendMessage({
+      chat_id: ctx.chatId,
+      text: '<b>لم أجد الحساب.</b>',
+      parse_mode: 'HTML',
+      reply_markup: mainMenuKeyboard(),
+    })
+  }
+  const session = createAccountSession({
+    mode: 'review',
+    reviewAccountId: account.id,
+    reviewOriginalLabel: accountLabel(account),
+    draft: {
+      ...emptyAccountDraft(),
+      ownerName: account.ownerName || '',
+      subAccountName: account.subAccountName || 'كاش بيننا',
+      notes: account.notes || '',
+    },
+  })
+  ctx.sessions.set(ctx.chatId, ctx.userId, session)
+  return sendStep(ctx, session)
+}
+
 export async function handleAccountCallback(ctx, data) {
   const session = ctx.sessions.get(ctx.chatId, ctx.userId)
   if (!session || session.flow !== 'account') return sendExpiredAccountMessage(ctx)
   if (isStaleAccountCallback(ctx, session)) return sendExpiredAccountMessage(ctx)
 
   if (data === 'acct:cancel') {
+    const cancelTitle = session.mode === 'review' ? 'تم إلغاء إصلاح الحساب.' : 'تم إلغاء إنشاء الحساب.'
     ctx.sessions.clear(ctx.chatId, ctx.userId)
     try {
       return await ctx.telegram.editMessageText({
         chat_id: ctx.chatId,
         message_id: session.uiMessageId || ctx.messageId,
-        text: '<b>تم إلغاء إنشاء الحساب.</b>',
+        text: `<b>${cancelTitle}</b>`,
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })
     } catch {
-      return ctx.telegram.sendMessage({ chat_id: ctx.chatId, text: '<b>تم إلغاء إنشاء الحساب.</b>', parse_mode: 'HTML', reply_markup: mainMenuKeyboard() })
+      return ctx.telegram.sendMessage({ chat_id: ctx.chatId, text: `<b>${cancelTitle}</b>`, parse_mode: 'HTML', reply_markup: mainMenuKeyboard() })
     }
   }
 
@@ -195,11 +231,18 @@ export async function handleAccountCallback(ctx, data) {
     if (session.step !== STEPS.REVIEW) return sendStep(ctx, session)
     let result
     try {
-      result = await appendTelegramAccount(ctx.repository, session.draft, {
-        idempotencyKey: accountIdempotencyKey([ctx.userId, session.sessionId]),
-        telegramUserId: ctx.userId,
-        telegramChatId: ctx.chatId,
-      })
+      if (session.mode === 'review') {
+        result = await resolveTelegramReviewAccount(ctx.repository, session.reviewAccountId, session.draft, {
+          telegramUserId: ctx.userId,
+          telegramChatId: ctx.chatId,
+        })
+      } else {
+        result = await appendTelegramAccount(ctx.repository, session.draft, {
+          idempotencyKey: accountIdempotencyKey([ctx.userId, session.sessionId]),
+          telegramUserId: ctx.userId,
+          telegramChatId: ctx.chatId,
+        })
+      }
     } catch (error) {
       console.error('[adreem-telegram-bot] account save failed', error?.message || error)
       return sendAccountConnectionError(ctx, session)
@@ -211,14 +254,14 @@ export async function handleAccountCallback(ctx, data) {
       return await ctx.telegram.editMessageText({
         chat_id: ctx.chatId,
         message_id: session.uiMessageId || ctx.messageId,
-        text: accountCreatedText(result.account, { duplicate: result.duplicate }),
+        text: accountCreatedText(result.account, { duplicate: result.duplicate, reviewed: session.mode === 'review' }),
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })
     } catch {
       return ctx.telegram.sendMessage({
         chat_id: ctx.chatId,
-        text: accountCreatedText(result.account, { duplicate: result.duplicate }),
+        text: accountCreatedText(result.account, { duplicate: result.duplicate, reviewed: session.mode === 'review' }),
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })

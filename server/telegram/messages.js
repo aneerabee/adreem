@@ -146,10 +146,14 @@ export function accountStepText(session) {
     summary.push(htmlLine('العملة', draft.currencyKind === CURRENCIES.USD ? 'دولار' : 'دينار'))
   }
 
+  const title = session?.mode === 'review' ? 'ADREEM · إصلاح حساب' : 'ADREEM · حساب جديد'
   const lines = [
-    '<b>ADREEM · حساب جديد</b>',
+    `<b>${title}</b>`,
     `<code>${progress}</code>`,
     '',
+    ...(session?.mode === 'review' && session.reviewOriginalLabel
+      ? [`<blockquote>${escapeHtml(`الحساب الحالي:\n${session.reviewOriginalLabel}`)}</blockquote>`, '']
+      : []),
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
     '<b>الخطوة الحالية</b>',
     `<blockquote>${escapeHtml(accountStepTitle(session))}\n${escapeHtml(accountStepHelp(session))}</blockquote>`,
@@ -180,8 +184,8 @@ export function accountReviewText(session, result = null) {
   return lines.join('\n')
 }
 
-export function accountCreatedText(account, { duplicate = false } = {}) {
-  const title = duplicate ? 'كان محفوظًا سابقًا ولم يتكرر.' : 'تم إنشاء الحساب.'
+export function accountCreatedText(account, { duplicate = false, reviewed = false } = {}) {
+  const title = reviewed ? 'تم إصلاح الحساب واعتماده.' : (duplicate ? 'كان محفوظًا سابقًا ولم يتكرر.' : 'تم إنشاء الحساب.')
   const preset = accountPresetFor(account?.type, account?.valueKind)
   return [
     `<b>${escapeHtml(title)}</b>`,

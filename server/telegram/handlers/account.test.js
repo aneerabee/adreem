@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
 import { createSessionStore } from '../sessionStore.js'
-import { handleAccountCallback, handleAccountText, startAccount } from './account.js'
+import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './account.js'
 
 function emptyState() {
   return {
@@ -174,5 +174,42 @@ describe('telegram account flow', () => {
     expect(session.step).toBe('owner')
     expect(session.draft.type).toBe(ACCOUNT_TYPES.PERSON)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('عملية قديمة')
+  })
+
+  it('resolves a review account through the same account wizard', async () => {
+    const ctx = createCtx()
+    ctx.repository = memoryRepository({
+      ...emptyState(),
+      accounts: [
+        {
+          id: 'review-person',
+          ownerName: 'محمد',
+          subAccountName: 'حساب',
+          type: ACCOUNT_TYPES.REVIEW,
+          valueKind: VALUE_KINDS.REVIEW,
+          status: ACCOUNT_STATUSES.NEEDS_REVIEW,
+        },
+      ],
+    })
+
+    await startReviewAccount(ctx, 'review-person')
+    await handleAccountCallback(ctx, 'acct:type:person-cash')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 58 }, 'محمد')
+    await handleAccountCallback(ctx, 'acct:detail:1')
+    await handleAccountCallback(ctx, 'acct:currency:LYD')
+    await handleAccountCallback(ctx, 'acct:confirm')
+
+    expect(ctx.repository.state.accounts).toHaveLength(1)
+    expect(ctx.repository.state.accounts[0]).toMatchObject({
+      id: 'review-person',
+      ownerName: 'محمد',
+      subAccountName: 'شيك بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      status: ACCOUNT_STATUSES.ACTIVE,
+      reviewSource: 'telegram',
+    })
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم إصلاح الحساب')
   })
 })
