@@ -78,6 +78,7 @@ function currentStepTitle(session) {
   if (session?.step === 'destination') return config.destinationQuestion || `اختر ${config.destinationLabel}`
   if (session?.step === 'note') return 'أضف ملاحظة'
   if (session?.step === 'dimension') return 'اربط مشروعًا'
+  if (session?.step === 'attachment') return 'أضف مرفقًا'
   if (session?.step === 'review') return 'راجع قبل الحفظ'
   return 'إدخال حركة'
 }
@@ -91,6 +92,7 @@ function currentStepHelp(session) {
   if (session?.step === 'destination') return 'اختر أين تدخل القيمة.'
   if (session?.step === 'note') return 'اختياري.'
   if (session?.step === 'dimension') return 'اختياري.'
+  if (session?.step === 'attachment') return 'اختياري.'
   if (session?.step === 'review') return 'تأكد ثم احفظ.'
   return ''
 }
@@ -221,6 +223,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
     ...(movementNeedsDestination(draft.type) ? ['destination'] : []),
     'note',
     ...(movementSupportsDimension(draft.type) ? ['dimension'] : []),
+    'attachment',
     'review',
   ]
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
@@ -234,6 +237,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, accountLabel(destination)))
   if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
   if (dimension) summary.push(htmlLine('مشروع', dimension.name))
+  if (draft.attachmentLabel || draft.attachmentUrl) summary.push(htmlLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : 'ADREEM · إدخال'
   const lines = [
     `<b>${title}</b>`,
@@ -255,6 +259,7 @@ export function stepPromptText(session) {
   if (session?.step === 'destination') return `اضغط على الحساب الذي ستدخل إليه القيمة.`
   if (session?.step === 'note') return 'اكتب ملاحظة قصيرة أو اضغط بدون ملاحظة.'
   if (session?.step === 'dimension') return 'اختر مشروعًا أو اضغط بدون مشروع.'
+  if (session?.step === 'attachment') return 'اكتب وصف المرفق أو رابطه، أو اضغط بدون مرفق.'
   if (session?.step === 'review') return 'راجع التأثير، ثم اضغط تأكيد الحفظ.'
   return 'اختر من الأزرار.'
 }
@@ -382,6 +387,7 @@ export function reviewMovementText(session, preview) {
   ]
   if (draft.rate) lines.push(htmlLine('السعر', formatRate(draft.rate)))
   if (draft.note) lines.push(htmlLine('ملاحظة', draft.note))
+  if (draft.attachmentLabel || draft.attachmentUrl) lines.push(htmlLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   lines.push('')
 
   if (!preview.validation.ok) {

@@ -159,6 +159,15 @@ export function dimensionKeyboard(dimensions = []) {
   return { inline_keyboard: rows }
 }
 
+export function attachmentKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: 'بدون مرفق', callback_data: 'mv:attachment:skip', style: 'primary' }],
+      [{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }],
+    ],
+  }
+}
+
 export function confirmKeyboard() {
   return {
     inline_keyboard: [

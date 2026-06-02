@@ -90,7 +90,7 @@ describe('telegram movement presentation', () => {
       },
     })
 
-    expect(movementText).toContain('<code>4/7</code>')
+    expect(movementText).toContain('<code>4/8</code>')
     expect(movementText).not.toContain('●')
     expect(accountText).toContain('<code>2/5</code>')
     expect(accountText).not.toContain('○')

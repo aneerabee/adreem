@@ -24,6 +24,7 @@ import {
 import {
   accountChoicesKeyboard,
   accountChoiceToken,
+  attachmentKeyboard,
   confirmKeyboard,
   currencyKeyboard,
   dimensionKeyboard,
@@ -42,6 +43,7 @@ const STEPS = {
   DESTINATION: 'destination',
   NOTE: 'note',
   DIMENSION: 'dimension',
+  ATTACHMENT: 'attachment',
   REVIEW: 'review',
 }
 
@@ -62,6 +64,8 @@ function createMovementSession(options = {}) {
       rate: undefined,
       note: '',
       dimensionId: '',
+      attachmentLabel: '',
+      attachmentUrl: '',
     },
     choices: {},
     uiMessageId: null,
@@ -121,7 +125,7 @@ async function sendStep(ctx, session, textPrefix = '') {
   }
   if (session.step === STEPS.DIMENSION) {
     if (!movementSupportsDimension(session.draft.type) || !dimensions.length) {
-      session.step = STEPS.REVIEW
+      session.step = STEPS.ATTACHMENT
       ctx.sessions.set(ctx.chatId, ctx.userId, session)
       return sendStep(ctx, session)
     }
@@ -133,6 +137,12 @@ async function sendStep(ctx, session, textPrefix = '') {
     return upsertFlowMessage(ctx, session, {
       text: `${text}\n\n${stepPromptText(session)}`,
       reply_markup: dimensionKeyboard(dimensions),
+    })
+  }
+  if (session.step === STEPS.ATTACHMENT) {
+    return upsertFlowMessage(ctx, session, {
+      text: `${text}\n\n${stepPromptText(session)}`,
+      reply_markup: attachmentKeyboard(),
     })
   }
   if (session.step === STEPS.REVIEW) {
@@ -233,6 +243,8 @@ export async function startReviewMovement(ctx, movementId) {
       rate: movement.rate,
       note: movement.note || '',
       dimensionId: movement.dimensionId || '',
+      attachmentLabel: '',
+      attachmentUrl: '',
     },
   })
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -278,6 +290,8 @@ export async function handleMovementCallback(ctx, data) {
       destinationAccountId: '',
       rate: movementNeedsRate(type) ? session.draft.rate : undefined,
       dimensionId: movementSupportsDimension(type) ? session.draft.dimensionId || '' : '',
+      attachmentLabel: session.draft.attachmentLabel || '',
+      attachmentUrl: session.draft.attachmentUrl || '',
     }
     session.step = STEPS.AMOUNT
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -321,6 +335,14 @@ export async function handleMovementCallback(ctx, data) {
   if (data.startsWith('mv:dimension:')) {
     const token = data.slice('mv:dimension:'.length)
     session.draft.dimensionId = token === 'skip' ? '' : session.choices?.dimension?.[token] || ''
+    session.step = STEPS.ATTACHMENT
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
+  if (data === 'mv:attachment:skip') {
+    session.draft.attachmentLabel = ''
+    session.draft.attachmentUrl = ''
     session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -460,7 +482,17 @@ export async function handleMovementText(ctx, text) {
 
   if (session.step === STEPS.NOTE) {
     session.draft.note = String(text || '').trim()
-    session.step = movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.REVIEW
+    session.step = movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.ATTACHMENT
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    await sendStep(ctx, session)
+    return true
+  }
+
+  if (session.step === STEPS.ATTACHMENT) {
+    const attachment = parseAttachmentText(text)
+    session.draft.attachmentLabel = attachment.label
+    session.draft.attachmentUrl = attachment.url
+    session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     await sendStep(ctx, session)
     return true
@@ -477,6 +509,13 @@ function previousStep(session) {
   if (session.step === STEPS.DESTINATION) return movementNeedsSource(session.draft.type) ? STEPS.SOURCE : (movementNeedsRate(session.draft.type) ? STEPS.RATE : (movementConfigFor(session.draft.type).currencyLocked ? STEPS.AMOUNT : STEPS.CURRENCY))
   if (session.step === STEPS.NOTE) return movementNeedsDestination(session.draft.type) ? STEPS.DESTINATION : (movementNeedsSource(session.draft.type) ? STEPS.SOURCE : STEPS.CURRENCY)
   if (session.step === STEPS.DIMENSION) return STEPS.NOTE
-  if (session.step === STEPS.REVIEW) return STEPS.NOTE
+  if (session.step === STEPS.ATTACHMENT) return movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.NOTE
+  if (session.step === STEPS.REVIEW) return STEPS.ATTACHMENT
   return STEPS.TYPE
+}
+
+function parseAttachmentText(text) {
+  const value = String(text || '').trim()
+  if (/^https?:\/\//i.test(value)) return { label: value, url: value }
+  return { label: value, url: '' }
 }

@@ -183,6 +183,7 @@ describe('telegram movement flow safety', () => {
     await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
     await handleMovementCallback(ctx, `mv:account:destination:${choiceTokenFor(ctx, 'destination', 'saeed-cash')}`)
     await handleMovementCallback(ctx, 'mv:note:skip')
+    await handleMovementCallback(ctx, 'mv:attachment:skip')
     await handleMovementCallback(ctx, 'mv:confirm')
 
     const saved = ctx.repository.state.movements.filter((movement) => movement.id === 'review-transfer')
@@ -227,6 +228,7 @@ describe('telegram movement flow safety', () => {
     const dimensionId = 'dimension-account-truck-project'
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('dimension')
     await handleMovementCallback(ctx, `mv:dimension:${choiceTokenFor(ctx, 'dimension', dimensionId)}`)
+    await handleMovementCallback(ctx, 'mv:attachment:skip')
     await handleMovementCallback(ctx, 'mv:confirm')
 
     const saved = ctx.repository.state.movements.find((movement) => movement.source === 'telegram')
@@ -235,6 +237,40 @@ describe('telegram movement flow safety', () => {
       status: MOVEMENT_STATUSES.POSTED,
       sourceAccountId: 'me-cash',
       dimensionId,
+    })
+  })
+
+  it('stores a telegram movement attachment as ledger attachment metadata', async () => {
+    const ctx = createCtx()
+
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, 'mv:type:expense')
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '125')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+    await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 57 }, 'وقود')
+    await handleMovementCallback(ctx, 'mv:dimension:skip')
+    await handleMovementCallback(ctx, 'mv:attachment:skip')
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    expect(ctx.repository.state.attachments || []).toHaveLength(0)
+
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, 'mv:type:expense')
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 58 }, '130')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+    await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 59 }, 'ديزل')
+    await handleMovementCallback(ctx, 'mv:dimension:skip')
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 60 }, 'https://example.com/receipt.jpg')
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const movement = ctx.repository.state.movements.find((item) => item.note === 'ديزل')
+    const attachment = (ctx.repository.state.attachments || []).find((item) => item.movementId === movement.id)
+    expect(attachment).toMatchObject({
+      label: 'https://example.com/receipt.jpg',
+      url: 'https://example.com/receipt.jpg',
+      source: 'telegram',
     })
   })
 })

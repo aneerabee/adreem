@@ -9,6 +9,7 @@ import {
   previewMovement,
   summarizeBalances,
 } from '../../src/mohammadLedger/ledgerCore.js'
+import { createAttachment } from '../../src/mohammadLedger/ledgerOperations.js'
 import {
   getMovementAccounts as getSharedMovementAccounts,
   rankMovementAccounts,
@@ -114,10 +115,12 @@ export async function appendTelegramMovement(repository, draft, metadata) {
       state.movements,
     )
     const preview = previewDraft(state, movement)
+    const attachments = appendTelegramAttachment(state.attachments, movement, draft)
     return {
       state: {
         ...state,
         movements: [...state.movements, movement],
+        attachments,
       },
       movement,
       preview,
@@ -162,10 +165,12 @@ export async function resolveTelegramReviewMovement(repository, movementId, draf
       { ...state, movements: state.movements.filter((item) => item.id !== id) },
       movement,
     )
+    const attachments = appendTelegramAttachment(state.attachments, movement, draft)
     return {
       state: {
         ...state,
         movements: state.movements.map((item) => (item.id === id ? movement : item)),
+        attachments,
       },
       movement,
       preview,
@@ -173,6 +178,23 @@ export async function resolveTelegramReviewMovement(repository, movementId, draf
       needsReview: movement.status !== MOVEMENT_STATUSES.POSTED,
     }
   })
+}
+
+function appendTelegramAttachment(attachments = [], movement, draft = {}) {
+  const attachment = createAttachment({
+    movementId: movement.id,
+    label: draft.attachmentLabel,
+    url: draft.attachmentUrl,
+    source: 'telegram',
+  })
+  if (!attachment) return attachments
+  const hasSameAttachment = (Array.isArray(attachments) ? attachments : []).some((item) =>
+    item?.movementId === attachment.movementId &&
+    item?.label === attachment.label &&
+    item?.url === attachment.url &&
+    item?.source === attachment.source,
+  )
+  return hasSameAttachment ? attachments : [...(Array.isArray(attachments) ? attachments : []), attachment]
 }
 
 export function movementEffectsText(state, movement) {

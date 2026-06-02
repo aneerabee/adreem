@@ -60,6 +60,39 @@ describe('telegram ledger service', () => {
     expect(saved).toHaveLength(1)
   })
 
+  it('stores telegram movement attachment metadata without duplicating repeated confirms', async () => {
+    const repository = memoryRepository()
+    const draft = {
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      note: 'وقود',
+      attachmentLabel: 'إيصال وقود',
+      attachmentUrl: 'https://example.com/fuel.jpg',
+    }
+
+    await appendTelegramMovement(repository, draft, {
+      idempotencyKey: 'user-session-attachment',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+    await appendTelegramMovement(repository, draft, {
+      idempotencyKey: 'user-session-attachment',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    const movement = repository.state.movements.find((item) => item.idempotencyKey === 'user-session-attachment')
+    const attachments = repository.state.attachments.filter((attachment) => attachment.movementId === movement.id)
+    expect(attachments).toHaveLength(1)
+    expect(attachments[0]).toMatchObject({
+      label: 'إيصال وقود',
+      url: 'https://example.com/fuel.jpg',
+      source: 'telegram',
+    })
+  })
+
   it('saves incomplete telegram movements into review instead of rejecting them', async () => {
     const repository = memoryRepository()
     const draft = {
