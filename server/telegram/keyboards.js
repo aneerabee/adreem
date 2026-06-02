@@ -12,7 +12,8 @@ export function mainMenuKeyboard() {
     inline_keyboard: [
       [{ text: '+ إدخال', callback_data: 'main:movement', style: 'success' }, { text: '= الأرصدة', callback_data: 'main:accounts', style: 'primary' }],
       [{ text: '≡ السجل', callback_data: 'main:history' }, { text: '! مراجعة', callback_data: 'main:review' }],
-      [{ text: '+ حساب جديد', callback_data: 'main:account', style: 'primary' }, { text: 'مطابقة رصيد', callback_data: 'main:reconcile', style: 'success' }],
+      [{ text: 'تنبيهات', callback_data: 'main:alerts', style: 'danger' }, { text: 'مطابقة رصيد', callback_data: 'main:reconcile', style: 'success' }],
+      [{ text: '+ حساب جديد', callback_data: 'main:account', style: 'primary' }],
       [{ text: 'سجل اليوم', callback_data: 'main:today' }, { text: 'بحث عن حساب', callback_data: 'main:search' }],
     ],
   }

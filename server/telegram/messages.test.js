@@ -6,6 +6,7 @@ import {
   accountChoiceButtonStyle,
   accountChoiceButtonText,
   accountStepText,
+  alertsText,
   formatAccountBalance,
   mainMenuText,
   movementBlockquote,
@@ -66,11 +67,25 @@ describe('telegram movement presentation', () => {
       '= الأرصدة',
       '≡ السجل',
       '! مراجعة',
-      '+ حساب جديد',
+      'تنبيهات',
       'مطابقة رصيد',
+      '+ حساب جديد',
       'سجل اليوم',
       'بحث عن حساب',
     ])
+  })
+
+  it('renders smart alerts as compact cards', () => {
+    const text = alertsText([
+      { tone: 'danger', title: 'حركات ناقصة', value: 2 },
+      { tone: 'warning', title: 'أدفع', value: 12500, format: 'money' },
+    ])
+
+    expect(text).toContain('<b>ADREEM · تنبيهات</b>')
+    expect(text).toContain('<code>2 تنبيه</code>')
+    expect(text).toContain('🔴 حركات ناقصة')
+    expect(text).toContain('🟠 أدفع')
+    expect(text).toContain('12,500 د.ل')
   })
 
   it('uses a compact step counter instead of visual dot noise', () => {

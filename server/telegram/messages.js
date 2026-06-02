@@ -116,6 +116,29 @@ export function mainMenuText(summary = null) {
   return lines.join('\n')
 }
 
+export function alertsText(alerts = []) {
+  const safeAlerts = Array.isArray(alerts) ? alerts : []
+  const lines = ['<b>ADREEM · تنبيهات</b>', `<code>${safeAlerts.length} تنبيه</code>`]
+  if (!safeAlerts.length) {
+    lines.push('', '<blockquote>لا توجد تنبيهات الآن.</blockquote>')
+    return lines.join('\n')
+  }
+  lines.push('')
+  safeAlerts.forEach((alert) => {
+    const icon = alertIcon(alert.tone)
+    const value = alert.format === 'money' ? formatMoney(alert.value, CURRENCIES.DINAR) : String(Math.round(Number(alert.value || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    lines.push(`<blockquote>${escapeHtml(`${icon} ${alert.title}\n${value}`)}</blockquote>`)
+  })
+  return lines.join('\n')
+}
+
+function alertIcon(tone) {
+  if (tone === 'danger') return '🔴'
+  if (tone === 'warning') return '🟠'
+  if (tone === 'info') return '🔵'
+  return '⚪'
+}
+
 function accountStepTitle(session) {
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
   if (session?.step === 'type') return 'اختر التصنيف'

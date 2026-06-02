@@ -1,10 +1,11 @@
 import { MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { buildLedgerAlerts, dueRecurringRules } from '../../src/mohammadLedger/ledgerOperations.js'
 import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
 import { createLedgerIdentity } from '../../src/mohammadLedger/ledgerState.js'
 import { accountLabel, buildLedgerSnapshot, formatMoney } from '../mohammadLedger/ledgerService.js'
 import { mainMenuKeyboard, reviewKeyboard } from './keyboards.js'
-import { accountBlockquote, escapeHtml, mainMenuText, movementBlockquote, movementLabels } from './messages.js'
+import { accountBlockquote, alertsText, escapeHtml, mainMenuText, movementBlockquote, movementLabels } from './messages.js'
 import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountInState } from './reviewActions.js'
 import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
@@ -196,6 +197,31 @@ async function showHistory(ctx) {
   return sendScreen(ctx, rows.length ? `<b>ADREEM · السجل</b>\n<code>${rows.length} حركة أخيرة</code>\n\n${rows.join('\n')}` : '<b>ADREEM · السجل</b>\n<blockquote>لا توجد حركات.</blockquote>')
 }
 
+async function showAlerts(ctx) {
+  sessions.clear(ctx.chatId, ctx.userId)
+  const { state } = await ctx.repository.load()
+  const snapshot = buildLedgerSnapshot(state)
+  const reviewAccounts = state.accounts.filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW)
+  const reviewMovements = state.movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
+  const iOwePeople = snapshot.balances
+    .filter((bucket) => bucket.account?.valueKind === VALUE_KINDS.RECEIVABLE)
+    .reduce((total, bucket) => total + Math.max(0, -Math.round(Number(bucket.dinar || 0))), 0)
+  const reconciliationDiffCount = (state.reconciliations || []).filter((item) =>
+    Math.round(Number(item.actualDinar || 0)) !== Math.round(Number(item.expectedDinar || 0)) ||
+    Math.round(Number(item.actualUsd || 0)) !== Math.round(Number(item.expectedUsd || 0)),
+  ).length
+  const alerts = buildLedgerAlerts({
+    reviewAccounts,
+    reviewMovements,
+    balances: snapshot.balances,
+    movements: state.movements,
+    totals: { iOwePeople },
+    dueRecurringCount: dueRecurringRules(state.recurringRules).length,
+    reconciliationDiffCount,
+  })
+  return sendScreen(ctx, alertsText(alerts))
+}
+
 async function showReview(ctx, notice = '') {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
@@ -382,6 +408,7 @@ async function handleCallback(ctx, update) {
   if (data === 'main:history') return showHistory(ctx)
   if (data === 'main:review') return showReview(ctx)
   if (data === 'main:search') return startSearch(ctx)
+  if (data === 'main:alerts') return showAlerts(ctx)
   if (data === 'main:reconcile') return startReconciliation(ctx)
   if (data.startsWith('review:')) return handleReviewCallback(ctx, data)
   if (data.startsWith('acct:')) return handleAccountCallback(ctx, data)
