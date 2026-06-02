@@ -255,6 +255,69 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   return lines.join('\n')
 }
 
+export function reconciliationStepText(session, accountsById = new Map(), balancesByAccountId = new Map()) {
+  const draft = session?.draft || {}
+  const account = accountsById.get(draft.accountId)
+  const bucket = balancesByAccountId.get(draft.accountId)
+  const steps = ['account', 'currency', 'actual', 'note', 'review']
+  const currentIndex = Math.max(0, steps.indexOf(session?.step))
+  const progress = `${currentIndex + 1}/${steps.length}`
+  const summary = []
+  if (account) summary.push(htmlLine('الحساب', accountLabel(account)))
+  if (draft.currency) summary.push(htmlLine('العملة', currencyLabel(draft.currency)))
+  if (typeof draft.actualBalance === 'number') summary.push(htmlLine('الرصيد الفعلي', formatMoney(draft.actualBalance, draft.currency)))
+  if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
+
+  const lines = [
+    '<b>ADREEM · مطابقة رصيد</b>',
+    `<code>${progress}</code>`,
+    '',
+    ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
+    '<b>الخطوة الحالية</b>',
+    `<blockquote>${escapeHtml(reconciliationStepTitle(session, account, bucket))}\n${escapeHtml(reconciliationStepHelp(session))}</blockquote>`,
+  ]
+  return lines.join('\n')
+}
+
+function reconciliationStepTitle(session, account, bucket) {
+  if (session?.step === 'account') return 'اختر الحساب الذي عدّدت رصيده'
+  if (session?.step === 'currency') return 'اختر عملة المطابقة'
+  if (session?.step === 'actual') return `كم الرصيد الفعلي الآن؟${account ? `\nدفتره: ${formatAccountBalance(account, bucket)}` : ''}`
+  if (session?.step === 'note') return 'اكتب سبب المطابقة'
+  if (session?.step === 'review') return 'راجع الفرق قبل الحفظ'
+  return 'مطابقة رصيد'
+}
+
+function reconciliationStepHelp(session) {
+  if (session?.step === 'account') return 'تظهر حسابات فلوسك فقط.'
+  if (session?.step === 'currency') return 'اختر العملة التي عدّدتَها.'
+  if (session?.step === 'actual') return 'اكتب رقمًا صحيحًا، ويمكن أن يكون صفر.'
+  if (session?.step === 'note') return 'الملاحظة إلزامية حتى نعرف سبب التصحيح.'
+  if (session?.step === 'review') return 'الحفظ سيضيف مطابقة، وقد ينشئ تصحيحًا.'
+  return ''
+}
+
+export function reconciliationReviewText(session, preview = {}) {
+  const draft = session?.draft || {}
+  const account = preview.account
+  const expected = Math.round(Number(preview.expected || 0))
+  const actual = Math.round(Number(draft.actualBalance || 0))
+  const diff = actual - expected
+  const sign = diff > 0 ? '+' : ''
+  const lines = [
+    '<b>تأكيد المطابقة</b>',
+    '<code>راجع قبل الحفظ</code>',
+    '',
+    `<blockquote>${escapeHtml(accountLabel(account))}\n${escapeHtml(`دفتر: ${formatMoney(expected, draft.currency)}`)}\n${escapeHtml(`فعلي: ${formatMoney(actual, draft.currency)}`)}\n${escapeHtml(`الفرق: ${sign}${formatMoney(diff, draft.currency)}`)}\n${escapeHtml(`ملاحظة: ${draft.note || ''}`)}</blockquote>`,
+  ]
+  if (!diff) {
+    lines.push('', '<blockquote>لا يوجد فرق. سيتم حفظ المطابقة بدون حركة تصحيح.</blockquote>')
+  } else {
+    lines.push('', `<blockquote>${escapeHtml(`سيتم إنشاء تعديل رصيد بقيمة ${sign}${formatMoney(diff, draft.currency)}.`)}</blockquote>`)
+  }
+  return lines.join('\n')
+}
+
 export function stepPromptText(session) {
   if (session?.step === 'amount') return 'أرسل المبلغ الآن كرقم فقط.'
   if (session?.step === 'rate') return 'أرسل سعر الصرف الآن.'

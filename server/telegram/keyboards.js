@@ -12,8 +12,48 @@ export function mainMenuKeyboard() {
     inline_keyboard: [
       [{ text: '+ إدخال', callback_data: 'main:movement', style: 'success' }, { text: '= الأرصدة', callback_data: 'main:accounts', style: 'primary' }],
       [{ text: '≡ السجل', callback_data: 'main:history' }, { text: '! مراجعة', callback_data: 'main:review' }],
-      [{ text: '+ حساب جديد', callback_data: 'main:account', style: 'primary' }],
+      [{ text: '+ حساب جديد', callback_data: 'main:account', style: 'primary' }, { text: 'مطابقة رصيد', callback_data: 'main:reconcile', style: 'success' }],
       [{ text: 'سجل اليوم', callback_data: 'main:today' }, { text: 'بحث عن حساب', callback_data: 'main:search' }],
+    ],
+  }
+}
+
+export function reconciliationAccountKeyboard(accounts, balancesByAccountId = new Map()) {
+  const rows = accounts.map((account) => ([{
+    text: accountChoiceButtonText(account, balancesByAccountId.get(account.id)),
+    callback_data: `rec:account:${accountChoiceToken(account)}`,
+    style: accountChoiceButtonStyle(account, balancesByAccountId.get(account.id)),
+  }]))
+  rows.push([{ text: '🔎 اكتب اسمًا للبحث', callback_data: 'rec:search', style: 'primary' }])
+  rows.push([{ text: '↩️ القائمة', callback_data: 'rec:cancel', style: 'primary' }])
+  return { inline_keyboard: rows }
+}
+
+export function reconciliationCurrencyKeyboard(selectedCurrency = '') {
+  return {
+    inline_keyboard: [
+      [
+        { text: `${selectedCurrency === CURRENCIES.DINAR ? '✓ ' : ''}دينار د.ل`, callback_data: `rec:currency:${CURRENCIES.DINAR}`, style: 'primary' },
+        { text: `${selectedCurrency === CURRENCIES.USD ? '✓ ' : ''}دولار $`, callback_data: `rec:currency:${CURRENCIES.USD}`, style: 'primary' },
+      ],
+      [{ text: '↩️ رجوع', callback_data: 'rec:back' }, { text: 'إلغاء', callback_data: 'rec:cancel', style: 'danger' }],
+    ],
+  }
+}
+
+export function reconciliationTextStepKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '↩️ رجوع', callback_data: 'rec:back' }, { text: 'إلغاء', callback_data: 'rec:cancel', style: 'danger' }],
+    ],
+  }
+}
+
+export function reconciliationConfirmKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: 'تأكيد المطابقة', callback_data: 'rec:confirm', style: 'success' }],
+      [{ text: '↩️ تعديل', callback_data: 'rec:back', style: 'primary' }, { text: 'إلغاء', callback_data: 'rec:cancel', style: 'danger' }],
     ],
   }
 }

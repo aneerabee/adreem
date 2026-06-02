@@ -3,9 +3,11 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohamma
 import { createMohammadFallbackState } from '../../src/mohammadLedger/ledgerState.js'
 import {
   appendTelegramMovement,
+  appendTelegramReconciliation,
   buildLedgerSnapshot,
   getMovementAccounts,
   parseAmountText,
+  parseBalanceText,
   rankAccountsForTelegram,
   resolveTelegramReviewMovement,
 } from './ledgerService.js'
@@ -30,6 +32,9 @@ describe('telegram ledger service', () => {
     expect(parseAmountText('١٢٥٠')).toBe(1250)
     expect(parseAmountText('7.55', { allowDecimal: true })).toBe(7.55)
     expect(parseAmountText('-1')).toBe(null)
+    expect(parseBalanceText('0')).toBe(0)
+    expect(parseBalanceText('١٢٬٥٠٠')).toBe(12500)
+    expect(parseBalanceText('-1')).toBe(null)
   })
 
   it('appends a telegram movement once using the idempotency key', async () => {
@@ -127,6 +132,68 @@ describe('telegram ledger service', () => {
         sourceAccountId: 'me-cash',
       },
     })
+  })
+
+  it('records telegram reconciliation and creates one idempotent correction movement', async () => {
+    const repository = memoryRepository()
+
+    const first = await appendTelegramReconciliation(repository, {
+      accountId: 'me-cash',
+      currency: CURRENCIES.DINAR,
+      actualBalance: 47000,
+      note: 'عد الصندوق',
+    }, {
+      idempotencyKey: 'user-reconcile-1',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+    const second = await appendTelegramReconciliation(repository, {
+      accountId: 'me-cash',
+      currency: CURRENCIES.DINAR,
+      actualBalance: 47000,
+      note: 'عد الصندوق',
+    }, {
+      idempotencyKey: 'user-reconcile-1',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    expect(first.reconciliation).toMatchObject({
+      accountId: 'me-cash',
+      actualDinar: 47000,
+      note: 'عد الصندوق',
+      source: 'telegram',
+    })
+    expect(first.correctionMovements).toHaveLength(1)
+    expect(first.correctionMovements[0]).toMatchObject({
+      type: MOVEMENT_TYPES.CORRECTION,
+      status: MOVEMENT_STATUSES.POSTED,
+      destinationAccountId: 'me-cash',
+      currency: CURRENCIES.DINAR,
+      reconciliationId: first.reconciliation.id,
+    })
+    expect(second.duplicate).toBe(true)
+    expect(repository.state.reconciliations).toHaveLength(1)
+    expect(repository.state.movements.filter((movement) => movement.reconciliationId === first.reconciliation.id)).toHaveLength(1)
+  })
+
+  it('rejects telegram reconciliation without a clear note', async () => {
+    const repository = memoryRepository()
+
+    const result = await appendTelegramReconciliation(repository, {
+      accountId: 'me-cash',
+      currency: CURRENCIES.DINAR,
+      actualBalance: 47000,
+      note: '',
+    }, {
+      idempotencyKey: 'user-reconcile-missing-note',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    expect(result.rejected).toBe(true)
+    expect(result.error).toContain('ملاحظة')
+    expect(repository.state.reconciliations).toHaveLength(0)
   })
 
   it('saves incomplete telegram movements into review instead of rejecting them', async () => {

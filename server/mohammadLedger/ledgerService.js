@@ -9,7 +9,12 @@ import {
   previewMovement,
   summarizeBalances,
 } from '../../src/mohammadLedger/ledgerCore.js'
-import { createAttachment, createRecurringRuleFromMovement } from '../../src/mohammadLedger/ledgerOperations.js'
+import {
+  buildReconciliationCorrectionDrafts,
+  createAttachment,
+  createReconciliation,
+  createRecurringRuleFromMovement,
+} from '../../src/mohammadLedger/ledgerOperations.js'
 import {
   getMovementAccounts as getSharedMovementAccounts,
   rankMovementAccounts,
@@ -57,6 +62,17 @@ export function parseAmountText(text, { allowDecimal = false } = {}) {
   const number = Number(normalized)
   if (!Number.isFinite(number) || number <= 0) return null
   return allowDecimal ? number : Math.round(number)
+}
+
+export function parseBalanceText(text) {
+  const normalized = String(text || '')
+    .replace(/[٬،\s]/g, '')
+    .replace(/,/g, '')
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[٫]/g, '.')
+  const number = Number(normalized)
+  if (!Number.isFinite(number) || number < 0) return null
+  return Math.round(number)
 }
 
 export function buildLedgerSnapshot(state) {
@@ -184,6 +200,83 @@ export async function resolveTelegramReviewMovement(repository, movementId, draf
   })
 }
 
+export async function appendTelegramReconciliation(repository, draft, metadata = {}) {
+  const idempotencyKey = String(metadata?.idempotencyKey || '').trim()
+  if (!idempotencyKey) throw new Error('Missing Telegram reconciliation idempotency key.')
+
+  return repository.update((state) => {
+    const existing = (state.reconciliations || []).find((item) => item.source === 'telegram' && item.idempotencyKey === idempotencyKey)
+    if (existing) {
+      return {
+        state,
+        reconciliation: existing,
+        correctionMovements: state.movements.filter((movement) => movement.reconciliationId === existing.id),
+        duplicate: true,
+      }
+    }
+
+    const snapshot = buildLedgerSnapshot(state)
+    const account = snapshot.accountById.get(draft.accountId)
+    const bucket = snapshot.balanceByAccountId.get(draft.accountId)
+    const note = String(draft.note || '').trim()
+    if (!account) {
+      return { state, rejected: true, error: 'الحساب غير موجود.' }
+    }
+    if (!note) {
+      return { state, rejected: true, error: 'المطابقة تحتاج ملاحظة واضحة.' }
+    }
+
+    const expectedDinar = Math.round(Number(bucket?.dinar || 0))
+    const expectedUsd = Math.round(Number(bucket?.usd || 0))
+    const currency = draft.currency || CURRENCIES.DINAR
+    const actualDinar = currency === CURRENCIES.DINAR ? draft.actualBalance : expectedDinar
+    const actualUsd = currency === CURRENCIES.USD ? draft.actualBalance : expectedUsd
+    const reconciliation = {
+      ...createReconciliation({
+        accountId: draft.accountId,
+        actualDinar,
+        actualUsd,
+        expectedDinar,
+        expectedUsd,
+        note,
+      }),
+      currency,
+      source: 'telegram',
+      idempotencyKey,
+      telegramUserId: metadata.telegramUserId,
+      telegramChatId: metadata.telegramChatId,
+    }
+
+    const correctionMovements = []
+    let validationMovements = state.movements
+    for (const correctionDraft of buildReconciliationCorrectionDrafts(reconciliation)) {
+      if (correctionDraft.currency !== currency) continue
+      const movement = postMovement({
+        ...correctionDraft,
+        id: telegramReconciliationMovementId(idempotencyKey, correctionDraft.currency),
+        source: 'telegram',
+        idempotencyKey: `${idempotencyKey}-${correctionDraft.currency}`,
+        telegramUserId: metadata.telegramUserId,
+        telegramChatId: metadata.telegramChatId,
+      }, state.accounts, validationMovements)
+      correctionMovements.push(movement)
+      validationMovements = [...validationMovements, movement]
+    }
+
+    return {
+      state: {
+        ...state,
+        reconciliations: [...(state.reconciliations || []), reconciliation],
+        movements: [...state.movements, ...correctionMovements],
+      },
+      reconciliation,
+      correctionMovements,
+      duplicate: false,
+      needsReview: correctionMovements.some((movement) => movement.status !== MOVEMENT_STATUSES.POSTED),
+    }
+  })
+}
+
 function appendTelegramAttachment(attachments = [], movement, draft = {}) {
   const attachment = createAttachment({
     movementId: movement.id,
@@ -235,4 +328,10 @@ function telegramMovementId(idempotencyKey) {
   const readable = idempotencyKey.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 48) || 'movement'
   const hash = createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 16)
   return `telegram-${readable}-${hash}`
+}
+
+function telegramReconciliationMovementId(idempotencyKey, currency) {
+  const readable = idempotencyKey.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 48) || 'reconcile'
+  const hash = createHash('sha256').update(`${idempotencyKey}-${currency}`).digest('hex').slice(0, 16)
+  return `telegram-reconcile-${readable}-${currency}-${hash}`
 }

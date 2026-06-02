@@ -10,6 +10,7 @@ import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
 import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './handlers/account.js'
 import { handleMovementCallback, handleMovementText, startMovement, startReviewMovement } from './handlers/movement.js'
+import { handleReconciliationCallback, handleReconciliationText, startReconciliation } from './handlers/reconciliation.js'
 import { createTelegramUserAccess } from './userRegistry.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
@@ -381,9 +382,11 @@ async function handleCallback(ctx, update) {
   if (data === 'main:history') return showHistory(ctx)
   if (data === 'main:review') return showReview(ctx)
   if (data === 'main:search') return startSearch(ctx)
+  if (data === 'main:reconcile') return startReconciliation(ctx)
   if (data.startsWith('review:')) return handleReviewCallback(ctx, data)
   if (data.startsWith('acct:')) return handleAccountCallback(ctx, data)
   if (data.startsWith('mv:')) return handleMovementCallback(ctx, data)
+  if (data.startsWith('rec:')) return handleReconciliationCallback(ctx, data)
   return sendScreen(ctx, 'أمر غير معروف.')
 }
 
@@ -401,6 +404,10 @@ async function handleMessage(ctx, update) {
     return null
   }
   if (await handleAccountText(ctx, text)) {
+    await deleteUserInput(ctx)
+    return null
+  }
+  if (await handleReconciliationText(ctx, text)) {
     await deleteUserInput(ctx)
     return null
   }
