@@ -228,8 +228,9 @@ export function movementStepText(session, accountsById = new Map()) {
   if (source) summary.push(htmlLine(config.sourceLabel, accountLabel(source)))
   if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, accountLabel(destination)))
   if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
+  const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : 'ADREEM · إدخال'
   const lines = [
-    '<b>ADREEM · إدخال</b>',
+    `<b>${title}</b>`,
     `<code>${progress}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`] : []),

@@ -9,7 +9,7 @@ import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountI
 import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
 import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './handlers/account.js'
-import { handleMovementCallback, handleMovementText, startMovement } from './handlers/movement.js'
+import { handleMovementCallback, handleMovementText, startMovement, startReviewMovement } from './handlers/movement.js'
 import { createTelegramUserAccess } from './userRegistry.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
@@ -228,6 +228,11 @@ async function handleReviewCallback(ctx, data) {
     if (!movementId) return showReview(ctx, 'هذا العنصر لم يعد موجودًا في القائمة.')
     const result = await ctx.repository.update((state) => cancelReviewMovementInState(state, movementId))
     return showReview(ctx, result.message)
+  }
+  if (kind === 'movement' && action === 'fix') {
+    const movementId = session.choices?.movements?.[token]
+    if (!movementId) return showReview(ctx, 'هذا العنصر لم يعد موجودًا في القائمة.')
+    return startReviewMovement(ctx, movementId)
   }
   if (kind === 'account' && action === 'hide') {
     const accountId = session.choices?.accounts?.[token]

@@ -163,7 +163,10 @@ export function reviewKeyboard(reviewSession) {
   const accountTokens = Object.keys(reviewSession?.choices?.accounts || {})
 
   movementTokens.forEach((token) => {
-    rows.push([{ text: `إلغاء حركة #${Number(token) + 1}`, callback_data: `review:movement:cancel:${token}`, style: 'danger' }])
+    rows.push([
+      { text: `إصلاح حركة #${Number(token) + 1}`, callback_data: `review:movement:fix:${token}`, style: 'success' },
+      { text: `إلغاء #${Number(token) + 1}`, callback_data: `review:movement:cancel:${token}`, style: 'danger' },
+    ])
   })
   accountTokens.forEach((token) => {
     rows.push([

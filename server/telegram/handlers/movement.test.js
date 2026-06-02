@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
-import { handleMovementCallback, handleMovementText } from './movement.js'
+import { handleMovementCallback, handleMovementText, startReviewMovement } from './movement.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
   let state = initialState
@@ -155,4 +155,51 @@ describe('telegram movement flow safety', () => {
     expect(session.draft.sourceAccountId).toBe('')
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('أين دخلت الفلوس')
   })
+
+  it('resolves a review movement through the same movement wizard', async () => {
+    const initialState = createMohammadFallbackState()
+    const ctx = createCtx()
+    ctx.repository = memoryRepository({
+      ...initialState,
+      movements: [
+        ...initialState.movements,
+        {
+          id: 'review-transfer',
+          type: MOVEMENT_TYPES.TRANSFER,
+          status: MOVEMENT_STATUSES.NEEDS_REVIEW,
+          amount: 100,
+          currency: CURRENCIES.DINAR,
+          sourceAccountId: 'me-cash',
+          destinationAccountId: '',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    })
+
+    await startReviewMovement(ctx, 'review-transfer')
+    await handleMovementCallback(ctx, 'mv:type:transfer')
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '100')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+    await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
+    await handleMovementCallback(ctx, `mv:account:destination:${choiceTokenFor(ctx, 'destination', 'saeed-cash')}`)
+    await handleMovementCallback(ctx, 'mv:note:skip')
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const saved = ctx.repository.state.movements.filter((movement) => movement.id === 'review-transfer')
+    expect(saved).toHaveLength(1)
+    expect(saved[0]).toMatchObject({
+      status: MOVEMENT_STATUSES.POSTED,
+      destinationAccountId: 'saeed-cash',
+      reviewSource: 'telegram',
+    })
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم إصلاح الحركة')
+  })
 })
+
+function choiceTokenFor(ctx, role, accountId) {
+  const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+  const entry = Object.entries(session?.choices?.[role] || {}).find(([, id]) => id === accountId)
+  if (!entry) throw new Error(`Missing ${role} choice for ${accountId}`)
+  return entry[0]
+}

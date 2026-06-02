@@ -17,6 +17,7 @@ import {
   parseAmountText,
   previewDraft,
   rankAccountsForTelegram,
+  resolveTelegramReviewMovement,
 } from '../../mohammadLedger/ledgerService.js'
 import {
   accountChoicesKeyboard,
@@ -40,12 +41,14 @@ const STEPS = {
   REVIEW: 'review',
 }
 
-function createMovementSession() {
+function createMovementSession(options = {}) {
   return {
     flow: 'movement',
+    mode: options.mode || 'create',
     step: STEPS.TYPE,
     sessionId: randomUUID(),
-    draft: {
+    reviewMovementId: options.reviewMovementId || '',
+    draft: options.draft || {
       type: '',
       amount: 0,
       currency: '',
@@ -181,23 +184,53 @@ export async function startMovement(ctx) {
   return sendStep(ctx, session)
 }
 
+export async function startReviewMovement(ctx, movementId) {
+  const { state } = await ctx.repository.load()
+  const movement = state.movements.find((item) => item.id === movementId)
+  if (!movement) {
+    return ctx.telegram.sendMessage({
+      chat_id: ctx.chatId,
+      text: '<b>لم أجد الحركة.</b>',
+      parse_mode: 'HTML',
+      reply_markup: mainMenuKeyboard(),
+    })
+  }
+  const session = createMovementSession({
+    mode: 'review',
+    reviewMovementId: movement.id,
+    draft: {
+      type: movement.type || '',
+      amount: movement.amount || 0,
+      currency: movement.currency || '',
+      currencyConfirmed: Boolean(movement.currency),
+      sourceAccountId: movement.sourceAccountId || '',
+      destinationAccountId: movement.destinationAccountId || '',
+      rate: movement.rate,
+      note: movement.note || '',
+    },
+  })
+  ctx.sessions.set(ctx.chatId, ctx.userId, session)
+  return sendStep(ctx, session, 'إصلاح حركة من المراجعة. راجع الخطوات ثم احفظ.')
+}
+
 export async function handleMovementCallback(ctx, data) {
   const session = ctx.sessions.get(ctx.chatId, ctx.userId)
   if (!session || session.flow !== 'movement') return sendExpiredMovementMessage(ctx)
   if (isStaleMovementCallback(ctx, session)) return sendExpiredMovementMessage(ctx)
 
   if (data === 'mv:cancel') {
+    const cancelText = session.mode === 'review' ? 'تم إلغاء إصلاح الحركة.' : 'تم إلغاء الإدخال.'
     ctx.sessions.clear(ctx.chatId, ctx.userId)
     try {
       return await ctx.telegram.editMessageText({
         chat_id: ctx.chatId,
         message_id: session.uiMessageId || ctx.messageId,
-        text: '<b>تم إلغاء الإدخال.</b>',
+        text: `<b>${cancelText}</b>`,
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })
     } catch {
-      return ctx.telegram.sendMessage({ chat_id: ctx.chatId, text: '<b>تم إلغاء الإدخال.</b>', parse_mode: 'HTML', reply_markup: mainMenuKeyboard() })
+      return ctx.telegram.sendMessage({ chat_id: ctx.chatId, text: `<b>${cancelText}</b>`, parse_mode: 'HTML', reply_markup: mainMenuKeyboard() })
     }
   }
 
@@ -262,11 +295,18 @@ export async function handleMovementCallback(ctx, data) {
     session.draft.currency = session.draft.currency || movementCurrencyFor(session.draft.type, CURRENCIES.DINAR)
     let result
     try {
-      result = await appendTelegramMovement(ctx.repository, session.draft, {
-        idempotencyKey: `${ctx.userId}-${session.sessionId}`,
-        telegramUserId: ctx.userId,
-        telegramChatId: ctx.chatId,
-      })
+      if (session.mode === 'review') {
+        result = await resolveTelegramReviewMovement(ctx.repository, session.reviewMovementId, session.draft, {
+          telegramUserId: ctx.userId,
+          telegramChatId: ctx.chatId,
+        })
+      } else {
+        result = await appendTelegramMovement(ctx.repository, session.draft, {
+          idempotencyKey: `${ctx.userId}-${session.sessionId}`,
+          telegramUserId: ctx.userId,
+          telegramChatId: ctx.chatId,
+        })
+      }
     } catch (error) {
       console.error('[adreem-telegram-bot] movement save failed', error?.message || error)
       return upsertFlowMessage(ctx, session, {
@@ -274,9 +314,15 @@ export async function handleMovementCallback(ctx, data) {
         reply_markup: confirmKeyboard(),
       })
     }
+    if (result.rejected) {
+      return upsertFlowMessage(ctx, session, {
+        text: `<b>لم يتم الحفظ.</b>\n<blockquote>${escapeHtml(result.error || 'الحركة لم تعد قابلة للإصلاح من هنا.')}</blockquote>`,
+        reply_markup: confirmKeyboard(),
+      })
+    }
     ctx.sessions.clear(ctx.chatId, ctx.userId)
     const amountText = formatMoney(result.movement.amount, result.movement.currency)
-    const suffix = savedMovementSuffix(result)
+    const suffix = savedMovementSuffix(result, session)
     const detailText = result.needsReview
       ? `${movementLabels[result.movement.type]} ${amountText}\nستظهر في قسم المراجعة.\nلا تغير الأرصدة قبل الاعتماد.`
       : `${movementLabels[result.movement.type]} ${amountText}`
@@ -301,7 +347,8 @@ export async function handleMovementCallback(ctx, data) {
   return sendStep(ctx, session, 'أمر غير معروف.')
 }
 
-function savedMovementSuffix(result) {
+function savedMovementSuffix(result, session = {}) {
+  if (session.mode === 'review') return result.needsReview ? 'ما زالت في المراجعة.' : 'تم إصلاح الحركة وتحديث الدفتر.'
   if (result.duplicate) return result.needsReview ? 'كانت محفوظة سابقًا في المراجعة.' : 'كانت محفوظة سابقًا ولم تتكرر.'
   return result.needsReview ? 'تم حفظها في المراجعة.' : 'تم الحفظ وتحديث الدفتر.'
 }

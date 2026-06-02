@@ -127,6 +127,54 @@ export async function appendTelegramMovement(repository, draft, metadata) {
   })
 }
 
+export async function resolveTelegramReviewMovement(repository, movementId, draft, metadata = {}) {
+  const id = String(movementId || '').trim()
+  if (!id) throw new Error('Missing review movement id.')
+
+  return repository.update((state) => {
+    const target = state.movements.find((movement) => movement.id === id)
+    if (!target || target.status !== MOVEMENT_STATUSES.NEEDS_REVIEW) {
+      return {
+        movement: target || null,
+        rejected: true,
+        needsReview: true,
+        preview: target ? previewDraft(state, target) : null,
+        error: 'الحركة لم تعد في المراجعة.',
+      }
+    }
+
+    const movement = postMovement(
+      {
+        ...target,
+        ...draft,
+        id: target.id,
+        source: target.source || 'telegram',
+        idempotencyKey: target.idempotencyKey,
+        telegramUserId: target.telegramUserId || metadata.telegramUserId,
+        telegramChatId: target.telegramChatId || metadata.telegramChatId,
+        reviewedBy: metadata.telegramUserId,
+        reviewSource: 'telegram',
+      },
+      state.accounts,
+      state.movements.filter((item) => item.id !== id),
+    )
+    const preview = previewDraft(
+      { ...state, movements: state.movements.filter((item) => item.id !== id) },
+      movement,
+    )
+    return {
+      state: {
+        ...state,
+        movements: state.movements.map((item) => (item.id === id ? movement : item)),
+      },
+      movement,
+      preview,
+      duplicate: false,
+      needsReview: movement.status !== MOVEMENT_STATUSES.POSTED,
+    }
+  })
+}
+
 export function movementEffectsText(state, movement) {
   const snapshot = buildLedgerSnapshot(state)
   const entries = buildPostingEntries(movement)

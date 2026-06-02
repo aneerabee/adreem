@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../src/mohammadLedger/ledgerState.js'
-import { appendTelegramMovement, buildLedgerSnapshot, getMovementAccounts, parseAmountText, rankAccountsForTelegram } from './ledgerService.js'
+import {
+  appendTelegramMovement,
+  buildLedgerSnapshot,
+  getMovementAccounts,
+  parseAmountText,
+  rankAccountsForTelegram,
+  resolveTelegramReviewMovement,
+} from './ledgerService.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
   let state = initialState
@@ -82,6 +89,48 @@ describe('telegram ledger service', () => {
     expect(second.duplicate).toBe(true)
     expect(second.needsReview).toBe(true)
     expect(saved).toHaveLength(1)
+  })
+
+  it('resolves a review telegram movement in place without creating a duplicate', async () => {
+    const initialState = createMohammadFallbackState()
+    const repository = memoryRepository({
+      ...initialState,
+      movements: [
+        ...initialState.movements,
+        {
+          id: 'review-transfer',
+          type: MOVEMENT_TYPES.TRANSFER,
+          status: MOVEMENT_STATUSES.NEEDS_REVIEW,
+          amount: 100,
+          currency: CURRENCIES.DINAR,
+          sourceAccountId: 'me-cash',
+          destinationAccountId: '',
+          source: 'telegram',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    })
+
+    const result = await resolveTelegramReviewMovement(repository, 'review-transfer', {
+      type: MOVEMENT_TYPES.TRANSFER,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: 'saeed-cash',
+      note: 'تم الإصلاح',
+    }, {
+      telegramUserId: 278516861,
+      telegramChatId: 278516861,
+    })
+
+    const saved = repository.state.movements.filter((movement) => movement.id === 'review-transfer')
+    expect(result.needsReview).toBe(false)
+    expect(saved).toHaveLength(1)
+    expect(saved[0]).toMatchObject({
+      status: MOVEMENT_STATUSES.POSTED,
+      destinationAccountId: 'saeed-cash',
+      reviewSource: 'telegram',
+    })
   })
 
   it('uses the shared web account-selection rules for telegram movement parties', () => {
