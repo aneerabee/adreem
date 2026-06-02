@@ -4,9 +4,10 @@ import { buildLedgerAlerts, dueRecurringRules } from '../../src/mohammadLedger/l
 import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
 import { createLedgerIdentity } from '../../src/mohammadLedger/ledgerState.js'
 import { accountLabel, buildLedgerSnapshot, formatMoney } from '../mohammadLedger/ledgerService.js'
-import { mainMenuKeyboard, reviewKeyboard } from './keyboards.js'
+import { historyCancelConfirmKeyboard, historyKeyboard, mainMenuKeyboard, reviewKeyboard } from './keyboards.js'
 import { accountBlockquote, alertsText, escapeHtml, mainMenuText, movementBlockquote, movementLabels } from './messages.js'
 import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountInState } from './reviewActions.js'
+import { buildHistorySession, recentHistoryMovements, voidRecentMovementInState } from './historyActions.js'
 import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
 import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './handlers/account.js'
@@ -184,17 +185,21 @@ async function showToday(ctx) {
   return sendScreen(ctx, rows.length ? `<b>ADREEM · سجل اليوم</b>\n<code>${rows.length} حركة</code>\n\n${rows.join('\n')}` : '<b>ADREEM · سجل اليوم</b>\n<blockquote>لا توجد حركات اليوم.</blockquote>')
 }
 
-async function showHistory(ctx) {
+async function showHistory(ctx, notice = '') {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
-  const rows = state.movements
-    .filter((movement) => movement.status === MOVEMENT_STATUSES.POSTED && !movement.id?.startsWith('opening-'))
-    .slice()
-    .reverse()
+  const historySession = buildHistorySession(state)
+  sessions.set(ctx.chatId, ctx.userId, { ...historySession, uiMessageId: ctx.isCallback ? ctx.messageId : null })
+  const rows = recentHistoryMovements(state)
     .slice(0, 14)
     .map((movement) => movementBlockquote(movement, snapshot.accountById, { includeDate: true }))
-  return sendScreen(ctx, rows.length ? `<b>ADREEM · السجل</b>\n<code>${rows.length} حركة أخيرة</code>\n\n${rows.join('\n')}` : '<b>ADREEM · السجل</b>\n<blockquote>لا توجد حركات.</blockquote>')
+  const noticeBlock = notice ? `\n\n<blockquote>${escapeHtml(notice)}</blockquote>` : ''
+  return sendScreen(
+    ctx,
+    rows.length ? `<b>ADREEM · السجل</b>\n<code>${rows.length} حركة أخيرة</code>${noticeBlock}\n\n${rows.join('\n')}` : `<b>ADREEM · السجل</b>${noticeBlock}\n<blockquote>لا توجد حركات.</blockquote>`,
+    historyKeyboard(historySession),
+  )
 }
 
 async function showAlerts(ctx) {
@@ -273,6 +278,37 @@ async function handleReviewCallback(ctx, data) {
     return startReviewAccount(ctx, accountId)
   }
   return showReview(ctx, 'أمر المراجعة غير معروف.')
+}
+
+async function handleHistoryCallback(ctx, data) {
+  const session = sessions.get(ctx.chatId, ctx.userId)
+  if (session?.flow !== 'history') {
+    return showHistory(ctx)
+  }
+
+  const [, action, token] = data.split(':')
+  const movementId = session.choices?.movements?.[token]
+  if (!movementId) return showHistory(ctx)
+
+  if (action === 'cancel') {
+    const { state } = await ctx.repository.load()
+    const snapshot = buildLedgerSnapshot(state)
+    const movement = state.movements.find((item) => item.id === movementId)
+    const text = [
+      '<b>تأكيد إلغاء الحركة</b>',
+      '<code>الإلغاء يبقي الحركة في السجل كملغية</code>',
+      '',
+      movementBlockquote(movement, snapshot.accountById, { includeDate: true }),
+    ].join('\n')
+    return sendScreen(ctx, text, historyCancelConfirmKeyboard(token))
+  }
+
+  if (action === 'confirm') {
+    const result = await ctx.repository.update((state) => voidRecentMovementInState(state, movementId))
+    return showHistory(ctx, result.message)
+  }
+
+  return showHistory(ctx)
 }
 
 async function startSearch(ctx) {
@@ -411,6 +447,7 @@ async function handleCallback(ctx, update) {
   if (data === 'main:alerts') return showAlerts(ctx)
   if (data === 'main:reconcile') return startReconciliation(ctx)
   if (data.startsWith('review:')) return handleReviewCallback(ctx, data)
+  if (data.startsWith('history:')) return handleHistoryCallback(ctx, data)
   if (data.startsWith('acct:')) return handleAccountCallback(ctx, data)
   if (data.startsWith('mv:')) return handleMovementCallback(ctx, data)
   if (data.startsWith('rec:')) return handleReconciliationCallback(ctx, data)

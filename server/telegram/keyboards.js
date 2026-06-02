@@ -248,3 +248,22 @@ export function reviewKeyboard(reviewSession) {
   rows.push([{ text: '↩️ القائمة', callback_data: 'main:home', style: 'primary' }])
   return { inline_keyboard: rows }
 }
+
+export function historyKeyboard(historySession) {
+  const rows = []
+  const movementTokens = Object.keys(historySession?.choices?.movements || {})
+  movementTokens.forEach((token) => {
+    rows.push([{ text: `إلغاء حركة #${Number(token) + 1}`, callback_data: `history:cancel:${token}`, style: 'danger' }])
+  })
+  rows.push([{ text: '↩️ القائمة', callback_data: 'main:home', style: 'primary' }])
+  return { inline_keyboard: rows }
+}
+
+export function historyCancelConfirmKeyboard(token) {
+  return {
+    inline_keyboard: [
+      [{ text: 'تأكيد الإلغاء', callback_data: `history:confirm:${token}`, style: 'danger' }],
+      [{ text: '↩️ رجوع للسجل', callback_data: 'main:history', style: 'primary' }],
+    ],
+  }
+}
