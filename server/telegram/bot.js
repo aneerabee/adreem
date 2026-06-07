@@ -354,7 +354,7 @@ function helpAdminText() {
     '/myid',
     '/users',
     '',
-    'إضافة المستخدمين وروابط الويب تتم من صفحة الإدارة فقط.</blockquote>',
+    'إضافة المستخدمين وتسجيل الدخول تتم من صفحة الإدارة فقط.</blockquote>',
   ].join('\n')
 }
 
@@ -386,7 +386,7 @@ async function handleAdminCommand(ctx, text) {
       chat_id: ctx.chatId,
       text: [
         '<b>إضافة المستخدمين من الويب فقط</b>',
-        '<blockquote>استخدم صفحة إدارة مستخدمي ADREEM.',
+        '<blockquote>استخدم صفحة إدارة مستخدمي ADREEM لإنشاء إيميل وكلمة مرور.',
         'التلقرام لا ينشئ مستخدمين حتى لا تتكرر مسارات الصلاحيات.</blockquote>',
       ].join('\n'),
       parse_mode: 'HTML',

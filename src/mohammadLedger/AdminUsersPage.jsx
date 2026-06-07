@@ -61,11 +61,11 @@ function UserRow({ user }) {
     <article className="adreem-admin-user">
       <div>
         <strong>{user.displayName || user.userId || user.ledgerId}</strong>
-        <span>{user.ledgerId}</span>
+        <span>{user.email || user.ledgerId}</span>
       </div>
       <div>
         <b>{user.source === 'env' ? 'ثابت' : 'مستقل'}</b>
-        {user.telegramUserId ? <span>Telegram {user.telegramUserId}</span> : <span>ويب فقط</span>}
+        {user.telegramUserId ? <span>Telegram {user.telegramUserId}</span> : <span>{user.hasPassword ? 'دخول ويب' : 'بدون دخول'}</span>}
       </div>
     </article>
   )
@@ -78,9 +78,10 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([])
   const [status, setStatus] = useState(initialToken ? 'loading' : 'need-token')
   const [message, setMessage] = useState('')
-  const [createdUrl, setCreatedUrl] = useState('')
   const [draft, setDraft] = useState({
     displayName: '',
+    email: '',
+    password: '',
     ledgerId: '',
     telegramUserId: '',
   })
@@ -115,32 +116,32 @@ export default function AdminUsersPage() {
   async function addUser(event) {
     event.preventDefault()
     setMessage('')
-    setCreatedUrl('')
     const ledgerId = defaultLedgerId(draft.ledgerId || draft.displayName)
-    if (!draft.displayName.trim() || !ledgerId) {
-      setMessage('اكتب اسم المستخدم وكود دفتر إنجليزي واضح.')
+    if (!draft.displayName.trim() || !ledgerId || !draft.email.trim() || draft.password.length < 8) {
+      setMessage('اكتب الاسم والإيميل وكلمة مرور 8 أحرف على الأقل وكود دفتر واضح.')
       return
     }
     try {
-      const data = await adminRequest('/api/admin/users', {
+      await adminRequest('/api/admin/users', {
         token,
         method: 'POST',
         body: {
           userId: ledgerId,
           displayName: draft.displayName.trim(),
+          email: draft.email.trim(),
+          password: draft.password,
           ledgerId,
           telegramUserId: draft.telegramUserId.trim(),
         },
       })
-      setCreatedUrl(data.webUrl || '')
-      setDraft({ displayName: '', ledgerId: '', telegramUserId: '' })
+      setDraft({ displayName: '', email: '', password: '', ledgerId: '', telegramUserId: '' })
       await loadUsers(token)
-      setMessage('تم إنشاء المستخدم والدفتر المستقل.')
+      setMessage('تم إنشاء المستخدم. يمكنه الدخول الآن بالإيميل وكلمة المرور.')
     } catch (error) {
       if (error.status === 409) {
-        setMessage('هذا الدفتر أو Telegram ID مستخدم بالفعل.')
+        setMessage('هذا الإيميل أو الدفتر أو Telegram ID مستخدم بالفعل.')
       } else {
-        setMessage('لم تتم الإضافة. راجع الاسم وكود الدفتر.')
+        setMessage('لم تتم الإضافة. راجع الإيميل وكلمة المرور وكود الدفتر.')
       }
     }
   }
@@ -185,6 +186,28 @@ export default function AdminUsersPage() {
                 />
               </label>
               <label>
+                <span>الإيميل</span>
+                <input
+                  value={draft.email}
+                  onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))}
+                  placeholder="name@example.com"
+                  type="email"
+                  inputMode="email"
+                  dir="ltr"
+                />
+              </label>
+              <label>
+                <span>كلمة المرور</span>
+                <input
+                  value={draft.password}
+                  onChange={(event) => setDraft((current) => ({ ...current, password: event.target.value }))}
+                  placeholder="8 أحرف على الأقل"
+                  type="password"
+                  autoComplete="new-password"
+                  dir="ltr"
+                />
+              </label>
+              <label>
                 <span>كود الدفتر</span>
                 <input
                   value={draft.ledgerId}
@@ -218,12 +241,6 @@ export default function AdminUsersPage() {
           </div>
         )}
 
-        {createdUrl ? (
-          <section className="adreem-admin-card adreem-admin-link">
-            <h2>رابط المستخدم الخاص</h2>
-            <input value={createdUrl} readOnly dir="ltr" />
-          </section>
-        ) : null}
         {message ? <p className="adreem-admin-message">{message}</p> : null}
       </section>
     </main>

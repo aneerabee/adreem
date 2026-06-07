@@ -251,7 +251,7 @@ describe('ADREEM web API auth helpers', () => {
     expect(response.statusCode).toBe(401)
   })
 
-  it('creates independent users from the web admin API and routes their web token to the new ledger', async () => {
+  it('creates independent users from the web admin API and routes email/password sessions to their ledger', async () => {
     const file = tempRegistry([])
     const api = createAdreemApiHandler({
       ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
@@ -263,6 +263,8 @@ describe('ADREEM web API auth helpers', () => {
     const createRequest = createJsonRequest({
       userId: 'saeed-book',
       displayName: 'سعيد',
+      email: 'saeed@example.com',
+      password: 'strong-pass-123',
       ledgerId: 'saeed-book',
       telegramUserId: '555',
     }, {
@@ -279,13 +281,50 @@ describe('ADREEM web API auth helpers', () => {
     expect(createResponse.statusCode).toBe(201)
     expect(payload.user).toMatchObject({
       userId: 'saeed-book',
+      email: 'saeed@example.com',
       ledgerId: 'saeed-book',
       telegramUserId: '555',
       displayName: 'سعيد',
+      hasPassword: true,
     })
-    expect(payload.webUrl).toMatch(/#ledger_token=/)
+    expect(payload.webUrl).toBeUndefined()
 
-    const webToken = new URL(payload.webUrl).hash.replace(/^#ledger_token=/, '')
+    const badLoginRequest = createJsonRequest({
+      email: 'saeed@example.com',
+      password: 'wrong-password',
+    }, {
+      method: 'POST',
+      url: '/api/auth/login',
+      token: '',
+    })
+    const badLoginResponse = createMockResponse()
+    const badLoginPromise = api(badLoginRequest, badLoginResponse)
+    badLoginRequest.emitBody()
+    await badLoginPromise
+    expect(badLoginResponse.statusCode).toBe(401)
+
+    const loginRequest = createJsonRequest({
+      email: 'SAEED@example.com',
+      password: 'strong-pass-123',
+    }, {
+      method: 'POST',
+      url: '/api/auth/login',
+      token: '',
+    })
+    const loginResponse = createMockResponse()
+    const loginPromise = api(loginRequest, loginResponse)
+    loginRequest.emitBody()
+    await loginPromise
+
+    const loginPayload = JSON.parse(loginResponse.body)
+    expect(loginResponse.statusCode).toBe(200)
+    expect(loginPayload.token).toBeTruthy()
+    expect(loginPayload.user).toMatchObject({
+      userId: 'saeed-book',
+      ledgerId: 'saeed-book',
+      email: 'saeed@example.com',
+    })
+
     const requestedLedgers = []
     api.__setRepositoryFactoryForTest?.((ledgerId) => {
       requestedLedgers.push(ledgerId)
@@ -299,7 +338,7 @@ describe('ADREEM web API auth helpers', () => {
     await api({
       method: 'GET',
       url: '/api/ledger',
-      headers: { authorization: `Bearer ${webToken}` },
+      headers: { authorization: `Bearer ${loginPayload.token}` },
     }, ledgerResponse)
 
     expect(ledgerResponse.statusCode).toBe(200)

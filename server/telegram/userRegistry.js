@@ -1,10 +1,13 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { randomBytes, createHash } from 'node:crypto'
+import { randomBytes, createHash, pbkdf2Sync, timingSafeEqual } from 'node:crypto'
 import { dirname } from 'node:path'
 import { ADREEM_DEFAULT_LEDGER_ID, createLedgerIdentity, adreemStateRowId } from '../../src/mohammadLedger/ledgerState.js'
 import { parseTelegramLedgerMap } from '../mohammadLedger/ledgerRepository.js'
 
 const HASH_PATTERN = /^[a-f0-9]{64}$/i
+const PASSWORD_ITERATIONS = 210_000
+const PASSWORD_KEYLEN = 32
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 export function parseIdList(value = '') {
   return String(value || '')
@@ -25,6 +28,33 @@ export function webTokenHash(token = '') {
   return createHash('sha256').update(String(token || '').trim()).digest('hex')
 }
 
+function normalizeEmail(value = '') {
+  return String(value || '').trim().toLowerCase()
+}
+
+function normalizeOptionalHash(value = '') {
+  const hash = String(value || '').trim().toLowerCase()
+  return HASH_PATTERN.test(hash) ? hash : ''
+}
+
+export function createPasswordHash(password = '') {
+  const text = String(password || '')
+  if (text.length < 8) return ''
+  const salt = randomBytes(16).toString('base64url')
+  const hash = pbkdf2Sync(text, salt, PASSWORD_ITERATIONS, PASSWORD_KEYLEN, 'sha256').toString('base64url')
+  return `pbkdf2-sha256$${PASSWORD_ITERATIONS}$${salt}$${hash}`
+}
+
+export function verifyPassword(password = '', passwordHash = '') {
+  const [kind, iterationsText, salt, expected] = String(passwordHash || '').split('$')
+  const iterations = Number(iterationsText)
+  if (kind !== 'pbkdf2-sha256' || !iterations || !salt || !expected) return false
+  const actual = pbkdf2Sync(String(password || ''), salt, iterations, PASSWORD_KEYLEN, 'sha256')
+  const expectedBuffer = Buffer.from(expected, 'base64url')
+  if (actual.length !== expectedBuffer.length) return false
+  return timingSafeEqual(actual, expectedBuffer)
+}
+
 export function createPrivateWebToken() {
   return randomBytes(32).toString('base64url')
 }
@@ -36,16 +66,21 @@ export function webUrlForToken(token, env = process.env) {
 export function normalizeTelegramUserEntry(entry = {}) {
   const userId = String(entry.userId || entry.id || entry.telegramUserId || '').trim()
   const telegramUserId = String(entry.telegramUserId || '').trim()
+  const email = normalizeEmail(entry.email)
   const rawLedgerId = String(entry.ledgerId || '').trim()
   const identity = createLedgerIdentity({ ledgerId: rawLedgerId })
   if (!userId || !rawLedgerId || !identity.ledgerId) return null
   if (identity.ledgerId === ADREEM_DEFAULT_LEDGER_ID && rawLedgerId.toLowerCase() !== ADREEM_DEFAULT_LEDGER_ID) return null
-  const hash = String(entry.webTokenHash || '').trim().toLowerCase()
+  const sessionExpiresAt = entry.sessionExpiresAt ? String(entry.sessionExpiresAt) : ''
   return {
     userId,
+    email,
     telegramUserId,
     ledgerId: identity.ledgerId,
-    webTokenHash: HASH_PATTERN.test(hash) ? hash : '',
+    webTokenHash: normalizeOptionalHash(entry.webTokenHash),
+    sessionTokenHash: normalizeOptionalHash(entry.sessionTokenHash),
+    sessionExpiresAt,
+    passwordHash: String(entry.passwordHash || '').startsWith('pbkdf2-sha256$') ? String(entry.passwordHash) : '',
     addedAt: entry.addedAt || new Date().toISOString(),
     addedBy: entry.addedBy ? String(entry.addedBy) : '',
     displayName: entry.displayName ? String(entry.displayName).slice(0, 80) : '',
@@ -102,22 +137,37 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     return isAdmin(key) || Boolean(ledgerIdForUser(key))
   }
 
-  function addUser({ userId, telegramUserId = '', ledgerId, addedBy, displayName = '', firstName = '', username = '' }) {
-    const webToken = createPrivateWebToken()
+  function addUser({
+    userId,
+    email = '',
+    password = '',
+    telegramUserId = '',
+    ledgerId,
+    addedBy,
+    displayName = '',
+    firstName = '',
+    username = '',
+    createWebToken = false,
+  }) {
+    const webToken = createWebToken ? createPrivateWebToken() : ''
     const entry = normalizeTelegramUserEntry({
       userId: userId || telegramUserId,
+      email,
       telegramUserId,
       ledgerId,
       addedBy,
       displayName,
       firstName,
       username,
-      webTokenHash: webTokenHash(webToken),
+      passwordHash: password ? createPasswordHash(password) : '',
+      webTokenHash: webToken ? webTokenHash(webToken) : '',
     })
     if (!entry) return { ok: false, error: 'invalid-user-or-ledger' }
+    if (email && !entry.email.includes('@')) return { ok: false, error: 'invalid-email' }
+    if (password && !entry.passwordHash) return { ok: false, error: 'weak-password' }
     const registry = loadTelegramUserRegistry(filePath)
     const envLedgerOwner = [...envLedgerMap.entries()].find(([envUserId, mappedLedgerId]) =>
-      envUserId !== entry.telegramUserId && mappedLedgerId === entry.ledgerId)
+      entry.telegramUserId && envUserId !== entry.telegramUserId && mappedLedgerId === entry.ledgerId)
     if (envLedgerOwner) {
       return { ok: false, error: 'ledger-used', existingUserId: envLedgerOwner[0] }
     }
@@ -133,6 +183,13 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
         return { ok: false, error: 'telegram-used', existingUserId: existingTelegramOwner.userId }
       }
     }
+    if (entry.email) {
+      const existingEmailOwner = registry.users.find((user) =>
+        user.userId !== entry.userId && normalizeEmail(user.email) === entry.email)
+      if (existingEmailOwner) {
+        return { ok: false, error: 'email-used', existingUserId: existingEmailOwner.userId }
+      }
+    }
     const nextUsers = registry.users.filter((user) => user.userId !== entry.userId)
     nextUsers.push(entry)
     nextUsers.sort((a, b) => a.userId.localeCompare(b.userId))
@@ -140,10 +197,35 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     return { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }), webToken, webUrl: webUrlForToken(webToken, env) }
   }
 
+  function loginUser({ email, password }) {
+    const normalizedEmail = normalizeEmail(email)
+    if (!normalizedEmail || !password) return { ok: false, error: 'invalid-login' }
+    const registry = loadTelegramUserRegistry(filePath)
+    const target = registry.users.find((user) => normalizeEmail(user.email) === normalizedEmail)
+    if (!target?.passwordHash || !verifyPassword(password, target.passwordHash)) {
+      return { ok: false, error: 'invalid-login' }
+    }
+    const sessionToken = createPrivateWebToken()
+    const sessionExpiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
+    const nextUsers = registry.users.map((user) => user.userId === target.userId
+      ? {
+          ...user,
+          sessionTokenHash: webTokenHash(sessionToken),
+          sessionExpiresAt,
+          lastLoginAt: new Date().toISOString(),
+        }
+      : user)
+    saveTelegramUserRegistry(filePath, { users: nextUsers })
+    const entry = normalizeTelegramUserEntry({ ...target, sessionTokenHash: webTokenHash(sessionToken), sessionExpiresAt })
+    return { ok: true, entry, sessionToken, sessionExpiresAt }
+  }
+
   function listUsers() {
     const registry = loadTelegramUserRegistry(filePath)
-    const envUsers = [...envLedgerMap.entries()].map(([telegramUserId, ledgerId]) => ({
+    const registryLedgerIds = new Set(registry.users.map((user) => user.ledgerId))
+    const envUsers = [...envLedgerMap.entries()].filter(([, ledgerId]) => !registryLedgerIds.has(ledgerId)).map(([telegramUserId, ledgerId]) => ({
       userId: `telegram-${telegramUserId}`,
+      email: '',
       telegramUserId,
       ledgerId,
       source: 'env',
@@ -161,13 +243,21 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     isAllowed,
     ledgerIdForUser,
     addUser,
+    loginUser,
     listUsers,
   }
 }
 
 export function registryWebTokenMap(env = process.env, filePath = defaultRegistryPath(env)) {
   const registry = loadTelegramUserRegistry(filePath)
-  return new Map(registry.users
-    .filter((user) => user.webTokenHash)
-    .map((user) => [user.webTokenHash, user.ledgerId]))
+  const now = Date.now()
+  const pairs = []
+  for (const user of registry.users) {
+    if (user.webTokenHash) pairs.push([user.webTokenHash, user.ledgerId])
+    const expiresAt = new Date(user.sessionExpiresAt || 0).getTime()
+    if (user.sessionTokenHash && Number.isFinite(expiresAt) && expiresAt > now) {
+      pairs.push([user.sessionTokenHash, user.ledgerId])
+    }
+  }
+  return new Map(pairs)
 }

@@ -346,7 +346,7 @@ export async function loadMohammadPersistedState(fallbackState) {
         state: fallback,
         source: 'api-missing-token',
         loadError: true,
-        error: new Error('Missing ADREEM ledger token.'),
+        error: new Error('Missing ADREEM login session.'),
       }
     }
     const localState = loadLocalMohammadState(fallback)
@@ -391,7 +391,7 @@ export async function saveMohammadPersistedState(state) {
       localOk: false,
       supabaseOk: false,
       state: normalizedState,
-      error: new Error('Missing ADREEM ledger token.'),
+      error: new Error('Missing ADREEM login session.'),
     }
   }
 

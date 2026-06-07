@@ -33,6 +33,7 @@ describe('telegram user registry', () => {
       ledgerId: 'Saeed Book',
       addedBy: '278516861',
       firstName: 'Saeed',
+      createWebToken: true,
     })
 
     expect(result.ok).toBe(true)
@@ -48,6 +49,62 @@ describe('telegram user registry', () => {
     expect(loadTelegramUserRegistry(filePath).users[0].webTokenHash).toBe(webTokenHash(result.webToken))
     expect(JSON.stringify(loadTelegramUserRegistry(filePath))).not.toContain(result.webToken)
     expect(registryWebTokenMap({}, filePath).get(webTokenHash(result.webToken))).toBe('saeed-book')
+  })
+
+  it('creates email/password users without storing the raw password and logs them into an isolated ledger', () => {
+    const filePath = tempFile()
+    const access = createTelegramUserAccess({}, filePath)
+
+    const result = access.addUser({
+      userId: 'rabee',
+      displayName: 'ربيع',
+      email: 'Rabee@Example.com',
+      password: 'secret-password',
+      ledgerId: 'rabee',
+      addedBy: 'web-admin',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.webToken).toBe('')
+    expect(result.webUrl).toMatch(/#ledger_token=$/)
+    const stored = loadTelegramUserRegistry(filePath).users[0]
+    expect(stored.email).toBe('rabee@example.com')
+    expect(stored.passwordHash).toMatch(/^pbkdf2-sha256\$/)
+    expect(JSON.stringify(loadTelegramUserRegistry(filePath))).not.toContain('secret-password')
+
+    const login = access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })
+    expect(login.ok).toBe(true)
+    expect(login.sessionToken).toBeTruthy()
+    expect(JSON.stringify(loadTelegramUserRegistry(filePath))).not.toContain(login.sessionToken)
+    expect(registryWebTokenMap({}, filePath).get(webTokenHash(login.sessionToken))).toBe('rabee')
+    expect(access.loginUser({ email: 'rabee@example.com', password: 'wrong-password' })).toMatchObject({ ok: false })
+  })
+
+  it('allows adding web email/password access for an env ledger while keeping telegram ownership strict', () => {
+    const filePath = tempFile()
+    const access = createTelegramUserAccess({
+      ADREEM_TELEGRAM_USER_IDS: '278516861',
+      ADREEM_TELEGRAM_LEDGER_IDS: '278516861=main',
+    }, filePath)
+
+    const webUser = access.addUser({
+      userId: 'rabee-main',
+      displayName: 'ربيع',
+      email: 'rabee@example.com',
+      password: 'secret-password',
+      ledgerId: 'main',
+      addedBy: 'web-admin',
+    })
+    const conflictingTelegram = access.addUser({
+      telegramUserId: '555',
+      ledgerId: 'main',
+      addedBy: 'web-admin',
+    })
+
+    expect(webUser.ok).toBe(true)
+    expect(webUser.entry.ledgerId).toBe('main')
+    expect(access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })).toMatchObject({ ok: true })
+    expect(conflictingTelegram).toMatchObject({ ok: false, error: 'ledger-used', existingUserId: '278516861' })
   })
 
   it('blocks assigning one ledger to two different telegram users', () => {

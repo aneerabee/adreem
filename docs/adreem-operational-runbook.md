@@ -52,10 +52,12 @@ ADREEM_RUNTIME_TEST_TOKEN=YOUR_LONG_TOKEN
 - شغّل API بـ `NODE_ENV=production`.
 - اضبط `ADREEM_WEB_ALLOWED_ORIGIN=https://aneerabee.github.io`.
 - اجعل API خلف HTTPS فقط.
-- استخدم token طويل وعشوائي لكل دفتر، وضع hash فقط داخل `ADREEM_WEB_LEDGER_TOKEN_HASHES`.
+- دخول المستخدمين يتم بالإيميل وكلمة المرور من صفحة ADREEM العادية.
+- جلسة الدخول تولّد token مؤقتًا داخل `sessionStorage` فقط، ولا يُعطى للمستخدم رابط token.
+- `ADREEM_WEB_LEDGER_TOKEN_HASHES` يبقى للتوافق وفحص التشغيل فقط، وليس طريقة إنشاء المستخدمين الجديدة.
 - صيغة `ADREEM_WEB_LEDGER_TOKENS` ما زالت مدعومة مؤقتًا للتوافق، لكنها ليست الصيغة المعتمدة للدفاتر الجديدة.
 - ضع rate limiting في reverse proxy أو firewall لأن API نفسه بسيط ومباشر.
-- عند فقدان رابط token، أنشئ token جديدًا، ضع hash الجديد في `ADREEM_WEB_LEDGER_TOKEN_HASHES`، وأعد تشغيل `adreem-api.service`.
+- عند فقدان كلمة مرور مستخدم، أنشئ له كلمة مرور جديدة من صفحة الإدارة بنفس كود الدفتر.
 
 إنشاء hash للتوكن:
 
@@ -69,7 +71,7 @@ node -e "const {createHash}=require('crypto'); console.log(createHash('sha256').
 npm run ops:create-ledger-access -- --ledger=saeed-book --telegram=555
 ```
 
-قاعدة العزل: كل مستخدم يحصل على `ledgerId` خاص ورابط ويب خاص. لا تعطي مستخدمين مختلفين نفس `ledgerId`. إدارة المستخدمين تتم من صفحة إدارة ADREEM، وليس من أوامر التلقرام.
+قاعدة العزل: كل مستخدم يحصل على `ledgerId` خاص ويدخل بالإيميل وكلمة المرور. لا تعطي مستخدمين مختلفين نفس `ledgerId`. إدارة المستخدمين تتم من صفحة إدارة ADREEM، وليس من أوامر التلقرام.
 
 ## إضافة مستخدم من صفحة الإدارة
 
@@ -90,9 +92,11 @@ https://aneerabee.github.io/adreem/#admin_token=YOUR_ADMIN_TOKEN
 من الصفحة:
 
 - اكتب اسم المستخدم.
+- اكتب إيميل المستخدم.
+- اكتب كلمة مرور 8 أحرف على الأقل.
 - اكتب كود دفتر إنجليزي واضح مثل `mohammad` أو `saeed-book`.
 - ضع Telegram ID اختياريًا فقط إذا كان هذا المستخدم سيستعمل البوت.
-- عند الإنشاء يظهر رابط ويب خاص للمستخدم مرة واحدة.
+- بعد الإنشاء يدخل المستخدم من الرابط العام: `https://aneerabee.github.io/adreem/`.
 
 أي مستخدم غير مضاف لا يستطيع الدخول للدفتر، لكنه يرى Telegram ID الخاص به فقط حتى يرسله لك. لا تفعّل وضع "الجميع مسموح" للدفتر المالي؛ هذا يكسر العزل.
 
@@ -103,7 +107,7 @@ https://aneerabee.github.io/adreem/#admin_token=YOUR_ADMIN_TOKEN
 /users
 ```
 
-البوت لا ينشئ مستخدمين. عند إضافة مستخدم من صفحة الإدارة يُحفظ hash رابط الويب فقط داخل `ADREEM_TELEGRAM_USERS_FILE`، والـ API يقرأ هذا الملف عند كل طلب، لذلك لا تحتاج لإعادة تشغيل API بعد إضافة مستخدم جديد.
+البوت لا ينشئ مستخدمين. عند إضافة مستخدم من صفحة الإدارة تُحفظ كلمة المرور كـ hash فقط داخل `ADREEM_TELEGRAM_USERS_FILE`، والـ API يقرأ هذا الملف عند كل طلب، لذلك لا تحتاج لإعادة تشغيل API بعد إضافة مستخدم جديد.
 
 ## systemd
 
@@ -138,15 +142,17 @@ systemctl --user status adreem-bot.service --no-pager
 
 إذا فشل SSH من الجهاز المحلي، لا تعتبر حالة Contabo مؤكدة. آخر كلمة حاسمة يجب أن تأتي من `systemctl` و `/health` على السيرفر نفسه.
 
-## الرابط الخاص
+## دخول المستخدم
 
-يفتح الويب الدفتر السحابي فقط عند وجود token:
+الرابط العام:
 
 ```text
-https://aneerabee.github.io/adreem/#ledger_token=YOUR_TOKEN
+https://aneerabee.github.io/adreem/
 ```
 
-بدون token يعمل الويب محليًا فقط ولا يقرأ من Supabase.
+في الإنتاج، إذا لم توجد جلسة دخول يظهر نموذج الإيميل وكلمة المرور. بعد الدخول يفتح الويب دفتر المستخدم المعزول حسب `ledgerId`.
+
+روابط `#ledger_token=` القديمة مدعومة مؤقتًا للتوافق فقط، ولا تُستخدم لإنشاء مستخدمين جدد.
 
 ## قاعدة عدم الحذف الفعلي
 

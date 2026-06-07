@@ -124,6 +124,7 @@ export function createAdreemApiHandler(env = process.env) {
   function publicUser(user) {
     return {
       userId: user.userId || '',
+      email: user.email || '',
       telegramUserId: user.telegramUserId || '',
       ledgerId: user.ledgerId || '',
       source: user.source || 'registry',
@@ -133,6 +134,7 @@ export function createAdreemApiHandler(env = process.env) {
       addedAt: user.addedAt || '',
       addedBy: user.addedBy || '',
       hasWebToken: Boolean(user.webTokenHash),
+      hasPassword: Boolean(user.passwordHash),
     }
   }
 
@@ -144,6 +146,25 @@ export function createAdreemApiHandler(env = process.env) {
     const url = new URL(req.url || '/', 'http://localhost')
     if (url.pathname === '/health') {
       return sendJson(res, 200, { ok: true, service: 'adreem-api' }, allowedOrigin)
+    }
+    if (url.pathname === '/api/auth/login') {
+      try {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
+        const body = await readJsonBody(req)
+        const result = userAccess.loginUser({ email: body.email, password: body.password })
+        if (!result.ok) return sendJson(res, 401, { error: 'Invalid email or password.' }, allowedOrigin)
+        return sendJson(res, 200, {
+          token: result.sessionToken,
+          expiresAt: result.sessionExpiresAt,
+          user: publicUser({ ...result.entry, source: 'registry' }),
+        }, allowedOrigin)
+      } catch (error) {
+        console.error('[adreem-api-auth]', error?.message || error)
+        if (error instanceof ApiRequestError) {
+          return sendJson(res, error.statusCode, { error: error.message }, allowedOrigin)
+        }
+        return sendJson(res, 500, { error: 'ADREEM auth failed.' }, allowedOrigin)
+      }
     }
     if (url.pathname === '/api/admin/users') {
       const token = tokenFromAuthHeader(req.headers.authorization)
@@ -161,21 +182,23 @@ export function createAdreemApiHandler(env = process.env) {
           const body = await readJsonBody(req)
           const result = userAccess.addUser({
             userId: body.userId,
+            email: body.email,
+            password: body.password,
             telegramUserId: body.telegramUserId,
             ledgerId: body.ledgerId,
             displayName: body.displayName,
             firstName: body.firstName,
             username: body.username,
             addedBy: 'web-admin',
+            createWebToken: false,
           })
           if (!result.ok) {
-            const status = result.error === 'ledger-used' || result.error === 'telegram-used' ? 409 : 400
+            const status = result.error === 'ledger-used' || result.error === 'telegram-used' || result.error === 'email-used' ? 409 : 400
             return sendJson(res, status, { error: result.error, existingUserId: result.existingUserId || '' }, allowedOrigin)
           }
           return sendJson(res, 201, {
             user: publicUser({ ...result.entry, source: 'registry' }),
             rowId: result.rowId,
-            webUrl: result.webUrl,
           }, allowedOrigin)
         }
         return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)

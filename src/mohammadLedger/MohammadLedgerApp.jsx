@@ -38,6 +38,7 @@ import {
   voidMovement,
 } from './ledgerCore'
 import {
+  ADREEM_API_TOKEN_SESSION_KEY,
   getMohammadPersistenceMode,
   loadLocalMohammadState,
   loadMohammadPersistedState,
@@ -260,9 +261,15 @@ function storageTextForStatus(saveStatus, storageMode) {
     loading: 'تحميل',
     saving: 'حفظ',
     saved: storageMode === 'supabase' || storageMode === 'api' ? 'سحابي' : 'تطوير',
-    local: storageMode === 'api-missing-token' ? 'رابط ناقص' : 'تطوير',
-    'local-only': storageMode === 'api-missing-token' ? 'رابط ناقص' : 'سحابة متوقفة',
+    local: storageMode === 'api-missing-token' ? 'دخول ناقص' : 'تطوير',
+    'local-only': storageMode === 'api-missing-token' ? 'دخول ناقص' : 'سحابة متوقفة',
   }[saveStatus] || 'تطوير'
+}
+
+function logoutFromCloudSession() {
+  if (typeof window === 'undefined') return
+  window.sessionStorage?.removeItem(ADREEM_API_TOKEN_SESSION_KEY)
+  window.location.assign(`${window.location.pathname}${window.location.search}`)
 }
 
 function movementVisibleSteps(config, needsSource) {
@@ -2166,6 +2173,7 @@ export default function MohammadLedgerApp() {
   }
 
   const storageText = storageTextForStatus(saveStatus, storageMode)
+  const canLogout = storageMode === 'api'
   const activeSectionTitle = sectionTitles[activeSection] || 'ADREEM'
   const movementReceipt = [
     { key: 'type', label: 'الحركة', value: movementLabels[movementDraft.type] },
@@ -2191,10 +2199,11 @@ export default function MohammadLedgerApp() {
               <h1>{activeSectionTitle}</h1>
             </div>
           </div>
-          <div className="adreem-status">
+          <div className={`adreem-status ${canLogout ? 'has-logout' : ''}`}>
             <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
             <b>اليوم {formatCount(todayMovements.length)}</b>
             <b>مراجعة {formatCount(reviewItems.length)}</b>
+            {canLogout ? <button type="button" className="adreem-logout" onClick={logoutFromCloudSession}>خروج</button> : null}
           </div>
         </header>
 
