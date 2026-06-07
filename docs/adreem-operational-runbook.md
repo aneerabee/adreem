@@ -69,34 +69,41 @@ node -e "const {createHash}=require('crypto'); console.log(createHash('sha256').
 npm run ops:create-ledger-access -- --ledger=saeed-book --telegram=555
 ```
 
-قاعدة العزل: كل مستخدم يحصل على `ledgerId` خاص، وسطر hash خاص في `ADREEM_WEB_LEDGER_TOKEN_HASHES`، وربط Telegram خاص في `ADREEM_TELEGRAM_LEDGER_IDS`. لا تعطي مستخدمين مختلفين نفس `ledgerId`.
+قاعدة العزل: كل مستخدم يحصل على `ledgerId` خاص ورابط ويب خاص. لا تعطي مستخدمين مختلفين نفس `ledgerId`. إدارة المستخدمين تتم من صفحة إدارة ADREEM، وليس من أوامر التلقرام.
 
-## إضافة مستخدم Telegram من البوت
+## إضافة مستخدم من صفحة الإدارة
 
 اضبط في `adreem.env`:
 
 ```text
+ADREEM_ADMIN_TOKEN_HASHES=SHA256_OF_ADMIN_TOKEN
 ADREEM_TELEGRAM_ADMIN_IDS=YOUR_TELEGRAM_ID
 ADREEM_TELEGRAM_USERS_FILE=/home/argaz/apps/adreem/adreem-telegram-users.json
 ```
 
-الأوامر من داخل البوت:
+رابط الإدارة:
+
+```text
+https://aneerabee.github.io/adreem/#admin_token=YOUR_ADMIN_TOKEN
+```
+
+من الصفحة:
+
+- اكتب اسم المستخدم.
+- اكتب كود دفتر إنجليزي واضح مثل `mohammad` أو `saeed-book`.
+- ضع Telegram ID اختياريًا فقط إذا كان هذا المستخدم سيستعمل البوت.
+- عند الإنشاء يظهر رابط ويب خاص للمستخدم مرة واحدة.
+
+أي مستخدم غير مضاف لا يستطيع الدخول للدفتر، لكنه يرى Telegram ID الخاص به فقط حتى يرسله لك. لا تفعّل وضع "الجميع مسموح" للدفتر المالي؛ هذا يكسر العزل.
+
+الأوامر المتبقية من داخل البوت:
 
 ```text
 /myid
 /users
-/adduser TELEGRAM_ID LEDGER_ID
 ```
 
-مثال:
-
-```text
-/adduser 555 saeed-book
-```
-
-أي مستخدم غير مضاف لا يستطيع الدخول للدفتر، لكنه يرى Telegram ID الخاص به فقط حتى يرسله لك. لا تفعّل وضع "الجميع مسموح" للدفتر المالي؛ هذا يكسر العزل.
-
-عند نجاح `/adduser` يولّد البوت رابط ويب خاصًا للمستخدم. يُحفظ hash الرابط فقط داخل `ADREEM_TELEGRAM_USERS_FILE`، والـ API يقرأ هذا الملف عند كل طلب، لذلك لا تحتاج لإعادة تشغيل API بعد إضافة مستخدم جديد من البوت.
+البوت لا ينشئ مستخدمين. عند إضافة مستخدم من صفحة الإدارة يُحفظ hash رابط الويب فقط داخل `ADREEM_TELEGRAM_USERS_FILE`، والـ API يقرأ هذا الملف عند كل طلب، لذلك لا تحتاج لإعادة تشغيل API بعد إضافة مستخدم جديد.
 
 ## systemd
 

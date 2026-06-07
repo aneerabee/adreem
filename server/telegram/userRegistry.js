@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { randomBytes, createHash } from 'node:crypto'
 import { dirname } from 'node:path'
-import { createLedgerIdentity, adreemStateRowId } from '../../src/mohammadLedger/ledgerState.js'
+import { ADREEM_DEFAULT_LEDGER_ID, createLedgerIdentity, adreemStateRowId } from '../../src/mohammadLedger/ledgerState.js'
 import { parseTelegramLedgerMap } from '../mohammadLedger/ledgerRepository.js'
 
 const HASH_PATTERN = /^[a-f0-9]{64}$/i
@@ -34,16 +34,21 @@ export function webUrlForToken(token, env = process.env) {
 }
 
 export function normalizeTelegramUserEntry(entry = {}) {
-  const telegramUserId = String(entry.telegramUserId || entry.userId || entry.id || '').trim()
-  const identity = createLedgerIdentity({ ledgerId: entry.ledgerId })
-  if (!telegramUserId || !identity.ledgerId) return null
+  const userId = String(entry.userId || entry.id || entry.telegramUserId || '').trim()
+  const telegramUserId = String(entry.telegramUserId || '').trim()
+  const rawLedgerId = String(entry.ledgerId || '').trim()
+  const identity = createLedgerIdentity({ ledgerId: rawLedgerId })
+  if (!userId || !rawLedgerId || !identity.ledgerId) return null
+  if (identity.ledgerId === ADREEM_DEFAULT_LEDGER_ID && rawLedgerId.toLowerCase() !== ADREEM_DEFAULT_LEDGER_ID) return null
   const hash = String(entry.webTokenHash || '').trim().toLowerCase()
   return {
+    userId,
     telegramUserId,
     ledgerId: identity.ledgerId,
     webTokenHash: HASH_PATTERN.test(hash) ? hash : '',
     addedAt: entry.addedAt || new Date().toISOString(),
     addedBy: entry.addedBy ? String(entry.addedBy) : '',
+    displayName: entry.displayName ? String(entry.displayName).slice(0, 80) : '',
     firstName: entry.firstName ? String(entry.firstName).slice(0, 80) : '',
     username: entry.username ? String(entry.username).slice(0, 80) : '',
   }
@@ -78,7 +83,9 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
 
   function registryMap() {
     const registry = loadTelegramUserRegistry(filePath)
-    return new Map(registry.users.map((entry) => [entry.telegramUserId, entry.ledgerId]))
+    return new Map(registry.users
+      .filter((entry) => entry.telegramUserId)
+      .map((entry) => [entry.telegramUserId, entry.ledgerId]))
   }
 
   function ledgerIdForUser(userId) {
@@ -95,31 +102,40 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     return isAdmin(key) || Boolean(ledgerIdForUser(key))
   }
 
-  function addUser({ telegramUserId, ledgerId, addedBy, firstName = '', username = '' }) {
+  function addUser({ userId, telegramUserId = '', ledgerId, addedBy, displayName = '', firstName = '', username = '' }) {
     const webToken = createPrivateWebToken()
     const entry = normalizeTelegramUserEntry({
+      userId: userId || telegramUserId,
       telegramUserId,
       ledgerId,
       addedBy,
+      displayName,
       firstName,
       username,
       webTokenHash: webTokenHash(webToken),
     })
     if (!entry) return { ok: false, error: 'invalid-user-or-ledger' }
     const registry = loadTelegramUserRegistry(filePath)
-    const envLedgerOwner = [...envLedgerMap.entries()].find(([userId, mappedLedgerId]) =>
-      userId !== entry.telegramUserId && mappedLedgerId === entry.ledgerId)
+    const envLedgerOwner = [...envLedgerMap.entries()].find(([envUserId, mappedLedgerId]) =>
+      envUserId !== entry.telegramUserId && mappedLedgerId === entry.ledgerId)
     if (envLedgerOwner) {
       return { ok: false, error: 'ledger-used', existingUserId: envLedgerOwner[0] }
     }
     const existingLedgerOwner = registry.users.find((user) =>
-      user.telegramUserId !== entry.telegramUserId && user.ledgerId === entry.ledgerId)
+      user.userId !== entry.userId && user.ledgerId === entry.ledgerId)
     if (existingLedgerOwner) {
-      return { ok: false, error: 'ledger-used', existingUserId: existingLedgerOwner.telegramUserId }
+      return { ok: false, error: 'ledger-used', existingUserId: existingLedgerOwner.userId }
     }
-    const nextUsers = registry.users.filter((user) => user.telegramUserId !== entry.telegramUserId)
+    if (entry.telegramUserId) {
+      const existingTelegramOwner = registry.users.find((user) =>
+        user.userId !== entry.userId && user.telegramUserId === entry.telegramUserId)
+      if (existingTelegramOwner) {
+        return { ok: false, error: 'telegram-used', existingUserId: existingTelegramOwner.userId }
+      }
+    }
+    const nextUsers = registry.users.filter((user) => user.userId !== entry.userId)
     nextUsers.push(entry)
-    nextUsers.sort((a, b) => a.telegramUserId.localeCompare(b.telegramUserId))
+    nextUsers.sort((a, b) => a.userId.localeCompare(b.userId))
     saveTelegramUserRegistry(filePath, { users: nextUsers })
     return { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }), webToken, webUrl: webUrlForToken(webToken, env) }
   }
@@ -127,6 +143,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
   function listUsers() {
     const registry = loadTelegramUserRegistry(filePath)
     const envUsers = [...envLedgerMap.entries()].map(([telegramUserId, ledgerId]) => ({
+      userId: `telegram-${telegramUserId}`,
       telegramUserId,
       ledgerId,
       source: 'env',

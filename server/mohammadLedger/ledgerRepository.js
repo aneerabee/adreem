@@ -6,7 +6,7 @@ import {
   MOHAMMAD_STATE_TABLE,
   adreemStateRowId,
   createLedgerIdentity,
-  createMohammadFallbackState,
+  createEmptyAdreemState,
   normalizeLedgerState,
   selectPersistedLedgerRows,
 } from '../../src/mohammadLedger/ledgerState.js'
@@ -74,7 +74,7 @@ export function resolveTelegramLedgerId(userId, env = process.env) {
 }
 
 async function loadLedgerState(client, ledgerConfig) {
-  const fallback = createMohammadFallbackState(undefined, ledgerConfig.identity)
+  const fallback = createEmptyAdreemState(undefined, ledgerConfig.identity)
   const { data, error } = await client
     .from(MOHAMMAD_STATE_TABLE)
     .select('id, payload, updated_at')

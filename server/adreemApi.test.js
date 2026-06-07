@@ -6,6 +6,7 @@ import {
   createAdreemApiHandler,
   parseLedgerTokenHashMap,
   parseLedgerTokenMap,
+  parseTokenHashSet,
   tokenFromAuthHeader,
   tokenHash,
 } from './adreemApi.js'
@@ -39,12 +40,12 @@ function createMockResponse() {
   }
 }
 
-function createJsonRequest(body) {
+function createJsonRequest(body, options = {}) {
   const listeners = {}
   return {
-    method: 'PUT',
-    url: '/api/ledger',
-    headers: { authorization: 'Bearer token-a' },
+    method: options.method || 'PUT',
+    url: options.url || '/api/ledger',
+    headers: { authorization: `Bearer ${options.token || 'token-a'}` },
     setEncoding() {},
     on(event, handler) {
       listeners[event] = handler
@@ -73,6 +74,15 @@ describe('ADREEM web API auth helpers', () => {
     expect(map.get(rabeeHash)).toBe('main')
     expect([...map.keys()].join(',')).not.toContain('rabee-secret')
     expect(map.has('not-a-real-hash')).toBe(false)
+  })
+
+  it('parses admin token hash sets without storing raw tokens', () => {
+    const hash = tokenHash('admin-secret')
+    const set = parseTokenHashSet(`${hash}, bad-token`)
+
+    expect(set.has(hash)).toBe(true)
+    expect([...set].join(',')).not.toContain('admin-secret')
+    expect(set.has('bad-token')).toBe(false)
   })
 
   it('extracts bearer tokens safely', () => {
@@ -221,5 +231,78 @@ describe('ADREEM web API auth helpers', () => {
     expect(response.statusCode).toBe(200)
     expect(payload.state.accounts.map((account) => account.id).sort()).toEqual(['from-bot', 'from-web'])
     expect(payload.state.movements.map((movement) => movement.id).sort()).toEqual(['bot-movement', 'web-movement'])
+  })
+
+  it('rejects admin users endpoint without a valid admin token', async () => {
+    const api = createAdreemApiHandler({
+      ADREEM_WEB_LEDGER_TOKENS: 'token-a=main',
+      ADREEM_ADMIN_TOKEN_HASHES: tokenHash('admin-secret'),
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const response = createMockResponse()
+
+    await api({
+      method: 'GET',
+      url: '/api/admin/users',
+      headers: { authorization: 'Bearer wrong-admin' },
+    }, response)
+
+    expect(response.statusCode).toBe(401)
+  })
+
+  it('creates independent users from the web admin API and routes their web token to the new ledger', async () => {
+    const file = tempRegistry([])
+    const api = createAdreemApiHandler({
+      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
+      ADREEM_ADMIN_TOKEN_HASHES: tokenHash('admin-secret'),
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const createRequest = createJsonRequest({
+      userId: 'saeed-book',
+      displayName: 'سعيد',
+      ledgerId: 'saeed-book',
+      telegramUserId: '555',
+    }, {
+      method: 'POST',
+      url: '/api/admin/users',
+      token: 'admin-secret',
+    })
+    const createResponse = createMockResponse()
+    const createPromise = api(createRequest, createResponse)
+    createRequest.emitBody()
+    await createPromise
+
+    const payload = JSON.parse(createResponse.body)
+    expect(createResponse.statusCode).toBe(201)
+    expect(payload.user).toMatchObject({
+      userId: 'saeed-book',
+      ledgerId: 'saeed-book',
+      telegramUserId: '555',
+      displayName: 'سعيد',
+    })
+    expect(payload.webUrl).toMatch(/#ledger_token=/)
+
+    const webToken = new URL(payload.webUrl).hash.replace(/^#ledger_token=/, '')
+    const requestedLedgers = []
+    api.__setRepositoryFactoryForTest?.((ledgerId) => {
+      requestedLedgers.push(ledgerId)
+      return {
+        async load() {
+          return { state: { ledgerId, accounts: [], movements: [] }, source: 'test' }
+        },
+      }
+    })
+    const ledgerResponse = createMockResponse()
+    await api({
+      method: 'GET',
+      url: '/api/ledger',
+      headers: { authorization: `Bearer ${webToken}` },
+    }, ledgerResponse)
+
+    expect(ledgerResponse.statusCode).toBe(200)
+    expect(requestedLedgers).toEqual(['saeed-book'])
   })
 })

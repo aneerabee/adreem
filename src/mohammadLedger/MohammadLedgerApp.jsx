@@ -44,6 +44,7 @@ import {
   saveMohammadPersistedState,
 } from './mohammadPersistence'
 import {
+  createEmptyAdreemState,
   createMohammadFallbackState,
   normalizeLedgerState,
   normalizeMohammadAccounts,
@@ -118,9 +119,14 @@ function accountPresetMark(key) {
 }
 
 function loadInitialLedgerState() {
-  const fallback = createMohammadFallbackState()
-  const localState = loadLocalMohammadState(fallback)
-  return { ...localState, accounts: normalizeMohammadAccounts(localState.accounts) }
+  const mode = getMohammadPersistenceMode()
+  const fallback = mode === 'api' || mode === 'api-missing-token'
+    ? createEmptyAdreemState()
+    : createMohammadFallbackState()
+  const state = mode === 'api' || mode === 'api-missing-token'
+    ? fallback
+    : loadLocalMohammadState(fallback)
+  return { ...state, accounts: normalizeMohammadAccounts(state.accounts) }
 }
 
 function ledgerExtrasFromState(state) {
@@ -253,10 +259,10 @@ function storageTextForStatus(saveStatus, storageMode) {
   return {
     loading: 'تحميل',
     saving: 'حفظ',
-    saved: storageMode === 'supabase' || storageMode === 'api' ? 'سحابي' : 'محلي',
-    local: 'هذا الجهاز',
-    'local-only': 'سحابة ناقصة',
-  }[saveStatus] || 'محلي'
+    saved: storageMode === 'supabase' || storageMode === 'api' ? 'سحابي' : 'تطوير',
+    local: storageMode === 'api-missing-token' ? 'رابط ناقص' : 'تطوير',
+    'local-only': storageMode === 'api-missing-token' ? 'رابط ناقص' : 'سحابة متوقفة',
+  }[saveStatus] || 'تطوير'
 }
 
 function movementVisibleSteps(config, needsSource) {
@@ -1128,6 +1134,7 @@ export default function MohammadLedgerApp() {
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [feedback, setFeedback] = useState('')
   const [isHydrated, setIsHydrated] = useState(false)
+  const [canPersist, setCanPersist] = useState(false)
   const [storageMode, setStorageMode] = useState(getMohammadPersistenceMode)
   const [saveStatus, setSaveStatus] = useState('loading')
   const [, setSyncProblem] = useState(false)
@@ -1314,9 +1321,12 @@ export default function MohammadLedgerApp() {
       setMovements(normalizedState.movements)
       setSaveStatus(result.loadError ? 'local-only' : 'saved')
       setSyncProblem(Boolean(result.loadError))
+      setCanPersist(!result.loadError && result.mode !== 'api-missing-token')
       setIsHydrated(true)
       if (result.loadError) {
-        setFeedback('تم فتح النسخة المحلية. السحابة غير جاهزة الآن.')
+        setFeedback(result.mode === 'api-missing-token'
+          ? 'رابط الدفتر ناقص. افتح الرابط الخاص أو صفحة الإدارة.'
+          : 'السحابة غير جاهزة الآن. لم يتم استخدام أي نسخة محلية.')
       }
     }
 
@@ -1327,7 +1337,7 @@ export default function MohammadLedgerApp() {
   }, [initialState])
 
   useEffect(() => {
-    if (!isHydrated) return undefined
+    if (!isHydrated || !canPersist) return undefined
     let cancelled = false
     const timer = window.setTimeout(() => {
       if (!cancelled) setSaveStatus('saving')
@@ -1337,9 +1347,9 @@ export default function MohammadLedgerApp() {
       .then((result) => {
         if (cancelled) return
         setStorageMode(result.mode)
-        const hasSyncProblem = result.mode === 'supabase' && !result.supabaseOk
+        const hasSyncProblem = (result.mode === 'supabase' || result.mode === 'api' || result.mode === 'api-missing-token') && !result.supabaseOk
         setSyncProblem(hasSyncProblem)
-        setSaveStatus(result.supabaseOk ? 'saved' : (result.mode === 'supabase' ? 'local-only' : 'local'))
+        setSaveStatus(result.supabaseOk ? 'saved' : (hasSyncProblem ? 'local-only' : 'local'))
         if (result.state) {
           const normalizedState = normalizeLedgerState(result.state, { ...ledgerExtras, accounts, movements })
           const nextExtras = ledgerExtrasFromState(normalizedState)
@@ -1361,7 +1371,7 @@ export default function MohammadLedgerApp() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [accounts, movements, ledgerExtras, isHydrated])
+  }, [accounts, movements, ledgerExtras, isHydrated, canPersist])
 
   useEffect(() => {
     if (!pendingUndo) return undefined

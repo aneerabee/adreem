@@ -353,20 +353,9 @@ function helpAdminText() {
     '<blockquote>الأوامر:',
     '/myid',
     '/users',
-    '/adduser TELEGRAM_ID LEDGER_ID',
     '',
-    'مثال:',
-    '/adduser 555 saeed-book</blockquote>',
+    'إضافة المستخدمين وروابط الويب تتم من صفحة الإدارة فقط.</blockquote>',
   ].join('\n')
-}
-
-function parseAddUserCommand(text) {
-  const parts = String(text || '').trim().split(/\s+/).filter(Boolean)
-  if (parts.length < 3) return null
-  return {
-    telegramUserId: parts[1],
-    ledgerId: parts[2],
-  }
 }
 
 async function handleAdminCommand(ctx, text) {
@@ -393,34 +382,12 @@ async function handleAdminCommand(ctx, text) {
     })
   }
   if (text.startsWith('/adduser')) {
-    const parsed = parseAddUserCommand(text)
-    if (!parsed) {
-      return telegram.sendMessage({ chat_id: ctx.chatId, text: helpAdminText(), parse_mode: 'HTML' })
-    }
-    const result = userAccess.addUser({
-      ...parsed,
-      addedBy: ctx.userId,
-      firstName: ctx.user?.first_name,
-      username: ctx.user?.username,
-    })
-    if (!result.ok) {
-      const message = result.error === 'ledger-used'
-        ? `هذا الدفتر مستخدم بالفعل للمستخدم ${result.existingUserId}. اختر ledgerId آخر.`
-        : 'لم أستطع إضافة المستخدم. تأكد من Telegram ID واسم الدفتر.'
-      return telegram.sendMessage({ chat_id: ctx.chatId, text: `<b>لم تتم الإضافة</b>\n<blockquote>${escapeHtml(message)}</blockquote>`, parse_mode: 'HTML' })
-    }
     return telegram.sendMessage({
       chat_id: ctx.chatId,
       text: [
-        '<b>تمت إضافة مستخدم مستقل</b>',
-        `<blockquote>Telegram: ${escapeHtml(result.entry.telegramUserId)}`,
-        `Ledger: ${escapeHtml(result.entry.ledgerId)}`,
-        `Row: ${escapeHtml(result.rowId)}`,
-        '',
-        'رابط الويب الخاص:',
-        `${escapeHtml(result.webUrl)}`,
-        '',
-        'يمكنه الآن فتح /start وسيعمل داخل دفتره فقط.</blockquote>',
+        '<b>إضافة المستخدمين من الويب فقط</b>',
+        '<blockquote>استخدم صفحة إدارة مستخدمي ADREEM.',
+        'التلقرام لا ينشئ مستخدمين حتى لا تتكرر مسارات الصلاحيات.</blockquote>',
       ].join('\n'),
       parse_mode: 'HTML',
     })

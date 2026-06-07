@@ -11,6 +11,219 @@
     sans-serif;
 }
 
+.adreem-admin-app {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(24, 129, 83, 0.12), transparent 30%),
+    linear-gradient(180deg, #f4f8f4 0%, #eef4f0 100%);
+  color: #13251c;
+  font-family: "SF Pro Display", "IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+
+.adreem-admin-shell {
+  width: min(1040px, calc(100% - 22px));
+  margin: 0 auto;
+  padding: 18px 0 40px;
+}
+
+.adreem-admin-head {
+  position: sticky;
+  top: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(19, 37, 28, 0.12);
+  border-radius: 18px;
+  background: rgba(252, 253, 248, 0.92);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 44px rgba(19, 37, 28, 0.12);
+}
+
+.adreem-admin-head span,
+.adreem-admin-card-head span {
+  color: #188153;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.adreem-admin-head h1,
+.adreem-admin-card h2 {
+  margin: 0;
+  line-height: 1.15;
+}
+
+.adreem-admin-head h1 {
+  font-size: clamp(1.25rem, 3vw, 2rem);
+}
+
+.adreem-admin-head b {
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: #13251c;
+  color: #fffdf4;
+}
+
+.adreem-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+  align-items: start;
+}
+
+.adreem-admin-card {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(19, 37, 28, 0.12);
+  border-radius: 18px;
+  background: rgba(252, 253, 248, 0.96);
+  box-shadow: 0 18px 46px rgba(19, 37, 28, 0.09);
+}
+
+.adreem-admin-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.adreem-admin-card label {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  color: #33483d;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.adreem-admin-card input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #d5e1d7;
+  border-radius: 12px;
+  background: #fff;
+  color: #13251c;
+  padding: 9px 11px;
+  outline: none;
+}
+
+.adreem-admin-card input:focus {
+  border-color: #188153;
+  box-shadow: 0 0 0 4px rgba(24, 129, 83, 0.12);
+}
+
+.adreem-admin-card button,
+.adreem-admin-token button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: #188153;
+  color: #fffdf4;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.adreem-admin-card button {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.adreem-admin-card-head button {
+  width: auto;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 12px;
+  background: #13251c;
+}
+
+.adreem-admin-users {
+  display: grid;
+  gap: 8px;
+}
+
+.adreem-admin-user {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 62px;
+  padding: 10px;
+  border: 1px solid #dce7df;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.adreem-admin-user div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.adreem-admin-user strong,
+.adreem-admin-user span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-admin-user span {
+  color: #5a6c62;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.adreem-admin-user b {
+  justify-self: end;
+  padding: 5px 8px;
+  border-radius: 10px;
+  background: #edf5ef;
+  color: #188153;
+  font-size: 0.74rem;
+}
+
+.adreem-admin-link input {
+  font-size: 0.82rem;
+}
+
+.adreem-admin-message {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #13251c;
+  color: #fffdf4;
+  font-weight: 900;
+}
+
+@media (max-width: 720px) {
+  .adreem-admin-shell {
+    width: min(100% - 12px, 520px);
+    padding-top: 8px;
+  }
+
+  .adreem-admin-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .adreem-admin-head,
+  .adreem-admin-card {
+    border-radius: 15px;
+  }
+
+  .adreem-admin-user {
+    grid-template-columns: 1fr;
+  }
+
+  .adreem-admin-user b {
+    justify-self: start;
+  }
+}
+
 /* Pocket Ledger redesign: mobile-first, dense, high-contrast operational UI. */
 .ml3-pocket-app {
   --ad-ink: #14231c;

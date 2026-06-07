@@ -15,12 +15,31 @@ import { ADREEM_LEDGER_VERSION } from './ledgerState.js'
 
 function installLocalStorage(initial = {}) {
   const store = new Map(Object.entries(initial))
+  const sessionStore = new Map()
   globalThis.window = {
     localStorage: {
       getItem: (key) => store.get(key) || null,
       setItem: (key, value) => store.set(key, String(value)),
       removeItem: (key) => store.delete(key),
       clear: () => store.clear(),
+      key: (index) => Array.from(store.keys())[index] || null,
+      get length() {
+        return store.size
+      },
+    },
+    sessionStorage: {
+      getItem: (key) => sessionStore.get(key) || null,
+      setItem: (key, value) => sessionStore.set(key, String(value)),
+      removeItem: (key) => sessionStore.delete(key),
+      clear: () => sessionStore.clear(),
+    },
+    location: {
+      hash: '',
+      pathname: '/adreem/',
+      search: '',
+    },
+    history: {
+      replaceState: vi.fn(),
     },
   }
   return store
@@ -28,6 +47,7 @@ function installLocalStorage(initial = {}) {
 
 afterEach(() => {
   delete globalThis.window
+  vi.unstubAllGlobals()
   vi.unstubAllEnvs()
 })
 
@@ -193,5 +213,70 @@ describe('adreem local persistence migration', () => {
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon-key')
 
     expect(getMohammadPersistenceMode()).toBe('local')
+  })
+
+  it('uses API state as source of truth instead of merging stale browser data', async () => {
+    const staleLocalState = {
+      version: ADREEM_LEDGER_VERSION,
+      savedAt: '2026-06-08T10:00:00.000Z',
+      accounts: [{ id: 'old-local-account', ownerName: 'قديم', subAccountName: 'كاش' }],
+      movements: [{ id: 'old-local-movement', createdAt: '2026-06-08T10:00:00.000Z' }],
+    }
+    const apiState = {
+      version: ADREEM_LEDGER_VERSION,
+      savedAt: '2026-05-25T12:01:42.608Z',
+      resetAt: '2026-05-25T12:01:42.608Z',
+      accounts: [{ id: 'me-cash', ownerName: 'أنا', subAccountName: 'كاش' }],
+      movements: [],
+    }
+    const store = installLocalStorage({
+      [ADREEM_STORAGE_KEY]: JSON.stringify(staleLocalState),
+    })
+    globalThis.window.location.hash = '#ledger_token=valid-token'
+    vi.stubEnv('VITE_ADREEM_API_URL', 'https://example.com/adreem-api')
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ state: apiState }),
+    })))
+    vi.resetModules()
+    const {
+      loadMohammadPersistedState: loadViaApi,
+    } = await import('./mohammadPersistence.js')
+
+    const result = await loadViaApi({ accounts: [], movements: [] })
+
+    expect(result.source).toBe('api')
+    expect(result.state.accounts.map((account) => account.id)).toEqual(['me-cash'])
+    expect(result.state.movements).toEqual([])
+    expect(store.has(ADREEM_STORAGE_KEY)).toBe(false)
+    expect(store.has('adreem-ledger-api-token-v1')).toBe(false)
+  })
+
+  it('does not fall back to local data when the cloud API token is missing', async () => {
+    const store = installLocalStorage({
+      [ADREEM_STORAGE_KEY]: JSON.stringify({
+        version: ADREEM_LEDGER_VERSION,
+        savedAt: '2026-06-08T10:00:00.000Z',
+        accounts: [{ id: 'old-local-account', ownerName: 'قديم', subAccountName: 'كاش' }],
+        movements: [],
+      }),
+    })
+    vi.stubEnv('VITE_ADREEM_API_URL', 'https://example.com/adreem-api')
+    vi.resetModules()
+    const {
+      getMohammadPersistenceMode: mode,
+      loadMohammadPersistedState: loadViaApi,
+      saveMohammadPersistedState: saveViaApi,
+    } = await import('./mohammadPersistence.js')
+
+    const loaded = await loadViaApi({ accounts: [], movements: [] })
+    const saved = await saveViaApi({ accounts: [{ id: 'draft-account' }], movements: [] })
+
+    expect(mode()).toBe('api-missing-token')
+    expect(loaded.source).toBe('api-missing-token')
+    expect(loaded.state.accounts).toEqual([])
+    expect(saved.mode).toBe('api-missing-token')
+    expect(saved.localOk).toBe(false)
+    expect(store.has(ADREEM_STORAGE_KEY)).toBe(false)
   })
 })

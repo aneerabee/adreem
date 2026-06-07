@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { createLedgerRepository } from './mohammadLedger/ledgerRepository.js'
 import { mergeLedgerStates } from '../src/mohammadLedger/ledgerState.js'
-import { registryWebTokenMap } from './telegram/userRegistry.js'
+import { createTelegramUserAccess, registryWebTokenMap } from './telegram/userRegistry.js'
 
 const DEFAULT_PORT = 8787
 
@@ -43,6 +43,13 @@ export function parseLedgerTokenHashMap(value = '') {
     }, new Map())
 }
 
+export function parseTokenHashSet(value = '') {
+  return new Set(String(value || '')
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => /^[a-f0-9]{64}$/.test(item)))
+}
+
 export function tokenFromAuthHeader(header = '') {
   const match = String(header || '').match(/^Bearer\s+(.+)$/i)
   return match ? match[1].trim() : ''
@@ -52,7 +59,7 @@ function sendJson(res, statusCode, payload, origin = '*') {
   const body = JSON.stringify(payload)
   res.writeHead(statusCode, {
     'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET, PUT, OPTIONS',
+    'access-control-allow-methods': 'GET, POST, PUT, OPTIONS',
     'access-control-allow-headers': 'authorization, content-type',
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(body),
@@ -86,6 +93,12 @@ function readJsonBody(req) {
 export function createAdreemApiHandler(env = process.env) {
   const tokenMap = parseLedgerTokenMap(env.ADREEM_WEB_LEDGER_TOKENS)
   const tokenHashMap = parseLedgerTokenHashMap(env.ADREEM_WEB_LEDGER_TOKEN_HASHES)
+  const adminTokenHashSet = parseTokenHashSet(env.ADREEM_ADMIN_TOKEN_HASHES)
+  const adminTokenSet = new Set(String(env.ADREEM_ADMIN_TOKENS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean))
+  const userAccess = createTelegramUserAccess(env)
   const repositories = new Map()
   const allowedOrigin = env.ADREEM_WEB_ALLOWED_ORIGIN || '*'
   let testRepository = null
@@ -103,6 +116,26 @@ export function createAdreemApiHandler(env = process.env) {
     return repositories.get(ledgerId)
   }
 
+  function isAdminToken(token) {
+    if (!token) return false
+    return adminTokenSet.has(token) || adminTokenHashSet.has(tokenHash(token))
+  }
+
+  function publicUser(user) {
+    return {
+      userId: user.userId || '',
+      telegramUserId: user.telegramUserId || '',
+      ledgerId: user.ledgerId || '',
+      source: user.source || 'registry',
+      displayName: user.displayName || user.firstName || user.username || '',
+      firstName: user.firstName || '',
+      username: user.username || '',
+      addedAt: user.addedAt || '',
+      addedBy: user.addedBy || '',
+      hasWebToken: Boolean(user.webTokenHash),
+    }
+  }
+
   async function adreemApiHandler(req, res) {
     if (req.method === 'OPTIONS') {
       return sendJson(res, 204, {}, allowedOrigin)
@@ -111,6 +144,48 @@ export function createAdreemApiHandler(env = process.env) {
     const url = new URL(req.url || '/', 'http://localhost')
     if (url.pathname === '/health') {
       return sendJson(res, 200, { ok: true, service: 'adreem-api' }, allowedOrigin)
+    }
+    if (url.pathname === '/api/admin/users') {
+      const token = tokenFromAuthHeader(req.headers.authorization)
+      if (!isAdminToken(token)) {
+        return sendJson(res, 401, { error: 'Invalid admin token.' }, allowedOrigin)
+      }
+      try {
+        if (req.method === 'GET') {
+          return sendJson(res, 200, {
+            users: userAccess.listUsers().map(publicUser),
+            source: 'registry',
+          }, allowedOrigin)
+        }
+        if (req.method === 'POST') {
+          const body = await readJsonBody(req)
+          const result = userAccess.addUser({
+            userId: body.userId,
+            telegramUserId: body.telegramUserId,
+            ledgerId: body.ledgerId,
+            displayName: body.displayName,
+            firstName: body.firstName,
+            username: body.username,
+            addedBy: 'web-admin',
+          })
+          if (!result.ok) {
+            const status = result.error === 'ledger-used' || result.error === 'telegram-used' ? 409 : 400
+            return sendJson(res, status, { error: result.error, existingUserId: result.existingUserId || '' }, allowedOrigin)
+          }
+          return sendJson(res, 201, {
+            user: publicUser({ ...result.entry, source: 'registry' }),
+            rowId: result.rowId,
+            webUrl: result.webUrl,
+          }, allowedOrigin)
+        }
+        return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
+      } catch (error) {
+        console.error('[adreem-api-admin]', error?.message || error)
+        if (error instanceof ApiRequestError) {
+          return sendJson(res, error.statusCode, { error: error.message }, allowedOrigin)
+        }
+        return sendJson(res, 500, { error: 'ADREEM admin API failed.' }, allowedOrigin)
+      }
     }
     if (url.pathname !== '/api/ledger') {
       return sendJson(res, 404, { error: 'Not found.' }, allowedOrigin)

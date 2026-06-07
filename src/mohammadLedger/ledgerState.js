@@ -99,6 +99,25 @@ export function createMohammadFallbackState(createdAt = new Date().toISOString()
   }
 }
 
+export function createEmptyAdreemState(createdAt = new Date().toISOString(), identity = {}) {
+  const ledgerIdentity = createLedgerIdentity(identity)
+  return {
+    ...ledgerIdentity,
+    accounts: [],
+    movements: [],
+    dimensions: [],
+    attachments: [],
+    recurringRules: [],
+    reconciliations: [],
+    ignoredExternalAccounts: [],
+    auditEvents: [],
+    version: MOHAMMAD_LEDGER_VERSION,
+    savedAt: createdAt,
+    resetAt: null,
+    migratedFrom: null,
+  }
+}
+
 export function normalizeLedgerState(state, fallbackState = createMohammadFallbackState()) {
   const safeState = state && typeof state === 'object' ? state : {}
   const accounts = Array.isArray(safeState.accounts) ? safeState.accounts : fallbackState.accounts
