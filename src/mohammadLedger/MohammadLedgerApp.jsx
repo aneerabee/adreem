@@ -1469,6 +1469,16 @@ export default function MohammadLedgerApp() {
     setMovementStep((current) => nextMovementStep(current))
   }
 
+  function previousMovementStep(step = movementStep) {
+    const index = visibleMovementSteps.indexOf(step)
+    if (index > 0) return visibleMovementSteps[index - 1]
+    return MOVEMENT_ENTRY_STEPS.TYPE
+  }
+
+  function retreatMovementStep() {
+    setMovementStep((current) => previousMovementStep(current))
+  }
+
   function editMovementStep(step) {
     setMovementStep(step)
   }
@@ -2197,9 +2207,20 @@ export default function MohammadLedgerApp() {
   const movementReceipt = [
     { key: 'type', label: 'الحركة', value: movementLabels[movementDraft.type] },
     { key: 'amount', label: 'المبلغ', value: movementDraft.amount ? money(movementDraft.amount, movementConfig.currency || movementDraft.currency) : 'لم يدخل' },
+    movementConfig.currencyLocked ? null : {
+      key: 'currency',
+      label: 'العملة',
+      value: movementDraft.currency === CURRENCIES.USD ? 'دولار' : 'دينار',
+    },
+    movementConfig.needsRate ? {
+      key: 'rate',
+      label: 'السعر',
+      value: movementDraft.rate ? formatRate(movementDraft.rate) : 'لم يدخل',
+    } : null,
     { key: 'source', label: movementConfig.sourceLabel || 'من', value: draftSourceAccount ? accountLabel(draftSourceAccount) : (movementSourceRequired ? 'اختر' : 'بدون') },
     { key: 'destination', label: movementConfig.destinationLabel || 'إلى', value: draftDestinationAccount ? accountLabel(draftDestinationAccount) : (movementConfig.needsDestination ? 'اختر' : 'بدون') },
-  ]
+    { key: 'note', label: 'ملاحظة', value: movementDraft.note || 'اختياري' },
+  ].filter(Boolean)
 
   return (
     <main className={`adreem-app adreem-app--${activeSection}`} dir="rtl">
@@ -2271,8 +2292,11 @@ export default function MohammadLedgerApp() {
                       const targetStep = {
                         type: MOVEMENT_ENTRY_STEPS.TYPE,
                         amount: MOVEMENT_ENTRY_STEPS.AMOUNT,
+                        currency: MOVEMENT_ENTRY_STEPS.CURRENCY,
+                        rate: MOVEMENT_ENTRY_STEPS.RATE,
                         source: MOVEMENT_ENTRY_STEPS.SOURCE,
                         destination: MOVEMENT_ENTRY_STEPS.DESTINATION,
+                        note: MOVEMENT_ENTRY_STEPS.NOTE,
                       }[item.key]
                       const targetIndex = visibleMovementSteps.indexOf(targetStep)
                       if (targetIndex >= 0 && targetIndex <= currentMovementStepIndex) editMovementStep(targetStep)
@@ -2396,9 +2420,14 @@ export default function MohammadLedgerApp() {
                     onChange={(value) => updateMovementDraft('amount', value)}
                   />
                 </div>
-                <button type="button" className="ml3-step-next" disabled={!hasMovementAmount} onClick={advanceMovementStep}>
-                  التالي
-                </button>
+                <div className="ml3-step-controls">
+                  <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
+                    رجوع
+                  </button>
+                  <button type="button" className="ml3-step-next" disabled={!hasMovementAmount} onClick={advanceMovementStep}>
+                    التالي
+                  </button>
+                </div>
               </section>
               ) : null}
 
@@ -2433,9 +2462,14 @@ export default function MohammadLedgerApp() {
                     </select>
                   </label>
                 )}
-                <button type="button" className="ml3-step-next" onClick={advanceMovementStep}>
-                  التالي
-                </button>
+                <div className="ml3-step-controls">
+                  <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
+                    رجوع
+                  </button>
+                  <button type="button" className="ml3-step-next" onClick={advanceMovementStep}>
+                    التالي
+                  </button>
+                </div>
               </section>
               ) : null}
 
@@ -2463,9 +2497,14 @@ export default function MohammadLedgerApp() {
                   placeholder="7.5"
                   allowDecimal
                 />
-                <button type="button" className="ml3-step-next" disabled={!hasMovementRate} onClick={advanceMovementStep}>
-                  التالي
-                </button>
+                <div className="ml3-step-controls">
+                  <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
+                    رجوع
+                  </button>
+                  <button type="button" className="ml3-step-next" disabled={!hasMovementRate} onClick={advanceMovementStep}>
+                    التالي
+                  </button>
+                </div>
               </section>
               ) : null}
 
@@ -2496,9 +2535,14 @@ export default function MohammadLedgerApp() {
                     balanceByAccountId={balanceByAccountId}
                   />
                 </div>
-                <button type="button" className="ml3-step-next" disabled={!movementDraft.sourceAccountId} onClick={advanceMovementStep}>
-                  التالي
-                </button>
+                <div className="ml3-step-controls">
+                  <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
+                    رجوع
+                  </button>
+                  <button type="button" className="ml3-step-next" disabled={!movementDraft.sourceAccountId} onClick={advanceMovementStep}>
+                    التالي
+                  </button>
+                </div>
               </section>
               ) : null}
 
@@ -2528,9 +2572,14 @@ export default function MohammadLedgerApp() {
                     balanceByAccountId={balanceByAccountId}
                   />
                 </div>
-                <button type="button" className="ml3-step-next" disabled={!movementDraft.destinationAccountId || sameLogicalAccount(draftSourceAccount, draftDestinationAccount)} onClick={advanceMovementStep}>
-                  التالي
-                </button>
+                <div className="ml3-step-controls">
+                  <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
+                    رجوع
+                  </button>
+                  <button type="button" className="ml3-step-next" disabled={!movementDraft.destinationAccountId || sameLogicalAccount(draftSourceAccount, draftDestinationAccount)} onClick={advanceMovementStep}>
+                    التالي
+                  </button>
+                </div>
               </section>
               ) : null}
 
@@ -2596,9 +2645,14 @@ export default function MohammadLedgerApp() {
                     حركة شهرية
                   </label>
                 </div>
-                <button type="button" className="ml3-step-next" onClick={advanceMovementStep}>
-                  مراجعة
-                </button>
+                <div className="ml3-step-controls">
+                  <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
+                    رجوع
+                  </button>
+                  <button type="button" className="ml3-step-next" onClick={advanceMovementStep}>
+                    مراجعة
+                  </button>
+                </div>
               </section>
               ) : null}
 
@@ -2621,9 +2675,14 @@ export default function MohammadLedgerApp() {
                     </div>
                   ))}
                 </div>
-                <button className="ml3-save" type="submit">
-                  {preview.validation.ok ? 'تأكيد وحفظ الحركة' : 'حفظ كحركة ناقصة'}
-                </button>
+                <div className="ml3-step-controls">
+                  <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
+                    رجوع
+                  </button>
+                  <button className="ml3-save" type="submit">
+                    {preview.validation.ok ? 'تأكيد وحفظ الحركة' : 'حفظ كحركة ناقصة'}
+                  </button>
+                </div>
               </section>
               ) : null}
             </form>

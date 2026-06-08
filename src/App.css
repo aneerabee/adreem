@@ -9422,21 +9422,32 @@
   background: var(--ad6-ink);
 }
 
-.adreem-app .ml3-step.is-done {
-  display: none;
-}
-
 .adreem-app .ml3-step {
   border: 1px solid var(--ad6-line);
   border-radius: 22px;
   padding: 14px;
   background: var(--ad6-surface-strong);
   box-shadow: none;
+  transform-origin: top center;
+  animation: adreemStepIn 260ms var(--ad6-ease) both;
+  transition:
+    border-color 180ms var(--ad6-ease),
+    background-color 180ms var(--ad6-ease),
+    box-shadow 220ms var(--ad6-ease),
+    opacity 180ms var(--ad6-ease),
+    transform 180ms var(--ad6-ease);
+}
+
+.adreem-app .ml3-step.is-done {
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--ad6-surface-strong) 78%, var(--ad6-bg));
+  opacity: 0.72;
 }
 
 .adreem-app .ml3-step.is-open {
   border-color: var(--ad6-ink);
   box-shadow: inset 6px 0 0 color-mix(in srgb, var(--ad6-green) 38%, transparent);
+  opacity: 1;
 }
 
 .adreem-app .ml3-step-head {
@@ -9460,6 +9471,23 @@
   box-shadow: 0 8px 18px rgba(18, 33, 26, 0.18);
 }
 
+.adreem-app .ml3-step.is-done .ml3-step-head {
+  margin-bottom: 6px;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+}
+
+.adreem-app .ml3-step.is-done .ml3-step-head span {
+  width: 30px;
+  height: 30px;
+  background: color-mix(in srgb, var(--ad6-green) 58%, var(--ad6-ink));
+  box-shadow: none;
+  font-size: 0.78rem;
+}
+
+.adreem-app .ml3-step.is-done .ml3-step-head strong {
+  font-size: 0.9rem;
+}
+
 .adreem-app .ml3-step-head strong {
   min-width: 0;
   color: var(--ad6-ink);
@@ -9469,6 +9497,7 @@
 }
 
 .adreem-app .ml3-step-head button,
+.adreem-app .ml3-step-back,
 .adreem-app .ml3-step-next,
 .adreem-app .ml3-save,
 .adreem-app .ml3-add-account > button,
@@ -9483,12 +9512,60 @@
   font-weight: 950;
 }
 
+.adreem-app .ml3-step-head button {
+  min-height: 34px;
+  border: 1px solid color-mix(in srgb, var(--ad6-ink) 16%, var(--ad6-line));
+  padding: 6px 10px;
+  color: var(--ad6-ink);
+  background: var(--ad6-surface-strong);
+}
+
+.adreem-app .ml3-step-controls {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(96px, 0.38fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.adreem-app .ml3-step-back {
+  color: var(--ad6-ink);
+  background: color-mix(in srgb, var(--ad6-surface-strong) 72%, var(--ad6-bg));
+  border: 1px solid var(--ad6-line-strong);
+  box-shadow: none;
+}
+
 .adreem-app .ml3-step-next,
 .adreem-app .ml3-save {
   width: 100%;
-  margin-top: 10px;
   background: linear-gradient(145deg, var(--ad6-green), #0c5c39);
   box-shadow: 0 10px 22px rgba(17, 107, 69, 0.2);
+}
+
+.adreem-app .ml3-step-controls .ml3-step-next,
+.adreem-app .ml3-step-controls .ml3-save {
+  margin-top: 0;
+}
+
+.adreem-app .ml3-step-summary {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ad6-ink);
+  font-size: 0.96rem;
+  line-height: 1.35;
+}
+
+@keyframes adreemStepIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.988);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .adreem-app button:disabled {
