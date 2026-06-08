@@ -351,6 +351,95 @@ describe('ADREEM web API auth helpers', () => {
     expect(adminResponse.statusCode).toBe(401)
   })
 
+  it('lets the owner update and remove user access while protecting the owner account', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'owner-main',
+        displayName: 'Owner',
+        email: 'owner@example.com',
+        password: 'owner-pass-123',
+        ledgerId: 'owner-main',
+      }),
+      registryPasswordUser({
+        userId: 'saeed-book',
+        displayName: 'سعيد',
+        email: 'saeed@example.com',
+        password: 'old-pass-123',
+        ledgerId: 'saeed-book',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
+      ADREEM_OWNER_EMAILS: 'owner@example.com',
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const ownerToken = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
+
+    const updateRequest = createJsonRequest({
+      displayName: 'سعيد الجديد',
+      email: 'saeed-new@example.com',
+      password: 'new-pass-123',
+      ledgerId: 'saeed-book',
+      telegramUserId: '555',
+    }, {
+      method: 'PATCH',
+      url: '/api/admin/users/saeed-book',
+      token: ownerToken,
+    })
+    const updateResponse = createMockResponse()
+    const updatePromise = api(updateRequest, updateResponse)
+    updateRequest.emitBody()
+    await updatePromise
+
+    expect(updateResponse.statusCode).toBe(200)
+    expect(JSON.parse(updateResponse.body).user).toMatchObject({
+      userId: 'saeed-book',
+      displayName: 'سعيد الجديد',
+      email: 'saeed-new@example.com',
+      telegramUserId: '555',
+    })
+    const oldLoginRequest = createJsonRequest({ email: 'saeed@example.com', password: 'old-pass-123' }, {
+      method: 'POST',
+      url: '/api/auth/login',
+      token: '',
+    })
+    const oldLoginResponse = createMockResponse()
+    const oldLoginPromise = api(oldLoginRequest, oldLoginResponse)
+    oldLoginRequest.emitBody()
+    await oldLoginPromise
+    expect(oldLoginResponse.statusCode).toBe(401)
+    await loginForToken(api, 'saeed-new@example.com', 'new-pass-123')
+
+    const ownerDeleteResponse = createMockResponse()
+    await api({
+      method: 'DELETE',
+      url: '/api/admin/users/owner-main',
+      headers: { authorization: `Bearer ${ownerToken}` },
+    }, ownerDeleteResponse)
+    expect(ownerDeleteResponse.statusCode).toBe(409)
+
+    const deleteResponse = createMockResponse()
+    await api({
+      method: 'DELETE',
+      url: '/api/admin/users/saeed-book',
+      headers: { authorization: `Bearer ${ownerToken}` },
+    }, deleteResponse)
+    expect(deleteResponse.statusCode).toBe(200)
+
+    const deletedLoginRequest = createJsonRequest({ email: 'saeed-new@example.com', password: 'new-pass-123' }, {
+      method: 'POST',
+      url: '/api/auth/login',
+      token: '',
+    })
+    const deletedLoginResponse = createMockResponse()
+    const deletedLoginPromise = api(deletedLoginRequest, deletedLoginResponse)
+    deletedLoginRequest.emitBody()
+    await deletedLoginPromise
+    expect(deletedLoginResponse.statusCode).toBe(401)
+  })
+
   it('creates independent users from the web admin API and routes email/password sessions to their ledger', async () => {
     const file = tempRegistry([
       registryPasswordUser({

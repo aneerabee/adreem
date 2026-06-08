@@ -60,6 +60,11 @@ function sendJson(res, statusCode, payload, origin = '*') {
   res.end(body)
 }
 
+function userIdFromAdminPath(pathname = '') {
+  const match = String(pathname || '').match(/^\/api\/admin\/users\/([^/]+)$/)
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     let body = ''
@@ -154,21 +159,22 @@ export function createAdreemApiHandler(env = process.env) {
         return sendJson(res, 500, { error: 'ADREEM auth failed.' }, allowedOrigin)
       }
     }
-    if (url.pathname === '/api/admin/users') {
+    if (url.pathname === '/api/admin/users' || userIdFromAdminPath(url.pathname)) {
       const token = tokenFromAuthHeader(req.headers.authorization)
       const ownerUser = ownerForToken(token)
       if (!ownerUser) {
         return sendJson(res, 401, { error: 'Owner session required.' }, allowedOrigin)
       }
       try {
-        if (req.method === 'GET') {
+        const targetUserId = userIdFromAdminPath(url.pathname)
+        if (!targetUserId && req.method === 'GET') {
           return sendJson(res, 200, {
             users: userAccess.listUsers().map(publicUser),
             source: 'registry',
             owner: ownerUser ? publicUser({ ...ownerUser, source: 'registry' }) : null,
           }, allowedOrigin)
         }
-        if (req.method === 'POST') {
+        if (!targetUserId && req.method === 'POST') {
           const body = await readJsonBody(req)
           const result = userAccess.addUser({
             userId: body.userId,
@@ -190,6 +196,35 @@ export function createAdreemApiHandler(env = process.env) {
             user: publicUser({ ...result.entry, source: 'registry' }),
             rowId: result.rowId,
           }, allowedOrigin)
+        }
+        if (targetUserId && req.method === 'PATCH') {
+          const body = await readJsonBody(req)
+          const result = userAccess.updateUser(targetUserId, {
+            email: body.email,
+            password: body.password,
+            telegramUserId: body.telegramUserId,
+            ledgerId: body.ledgerId,
+            displayName: body.displayName,
+            updatedBy: ownerUser.userId,
+          })
+          if (!result.ok) {
+            const status = result.error === 'not-found' ? 404
+              : result.error === 'ledger-used' || result.error === 'telegram-used' || result.error === 'email-used' ? 409
+                : 400
+            return sendJson(res, status, { error: result.error, existingUserId: result.existingUserId || '' }, allowedOrigin)
+          }
+          return sendJson(res, 200, {
+            user: publicUser({ ...result.entry, source: 'registry' }),
+            rowId: result.rowId,
+          }, allowedOrigin)
+        }
+        if (targetUserId && req.method === 'DELETE') {
+          const result = userAccess.removeUserAccess(targetUserId, { requestedBy: ownerUser.userId })
+          if (!result.ok) {
+            const status = result.error === 'not-found' ? 404 : result.error === 'owner-protected' ? 409 : 400
+            return sendJson(res, status, { error: result.error }, allowedOrigin)
+          }
+          return sendJson(res, 200, { ok: true, removedUserId: targetUserId })
         }
         return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
       } catch (error) {

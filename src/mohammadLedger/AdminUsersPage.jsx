@@ -50,7 +50,8 @@ async function adminRequest(path, { token, method = 'GET', body } = {}) {
   return data
 }
 
-function UserRow({ user }) {
+function UserRow({ user, owner, onEdit, onRemove }) {
+  const isOwner = owner?.userId && user.userId === owner.userId
   return (
     <article className="adreem-admin-user">
       <div>
@@ -58,9 +59,17 @@ function UserRow({ user }) {
         <span>{user.email || user.ledgerId}</span>
       </div>
       <div>
-        <b>{user.source === 'env' ? 'ثابت' : 'مستقل'}</b>
+        <b>{isOwner ? 'مالك' : user.source === 'env' ? 'ثابت' : 'مستقل'}</b>
         {user.telegramUserId ? <span>Telegram {user.telegramUserId}</span> : <span>{user.hasPassword ? 'دخول ويب' : 'بدون دخول'}</span>}
       </div>
+      {user.source === 'registry' ? (
+        <div className="adreem-admin-user-actions">
+          <button type="button" onClick={() => onEdit(user)}>تعديل</button>
+          <button type="button" disabled={isOwner} onClick={() => onRemove(user)}>
+            حذف الدخول
+          </button>
+        </div>
+      ) : null}
     </article>
   )
 }
@@ -72,6 +81,7 @@ export default function AdminUsersPage() {
   const [owner, setOwner] = useState(null)
   const [status, setStatus] = useState(initialToken ? 'loading' : 'need-login')
   const [message, setMessage] = useState('')
+  const [editingUserId, setEditingUserId] = useState('')
   const [draft, setDraft] = useState({
     displayName: '',
     email: '',
@@ -79,6 +89,8 @@ export default function AdminUsersPage() {
     ledgerId: '',
     telegramUserId: '',
   })
+
+  const editingUser = users.find((user) => user.userId === editingUserId) || null
 
   async function loadUsers(nextToken = token) {
     setStatus('loading')
@@ -139,6 +151,80 @@ export default function AdminUsersPage() {
     }
   }
 
+  function editUser(user) {
+    setEditingUserId(user.userId)
+    setDraft({
+      displayName: user.displayName || '',
+      email: user.email || '',
+      password: '',
+      ledgerId: user.ledgerId || '',
+      telegramUserId: user.telegramUserId || '',
+    })
+    setMessage('اكتب التعديل ثم احفظ. كلمة المرور لا تتغير إلا إذا كتبت كلمة جديدة.')
+  }
+
+  function resetUserForm() {
+    setEditingUserId('')
+    setDraft({ displayName: '', email: '', password: '', ledgerId: '', telegramUserId: '' })
+  }
+
+  async function updateUser(event) {
+    event.preventDefault()
+    if (!editingUser) return
+    setMessage('')
+    const ledgerId = defaultLedgerId(draft.ledgerId || draft.displayName)
+    if (!draft.displayName.trim() || !ledgerId || !draft.email.trim()) {
+      setMessage('اكتب الاسم والإيميل وكود دفتر واضح.')
+      return
+    }
+    if (draft.password && draft.password.length < 8) {
+      setMessage('كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل.')
+      return
+    }
+    try {
+      await adminRequest(`/api/admin/users/${encodeURIComponent(editingUser.userId)}`, {
+        token,
+        method: 'PATCH',
+        body: {
+          displayName: draft.displayName.trim(),
+          email: draft.email.trim(),
+          password: draft.password,
+          ledgerId,
+          telegramUserId: draft.telegramUserId.trim(),
+        },
+      })
+      resetUserForm()
+      await loadUsers(token)
+      setMessage('تم تعديل المستخدم.')
+    } catch (error) {
+      if (error.status === 409) {
+        setMessage('التعديل يتعارض مع مستخدم آخر: إيميل أو دفتر أو Telegram ID مستخدم بالفعل.')
+      } else {
+        setMessage('لم يتم التعديل. راجع البيانات.')
+      }
+    }
+  }
+
+  async function removeUser(user) {
+    if (user.userId === owner?.userId) {
+      setMessage('لا يمكن حذف المالك.')
+      return
+    }
+    const ok = window.confirm(`حذف دخول ${user.displayName || user.email || user.userId}؟ بيانات الدفتر لن تُحذف.`)
+    if (!ok) return
+    try {
+      await adminRequest(`/api/admin/users/${encodeURIComponent(user.userId)}`, {
+        token,
+        method: 'DELETE',
+      })
+      if (editingUserId === user.userId) resetUserForm()
+      await loadUsers(token)
+      setMessage('تم حذف صلاحية الدخول. بيانات الدفتر بقيت محفوظة.')
+    } catch (error) {
+      setMessage(error.status === 409 ? 'لا يمكن حذف المالك.' : 'لم يتم حذف المستخدم.')
+    }
+  }
+
   const normalizedLedgerId = defaultLedgerId(draft.ledgerId || draft.displayName)
 
   return (
@@ -170,9 +256,9 @@ export default function AdminUsersPage() {
           </section>
         ) : (
           <div className="adreem-admin-grid">
-            <form className="adreem-admin-card" onSubmit={addUser}>
+            <form className="adreem-admin-card" onSubmit={editingUser ? updateUser : addUser}>
               <div className="adreem-admin-card-head">
-                <h2>مستخدم جديد</h2>
+                <h2>{editingUser ? 'تعديل مستخدم' : 'مستخدم جديد'}</h2>
                 <span>{normalizedLedgerId || 'ledger-id'}</span>
               </div>
               <label>
@@ -199,7 +285,7 @@ export default function AdminUsersPage() {
                 <input
                   value={draft.password}
                   onChange={(event) => setDraft((current) => ({ ...current, password: event.target.value }))}
-                  placeholder="8 أحرف على الأقل"
+                  placeholder={editingUser ? 'اتركها فارغة بدون تغيير' : '8 أحرف على الأقل'}
                   type="password"
                   autoComplete="new-password"
                   dir="ltr"
@@ -224,7 +310,8 @@ export default function AdminUsersPage() {
                   dir="ltr"
                 />
               </label>
-              <button type="submit">إنشاء مستخدم</button>
+              <button type="submit">{editingUser ? 'حفظ التعديل' : 'إنشاء مستخدم'}</button>
+              {editingUser ? <button type="button" onClick={resetUserForm}>إلغاء التعديل</button> : null}
             </form>
 
             <section className="adreem-admin-card">
@@ -233,7 +320,15 @@ export default function AdminUsersPage() {
                 <button type="button" onClick={() => loadUsers(token)}>تحديث</button>
               </div>
               <div className="adreem-admin-users">
-                {users.length ? users.map((user) => <UserRow key={`${user.source}-${user.userId || user.telegramUserId || user.ledgerId}`} user={user} />) : <p>لا يوجد مستخدمون بعد.</p>}
+                {users.length ? users.map((user) => (
+                  <UserRow
+                    key={`${user.source}-${user.userId || user.telegramUserId || user.ledgerId}`}
+                    user={user}
+                    owner={owner}
+                    onEdit={editUser}
+                    onRemove={removeUser}
+                  />
+                )) : <p>لا يوجد مستخدمون بعد.</p>}
               </div>
             </section>
           </div>

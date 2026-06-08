@@ -164,7 +164,7 @@
 
 .adreem-admin-user {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
   min-height: 62px;
@@ -201,6 +201,35 @@
   background: #edf5ef;
   color: #188153;
   font-size: 0.74rem;
+}
+
+.adreem-admin-user-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(64px, auto));
+  gap: 6px;
+}
+
+.adreem-admin-user-actions button {
+  width: auto;
+  min-width: 62px;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid #d5e1d7;
+  background: #fffdf4;
+  color: #13251c;
+  font-size: 0.76rem;
+}
+
+.adreem-admin-user-actions button:last-child {
+  border-color: #f0c9c2;
+  background: #fae9e4;
+  color: #a43429;
+}
+
+.adreem-admin-user-actions button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 .adreem-admin-link input {
@@ -341,6 +370,10 @@
 
   .adreem-admin-user b {
     justify-self: start;
+  }
+
+  .adreem-admin-user-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
