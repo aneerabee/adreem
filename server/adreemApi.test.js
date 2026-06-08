@@ -6,10 +6,10 @@ import {
   createAdreemApiHandler,
   parseLedgerTokenHashMap,
   parseLedgerTokenMap,
-  parseTokenHashSet,
   tokenFromAuthHeader,
   tokenHash,
 } from './adreemApi.js'
+import { createPasswordHash } from './telegram/userRegistry.js'
 
 let tempDir = null
 
@@ -59,6 +59,38 @@ function createJsonRequest(body, options = {}) {
   }
 }
 
+function registryPasswordUser({
+  userId,
+  displayName,
+  email,
+  password,
+  ledgerId,
+  telegramUserId = '',
+}) {
+  return {
+    userId,
+    displayName,
+    email,
+    passwordHash: createPasswordHash(password),
+    ledgerId,
+    telegramUserId,
+  }
+}
+
+async function loginForToken(api, email, password) {
+  const loginRequest = createJsonRequest({ email, password }, {
+    method: 'POST',
+    url: '/api/auth/login',
+    token: '',
+  })
+  const loginResponse = createMockResponse()
+  const loginPromise = api(loginRequest, loginResponse)
+  loginRequest.emitBody()
+  await loginPromise
+  expect(loginResponse.statusCode).toBe(200)
+  return JSON.parse(loginResponse.body).token
+}
+
 describe('ADREEM web API auth helpers', () => {
   it('parses private web tokens into isolated ledger ids', () => {
     const map = parseLedgerTokenMap('rabee-secret=main, saeed-secret=saeed-book')
@@ -74,15 +106,6 @@ describe('ADREEM web API auth helpers', () => {
     expect(map.get(rabeeHash)).toBe('main')
     expect([...map.keys()].join(',')).not.toContain('rabee-secret')
     expect(map.has('not-a-real-hash')).toBe(false)
-  })
-
-  it('parses admin token hash sets without storing raw tokens', () => {
-    const hash = tokenHash('admin-secret')
-    const set = parseTokenHashSet(`${hash}, bad-token`)
-
-    expect(set.has(hash)).toBe(true)
-    expect([...set].join(',')).not.toContain('admin-secret')
-    expect(set.has('bad-token')).toBe(false)
   })
 
   it('extracts bearer tokens safely', () => {
@@ -233,10 +256,9 @@ describe('ADREEM web API auth helpers', () => {
     expect(payload.state.movements.map((movement) => movement.id).sort()).toEqual(['bot-movement', 'web-movement'])
   })
 
-  it('rejects admin users endpoint without a valid admin token', async () => {
+  it('rejects admin users endpoint without a valid owner session', async () => {
     const api = createAdreemApiHandler({
       ADREEM_WEB_LEDGER_TOKENS: 'token-a=main',
-      ADREEM_ADMIN_TOKEN_HASHES: tokenHash('admin-secret'),
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -245,21 +267,108 @@ describe('ADREEM web API auth helpers', () => {
     await api({
       method: 'GET',
       url: '/api/admin/users',
-      headers: { authorization: 'Bearer wrong-admin' },
+      headers: { authorization: 'Bearer wrong-owner' },
     }, response)
 
     expect(response.statusCode).toBe(401)
   })
 
-  it('creates independent users from the web admin API and routes email/password sessions to their ledger', async () => {
-    const file = tempRegistry([])
+  it('allows the configured owner session to manage users without an admin token', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'owner-main',
+        displayName: 'Owner',
+        email: 'owner@example.com',
+        password: 'owner-pass-123',
+        ledgerId: 'owner-main',
+      }),
+    ])
     const api = createAdreemApiHandler({
       ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
-      ADREEM_ADMIN_TOKEN_HASHES: tokenHash('admin-secret'),
+      ADREEM_OWNER_EMAILS: 'owner@example.com',
       ADREEM_TELEGRAM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
+    const ownerToken = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
+
+    const createRequest = createJsonRequest({
+      userId: 'saeed-book',
+      displayName: 'سعيد',
+      email: 'saeed@example.com',
+      password: 'strong-pass-123',
+      ledgerId: 'saeed-book',
+    }, {
+      method: 'POST',
+      url: '/api/admin/users',
+      token: ownerToken,
+    })
+    const createResponse = createMockResponse()
+    const createPromise = api(createRequest, createResponse)
+    createRequest.emitBody()
+    await createPromise
+
+    expect(createResponse.statusCode).toBe(201)
+
+    const listResponse = createMockResponse()
+    await api({
+      method: 'GET',
+      url: '/api/admin/users',
+      headers: { authorization: `Bearer ${ownerToken}` },
+    }, listResponse)
+    const listPayload = JSON.parse(listResponse.body)
+    expect(listResponse.statusCode).toBe(200)
+    expect(listPayload.owner).toMatchObject({ email: 'owner@example.com', ledgerId: 'owner-main' })
+    expect(listPayload.users.map((user) => user.email).sort()).toEqual(['owner@example.com', 'saeed@example.com'])
+  })
+
+  it('blocks non-owner web sessions from the users admin API', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'normal-user',
+        displayName: 'Normal',
+        email: 'normal@example.com',
+        password: 'normal-pass-123',
+        ledgerId: 'normal-book',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
+      ADREEM_OWNER_EMAILS: 'owner@example.com',
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const normalToken = await loginForToken(api, 'normal@example.com', 'normal-pass-123')
+
+    const adminResponse = createMockResponse()
+    await api({
+      method: 'GET',
+      url: '/api/admin/users',
+      headers: { authorization: `Bearer ${normalToken}` },
+    }, adminResponse)
+
+    expect(adminResponse.statusCode).toBe(401)
+  })
+
+  it('creates independent users from the web admin API and routes email/password sessions to their ledger', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'owner-main',
+        displayName: 'Owner',
+        email: 'owner@example.com',
+        password: 'owner-pass-123',
+        ledgerId: 'owner-main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
+      ADREEM_OWNER_EMAILS: 'owner@example.com',
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const ownerToken = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
     const createRequest = createJsonRequest({
       userId: 'saeed-book',
       displayName: 'سعيد',
@@ -270,7 +379,7 @@ describe('ADREEM web API auth helpers', () => {
     }, {
       method: 'POST',
       url: '/api/admin/users',
-      token: 'admin-secret',
+      token: ownerToken,
     })
     const createResponse = createMockResponse()
     const createPromise = api(createRequest, createResponse)

@@ -114,6 +114,9 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     '',
   )
   const adminIds = parseIdList(env.ADREEM_TELEGRAM_ADMIN_IDS || envUserIds.join(','))
+  const ownerEmails = parseIdList(env.ADREEM_OWNER_EMAILS || env.ADREEM_OWNER_EMAIL).map(normalizeEmail)
+  const ownerUserIds = parseIdList(env.ADREEM_OWNER_USER_IDS || env.ADREEM_OWNER_USER_ID)
+  const ownerLedgerIds = parseIdList(env.ADREEM_OWNER_LEDGER_IDS || env.ADREEM_OWNER_LEDGER_ID)
   const envLedgerMap = parseTelegramLedgerMap(env.ADREEM_TELEGRAM_LEDGER_IDS || env.MOHAMMAD_TELEGRAM_LEDGER_IDS)
 
   function registryMap() {
@@ -130,6 +133,20 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
 
   function isAdmin(userId) {
     return adminIds.includes(String(userId || ''))
+  }
+
+  function isOwnerUser(user = {}) {
+    const email = normalizeEmail(user.email)
+    const userId = String(user.userId || '').trim()
+    const telegramUserId = String(user.telegramUserId || '').trim()
+    const ledgerId = String(user.ledgerId || '').trim()
+    return Boolean(
+      (email && ownerEmails.includes(email)) ||
+      (userId && ownerUserIds.includes(userId)) ||
+      (telegramUserId && ownerUserIds.includes(telegramUserId)) ||
+      (ledgerId && ownerLedgerIds.includes(ledgerId)) ||
+      (telegramUserId && adminIds.includes(telegramUserId)),
+    )
   }
 
   function isAllowed(userId) {
@@ -220,6 +237,19 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     return { ok: true, entry, sessionToken, sessionExpiresAt }
   }
 
+  function userForSessionToken(token = '') {
+    if (!String(token || '').trim()) return null
+    const hash = webTokenHash(token)
+    if (!normalizeOptionalHash(hash)) return null
+    const registry = loadTelegramUserRegistry(filePath)
+    const now = Date.now()
+    const target = registry.users.find((user) => {
+      const expiresAt = new Date(user.sessionExpiresAt || 0).getTime()
+      return user.sessionTokenHash === hash && Number.isFinite(expiresAt) && expiresAt > now
+    })
+    return target || null
+  }
+
   function listUsers() {
     const registry = loadTelegramUserRegistry(filePath)
     const registryLedgerIds = new Set(registry.users.map((user) => user.ledgerId))
@@ -240,10 +270,12 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     envLedgerMap,
     filePath,
     isAdmin,
+    isOwnerUser,
     isAllowed,
     ledgerIdForUser,
     addUser,
     loginUser,
+    userForSessionToken,
     listUsers,
   }
 }

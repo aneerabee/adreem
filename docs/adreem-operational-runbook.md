@@ -78,7 +78,7 @@ npm run ops:create-ledger-access -- --ledger=saeed-book --telegram=555
 اضبط في `adreem.env`:
 
 ```text
-ADREEM_ADMIN_TOKEN_HASHES=SHA256_OF_ADMIN_TOKEN
+ADREEM_OWNER_EMAILS=owner@example.com
 ADREEM_TELEGRAM_ADMIN_IDS=YOUR_TELEGRAM_ID
 ADREEM_TELEGRAM_USERS_FILE=/home/argaz/apps/adreem/adreem-telegram-users.json
 ```
@@ -86,8 +86,10 @@ ADREEM_TELEGRAM_USERS_FILE=/home/argaz/apps/adreem/adreem-telegram-users.json
 رابط الإدارة:
 
 ```text
-https://aneerabee.github.io/adreem/#admin_token=YOUR_ADMIN_TOKEN
+https://aneerabee.github.io/adreem/?admin=users
 ```
+
+الإدارة لا تستخدم توكنًا يدويًا. ادخل أولًا بحساب المالك بالإيميل وكلمة المرور، ثم افتح رابط الإدارة أو زر `إدارة` من واجهة ADREEM.
 
 من الصفحة:
 

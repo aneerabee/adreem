@@ -43,13 +43,6 @@ export function parseLedgerTokenHashMap(value = '') {
     }, new Map())
 }
 
-export function parseTokenHashSet(value = '') {
-  return new Set(String(value || '')
-    .split(',')
-    .map((item) => item.trim().toLowerCase())
-    .filter((item) => /^[a-f0-9]{64}$/.test(item)))
-}
-
 export function tokenFromAuthHeader(header = '') {
   const match = String(header || '').match(/^Bearer\s+(.+)$/i)
   return match ? match[1].trim() : ''
@@ -93,11 +86,6 @@ function readJsonBody(req) {
 export function createAdreemApiHandler(env = process.env) {
   const tokenMap = parseLedgerTokenMap(env.ADREEM_WEB_LEDGER_TOKENS)
   const tokenHashMap = parseLedgerTokenHashMap(env.ADREEM_WEB_LEDGER_TOKEN_HASHES)
-  const adminTokenHashSet = parseTokenHashSet(env.ADREEM_ADMIN_TOKEN_HASHES)
-  const adminTokenSet = new Set(String(env.ADREEM_ADMIN_TOKENS || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean))
   const userAccess = createTelegramUserAccess(env)
   const repositories = new Map()
   const allowedOrigin = env.ADREEM_WEB_ALLOWED_ORIGIN || '*'
@@ -116,9 +104,9 @@ export function createAdreemApiHandler(env = process.env) {
     return repositories.get(ledgerId)
   }
 
-  function isAdminToken(token) {
-    if (!token) return false
-    return adminTokenSet.has(token) || adminTokenHashSet.has(tokenHash(token))
+  function ownerForToken(token) {
+    const user = userAccess.userForSessionToken(token)
+    return user && userAccess.isOwnerUser(user) ? user : null
   }
 
   function publicUser(user) {
@@ -168,14 +156,16 @@ export function createAdreemApiHandler(env = process.env) {
     }
     if (url.pathname === '/api/admin/users') {
       const token = tokenFromAuthHeader(req.headers.authorization)
-      if (!isAdminToken(token)) {
-        return sendJson(res, 401, { error: 'Invalid admin token.' }, allowedOrigin)
+      const ownerUser = ownerForToken(token)
+      if (!ownerUser) {
+        return sendJson(res, 401, { error: 'Owner session required.' }, allowedOrigin)
       }
       try {
         if (req.method === 'GET') {
           return sendJson(res, 200, {
             users: userAccess.listUsers().map(publicUser),
             source: 'registry',
+            owner: ownerUser ? publicUser({ ...ownerUser, source: 'registry' }) : null,
           }, allowedOrigin)
         }
         if (req.method === 'POST') {
@@ -189,7 +179,7 @@ export function createAdreemApiHandler(env = process.env) {
             displayName: body.displayName,
             firstName: body.firstName,
             username: body.username,
-            addedBy: 'web-admin',
+            addedBy: ownerUser.userId,
             createWebToken: false,
           })
           if (!result.ok) {

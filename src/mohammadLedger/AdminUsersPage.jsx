@@ -1,31 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  ADREEM_API_TOKEN_PERSIST_KEY,
+  ADREEM_API_TOKEN_SESSION_KEY,
+} from './mohammadPersistence'
 
-const ADREEM_ADMIN_TOKEN_SESSION_KEY = 'adreem-admin-token-session-v1'
 const ADREEM_API_URL = String(import.meta.env.VITE_ADREEM_API_URL || '').replace(/\/+$/, '')
 
-function readAdminTokenFromLocation() {
+function ledgerLoginToken() {
   if (typeof window === 'undefined') return ''
-  const hash = String(window.location?.hash || '').replace(/^#/, '')
-  const params = new URLSearchParams(hash)
-  const token = params.get('admin_token') || params.get('adreem_admin') || ''
-  if (token && window.history?.replaceState) {
-    const url = new URL(window.location.href)
-    url.hash = ''
-    url.searchParams.set('admin', 'users')
-    window.history.replaceState(null, '', `${url.pathname}${url.search}`)
+  try {
+    return window.sessionStorage?.getItem(ADREEM_API_TOKEN_SESSION_KEY) ||
+      window.localStorage?.getItem(ADREEM_API_TOKEN_PERSIST_KEY) ||
+      ''
+  } catch {
+    return ''
   }
-  return token
-}
-
-function sessionToken() {
-  if (typeof window === 'undefined' || !window.sessionStorage) return ''
-  return window.sessionStorage.getItem(ADREEM_ADMIN_TOKEN_SESSION_KEY) || ''
-}
-
-function saveSessionToken(token) {
-  if (typeof window === 'undefined' || !window.sessionStorage) return
-  if (token) window.sessionStorage.setItem(ADREEM_ADMIN_TOKEN_SESSION_KEY, token)
-  else window.sessionStorage.removeItem(ADREEM_ADMIN_TOKEN_SESSION_KEY)
 }
 
 function openLedgerLogin() {
@@ -77,11 +66,11 @@ function UserRow({ user }) {
 }
 
 export default function AdminUsersPage() {
-  const initialToken = useMemo(() => readAdminTokenFromLocation() || sessionToken(), [])
+  const initialToken = useMemo(() => ledgerLoginToken(), [])
   const [token, setToken] = useState(initialToken)
-  const [tokenInput, setTokenInput] = useState('')
   const [users, setUsers] = useState([])
-  const [status, setStatus] = useState(initialToken ? 'loading' : 'need-token')
+  const [owner, setOwner] = useState(null)
+  const [status, setStatus] = useState(initialToken ? 'loading' : 'need-login')
   const [message, setMessage] = useState('')
   const [draft, setDraft] = useState({
     displayName: '',
@@ -97,11 +86,11 @@ export default function AdminUsersPage() {
     try {
       const data = await adminRequest('/api/admin/users', { token: nextToken })
       setUsers(Array.isArray(data.users) ? data.users : [])
+      setOwner(data.owner || null)
       setStatus('ready')
-      saveSessionToken(nextToken)
     } catch (error) {
       setStatus('error')
-      setMessage(error.status === 401 ? 'توكن الإدارة غير صحيح.' : 'لم أستطع تحميل المستخدمين.')
+      setMessage(error.status === 401 ? 'هذا الحساب ليس مالكًا أو تحتاج تسجيل الدخول من جديد.' : 'لم أستطع تحميل المستخدمين.')
     }
   }
 
@@ -110,12 +99,11 @@ export default function AdminUsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialToken])
 
-  function submitToken(event) {
-    event.preventDefault()
-    const nextToken = tokenInput.trim()
-    if (!nextToken) return
+  function refreshOwnerSession() {
+    const nextToken = ledgerLoginToken()
     setToken(nextToken)
-    loadUsers(nextToken)
+    if (nextToken) loadUsers(nextToken)
+    else setStatus('need-login')
   }
 
   async function addUser(event) {
@@ -163,21 +151,23 @@ export default function AdminUsersPage() {
           </div>
           <div className="adreem-admin-head-actions">
             <button type="button" onClick={openLedgerLogin}>الدخول للدفتر</button>
+            <button type="button" onClick={refreshOwnerSession}>تحديث الجلسة</button>
             <b>{status === 'ready' ? 'سحابي' : status === 'loading' ? 'تحميل' : 'محمي'}</b>
           </div>
         </header>
 
-        {!token ? (
-          <form className="adreem-admin-card adreem-admin-token" onSubmit={submitToken}>
-            <h2>توكن الإدارة</h2>
-            <input
-              value={tokenInput}
-              onChange={(event) => setTokenInput(event.target.value)}
-              placeholder="ضع توكن الإدارة"
-              autoComplete="off"
-            />
-            <button type="submit">فتح الإدارة</button>
-          </form>
+        {!token || status === 'need-login' ? (
+          <section className="adreem-admin-card adreem-admin-token">
+            <h2>ادخل بحساب المالك</h2>
+            <p>إدارة المستخدمين تعمل من جلسة حسابك العادي فقط. لا يوجد توكن إدارة يدوي.</p>
+            <button type="button" onClick={openLedgerLogin}>تسجيل الدخول</button>
+          </section>
+        ) : status === 'error' ? (
+          <section className="adreem-admin-card adreem-admin-token">
+            <h2>الإدارة للمالك فقط</h2>
+            <p>هذا الحساب لا يملك صلاحية إدارة المستخدمين، أو أن الجلسة انتهت.</p>
+            <button type="button" onClick={refreshOwnerSession}>إعادة الفحص</button>
+          </section>
         ) : (
           <div className="adreem-admin-grid">
             <form className="adreem-admin-card" onSubmit={addUser}>
@@ -239,7 +229,7 @@ export default function AdminUsersPage() {
 
             <section className="adreem-admin-card">
               <div className="adreem-admin-card-head">
-                <h2>المستخدمون</h2>
+                <h2>{owner?.displayName ? `المستخدمون · ${owner.displayName}` : 'المستخدمون'}</h2>
                 <button type="button" onClick={() => loadUsers(token)}>تحديث</button>
               </div>
               <div className="adreem-admin-users">
