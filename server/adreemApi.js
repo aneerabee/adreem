@@ -49,13 +49,16 @@ export function tokenFromAuthHeader(header = '') {
 }
 
 function sendJson(res, statusCode, payload, origin = '*') {
-  const body = JSON.stringify(payload)
-  res.writeHead(statusCode, {
+  const body = statusCode === 204 ? '' : JSON.stringify(payload)
+  const headers = {
     'access-control-allow-origin': origin,
     'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'access-control-allow-headers': 'authorization, content-type',
     'content-type': 'application/json; charset=utf-8',
-    'content-length': Buffer.byteLength(body),
+  }
+  if (statusCode !== 204) headers['content-length'] = Buffer.byteLength(body)
+  res.writeHead(statusCode, {
+    ...headers,
   })
   res.end(body)
 }

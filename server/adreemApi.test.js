@@ -129,6 +129,7 @@ describe('ADREEM web API auth helpers', () => {
     }, response)
 
     expect(response.statusCode).toBe(204)
+    expect(response.body).toBe('')
     expect(response.headers['access-control-allow-methods']).toContain('PATCH')
     expect(response.headers['access-control-allow-methods']).toContain('DELETE')
   })
