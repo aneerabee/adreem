@@ -10890,3 +10890,103 @@
     height: 70px;
   }
 }
+
+/* Final guardrail: step cards must never inherit legacy compact-grid behavior. */
+.adreem-app .ml3-entry-card .ml3-step,
+.adreem-app .ml3-entry-card .ml3-step.is-done,
+.adreem-app .ml3-entry-card .ml3-step.is-open {
+  display: block !important;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.adreem-app .ml3-entry-card .ml3-step-head,
+.adreem-app .ml3-entry-card .ml3-step.is-done .ml3-step-head,
+.adreem-app .ml3-entry-card .ml3-step.is-open .ml3-step-head {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 36px;
+  margin-bottom: 8px;
+}
+
+.adreem-app .ml3-entry-card .ml3-step-head span,
+.adreem-app .ml3-entry-card .ml3-step.is-done .ml3-step-head span,
+.adreem-app .ml3-entry-card .ml3-step.is-open .ml3-step-head span {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+}
+
+.adreem-app .ml3-entry-card .ml3-step.is-done .ml3-step-head span {
+  flex-basis: 30px;
+  width: 30px;
+  height: 30px;
+}
+
+.adreem-app .ml3-entry-card .ml3-step-head strong,
+.adreem-app .ml3-entry-card .ml3-step.is-done .ml3-step-head strong,
+.adreem-app .ml3-entry-card .ml3-step.is-open .ml3-step-head strong {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-app .ml3-entry-card .ml3-step-head button,
+.adreem-app .ml3-entry-card .ml3-step.is-done .ml3-step-head button,
+.adreem-app .ml3-entry-card .ml3-step.is-open .ml3-step-head button {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  flex: 0 0 auto;
+  margin-inline-start: 0;
+  white-space: nowrap;
+}
+
+.adreem-app .ml3-entry-card .ml3-step-summary,
+.adreem-app .ml3-entry-card .ml3-step.is-done .ml3-step-summary {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 540px) {
+  .adreem-app .ml3-entry-card .ml3-step-head,
+  .adreem-app .ml3-entry-card .ml3-step.is-done .ml3-step-head,
+  .adreem-app .ml3-entry-card .ml3-step.is-open .ml3-step-head {
+    gap: 8px;
+    min-height: 34px;
+  }
+
+  .adreem-app .ml3-entry-card .ml3-step-head span,
+  .adreem-app .ml3-entry-card .ml3-step.is-open .ml3-step-head span {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .adreem-app .ml3-entry-card .ml3-step.is-done .ml3-step-head span {
+    flex-basis: 28px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .adreem-app .ml3-entry-card .ml3-step-head button,
+  .adreem-app .ml3-entry-card .ml3-step.is-done .ml3-step-head button {
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 0.72rem;
+  }
+}
