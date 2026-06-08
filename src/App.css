@@ -8866,6 +8866,28 @@
   100% { transform: scale(1); }
 }
 
+@keyframes adreem-flow-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes adreem-soft-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 .adreem-app *,
 .adreem-app *::before,
 .adreem-app *::after {
@@ -9204,6 +9226,7 @@
   grid-area: body;
   min-width: 0;
   width: 100%;
+  animation: adreem-flow-in 260ms var(--ad6-ease) both;
 }
 
 .adreem-entry {
@@ -9333,6 +9356,49 @@
   background: var(--ad6-surface);
   box-shadow: var(--ad6-shadow-soft);
   animation: adreem-rise 420ms var(--ad6-ease) both;
+}
+
+.adreem-app .ml3-content > *,
+.adreem-entry > *,
+.adreem-app .ml3-review-active > *,
+.adreem-app .ml3-account-sections > *,
+.adreem-app .ml3-history-list > *,
+.adreem-app .ml3-today-list > * {
+  animation: adreem-soft-in 220ms var(--ad6-ease) both;
+}
+
+.adreem-app .ml3-content > :nth-child(2),
+.adreem-entry > :nth-child(2),
+.adreem-app .ml3-account-sections > :nth-child(2),
+.adreem-app .ml3-history-list > :nth-child(2),
+.adreem-app .ml3-today-list > :nth-child(2) {
+  animation-delay: 28ms;
+}
+
+.adreem-app .ml3-content > :nth-child(3),
+.adreem-entry > :nth-child(3),
+.adreem-app .ml3-account-sections > :nth-child(3),
+.adreem-app .ml3-history-list > :nth-child(3),
+.adreem-app .ml3-today-list > :nth-child(3) {
+  animation-delay: 54ms;
+}
+
+.adreem-app .ml3-panel,
+.adreem-app .ml3-entry-card,
+.adreem-app .ml3-add-account,
+.adreem-app .ml3-today-panel,
+.adreem-app .ml3-review-card,
+.adreem-app .ml3-ops-card,
+.adreem-app .ml3-home-card,
+.adreem-app .ml3-history-row,
+.adreem-app .ml3-today-row,
+.adreem-app .ml3-account-row,
+.adreem-app .ml3-review-ticket {
+  transition:
+    border-color 180ms var(--ad6-ease),
+    background-color 180ms var(--ad6-ease),
+    box-shadow 220ms var(--ad6-ease),
+    opacity 180ms var(--ad6-ease);
 }
 
 .adreem-app .ml3-step-meter {

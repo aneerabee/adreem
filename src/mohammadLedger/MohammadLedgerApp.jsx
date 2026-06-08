@@ -1926,7 +1926,7 @@ export default function MohammadLedgerApp() {
     }
     const rows = accountRowsByGroup[activeGroup.key] || []
     return (
-      <section className="ml3-panel ml3-balances-surface">
+      <section className="ml3-panel ml3-balances-surface" key={`accounts-${activeAccountGroup}`}>
         <div className="ml3-panel-head">
           <div>
             <h2>الأرصدة</h2>
@@ -2244,7 +2244,7 @@ export default function MohammadLedgerApp() {
           />
         ) : null}
 
-        <section className={`ml3-layout ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
+        <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
           {activeSection === 'entry' ? (
           <aside className="adreem-entry">
             <section className="adreem-receipt" aria-label="ملخص الحركة الحالي">
@@ -2724,7 +2724,7 @@ export default function MohammadLedgerApp() {
           ) : null}
 
           {activeSection !== 'entry' ? (
-          <section className="ml3-content">
+          <section className="ml3-content" key={`content-${activeSection}`}>
             {feedback ? <div className="ml3-feedback">{feedback}</div> : null}
             {pendingUndo ? (
               <div className="ml3-undo-banner">
