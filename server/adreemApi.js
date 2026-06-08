@@ -52,7 +52,7 @@ function sendJson(res, statusCode, payload, origin = '*') {
   const body = JSON.stringify(payload)
   res.writeHead(statusCode, {
     'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET, POST, PUT, OPTIONS',
+    'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'access-control-allow-headers': 'authorization, content-type',
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(body),

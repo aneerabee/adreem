@@ -30,6 +30,19 @@ function defaultLedgerId(displayName = '') {
     .replace(/^-+|-+$/g, '')
 }
 
+function adminErrorMessage(error, fallback) {
+  const code = error?.data?.error || ''
+  if (code === 'email-used') return 'هذا الإيميل مستخدم بالفعل.'
+  if (code === 'ledger-used') return 'كود الدفتر مستخدم بالفعل.'
+  if (code === 'telegram-used') return 'Telegram ID مستخدم بالفعل.'
+  if (code === 'owner-protected') return 'لا يمكن حذف المالك.'
+  if (code === 'not-found') return 'المستخدم غير موجود أو تم حذفه.'
+  if (code === 'weak-password') return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.'
+  if (code === 'invalid-email') return 'الإيميل غير صحيح.'
+  if (code === 'invalid-user-or-ledger') return 'كود الدفتر أو بيانات المستخدم غير صحيحة.'
+  return fallback
+}
+
 async function adminRequest(path, { token, method = 'GET', body } = {}) {
   if (!ADREEM_API_URL) throw new Error('ADREEM API URL is missing.')
   const response = await fetch(`${ADREEM_API_URL}${path}`, {
@@ -198,9 +211,9 @@ export default function AdminUsersPage() {
       setMessage('تم تعديل المستخدم.')
     } catch (error) {
       if (error.status === 409) {
-        setMessage('التعديل يتعارض مع مستخدم آخر: إيميل أو دفتر أو Telegram ID مستخدم بالفعل.')
+        setMessage(adminErrorMessage(error, 'التعديل يتعارض مع مستخدم آخر.'))
       } else {
-        setMessage('لم يتم التعديل. راجع البيانات.')
+        setMessage(adminErrorMessage(error, 'لم يتم التعديل. راجع البيانات أو سجل دخول المالك من جديد.'))
       }
     }
   }
@@ -221,7 +234,7 @@ export default function AdminUsersPage() {
       await loadUsers(token)
       setMessage('تم حذف صلاحية الدخول. بيانات الدفتر بقيت محفوظة.')
     } catch (error) {
-      setMessage(error.status === 409 ? 'لا يمكن حذف المالك.' : 'لم يتم حذف المستخدم.')
+      setMessage(adminErrorMessage(error, 'لم يتم حذف المستخدم.'))
     }
   }
 

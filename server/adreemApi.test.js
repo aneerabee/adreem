@@ -114,6 +114,25 @@ describe('ADREEM web API auth helpers', () => {
     expect(tokenFromAuthHeader('abc123')).toBe('')
   })
 
+  it('allows browser preflight for admin edit and delete requests', async () => {
+    const api = createAdreemApiHandler({
+      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const response = createMockResponse()
+
+    await api({
+      method: 'OPTIONS',
+      url: '/api/admin/users/saeed-book',
+      headers: {},
+    }, response)
+
+    expect(response.statusCode).toBe(204)
+    expect(response.headers['access-control-allow-methods']).toContain('PATCH')
+    expect(response.headers['access-control-allow-methods']).toContain('DELETE')
+  })
+
   it('rejects unknown web tokens before any ledger access', async () => {
     const api = createAdreemApiHandler({
       ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
