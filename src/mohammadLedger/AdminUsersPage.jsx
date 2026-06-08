@@ -28,6 +28,11 @@ function saveSessionToken(token) {
   else window.sessionStorage.removeItem(ADREEM_ADMIN_TOKEN_SESSION_KEY)
 }
 
+function openLedgerLogin() {
+  if (typeof window === 'undefined') return
+  window.location.assign(window.location.pathname)
+}
+
 function defaultLedgerId(displayName = '') {
   return String(displayName || '')
     .trim()
@@ -156,7 +161,10 @@ export default function AdminUsersPage() {
             <span>ADREEM</span>
             <h1>إدارة المستخدمين</h1>
           </div>
-          <b>{status === 'ready' ? 'سحابي' : status === 'loading' ? 'تحميل' : 'محمي'}</b>
+          <div className="adreem-admin-head-actions">
+            <button type="button" onClick={openLedgerLogin}>الدخول للدفتر</button>
+            <b>{status === 'ready' ? 'سحابي' : status === 'loading' ? 'تحميل' : 'محمي'}</b>
+          </div>
         </header>
 
         {!token ? (

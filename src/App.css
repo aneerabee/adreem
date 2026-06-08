@@ -66,6 +66,23 @@
   color: #fffdf4;
 }
 
+.adreem-admin-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.adreem-admin-head-actions button {
+  min-height: 36px;
+  border: 1px solid #d5e1d7;
+  border-radius: 12px;
+  padding: 0 12px;
+  background: #fff;
+  color: #13251c;
+  font-weight: 950;
+  cursor: pointer;
+}
+
 .adreem-admin-grid {
   display: grid;
   grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
@@ -280,6 +297,12 @@
   color: #fffdf4;
   font-weight: 950;
   cursor: pointer;
+}
+
+.adreem-login-card .adreem-login-secondary {
+  border: 1px solid #d5e1d7;
+  background: #fff;
+  color: #13251c;
 }
 
 .adreem-login-card button:disabled {
@@ -8967,6 +8990,14 @@
 
 .adreem-status button {
   cursor: pointer;
+  border-color: rgba(19, 37, 28, 0.12);
+}
+
+.adreem-status .adreem-admin-open {
+  color: var(--ad6-blue);
+}
+
+.adreem-status .adreem-logout {
   border-color: rgba(196, 61, 50, 0.22);
   color: var(--ad6-red);
 }
@@ -10108,6 +10139,10 @@
 
   .adreem-status.has-logout {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .adreem-status.has-cloud-actions {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .adreem-status b,

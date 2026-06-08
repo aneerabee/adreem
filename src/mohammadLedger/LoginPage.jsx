@@ -34,6 +34,14 @@ export default function LoginPage() {
     }
   }
 
+  function openAdmin(event) {
+    event.preventDefault()
+    const url = new URL(window.location.href)
+    url.searchParams.set('admin', 'users')
+    url.hash = ''
+    window.location.assign(`${url.pathname}${url.search}`)
+  }
+
   return (
     <main className="adreem-login-app" dir="rtl">
       <form className="adreem-login-card" onSubmit={submit}>
@@ -67,6 +75,9 @@ export default function LoginPage() {
         </label>
         <button type="submit" disabled={status === 'loading'}>
           {status === 'loading' ? 'جاري الدخول' : 'دخول'}
+        </button>
+        <button type="button" className="adreem-login-secondary" onClick={openAdmin}>
+          إدارة المستخدمين
         </button>
         {message ? <p>{message}</p> : null}
       </form>

@@ -631,18 +631,7 @@ export const mohammadSummaryAccounts = [
   }),
 ]
 
-export const knownExternalAccounts = [
-  account({
-    id: 'mohammad-keifo',
-    legacyName: 'محمد الكيفو',
-    ownerName: 'محمد الكيفو',
-    subAccountName: 'كاش',
-    type: ACCOUNT_TYPES.PERSON,
-    valueKind: VALUE_KINDS.RECEIVABLE,
-    status: ACCOUNT_STATUSES.NEEDS_REVIEW,
-    notes: 'ظهر في حركة من Actions ولم يكن موجودًا في Table 1.',
-  }),
-]
+export const knownExternalAccounts = []
 
 export function buildAccountMap(accounts = mohammadAccountCatalog) {
   return new Map(accounts.map((accountItem) => [accountItem.id, accountItem]))

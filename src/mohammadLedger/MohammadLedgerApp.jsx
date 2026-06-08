@@ -272,6 +272,14 @@ function logoutFromCloudSession() {
   window.location.assign(`${window.location.pathname}${window.location.search}`)
 }
 
+function openAdminUsersPage() {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  url.searchParams.set('admin', 'users')
+  url.hash = ''
+  window.location.assign(`${url.pathname}${url.search}`)
+}
+
 function movementVisibleSteps(config, needsSource) {
   return [
     MOVEMENT_ENTRY_STEPS.TYPE,
@@ -2174,6 +2182,7 @@ export default function MohammadLedgerApp() {
 
   const storageText = storageTextForStatus(saveStatus, storageMode)
   const canLogout = storageMode === 'api'
+  const canOpenAdmin = storageMode === 'api'
   const activeSectionTitle = sectionTitles[activeSection] || 'ADREEM'
   const movementReceipt = [
     { key: 'type', label: 'الحركة', value: movementLabels[movementDraft.type] },
@@ -2199,10 +2208,11 @@ export default function MohammadLedgerApp() {
               <h1>{activeSectionTitle}</h1>
             </div>
           </div>
-          <div className={`adreem-status ${canLogout ? 'has-logout' : ''}`}>
+          <div className={`adreem-status ${canLogout || canOpenAdmin ? 'has-cloud-actions' : ''}`}>
             <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
             <b>اليوم {formatCount(todayMovements.length)}</b>
             <b>مراجعة {formatCount(reviewItems.length)}</b>
+            {canOpenAdmin ? <button type="button" className="adreem-admin-open" onClick={openAdminUsersPage}>إدارة</button> : null}
             {canLogout ? <button type="button" className="adreem-logout" onClick={logoutFromCloudSession}>خروج</button> : null}
           </div>
         </header>

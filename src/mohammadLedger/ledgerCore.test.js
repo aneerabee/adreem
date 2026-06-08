@@ -552,13 +552,13 @@ describe('mohammad ledger core', () => {
 
   it('creates dynamic accounts with validation before use', () => {
     const account = createAccount({
-      ownerName: 'محمد الكيفو',
+      ownerName: 'سعيد الجديد',
       subAccountName: 'كاش',
       type: ACCOUNT_TYPES.PERSON,
       valueKind: 'receivable',
     })
 
-    expect(account.id).toContain('محمد-الكيفو-كاش-lyd')
+    expect(account.id).toContain('سعيد-الجديد-كاش-lyd')
     expect(account.currencyKind).toBe(CURRENCIES.DINAR)
     expect(validateAccount(account, mohammadAccountCatalog).ok).toBe(true)
     expect(validateAccount({ ...account, ownerName: '' }, mohammadAccountCatalog).ok).toBe(false)
