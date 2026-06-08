@@ -75,6 +75,7 @@ describe('telegram user registry', () => {
     const login = access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })
     expect(login.ok).toBe(true)
     expect(login.sessionToken).toBeTruthy()
+    expect(new Date(login.sessionExpiresAt).getTime() - Date.now()).toBeGreaterThan(9 * 365 * 24 * 60 * 60 * 1000)
     expect(JSON.stringify(loadTelegramUserRegistry(filePath))).not.toContain(login.sessionToken)
     expect(registryWebTokenMap({}, filePath).get(webTokenHash(login.sessionToken))).toBe('rabee')
     expect(access.loginUser({ email: 'rabee@example.com', password: 'wrong-password' })).toMatchObject({ ok: false })

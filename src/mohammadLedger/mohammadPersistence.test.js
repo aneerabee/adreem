@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ADREEM_MIGRATION_MARKER_KEY,
+  ADREEM_API_TOKEN_PERSIST_KEY,
   ADREEM_STORAGE_KEY,
   MOHAMMAD_STORAGE_KEY,
   adreemStorageKeysForApiToken,
@@ -250,6 +251,47 @@ describe('adreem local persistence migration', () => {
     expect(result.state.movements).toEqual([])
     expect(store.has(ADREEM_STORAGE_KEY)).toBe(false)
     expect(store.has('adreem-ledger-api-token-v1')).toBe(false)
+    expect(store.get(ADREEM_API_TOKEN_PERSIST_KEY)).toBe('valid-token')
+  })
+
+  it('keeps the cloud login on the same device after the browser session ends', async () => {
+    const apiState = {
+      version: ADREEM_LEDGER_VERSION,
+      savedAt: '2026-06-08T12:00:00.000Z',
+      accounts: [{ id: 'remembered-account', ownerName: 'أنا', subAccountName: 'كاش' }],
+      movements: [],
+    }
+    const store = installLocalStorage({
+      [ADREEM_API_TOKEN_PERSIST_KEY]: 'remembered-token',
+      [ADREEM_STORAGE_KEY]: JSON.stringify({
+        version: ADREEM_LEDGER_VERSION,
+        savedAt: '2026-06-08T10:00:00.000Z',
+        accounts: [{ id: 'stale-local-account', ownerName: 'قديم', subAccountName: 'كاش' }],
+        movements: [],
+      }),
+    })
+    vi.stubEnv('VITE_ADREEM_API_URL', 'https://example.com/adreem-api')
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ state: apiState }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    const {
+      getMohammadPersistenceMode: mode,
+      loadMohammadPersistedState: loadViaApi,
+    } = await import('./mohammadPersistence.js')
+
+    const result = await loadViaApi({ accounts: [], movements: [] })
+
+    expect(mode()).toBe('api')
+    expect(result.source).toBe('api')
+    expect(result.state.accounts.map((account) => account.id)).toEqual(['remembered-account'])
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/adreem-api/api/ledger', {
+      headers: { authorization: 'Bearer remembered-token' },
+    })
+    expect(store.has(ADREEM_STORAGE_KEY)).toBe(false)
+    expect(store.get(ADREEM_API_TOKEN_PERSIST_KEY)).toBe('remembered-token')
   })
 
   it('does not fall back to local data when the cloud API token is missing', async () => {

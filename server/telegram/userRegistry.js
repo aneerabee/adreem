@@ -7,7 +7,7 @@ import { parseTelegramLedgerMap } from '../mohammadLedger/ledgerRepository.js'
 const HASH_PATTERN = /^[a-f0-9]{64}$/i
 const PASSWORD_ITERATIONS = 210_000
 const PASSWORD_KEYLEN = 32
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const SESSION_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000
 
 export function parseIdList(value = '') {
   return String(value || '')

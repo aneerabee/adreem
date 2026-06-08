@@ -15,6 +15,7 @@ export const MOHAMMAD_STORAGE_KEY = 'mohammad-ledger-v1'
 export const ADREEM_STORAGE_KEY = 'adreem-ledger-v1'
 export const ADREEM_API_TOKEN_STORAGE_KEY = 'adreem-ledger-api-token-v1'
 export const ADREEM_API_TOKEN_SESSION_KEY = 'adreem-ledger-api-token-session-v1'
+export const ADREEM_API_TOKEN_PERSIST_KEY = 'adreem-ledger-api-login-token-v1'
 
 const BACKUP_STORAGE_KEY = 'adreem-ledger-backups-v1'
 const LEGACY_BACKUP_STORAGE_KEY = 'mohammad-ledger-backups-v1'
@@ -40,8 +41,22 @@ function hasBrowserStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
 }
 
-function hasBrowserSessionStorage() {
-  return typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined'
+function readBrowserStorageItem(storageName, key) {
+  if (typeof window === 'undefined') return ''
+  try {
+    return window[storageName]?.getItem(key) || ''
+  } catch {
+    return ''
+  }
+}
+
+function writeBrowserStorageItem(storageName, key, value) {
+  if (typeof window === 'undefined') return
+  try {
+    window[storageName]?.setItem(key, value)
+  } catch {
+    // Ignored: private browsing or disabled storage should not break cloud login.
+  }
 }
 
 function readApiTokenFromLocation() {
@@ -80,13 +95,12 @@ function getAdreemApiConfig() {
   clearCloudLocalLedgerData()
   const tokenFromLocation = readApiTokenFromLocation()
   if (tokenFromLocation) {
-    if (hasBrowserSessionStorage()) {
-      window.sessionStorage.setItem(ADREEM_API_TOKEN_SESSION_KEY, tokenFromLocation)
-    }
+    writeBrowserStorageItem('sessionStorage', ADREEM_API_TOKEN_SESSION_KEY, tokenFromLocation)
+    writeBrowserStorageItem('localStorage', ADREEM_API_TOKEN_PERSIST_KEY, tokenFromLocation)
   }
-  const token = tokenFromLocation || (hasBrowserSessionStorage()
-    ? window.sessionStorage.getItem(ADREEM_API_TOKEN_SESSION_KEY)
-    : '') || ''
+  const token = tokenFromLocation ||
+    readBrowserStorageItem('sessionStorage', ADREEM_API_TOKEN_SESSION_KEY) ||
+    readBrowserStorageItem('localStorage', ADREEM_API_TOKEN_PERSIST_KEY)
   return token ? { url: ADREEM_API_URL, token } : null
 }
 

@@ -38,6 +38,7 @@ import {
   voidMovement,
 } from './ledgerCore'
 import {
+  ADREEM_API_TOKEN_PERSIST_KEY,
   ADREEM_API_TOKEN_SESSION_KEY,
   getMohammadPersistenceMode,
   loadLocalMohammadState,
@@ -268,7 +269,16 @@ function storageTextForStatus(saveStatus, storageMode) {
 
 function logoutFromCloudSession() {
   if (typeof window === 'undefined') return
-  window.sessionStorage?.removeItem(ADREEM_API_TOKEN_SESSION_KEY)
+  try {
+    window.sessionStorage?.removeItem(ADREEM_API_TOKEN_SESSION_KEY)
+  } catch {
+    // If session storage is blocked, continue clearing the persistent device login below.
+  }
+  try {
+    window.localStorage?.removeItem(ADREEM_API_TOKEN_PERSIST_KEY)
+  } catch {
+    // If browser storage is blocked, reloading is still enough to reset the current view.
+  }
   window.location.assign(`${window.location.pathname}${window.location.search}`)
 }
 

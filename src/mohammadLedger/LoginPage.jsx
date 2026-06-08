@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import { ADREEM_API_TOKEN_SESSION_KEY } from './mohammadPersistence'
+import {
+  ADREEM_API_TOKEN_PERSIST_KEY,
+  ADREEM_API_TOKEN_SESSION_KEY,
+} from './mohammadPersistence'
 
 const ADREEM_API_URL = String(import.meta.env.VITE_ADREEM_API_URL || '').replace(/\/+$/, '')
 
@@ -14,6 +17,19 @@ async function loginRequest({ email, password }) {
   return data
 }
 
+function rememberLoginToken(token) {
+  try {
+    window.sessionStorage?.setItem(ADREEM_API_TOKEN_SESSION_KEY, token)
+  } catch {
+    // Session storage can be disabled in hardened browsers.
+  }
+  try {
+    window.localStorage?.setItem(ADREEM_API_TOKEN_PERSIST_KEY, token)
+  } catch {
+    // The user will still remain logged in for this tab if sessionStorage worked.
+  }
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -26,7 +42,7 @@ export default function LoginPage() {
     setMessage('')
     try {
       const data = await loginRequest({ email: email.trim(), password })
-      window.sessionStorage?.setItem(ADREEM_API_TOKEN_SESSION_KEY, data.token)
+      rememberLoginToken(data.token)
       window.location.assign(`${window.location.pathname}${window.location.search}`)
     } catch {
       setStatus('error')
@@ -48,7 +64,7 @@ export default function LoginPage() {
         <div className="adreem-login-brand">
           <span>ADREEM</span>
           <h1>الدخول للدفتر</h1>
-          <p>كل مستخدم يدخل إلى دفتره المستقل فقط.</p>
+          <p>هذا الجهاز يتذكر دخولك إلى أن تسجل خروجك أو تحذف بيانات الموقع.</p>
         </div>
         <label>
           <span>الإيميل</span>
