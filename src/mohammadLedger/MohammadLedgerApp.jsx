@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import './adreemDesk.css'
 import {
   ACCOUNT_STATUSES,
   ACCOUNT_CURRENCY_KINDS,
@@ -2258,11 +2259,11 @@ export default function MohammadLedgerApp() {
   ].filter(Boolean)
 
   return (
-    <main className={`adreem-app adreem-app--${activeSection} ml3-pocket-app pocket-ledger-app pocket-ledger-app--${activeSection}`} dir="rtl">
-      <section className="adreem-shell pocket-ledger-shell">
-        <header className="adreem-header pocket-ledger-header">
-          <div className="adreem-brand pocket-ledger-brand">
-            <span className="adreem-mark pocket-ledger-mark" aria-hidden="true">
+    <main className={`adreem-app adreem-app--${activeSection} adreem-desk adreem-desk--${activeSection}`} dir="rtl">
+      <section className="adreem-shell adreem-desk-shell">
+        <header className="adreem-header adreem-desk-header">
+          <div className="adreem-brand adreem-desk-brand">
+            <span className="adreem-mark adreem-desk-mark" aria-hidden="true">
               <svg viewBox="0 0 32 32">
                 <rect x="7" y="5" width="18" height="22" rx="4" />
                 <path d="M12 12h8M12 16h8M12 20h5" />
@@ -2274,7 +2275,7 @@ export default function MohammadLedgerApp() {
               <h1>{activeSectionTitle}</h1>
             </div>
           </div>
-          <div className={`adreem-status pocket-ledger-status ${canLogout || canOpenAdmin ? 'has-cloud-actions' : ''}`}>
+          <div className={`adreem-status adreem-desk-status ${canLogout || canOpenAdmin ? 'has-cloud-actions' : ''}`}>
             <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
             <b>اليوم {formatCount(todayMovements.length)}</b>
             <b>مراجعة {formatCount(reviewItems.length)}</b>
@@ -2283,7 +2284,7 @@ export default function MohammadLedgerApp() {
           </div>
         </header>
 
-        <nav className="adreem-nav pocket-ledger-nav" aria-label="أقسام الدفتر">
+        <nav className="adreem-nav adreem-desk-nav" aria-label="أقسام الدفتر">
           {sectionTabs.map((tab) => (
             <button
               type="button"
@@ -2312,8 +2313,8 @@ export default function MohammadLedgerApp() {
 
         <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
           {activeSection === 'entry' ? (
-          <aside className="adreem-entry pocket-ledger-entry">
-            <section className="adreem-receipt pocket-ledger-receipt" aria-label="ملخص الحركة الحالي">
+          <aside className="adreem-entry adreem-desk-entry">
+            <section className="adreem-receipt adreem-desk-receipt" aria-label="ملخص الحركة الحالي">
               <div className="adreem-receipt-head">
                 <span>{activeEntryMode === 'movement' ? 'ملخص الحركة' : 'ملخص الحساب'}</span>
                 <strong>{activeEntryMode === 'movement' ? movementProgressText : 'جديد'}</strong>

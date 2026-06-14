@@ -1,0 +1,1241 @@
+/* ADREEM Desk: one isolated design system for the ledger UI. */
+.adreem-desk {
+  --desk-bg: #eef5f7;
+  --desk-bg-warm: #f7f1e8;
+  --desk-surface: #ffffff;
+  --desk-surface-2: #f8fbfb;
+  --desk-surface-3: #eef4f5;
+  --desk-ink: #172123;
+  --desk-muted: #687678;
+  --desk-faint: #889598;
+  --desk-line: #d8e1e2;
+  --desk-line-strong: #b9c7c9;
+  --desk-teal: #008d88;
+  --desk-teal-soft: #dff7f4;
+  --desk-blue: #2c65c8;
+  --desk-blue-soft: #e4edff;
+  --desk-red: #d44635;
+  --desk-red-soft: #ffe6e1;
+  --desk-gold: #b77a13;
+  --desk-gold-soft: #fff2cf;
+  --desk-green: #16824c;
+  --desk-green-soft: #e3f6ea;
+  --desk-violet: #6955bf;
+  --desk-violet-soft: #eeeafb;
+  --desk-radius: 8px;
+  --desk-shadow: 0 14px 36px rgba(30, 46, 50, 0.1);
+  --desk-shadow-soft: 0 8px 22px rgba(30, 46, 50, 0.07);
+  --desk-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  min-height: 100dvh;
+  overflow-x: clip;
+  background:
+    linear-gradient(145deg, rgba(0, 141, 136, 0.12), transparent 34%),
+    linear-gradient(315deg, rgba(183, 122, 19, 0.16), transparent 29%),
+    linear-gradient(180deg, #f8fbfb 0%, var(--desk-bg) 52%, #f5efe6 100%);
+  color: var(--desk-ink);
+  font-family: "SF Arabic", "Noto Sans Arabic", "IBM Plex Sans Arabic", Tahoma, system-ui, sans-serif;
+  font-size: 15px;
+}
+
+.adreem-desk,
+.adreem-desk * {
+  box-sizing: border-box;
+}
+
+.adreem-desk :where(h1, h2, h3, p, span, strong, b, small, button, input, select, textarea, label) {
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.adreem-desk :where(button, input, select, textarea) {
+  font: inherit;
+}
+
+.adreem-desk :where(button) {
+  cursor: pointer;
+}
+
+.adreem-desk :where(button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@keyframes adreem-desk-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.adreem-desk .adreem-shell {
+  width: min(100% - 24px, 1180px) !important;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 12px 0 26px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  grid-template-areas:
+    "header header"
+    "body nav"
+    "body alerts";
+  align-content: start;
+  gap: 12px;
+}
+
+.adreem-desk .adreem-header {
+  grid-area: header;
+  position: relative;
+  min-height: 72px;
+  border: 1px solid rgba(23, 33, 35, 0.08);
+  border-radius: var(--desk-radius);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, auto);
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--desk-shadow);
+  backdrop-filter: blur(16px);
+  animation: adreem-desk-in 260ms var(--desk-ease) both;
+}
+
+.adreem-desk .adreem-header::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 6px;
+  background: linear-gradient(180deg, var(--desk-teal), var(--desk-blue), var(--desk-gold));
+}
+
+.adreem-desk .adreem-brand {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.adreem-desk .adreem-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--desk-radius);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(145deg, var(--desk-teal), var(--desk-blue));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.38);
+}
+
+.adreem-desk .adreem-mark svg {
+  width: 27px;
+  height: 27px;
+}
+
+.adreem-desk .adreem-mark svg * {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.adreem-desk .adreem-brand span:not(.adreem-mark) {
+  display: block;
+  color: var(--desk-teal);
+  font-size: 0.7rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.adreem-desk .adreem-brand h1 {
+  margin: 3px 0 0;
+  color: var(--desk-ink);
+  font-size: clamp(1.24rem, 2.4vw, 1.9rem);
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.adreem-desk .adreem-status {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.adreem-desk .adreem-status.has-cloud-actions {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.adreem-desk .adreem-status b,
+.adreem-desk .adreem-status button {
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--desk-radius);
+  padding: 7px 9px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--desk-surface-2);
+  color: var(--desk-ink);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-desk .adreem-status .ml3-save-state--saved {
+  border-color: rgba(0, 141, 136, 0.32);
+  background: var(--desk-teal-soft);
+  color: #006c68;
+}
+
+.adreem-desk .adreem-status .ml3-save-state--saving,
+.adreem-desk .adreem-status .ml3-save-state--loading {
+  border-color: rgba(183, 122, 19, 0.34);
+  background: var(--desk-gold-soft);
+  color: var(--desk-gold);
+}
+
+.adreem-desk .adreem-status .ml3-save-state--local,
+.adreem-desk .adreem-status .ml3-save-state--local-only {
+  border-color: rgba(212, 70, 53, 0.34);
+  background: var(--desk-red-soft);
+  color: var(--desk-red);
+}
+
+.adreem-desk .adreem-nav {
+  grid-area: nav;
+  position: sticky;
+  top: 12px;
+  z-index: 20;
+  min-height: 384px;
+  border: 1px solid rgba(23, 33, 35, 0.08);
+  border-radius: var(--desk-radius);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 8px;
+  background: #162124;
+  box-shadow: var(--desk-shadow);
+}
+
+.adreem-desk .adreem-nav button {
+  min-width: 0;
+  min-height: 76px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--desk-radius);
+  padding: 9px 7px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.adreem-desk .adreem-nav button span {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--desk-radius);
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  color: currentColor;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.adreem-desk .adreem-nav button strong {
+  max-width: 100%;
+  color: inherit;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: normal;
+}
+
+.adreem-desk .adreem-nav button.is-active {
+  border-color: transparent;
+  background: linear-gradient(145deg, var(--desk-teal), #006f6b);
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(0, 141, 136, 0.24);
+}
+
+.adreem-desk .adreem-nav button.is-active span {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.adreem-desk .ml3-alert-board {
+  grid-area: alerts;
+}
+
+.adreem-desk.adreem-desk--entry .ml3-alert-board {
+  display: none;
+}
+
+.adreem-desk .ml3-layout {
+  grid-area: body;
+  width: 100%;
+  min-width: 0;
+  animation: adreem-desk-in 220ms var(--desk-ease) both;
+}
+
+.adreem-desk .ml3-layout > *,
+.adreem-desk .adreem-entry,
+.adreem-desk .ml3-content,
+.adreem-desk .ml3-home,
+.adreem-desk .ml3-account-sections,
+.adreem-desk .ml3-review-workspace,
+.adreem-desk .ml3-history-list,
+.adreem-desk .ml3-today-list,
+.adreem-desk .ml3-list {
+  min-width: 0;
+}
+
+.adreem-desk .adreem-entry {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.92fr) minmax(0, 1.28fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.adreem-desk .adreem-entry > * {
+  min-width: 0;
+}
+
+.adreem-desk .adreem-receipt {
+  grid-column: 1;
+  grid-row: 1 / span 6;
+  position: sticky;
+  top: 12px;
+  border: 1px solid rgba(23, 33, 35, 0.08);
+  border-radius: var(--desk-radius);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--desk-shadow-soft);
+}
+
+.adreem-desk .adreem-receipt-head {
+  grid-column: 1 / -1;
+  min-height: 40px;
+  border-radius: var(--desk-radius);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #162124;
+  color: #fff;
+}
+
+.adreem-desk .adreem-receipt-head span,
+.adreem-desk .adreem-receipt-head strong {
+  color: inherit;
+  font-size: 0.74rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.adreem-desk .adreem-receipt button {
+  min-width: 0;
+  min-height: 68px;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--desk-radius);
+  padding: 8px;
+  display: grid;
+  align-content: space-between;
+  gap: 4px;
+  background: var(--desk-surface);
+  color: var(--desk-ink);
+  text-align: right;
+}
+
+.adreem-desk .adreem-receipt button span {
+  color: var(--desk-muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.adreem-desk .adreem-receipt button strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--desk-ink);
+  font-size: 0.84rem;
+  font-weight: 950;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-desk .ml3-entry-mode,
+.adreem-desk .ml3-entry-card,
+.adreem-desk .ml3-add-account,
+.adreem-desk .ml3-today-panel,
+.adreem-desk .ml3-panel,
+.adreem-desk .ml3-list-block,
+.adreem-desk .ml3-review-card,
+.adreem-desk .ml3-ops-card,
+.adreem-desk .ml3-home-focus,
+.adreem-desk .ml3-alert-board {
+  border: 1px solid rgba(23, 33, 35, 0.08);
+  border-radius: var(--desk-radius);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--desk-shadow-soft);
+}
+
+.adreem-desk .ml3-entry-mode,
+.adreem-desk .ml3-entry-card,
+.adreem-desk .ml3-add-account,
+.adreem-desk .ml3-today-panel,
+.adreem-desk .ml3-feedback,
+.adreem-desk .ml3-undo-banner,
+.adreem-desk .ml3-edit-banner {
+  grid-column: 2;
+}
+
+.adreem-desk .ml3-entry-mode {
+  padding: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  background: #162124;
+}
+
+.adreem-desk .ml3-entry-mode button {
+  min-height: 46px;
+  border: 0;
+  border-radius: var(--desk-radius);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 900;
+}
+
+.adreem-desk .ml3-entry-mode button.is-active {
+  background: #fff;
+  color: var(--desk-ink);
+}
+
+.adreem-desk .ml3-entry-card,
+.adreem-desk .ml3-add-account,
+.adreem-desk .ml3-today-panel,
+.adreem-desk .ml3-panel,
+.adreem-desk .ml3-list-block,
+.adreem-desk .ml3-review-card,
+.adreem-desk .ml3-ops-card {
+  padding: 12px;
+}
+
+.adreem-desk .ml3-entry-head,
+.adreem-desk .ml3-panel-head,
+.adreem-desk .ml3-today-head,
+.adreem-desk .ml3-alert-title,
+.adreem-desk .ml3-ops-head {
+  min-width: 0;
+  min-height: 46px;
+  border-radius: var(--desk-radius);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--desk-surface-2);
+  color: var(--desk-ink);
+}
+
+.adreem-desk .ml3-entry-head h2,
+.adreem-desk .ml3-panel-head h2,
+.adreem-desk .ml3-today-head h2,
+.adreem-desk .ml3-alert-title h2,
+.adreem-desk .ml3-ops-head h2 {
+  margin: 0;
+  color: var(--desk-ink);
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.adreem-desk .ml3-entry-head span,
+.adreem-desk .ml3-entry-head b,
+.adreem-desk .ml3-panel-head p,
+.adreem-desk .ml3-panel-head span,
+.adreem-desk .ml3-today-head span,
+.adreem-desk .ml3-alert-title span {
+  color: var(--desk-muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.adreem-desk .ml3-step-meter {
+  min-height: 10px;
+  margin: 9px 0 12px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.adreem-desk .ml3-step-meter span {
+  height: 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  color: transparent;
+  background: var(--desk-line);
+}
+
+.adreem-desk .ml3-step-meter span.is-done {
+  background: var(--desk-teal);
+}
+
+.adreem-desk .ml3-step-meter span.is-current {
+  background: var(--desk-blue);
+}
+
+.adreem-desk .ml3-step {
+  min-width: 0;
+  border: 1px solid var(--desk-line);
+  border-inline-start: 5px solid var(--desk-line-strong);
+  border-radius: var(--desk-radius);
+  padding: 10px;
+  display: block;
+  overflow: hidden;
+  background: var(--desk-surface);
+}
+
+.adreem-desk .ml3-step + .ml3-step {
+  margin-top: 8px;
+}
+
+.adreem-desk .ml3-step--type { --step-color: var(--desk-blue); --step-soft: var(--desk-blue-soft); }
+.adreem-desk .ml3-step--amount { --step-color: var(--desk-teal); --step-soft: var(--desk-teal-soft); }
+.adreem-desk .ml3-step--currency { --step-color: var(--desk-violet); --step-soft: var(--desk-violet-soft); }
+.adreem-desk .ml3-step--rate { --step-color: var(--desk-gold); --step-soft: var(--desk-gold-soft); }
+.adreem-desk .ml3-step--source { --step-color: var(--desk-green); --step-soft: var(--desk-green-soft); }
+.adreem-desk .ml3-step--destination { --step-color: var(--desk-blue); --step-soft: var(--desk-blue-soft); }
+.adreem-desk .ml3-step--note { --step-color: var(--desk-muted); --step-soft: var(--desk-surface-3); }
+.adreem-desk .ml3-step--review { --step-color: var(--desk-teal); --step-soft: var(--desk-teal-soft); }
+
+.adreem-desk .ml3-step.is-open {
+  border-color: color-mix(in srgb, var(--step-color, var(--desk-teal)) 36%, var(--desk-line));
+  border-inline-start-color: var(--step-color, var(--desk-teal));
+  background: linear-gradient(180deg, var(--step-soft, var(--desk-surface-2)), #fff 64%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58);
+}
+
+.adreem-desk .ml3-step.is-done {
+  min-height: 58px;
+  border-inline-start-color: var(--desk-teal);
+  background: var(--desk-surface-2);
+  opacity: 0.78;
+}
+
+.adreem-desk .ml3-step-head {
+  min-width: 0;
+  min-height: 36px;
+  margin-bottom: 8px;
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
+}
+
+.adreem-desk .ml3-step-head span {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--desk-radius);
+  display: grid;
+  place-items: center;
+  background: var(--step-color, var(--desk-teal));
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.adreem-desk .ml3-step.is-done .ml3-step-head span {
+  flex-basis: 28px;
+  width: 28px;
+  height: 28px;
+  background: var(--desk-teal);
+}
+
+.adreem-desk .ml3-step-head strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--desk-ink);
+  font-size: 0.96rem;
+  font-weight: 950;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-desk .ml3-step-head button,
+.adreem-desk .ml3-step-back,
+.adreem-desk .ml3-step-next,
+.adreem-desk .ml3-save,
+.adreem-desk .ml3-add-account > button,
+.adreem-desk .ml3-mini-action {
+  min-height: 34px;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--desk-radius);
+  padding: 7px 10px;
+  background: var(--desk-surface);
+  color: var(--desk-ink);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.adreem-desk .ml3-step-next,
+.adreem-desk .ml3-save,
+.adreem-desk .ml3-mini-action.is-confirm,
+.adreem-desk .ml3-add-account > button {
+  border-color: transparent;
+  background: var(--desk-teal);
+  color: #fff;
+}
+
+.adreem-desk .ml3-mini-action.is-muted,
+.adreem-desk .ml3-step-back {
+  background: var(--desk-surface-3);
+  color: var(--desk-muted);
+}
+
+.adreem-desk .ml3-step-summary {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  border-radius: var(--desk-radius);
+  padding: 7px 9px;
+  overflow: hidden;
+  background: var(--step-soft, var(--desk-surface-3));
+  color: var(--desk-ink);
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-desk .ml3-step-controls,
+.adreem-desk .ml3-decision-actions,
+.adreem-desk .ml3-picked-actions,
+.adreem-desk .ml3-row-actions,
+.adreem-desk .ml3-ops-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.adreem-desk .ml3-quick-actions,
+.adreem-desk .ml3-account-presets,
+.adreem-desk .ml3-account-detail-choice,
+.adreem-desk .ml3-extra-grid,
+.adreem-desk .ml3-number-pad,
+.adreem-desk .ml3-balance-ledger,
+.adreem-desk .ml3-account-switcher,
+.adreem-desk .ml3-account-toolbar,
+.adreem-desk .ml3-history-filters,
+.adreem-desk .ml3-decision-grid,
+.adreem-desk .ml3-profile-editor-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.adreem-desk .ml3-action-choice,
+.adreem-desk .ml3-account-presets button,
+.adreem-desk .ml3-account-detail-choice button,
+.adreem-desk .ml3-number-pad button,
+.adreem-desk .ml3-picker-chips button,
+.adreem-desk .ml3-picker-results button,
+.adreem-desk .ml3-picker-favorites button,
+.adreem-desk .ml3-balance-ledger button,
+.adreem-desk .ml3-account-switcher button,
+.adreem-desk .ml3-account-toolbar button {
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--desk-radius);
+  padding: 8px;
+  background: var(--desk-surface);
+  color: var(--desk-ink);
+  font-weight: 900;
+  text-align: center;
+}
+
+.adreem-desk .ml3-action-choice {
+  min-height: 64px;
+}
+
+.adreem-desk .ml3-action-choice.is-active,
+.adreem-desk .ml3-account-presets button.is-active,
+.adreem-desk .ml3-account-detail-choice button.is-active,
+.adreem-desk .ml3-picker-chips button.is-active,
+.adreem-desk .ml3-account-switcher button.is-active {
+  border-color: transparent;
+  background: #162124;
+  color: #fff;
+}
+
+.adreem-desk .ml3-action-choice--expense.is-active {
+  background: var(--desk-red);
+}
+
+.adreem-desk .ml3-action-choice--income.is-active,
+.adreem-desk .ml3-action-choice--sale.is-active {
+  background: var(--desk-green);
+}
+
+.adreem-desk .ml3-action-choice--buy.is-active {
+  background: var(--desk-gold);
+}
+
+.adreem-desk label {
+  min-width: 0;
+  color: var(--desk-muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.adreem-desk input,
+.adreem-desk select,
+.adreem-desk textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--desk-radius);
+  padding: 9px 10px;
+  background: var(--desk-surface);
+  color: var(--desk-ink);
+  outline: none;
+}
+
+.adreem-desk textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.adreem-desk input:focus,
+.adreem-desk select:focus,
+.adreem-desk textarea:focus {
+  border-color: var(--desk-teal);
+  box-shadow: 0 0 0 4px rgba(0, 141, 136, 0.12);
+}
+
+.adreem-desk .ml3-number-display,
+.adreem-desk .ml3-account-picker,
+.adreem-desk .ml3-picked-account,
+.adreem-desk .ml3-preview,
+.adreem-desk .ml3-effect,
+.adreem-desk .ml3-account-summary,
+.adreem-desk .ml3-currency-lock,
+.adreem-desk .ml3-merge-box,
+.adreem-desk .ml3-profile-reconcile,
+.adreem-desk .ml3-profile-editor,
+.adreem-desk .ml3-profile-movement {
+  min-width: 0;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--desk-radius);
+  padding: 10px;
+  background: var(--desk-surface);
+}
+
+.adreem-desk .ml3-number-display strong {
+  color: var(--desk-ink);
+  font-size: 1.35rem;
+  font-weight: 950;
+}
+
+.adreem-desk .ml3-account-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.adreem-desk .ml3-picked-account {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.adreem-desk .ml3-picked-account.is-selected {
+  border-color: rgba(0, 141, 136, 0.34);
+  background: var(--desk-teal-soft);
+}
+
+.adreem-desk .ml3-picker-favorites,
+.adreem-desk .ml3-picker-chips,
+.adreem-desk .ml3-picker-results {
+  display: grid;
+  gap: 7px;
+}
+
+.adreem-desk .ml3-picker-favorites,
+.adreem-desk .ml3-picker-chips {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.adreem-desk .ml3-picker-results button {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  text-align: right;
+}
+
+.adreem-desk .ml3-picker-results button.is-selected {
+  border-color: var(--desk-teal);
+  background: var(--desk-teal-soft);
+}
+
+.adreem-desk .ml3-picker-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--desk-muted);
+}
+
+.adreem-desk .ml3-picker-dot--cash,
+.adreem-desk .ml3-picker-dot--bank {
+  background: var(--desk-blue);
+}
+
+.adreem-desk .ml3-picker-dot--asset {
+  background: var(--desk-violet);
+}
+
+.adreem-desk .ml3-picker-dot--expense {
+  background: var(--desk-red);
+}
+
+.adreem-desk .ml3-balance-chip {
+  min-height: 26px;
+  border-radius: var(--desk-radius);
+  padding: 5px 7px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--desk-surface-3);
+  color: var(--desk-muted);
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.adreem-desk .is-positive,
+.adreem-desk .ml3-balance-chip.is-positive {
+  color: var(--desk-green);
+}
+
+.adreem-desk .is-negative,
+.adreem-desk .ml3-balance-chip.is-negative {
+  color: var(--desk-red);
+}
+
+.adreem-desk .ml3-account-row,
+.adreem-desk .ml3-history-row,
+.adreem-desk .ml3-today-row,
+.adreem-desk .ml3-review-ticket,
+.adreem-desk .ml3-home-card,
+.adreem-desk .ml3-ops-row,
+.adreem-desk .ml3-alert {
+  min-width: 0;
+  min-height: 82px;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--desk-radius);
+  padding: 10px;
+  display: grid;
+  gap: 7px;
+  background: var(--desk-surface);
+  box-shadow: 0 8px 18px rgba(30, 46, 50, 0.05);
+}
+
+.adreem-desk .ml3-account-row,
+.adreem-desk .ml3-history-row,
+.adreem-desk .ml3-today-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.adreem-desk .ml3-account-main,
+.adreem-desk .ml3-history-main,
+.adreem-desk .ml3-today-main {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: right;
+}
+
+.adreem-desk .ml3-account-main strong,
+.adreem-desk .ml3-history-main strong,
+.adreem-desk .ml3-today-main strong,
+.adreem-desk .ml3-review-ticket strong,
+.adreem-desk .ml3-home-card strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--desk-ink);
+  font-size: 0.96rem;
+  font-weight: 950;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-desk .ml3-account-main span,
+.adreem-desk .ml3-history-main span,
+.adreem-desk .ml3-today-main span,
+.adreem-desk .ml3-account-meta,
+.adreem-desk .ml3-history-route,
+.adreem-desk .ml3-today-route,
+.adreem-desk .ml3-history-row small,
+.adreem-desk .ml3-today-row small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--desk-muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-desk .ml3-account-row.is-positive,
+.adreem-desk .ml3-home-card.is-positive,
+.adreem-desk .ml3-balance-ledger button.is-positive {
+  border-color: rgba(22, 130, 76, 0.28);
+  background: var(--desk-green-soft);
+}
+
+.adreem-desk .ml3-account-row.is-negative,
+.adreem-desk .ml3-home-card.is-negative,
+.adreem-desk .ml3-balance-ledger button.is-negative {
+  border-color: rgba(212, 70, 53, 0.3);
+  background: var(--desk-red-soft);
+}
+
+.adreem-desk .ml3-home-card.is-money,
+.adreem-desk .ml3-balance-ledger button.is-money {
+  border-color: rgba(44, 101, 200, 0.28);
+  background: var(--desk-blue-soft);
+}
+
+.adreem-desk .ml3-home-card.is-review,
+.adreem-desk .ml3-balance-ledger button.is-review,
+.adreem-desk .ml3-review-ticket {
+  border-color: rgba(183, 122, 19, 0.32);
+  background: var(--desk-gold-soft);
+}
+
+.adreem-desk .ml3-history-row--expense {
+  border-color: rgba(212, 70, 53, 0.28);
+}
+
+.adreem-desk .ml3-history-row--income,
+.adreem-desk .ml3-history-row--sale {
+  border-color: rgba(22, 130, 76, 0.28);
+}
+
+.adreem-desk .ml3-history-row--purchase {
+  border-color: rgba(183, 122, 19, 0.3);
+}
+
+.adreem-desk .ml3-list,
+.adreem-desk .ml3-history-list,
+.adreem-desk .ml3-today-list,
+.adreem-desk .ml3-account-sections,
+.adreem-desk .ml3-home,
+.adreem-desk .ml3-home-grid,
+.adreem-desk .ml3-review-queue,
+.adreem-desk .ml3-review-active,
+.adreem-desk .ml3-ops-grid,
+.adreem-desk .ml3-alert-list {
+  display: grid;
+  gap: 9px;
+}
+
+.adreem-desk .ml3-account-sections,
+.adreem-desk .ml3-review-workspace,
+.adreem-desk .ml3-ops-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.adreem-desk .ml3-history-filters {
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(110px, 0.7fr));
+}
+
+.adreem-desk .ml3-empty {
+  margin: 0;
+  border: 1px dashed var(--desk-line-strong);
+  border-radius: var(--desk-radius);
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.54);
+  color: var(--desk-muted);
+  text-align: center;
+  font-weight: 850;
+}
+
+.adreem-desk .ml3-feedback,
+.adreem-desk .ml3-undo-banner,
+.adreem-desk .ml3-edit-banner {
+  border: 1px solid rgba(0, 141, 136, 0.24);
+  border-radius: var(--desk-radius);
+  padding: 10px 12px;
+  background: var(--desk-teal-soft);
+  color: #006c68;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.adreem-desk .ml3-profile-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  padding: 16px;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  background: rgba(23, 33, 35, 0.42);
+  backdrop-filter: blur(8px);
+}
+
+.adreem-desk .ml3-profile {
+  width: min(100%, 760px);
+  max-height: min(820px, 92dvh);
+  border-radius: var(--desk-radius);
+  padding: 14px;
+  overflow: auto;
+  background: var(--desk-surface);
+  box-shadow: 0 28px 80px rgba(23, 33, 35, 0.28);
+}
+
+.adreem-desk .ml3-profile-head,
+.adreem-desk .ml3-profile-facts,
+.adreem-desk .ml3-profile-movements,
+.adreem-desk .ml3-attachment-list {
+  display: grid;
+  gap: 9px;
+}
+
+.adreem-desk .ml3-profile-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.adreem-desk button {
+  transition:
+    transform 160ms var(--desk-ease),
+    box-shadow 160ms var(--desk-ease),
+    background-color 160ms var(--desk-ease),
+    border-color 160ms var(--desk-ease),
+    color 160ms var(--desk-ease);
+}
+
+.adreem-desk button:not(:disabled):hover {
+  box-shadow: 0 10px 22px rgba(30, 46, 50, 0.11);
+}
+
+.adreem-desk button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.adreem-login-app,
+.adreem-admin-app {
+  min-height: 100dvh;
+  background:
+    linear-gradient(145deg, rgba(0, 141, 136, 0.12), transparent 36%),
+    linear-gradient(315deg, rgba(183, 122, 19, 0.16), transparent 30%),
+    #f5f8f8;
+  color: var(--desk-ink, #172123);
+  font-family: "SF Arabic", "Noto Sans Arabic", Tahoma, system-ui, sans-serif;
+}
+
+.adreem-login-card,
+.adreem-admin-card,
+.adreem-admin-head {
+  border: 1px solid #d8e1e2;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 36px rgba(30, 46, 50, 0.1);
+}
+
+.adreem-admin-app button,
+.adreem-login-app button {
+  border-radius: 8px;
+}
+
+@media (max-width: 980px) {
+  .adreem-desk .adreem-shell {
+    width: min(100% - 14px, 760px) !important;
+    padding-bottom: 92px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "alerts"
+      "body"
+      "nav";
+    gap: 9px;
+  }
+
+  .adreem-desk .adreem-header {
+    position: sticky;
+    top: 7px;
+    z-index: 70;
+    min-height: 66px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adreem-desk .adreem-status,
+  .adreem-desk .adreem-status.has-cloud-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .adreem-desk .adreem-status b:nth-of-type(2) {
+    display: none;
+  }
+
+  .adreem-desk .adreem-nav {
+    position: fixed;
+    inset-inline: 9px;
+    top: auto;
+    bottom: calc(9px + env(safe-area-inset-bottom));
+    z-index: 90;
+    min-height: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 6px;
+  }
+
+  .adreem-desk .adreem-nav button {
+    min-height: 58px;
+    padding: 7px 4px;
+  }
+
+  .adreem-desk .adreem-nav button span {
+    width: 25px;
+    height: 25px;
+  }
+
+  .adreem-desk .adreem-nav button strong {
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  .adreem-desk .adreem-entry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adreem-desk .adreem-receipt,
+  .adreem-desk .ml3-entry-mode,
+  .adreem-desk .ml3-entry-card,
+  .adreem-desk .ml3-add-account,
+  .adreem-desk .ml3-today-panel,
+  .adreem-desk .ml3-feedback,
+  .adreem-desk .ml3-undo-banner,
+  .adreem-desk .ml3-edit-banner {
+    grid-column: 1;
+  }
+
+  .adreem-desk .adreem-receipt {
+    position: static;
+    grid-row: auto;
+  }
+
+  .adreem-desk .ml3-account-sections,
+  .adreem-desk .ml3-review-workspace,
+  .adreem-desk .ml3-ops-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adreem-desk .ml3-history-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 430px) {
+  .adreem-desk {
+    font-size: 14px;
+  }
+
+  .adreem-desk .adreem-shell {
+    width: calc(100% - 10px) !important;
+  }
+
+  .adreem-desk .adreem-header {
+    padding: 8px;
+  }
+
+  .adreem-desk .adreem-brand {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .adreem-desk .adreem-mark {
+    width: 40px;
+    height: 40px;
+  }
+
+  .adreem-desk .adreem-brand h1 {
+    font-size: 1.12rem;
+  }
+
+  .adreem-desk .adreem-status b,
+  .adreem-desk .adreem-status button {
+    min-height: 34px;
+    padding-inline: 5px;
+    font-size: 0.64rem;
+  }
+
+  .adreem-desk .adreem-receipt,
+  .adreem-desk .ml3-quick-actions,
+  .adreem-desk .ml3-account-presets,
+  .adreem-desk .ml3-account-detail-choice,
+  .adreem-desk .ml3-extra-grid,
+  .adreem-desk .ml3-number-pad,
+  .adreem-desk .ml3-balance-ledger,
+  .adreem-desk .ml3-account-switcher,
+  .adreem-desk .ml3-account-toolbar,
+  .adreem-desk .ml3-decision-grid,
+  .adreem-desk .ml3-profile-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adreem-desk .ml3-entry-card,
+  .adreem-desk .ml3-add-account,
+  .adreem-desk .ml3-today-panel,
+  .adreem-desk .ml3-panel,
+  .adreem-desk .ml3-list-block,
+  .adreem-desk .ml3-review-card,
+  .adreem-desk .ml3-ops-card {
+    padding: 9px;
+  }
+
+  .adreem-desk .ml3-account-row,
+  .adreem-desk .ml3-history-row,
+  .adreem-desk .ml3-today-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adreem-desk *,
+  .adreem-desk *::before,
+  .adreem-desk *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
