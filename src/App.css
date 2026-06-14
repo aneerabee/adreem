@@ -12010,3 +12010,625 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ADREEM Control Deck v8: a full visual reset over the previous pocket-ledger skin. */
+.pocket-ledger-app.adreem-app {
+  --deck-bg: #10100f;
+  --deck-bg-2: #181715;
+  --deck-surface: #fffaf2;
+  --deck-surface-2: #f4f7fb;
+  --deck-ink: #181310;
+  --deck-muted: #6a625b;
+  --deck-line: #ddd4ca;
+  --deck-line-strong: #b9aca0;
+  --deck-teal: #00a99d;
+  --deck-teal-soft: #d9fbf5;
+  --deck-coral: #e4573d;
+  --deck-coral-soft: #ffe1d8;
+  --deck-indigo: #4056f4;
+  --deck-indigo-soft: #e5e8ff;
+  --deck-lime: #87b90f;
+  --deck-lime-soft: #eef8cf;
+  --deck-gold: #c98616;
+  --deck-gold-soft: #fff0c7;
+  --deck-shadow: 0 24px 70px rgba(16, 16, 15, 0.16);
+  --deck-fast: cubic-bezier(0.2, 0.9, 0.18, 1);
+  min-height: 100dvh;
+  background:
+    linear-gradient(135deg, rgba(0, 169, 157, 0.16), transparent 28%),
+    linear-gradient(315deg, rgba(228, 87, 61, 0.15), transparent 24%),
+    linear-gradient(180deg, #fbfaf6 0%, #f1f4f7 52%, #ece7e1 100%);
+  color: var(--deck-ink);
+  font-family: "SF Arabic", "Noto Sans Arabic", "IBM Plex Sans Arabic", Tahoma, system-ui, sans-serif;
+}
+
+@keyframes deck-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes deck-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 169, 157, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(0, 169, 157, 0.13);
+  }
+}
+
+.pocket-ledger-app .adreem-shell {
+  width: min(100% - 22px, 1180px) !important;
+  min-height: 100dvh;
+  margin-inline: auto;
+  padding: 12px 0 20px;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-areas:
+    "header header"
+    "nav body"
+    "alerts body";
+  align-content: start;
+  gap: 12px;
+}
+
+.pocket-ledger-app.pocket-ledger-app--accounts .adreem-shell,
+.pocket-ledger-app.pocket-ledger-app--history .adreem-shell,
+.pocket-ledger-app.pocket-ledger-app--review .adreem-shell {
+  width: min(100% - 22px, 1180px) !important;
+}
+
+.pocket-ledger-app .adreem-header {
+  min-height: 72px;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, auto);
+  gap: 12px;
+  background: var(--deck-bg);
+  color: var(--deck-surface);
+  box-shadow: var(--deck-shadow);
+  backdrop-filter: none;
+  overflow: hidden;
+  animation: deck-rise 340ms var(--deck-fast) both;
+}
+
+.pocket-ledger-app .adreem-header::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 6px;
+  background: linear-gradient(180deg, var(--deck-teal), var(--deck-coral), var(--deck-gold));
+}
+
+.pocket-ledger-app .adreem-brand {
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 11px;
+}
+
+.pocket-ledger-app .adreem-mark {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, var(--deck-teal), var(--deck-indigo) 48%, var(--deck-coral));
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.pocket-ledger-app .adreem-brand span {
+  color: var(--deck-teal);
+  font-size: 0.7rem;
+  letter-spacing: 0;
+}
+
+.pocket-ledger-app .adreem-brand h1 {
+  color: #fffaf2;
+  font-size: clamp(1.18rem, 2.5vw, 1.9rem);
+  line-height: 1.05;
+}
+
+.pocket-ledger-app .adreem-status,
+.pocket-ledger-app .adreem-status.has-cloud-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.pocket-ledger-app .adreem-status b,
+.pocket-ledger-app .adreem-status button {
+  min-height: 38px;
+  border: 1px solid rgba(255, 250, 242, 0.16);
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: rgba(255, 250, 242, 0.09);
+  color: #fffaf2;
+  font-size: 0.73rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pocket-ledger-app .adreem-status .ml3-save-state--saved {
+  border-color: rgba(0, 169, 157, 0.5);
+  background: rgba(0, 169, 157, 0.18);
+  color: #baf7ed;
+  animation: deck-pulse 2.8s ease-in-out infinite;
+}
+
+.pocket-ledger-app .adreem-nav {
+  position: sticky;
+  top: 12px;
+  z-index: 20;
+  min-height: 360px;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 8px;
+  background: var(--deck-bg-2);
+  box-shadow: var(--deck-shadow);
+}
+
+.pocket-ledger-app .adreem-nav button {
+  min-height: 74px;
+  border: 1px solid rgba(255, 250, 242, 0.08);
+  border-radius: 8px;
+  padding: 9px 7px;
+  align-content: center;
+  gap: 7px;
+  background: rgba(255, 250, 242, 0.06);
+  color: rgba(255, 250, 242, 0.72);
+}
+
+.pocket-ledger-app .adreem-nav button span {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(255, 250, 242, 0.1);
+  color: currentColor;
+}
+
+.pocket-ledger-app .adreem-nav button strong {
+  font-size: 0.77rem;
+  white-space: normal;
+}
+
+.pocket-ledger-app .adreem-nav button.is-active {
+  border-color: rgba(0, 169, 157, 0.45);
+  background: linear-gradient(135deg, var(--deck-teal), #087f79);
+  color: #fff;
+  transform: translateX(-2px);
+}
+
+.pocket-ledger-app .adreem-nav button.is-active span {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.pocket-ledger-app .ml3-layout {
+  align-self: start;
+  animation: deck-rise 300ms var(--deck-fast) both;
+}
+
+.pocket-ledger-app .ml3-alert-board,
+.pocket-ledger-app .ml3-panel,
+.pocket-ledger-app .ml3-entry-card,
+.pocket-ledger-app .ml3-add-account,
+.pocket-ledger-app .ml3-today-panel,
+.pocket-ledger-app .ml3-list-block,
+.pocket-ledger-app .ml3-review-card,
+.pocket-ledger-app .ml3-ops-card,
+.pocket-ledger-app .adreem-receipt {
+  border: 1px solid rgba(24, 19, 16, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 250, 242, 0.92);
+  box-shadow: 0 18px 44px rgba(24, 19, 16, 0.1);
+}
+
+.pocket-ledger-app .ml3-alert-board {
+  padding: 9px;
+  align-self: start;
+  background: #fff;
+}
+
+.pocket-ledger-app.pocket-ledger-app--entry .ml3-alert-board {
+  display: grid;
+}
+
+.pocket-ledger-app .adreem-entry {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.pocket-ledger-app.pocket-ledger-app--entry .adreem-entry {
+  grid-template-columns: minmax(360px, 0.95fr) minmax(0, 1.25fr);
+  align-items: start;
+}
+
+.pocket-ledger-app .adreem-receipt {
+  order: 0;
+  position: sticky;
+  top: 12px;
+  padding: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 247, 251, 0.92));
+}
+
+.pocket-ledger-app .adreem-receipt-head {
+  min-height: 44px;
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: linear-gradient(135deg, var(--deck-indigo), #1f257a);
+}
+
+.pocket-ledger-app .adreem-receipt button {
+  min-height: 68px;
+  border: 1px solid var(--deck-line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pocket-ledger-app .adreem-receipt button strong,
+.pocket-ledger-app .ml3-entry-head h2,
+.pocket-ledger-app .ml3-add-account h2,
+.pocket-ledger-app .ml3-today-panel h2,
+.pocket-ledger-app .ml3-list-block h2,
+.pocket-ledger-app .ml3-review-card h2 {
+  color: var(--deck-ink);
+}
+
+.pocket-ledger-app .ml3-entry-mode {
+  order: -1;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--deck-bg-2);
+  box-shadow: 0 14px 34px rgba(24, 19, 16, 0.12);
+}
+
+.pocket-ledger-app .ml3-entry-mode button {
+  min-height: 48px;
+  border-radius: 8px;
+  color: rgba(255, 250, 242, 0.7);
+}
+
+.pocket-ledger-app .ml3-entry-mode button.is-active {
+  background: #fffaf2;
+  color: var(--deck-ink);
+}
+
+.pocket-ledger-app .ml3-entry-card,
+.pocket-ledger-app .ml3-add-account,
+.pocket-ledger-app .ml3-today-panel {
+  padding: 12px;
+}
+
+.pocket-ledger-app .ml3-entry-card {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 242, 0.98), rgba(255, 255, 255, 0.94));
+}
+
+.pocket-ledger-app .ml3-step {
+  border: 1px solid var(--deck-line);
+  border-inline-start: 5px solid var(--deck-line-strong);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pocket-ledger-app .ml3-step.is-open {
+  border-inline-start-color: var(--deck-indigo);
+  background:
+    linear-gradient(135deg, rgba(64, 86, 244, 0.08), rgba(255, 255, 255, 0.94));
+}
+
+.pocket-ledger-app .ml3-step.is-done {
+  border-inline-start-color: var(--deck-teal);
+  background: var(--deck-teal-soft);
+}
+
+.pocket-ledger-app .ml3-step-head span,
+.pocket-ledger-app .ml3-step.is-done .ml3-step-head span {
+  border-radius: 8px;
+  background: var(--deck-bg);
+  color: #fff;
+}
+
+.pocket-ledger-app .ml3-step.is-open .ml3-step-head span {
+  background: var(--deck-indigo);
+}
+
+.pocket-ledger-app .ml3-step.is-done .ml3-step-head span {
+  background: var(--deck-teal);
+}
+
+.pocket-ledger-app .ml3-action-choice {
+  min-height: 70px;
+  border-radius: 8px;
+  border: 1px solid var(--deck-line);
+  background: #fff;
+}
+
+.pocket-ledger-app .ml3-action-choice.is-active {
+  border-color: transparent;
+  background: var(--deck-bg);
+  color: #fff;
+  box-shadow: 0 14px 28px rgba(16, 16, 15, 0.16);
+}
+
+.pocket-ledger-app .ml3-action-choice--expense.is-active {
+  background: linear-gradient(135deg, var(--deck-coral), #9d271c);
+}
+
+.pocket-ledger-app .ml3-action-choice--income.is-active,
+.pocket-ledger-app .ml3-action-choice--sale.is-active {
+  background: linear-gradient(135deg, var(--deck-teal), #087f79);
+}
+
+.pocket-ledger-app .ml3-action-choice--buy.is-active {
+  background: linear-gradient(135deg, var(--deck-gold), #80500d);
+}
+
+.pocket-ledger-app .ml3-number-pad {
+  gap: 7px;
+}
+
+.pocket-ledger-app .ml3-number-pad button {
+  min-height: 52px;
+  border: 1px solid var(--deck-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--deck-ink);
+  box-shadow: 0 8px 18px rgba(24, 19, 16, 0.06);
+}
+
+.pocket-ledger-app input,
+.pocket-ledger-app select,
+.pocket-ledger-app textarea {
+  border-color: var(--deck-line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pocket-ledger-app input:focus,
+.pocket-ledger-app select:focus,
+.pocket-ledger-app textarea:focus {
+  border-color: var(--deck-indigo);
+  box-shadow: 0 0 0 4px rgba(64, 86, 244, 0.12);
+}
+
+.pocket-ledger-app .ml3-account-picker,
+.pocket-ledger-app .ml3-picked-account,
+.pocket-ledger-app .ml3-preview,
+.pocket-ledger-app .ml3-effect,
+.pocket-ledger-app .ml3-account-summary {
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pocket-ledger-app .ml3-account-row,
+.pocket-ledger-app .ml3-history-row,
+.pocket-ledger-app .ml3-today-row,
+.pocket-ledger-app .ml3-review-ticket,
+.pocket-ledger-app .ml3-home-card {
+  min-height: 92px;
+  border: 1px solid rgba(24, 19, 16, 0.08);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(24, 19, 16, 0.06);
+}
+
+.pocket-ledger-app .ml3-account-row.is-positive,
+.pocket-ledger-app .ml3-home-card.is-positive,
+.pocket-ledger-app .ml3-balance-chip.is-positive {
+  border-color: rgba(0, 169, 157, 0.38);
+  background: linear-gradient(135deg, #fff, var(--deck-teal-soft));
+  color: #04756d;
+}
+
+.pocket-ledger-app .ml3-account-row.is-negative,
+.pocket-ledger-app .ml3-home-card.is-negative,
+.pocket-ledger-app .ml3-balance-chip.is-negative {
+  border-color: rgba(228, 87, 61, 0.42);
+  background: linear-gradient(135deg, #fff, var(--deck-coral-soft));
+  color: #af2d1f;
+}
+
+.pocket-ledger-app .ml3-home-card.is-money,
+.pocket-ledger-app .ml3-balance-ledger button.is-money {
+  border-color: rgba(64, 86, 244, 0.32);
+  background: linear-gradient(135deg, #fff, var(--deck-indigo-soft));
+}
+
+.pocket-ledger-app .ml3-home-card.is-review,
+.pocket-ledger-app .ml3-balance-ledger button.is-review {
+  border-color: rgba(201, 134, 22, 0.42);
+  background: linear-gradient(135deg, #fff, var(--deck-gold-soft));
+}
+
+.pocket-ledger-app .ml3-balance-ledger,
+.pocket-ledger-app .ml3-account-switcher,
+.pocket-ledger-app .ml3-account-toolbar,
+.pocket-ledger-app .ml3-history-filters {
+  border-radius: 8px;
+  background: rgba(24, 19, 16, 0.06);
+}
+
+.pocket-ledger-app .ml3-balance-ledger button,
+.pocket-ledger-app .ml3-account-switcher button,
+.pocket-ledger-app .ml3-account-toolbar button,
+.pocket-ledger-app .ml3-picker-chips button {
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pocket-ledger-app .ml3-account-switcher button.is-active,
+.pocket-ledger-app .ml3-picker-chips button.is-active {
+  background: var(--deck-bg);
+  color: #fff;
+}
+
+.pocket-ledger-app .ml3-feedback,
+.pocket-ledger-app .ml3-undo-banner,
+.pocket-ledger-app .ml3-edit-banner {
+  border: 0;
+  border-radius: 8px;
+  background: var(--deck-bg);
+  color: #fff;
+}
+
+.pocket-ledger-app button {
+  transition:
+    transform 170ms var(--deck-fast),
+    box-shadow 170ms var(--deck-fast),
+    background-color 170ms var(--deck-fast),
+    border-color 170ms var(--deck-fast),
+    color 170ms var(--deck-fast);
+}
+
+.pocket-ledger-app button:not(:disabled):hover {
+  box-shadow: 0 12px 26px rgba(24, 19, 16, 0.11);
+}
+
+.pocket-ledger-app button:not(:disabled):active {
+  transform: translateY(2px) scale(0.99);
+}
+
+@media (min-width: 920px) {
+  .pocket-ledger-app.pocket-ledger-app--entry .adreem-receipt {
+    grid-column: 1;
+    grid-row: 2 / span 5;
+  }
+
+  .pocket-ledger-app.pocket-ledger-app--entry .ml3-entry-mode,
+  .pocket-ledger-app.pocket-ledger-app--entry .ml3-entry-card,
+  .pocket-ledger-app.pocket-ledger-app--entry .ml3-add-account,
+  .pocket-ledger-app.pocket-ledger-app--entry .ml3-today-panel,
+  .pocket-ledger-app.pocket-ledger-app--entry .ml3-feedback,
+  .pocket-ledger-app.pocket-ledger-app--entry .ml3-undo-banner,
+  .pocket-ledger-app.pocket-ledger-app--entry .ml3-edit-banner {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 919px) {
+  .pocket-ledger-app .adreem-shell {
+    width: min(100% - 14px, 760px) !important;
+    padding-bottom: 90px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "alerts"
+      "body"
+      "nav";
+    gap: 9px;
+  }
+
+  .pocket-ledger-app .adreem-header {
+    position: sticky;
+    top: 7px;
+    z-index: 60;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 66px;
+  }
+
+  .pocket-ledger-app .adreem-status,
+  .pocket-ledger-app .adreem-status.has-cloud-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .pocket-ledger-app .adreem-status b:nth-of-type(2) {
+    display: none;
+  }
+
+  .pocket-ledger-app .adreem-nav {
+    position: fixed;
+    inset-inline: 9px;
+    bottom: calc(9px + env(safe-area-inset-bottom));
+    top: auto;
+    min-height: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 6px;
+    z-index: 80;
+  }
+
+  .pocket-ledger-app .adreem-nav button {
+    min-height: 58px;
+    padding: 7px 4px;
+  }
+
+  .pocket-ledger-app .adreem-nav button span {
+    width: 25px;
+    height: 25px;
+  }
+
+  .pocket-ledger-app .adreem-nav button strong {
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  .pocket-ledger-app .adreem-nav button.is-active {
+    transform: translateY(-2px);
+  }
+
+  .pocket-ledger-app.pocket-ledger-app--entry .adreem-entry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pocket-ledger-app .adreem-receipt {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .pocket-ledger-app .adreem-shell {
+    width: calc(100% - 10px) !important;
+  }
+
+  .pocket-ledger-app .adreem-brand {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .pocket-ledger-app .adreem-mark {
+    width: 40px;
+    height: 40px;
+  }
+
+  .pocket-ledger-app .adreem-brand h1 {
+    font-size: 1.14rem;
+  }
+
+  .pocket-ledger-app .adreem-status b,
+  .pocket-ledger-app .adreem-status button {
+    min-height: 34px;
+    padding-inline: 5px;
+    font-size: 0.64rem;
+  }
+
+  .pocket-ledger-app .adreem-receipt,
+  .pocket-ledger-app .ml3-action-grid,
+  .pocket-ledger-app .ml3-balance-ledger,
+  .pocket-ledger-app .ml3-quick-actions,
+  .pocket-ledger-app .ml3-account-presets,
+  .pocket-ledger-app .ml3-account-detail-choice,
+  .pocket-ledger-app .ml3-extra-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pocket-ledger-app .ml3-entry-card,
+  .pocket-ledger-app .ml3-add-account,
+  .pocket-ledger-app .ml3-today-panel {
+    padding: 9px;
+  }
+}
