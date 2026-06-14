@@ -78,6 +78,17 @@
   }
 }
 
+@keyframes adreem-choice-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .adreem-desk .adreem-shell {
   width: min(100% - 24px, 1180px) !important;
   min-height: 100dvh;
@@ -524,6 +535,16 @@
   display: block;
   overflow: hidden;
   background: var(--desk-surface);
+  transition:
+    opacity 180ms var(--desk-ease),
+    transform 180ms var(--desk-ease),
+    border-color 180ms var(--desk-ease),
+    background 180ms var(--desk-ease),
+    box-shadow 180ms var(--desk-ease);
+}
+
+.adreem-app.adreem-desk .ml3-entry-card .ml3-step.is-open {
+  overflow: visible !important;
 }
 
 .adreem-desk .ml3-step + .ml3-step {
@@ -544,6 +565,7 @@
   border-inline-start-color: var(--step-color, var(--desk-teal));
   background: linear-gradient(180deg, var(--step-soft, var(--desk-surface-2)), var(--desk-surface) 64%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58);
+  animation: adreem-choice-in 220ms var(--desk-ease) both;
 }
 
 .adreem-desk .ml3-step.is-done {
@@ -670,6 +692,100 @@
   gap: 8px;
 }
 
+.adreem-desk .ml3-quick-actions,
+.adreem-desk .ml3-account-presets {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.adreem-app.adreem-desk .ml3-quick-actions,
+.adreem-app.adreem-desk .ml3-account-presets {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-auto-rows: auto !important;
+  align-items: stretch !important;
+  gap: 10px !important;
+}
+
+.adreem-desk .ml3-option-group {
+  min-width: 0;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--desk-radius);
+  padding: 7px;
+  display: grid;
+  gap: 8px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--option-tone, var(--desk-primary)) 8%, transparent), transparent 64%),
+    var(--desk-surface);
+}
+
+.adreem-app.adreem-desk .ml3-option-group {
+  position: relative !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.adreem-desk .ml3-option-group--daily,
+.adreem-desk .ml3-account-preset-group--money {
+  --option-tone: var(--desk-primary);
+}
+
+.adreem-desk .ml3-option-group--exchange,
+.adreem-desk .ml3-account-preset-group--tracking {
+  --option-tone: var(--desk-negative);
+}
+
+.adreem-desk .ml3-account-preset-group--people {
+  --option-tone: var(--desk-positive);
+}
+
+.adreem-desk .ml3-option-group-head,
+.adreem-desk .ml3-picker-lane-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adreem-desk .ml3-option-group-head strong,
+.adreem-desk .ml3-picker-lane-head strong {
+  min-width: 0;
+  color: color-mix(in srgb, var(--option-tone, var(--desk-primary)) 72%, var(--desk-ink));
+  font-size: 0.78rem;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.adreem-desk .ml3-option-group-head span,
+.adreem-desk .ml3-picker-lane-head span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: color-mix(in srgb, var(--option-tone, var(--desk-primary)) 10%, var(--desk-surface-2));
+  color: var(--desk-muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.adreem-desk .ml3-option-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.adreem-app.adreem-desk .ml3-option-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-auto-rows: auto !important;
+  gap: 6px !important;
+}
+
 .adreem-desk .ml3-action-choice,
 .adreem-desk .ml3-account-presets button,
 .adreem-desk .ml3-account-detail-choice button,
@@ -692,7 +808,50 @@
 }
 
 .adreem-desk .ml3-action-choice {
-  min-height: 64px;
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  text-align: right;
+  transition:
+    transform 180ms var(--desk-ease),
+    border-color 180ms var(--desk-ease),
+    background 180ms var(--desk-ease),
+    box-shadow 180ms var(--desk-ease);
+}
+
+.adreem-app.adreem-desk .ml3-action-choice,
+.adreem-app.adreem-desk .ml3-account-presets button {
+  position: relative !important;
+  inset: auto !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+.adreem-desk .ml3-action-choice span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--desk-muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-desk .ml3-action-choice.is-active span {
+  color: color-mix(in srgb, var(--desk-surface) 82%, transparent);
+}
+
+.adreem-desk .ml3-action-choice:not(.is-active):hover,
+.adreem-desk .ml3-account-presets button:not(.is-active):hover,
+.adreem-desk .ml3-account-detail-choice button:not(.is-active):hover,
+.adreem-desk .ml3-picker-results button:not(.is-selected):hover,
+.adreem-desk .ml3-picker-favorites button:not(.is-selected):hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--desk-primary) 22%, var(--desk-line));
+  box-shadow: 0 10px 22px rgba(30, 46, 50, 0.07);
 }
 
 .adreem-desk .ml3-action-choice.is-active,
@@ -703,6 +862,7 @@
   border-color: transparent;
   background: var(--desk-primary-ink);
   color: var(--desk-surface);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--desk-primary) 18%, transparent);
 }
 
 .adreem-desk .ml3-action-choice--expense.is-active {
@@ -800,9 +960,27 @@
   gap: 7px;
 }
 
+.adreem-desk .ml3-picker-lane {
+  min-width: 0;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--desk-radius);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+  background: var(--desk-surface-2);
+}
+
+.adreem-desk .ml3-picker-lane.is-filter {
+  background: transparent;
+}
+
 .adreem-desk .ml3-picker-favorites,
 .adreem-desk .ml3-picker-chips {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.adreem-desk .ml3-picker-chips {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .adreem-desk .ml3-picker-results button {
@@ -812,11 +990,24 @@
   align-items: center;
   gap: 8px;
   text-align: right;
+  transition:
+    transform 180ms var(--desk-ease),
+    border-color 180ms var(--desk-ease),
+    background 180ms var(--desk-ease),
+    box-shadow 180ms var(--desk-ease);
 }
 
 .adreem-desk .ml3-picker-results button.is-selected {
   border-color: var(--desk-teal);
   background: var(--desk-teal-soft);
+}
+
+.adreem-desk .ml3-picker-more {
+  min-height: 44px !important;
+  border-style: dashed !important;
+  background: var(--desk-surface-2) !important;
+  color: var(--desk-primary-ink) !important;
+  font-weight: 950 !important;
 }
 
 .adreem-desk .ml3-picker-dot {
@@ -993,6 +1184,76 @@
   --ad6-preset-soft: var(--desk-primary-soft);
   border-color: color-mix(in srgb, var(--ad6-preset) 28%, var(--desk-line));
   background: linear-gradient(145deg, var(--ad6-preset-soft), var(--desk-surface) 68%);
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  text-align: right;
+  transition:
+    transform 180ms var(--desk-ease),
+    border-color 180ms var(--desk-ease),
+    background 180ms var(--desk-ease),
+    box-shadow 180ms var(--desk-ease);
+}
+
+.adreem-app.adreem-desk .ml3-account-presets button {
+  min-height: 72px !important;
+  padding: 8px !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  grid-template-rows: auto auto !important;
+  justify-items: stretch !important;
+  align-items: center !important;
+}
+
+.adreem-desk .ml3-account-presets button i {
+  grid-row: span 2;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--desk-radius);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ad6-preset) 14%, var(--desk-surface));
+  color: var(--ad6-preset);
+  font-style: normal;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.adreem-app.adreem-desk .ml3-account-presets button i {
+  grid-column: 1 !important;
+  grid-row: 1 / span 2 !important;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: var(--desk-radius) !important;
+}
+
+.adreem-desk .ml3-account-presets button strong,
+.adreem-desk .ml3-account-presets button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-app.adreem-desk .ml3-account-presets button strong,
+.adreem-app.adreem-desk .ml3-account-presets button span {
+  grid-column: 2 !important;
+}
+
+.adreem-desk .ml3-account-presets button span {
+  color: var(--desk-muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.adreem-desk .ml3-account-presets button.is-active i {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--desk-surface);
+}
+
+.adreem-desk .ml3-account-presets button.is-active span {
+  color: color-mix(in srgb, var(--desk-surface) 82%, transparent);
 }
 
 .adreem-desk .ml3-account-preset--person-cash,
@@ -1501,6 +1762,58 @@
 
   .adreem-desk .adreem-receipt button:nth-of-type(n + 4) {
     display: none;
+  }
+
+  .adreem-desk .ml3-option-group {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .adreem-desk .ml3-option-group-head span,
+  .adreem-desk .ml3-picker-lane-head span {
+    padding: 3px 6px;
+    font-size: 0.61rem;
+  }
+
+  .adreem-desk .ml3-option-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .adreem-desk .ml3-action-choice {
+    min-height: 52px;
+    padding: 7px;
+    text-align: center;
+  }
+
+  .adreem-desk .ml3-action-choice span {
+    display: none;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-presets button {
+    min-height: 56px !important;
+    padding: 7px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-presets button i {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 0.74rem;
+  }
+
+  .adreem-desk .ml3-account-presets button span {
+    display: none;
+  }
+
+  .adreem-desk .ml3-picker-chips {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .adreem-desk .ml3-picker-chips button {
+    min-height: 34px;
+    padding: 5px 4px;
+    font-size: 0.68rem;
   }
 
   .adreem-desk .adreem-receipt button {

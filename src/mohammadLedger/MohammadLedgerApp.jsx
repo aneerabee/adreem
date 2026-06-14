@@ -112,6 +112,42 @@ const sectionTitles = {
   review: 'المراجعة',
 }
 
+const movementOptionGroups = [
+  {
+    key: 'daily',
+    title: 'اليومي',
+    hint: 'الأكثر استعمالًا',
+    types: [MOVEMENT_TYPES.TRANSFER, MOVEMENT_TYPES.EXPENSE, MOVEMENT_TYPES.EXTERNAL_INCOME],
+  },
+  {
+    key: 'exchange',
+    title: 'الدولار',
+    hint: 'بيع أو شراء',
+    types: [MOVEMENT_TYPES.USD_SALE, MOVEMENT_TYPES.USD_PURCHASE],
+  },
+]
+
+const accountPresetGroups = [
+  {
+    key: 'people',
+    title: 'العلاقات',
+    hint: 'أشخاص وجهات',
+    keys: ['person-cash'],
+  },
+  {
+    key: 'money',
+    title: 'فلوسي',
+    hint: 'كاش ومصرف',
+    keys: ['own-cash', 'own-bank'],
+  },
+  {
+    key: 'tracking',
+    title: 'تتبع',
+    hint: 'أصول ومصاريف',
+    keys: ['asset', 'project', 'expense'],
+  },
+]
+
 function accountPresetMark(key) {
   if (key === 'person-cash') return 'ش'
   if (key === 'own-cash') return 'ك'
@@ -458,6 +494,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   const [query, setQuery] = useState('')
   const [isChanging, setIsChanging] = useState(false)
   const [quickFilter, setQuickFilter] = useState('')
+  const [showAllResults, setShowAllResults] = useState(false)
   const normalizedQuery = query.trim().toLowerCase()
   const selectedAccount = accounts.find((account) => account.id === value)
   const selectedBalance = selectedAccount ? accountBalanceChip(selectedAccount, balanceByAccountId.get(selectedAccount.id)) : null
@@ -511,12 +548,15 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
     ? [selectedAccount, ...filteredAccounts]
     : filteredAccounts
   const resultAccounts = visibleAccounts
+  const shouldLimitResults = !normalizedQuery && !quickFilter && !showAllResults
+  const shownResultAccounts = shouldLimitResults ? resultAccounts.slice(0, 8) : resultAccounts
 
   function chooseAccount(accountId) {
     onChange(accountId)
     setQuery('')
     setQuickFilter('')
     setIsChanging(false)
+    setShowAllResults(false)
   }
 
   return (
@@ -542,39 +582,56 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
               onChange={(event) => {
                 setQuery(event.target.value)
                 setQuickFilter('')
+                setShowAllResults(false)
               }}
               placeholder="اكتب الاسم أو كاش أو مصرف"
             />
           </label>
           {!normalizedQuery && !quickFilter && preferredAccounts.length ? (
-            <div className="ml3-picker-favorites" aria-label="اختيارات سريعة">
-              {preferredAccounts.map((account) => (
+            <div className="ml3-picker-lane">
+              <div className="ml3-picker-lane-head">
+                <strong>الأقرب</strong>
+                <span>اختيارات سريعة</span>
+              </div>
+              <div className="ml3-picker-favorites" aria-label="اختيارات سريعة">
+                {preferredAccounts.map((account) => (
+                  <button
+                    type="button"
+                    key={account.id}
+                    className={`ml3-picker-favorite--${visualKind(account)} ${account.id === value ? 'is-selected' : ''}`}
+                    onClick={() => chooseAccount(account.id)}
+                  >
+                    <strong>{account.ownerName}</strong>
+                    <span>{displaySubAccountName(account.subAccountName)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div className="ml3-picker-lane is-filter">
+            <div className="ml3-picker-lane-head">
+              <strong>فلترة</strong>
+              <span>{formatCount(resultAccounts.length)} نتيجة</span>
+            </div>
+            <div className="ml3-picker-chips" aria-label="تصفية سريعة">
+              {quickFilters.map((filter) => (
                 <button
                   type="button"
-                  key={account.id}
-                  className={`ml3-picker-favorite--${visualKind(account)} ${account.id === value ? 'is-selected' : ''}`}
-                  onClick={() => chooseAccount(account.id)}
+                  key={filter.key || 'all'}
+                  className={quickFilter === filter.key && !normalizedQuery ? 'is-active' : ''}
+                  onClick={() => {
+                    setQuickFilter(filter.key)
+                    setQuery('')
+                    setShowAllResults(false)
+                  }}
                 >
-                  <strong>{account.ownerName}</strong>
-                  <span>{displaySubAccountName(account.subAccountName)}</span>
+                  {filter.label}
                 </button>
               ))}
             </div>
-          ) : null}
-          <div className="ml3-picker-chips" aria-label="تصفية سريعة">
-            {quickFilters.map((filter) => (
-              <button
-                type="button"
-                key={filter.key || 'all'}
-                className={quickFilter === filter.key && !normalizedQuery ? 'is-active' : ''}
-                onClick={() => { setQuickFilter(filter.key); setQuery('') }}
-              >
-                {filter.label}
-              </button>
-            ))}
           </div>
           <div className="ml3-picker-results">
-            {resultAccounts.map((account) => {
+            {shownResultAccounts.map((account) => {
               const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id))
               const hasBalance = hasVisibleBalance(account)
               return (
@@ -592,6 +649,11 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
                 </button>
               )
             })}
+            {shouldLimitResults && resultAccounts.length > shownResultAccounts.length ? (
+              <button type="button" className="ml3-picker-more" onClick={() => setShowAllResults(true)}>
+                عرض الكل · {formatCount(resultAccounts.length)}
+              </button>
+            ) : null}
             {normalizedQuery && resultAccounts.length === 0 ? <p>لا توجد نتيجة</p> : null}
           </div>
         </>
@@ -2418,16 +2480,33 @@ export default function MohammadLedgerApp() {
                   <strong>نوع الحركة</strong>
                 </div>
                 <div className="ml3-quick-actions">
-                  {movementTypeOptions.map((option) => (
-                    <button
-                      type="button"
-                      className={`ml3-action-choice ml3-action-choice--${option.tone} ${movementDraft.type === option.type ? 'is-active' : ''}`}
-                      key={option.type}
-                      onClick={() => chooseMovementType(option.type)}
-                    >
-                      <strong>{option.label}</strong>
-                    </button>
-                  ))}
+                  {movementOptionGroups.map((group) => {
+                    const options = group.types
+                      .map((type) => movementTypeOptions.find((option) => option.type === type))
+                      .filter(Boolean)
+                    if (!options.length) return null
+                    return (
+                      <div className={`ml3-option-group ml3-option-group--${group.key}`} key={group.key}>
+                        <div className="ml3-option-group-head">
+                          <strong>{group.title}</strong>
+                          <span>{group.hint}</span>
+                        </div>
+                        <div className="ml3-option-grid">
+                          {options.map((option) => (
+                            <button
+                              type="button"
+                              className={`ml3-action-choice ml3-action-choice--${option.tone} ${movementDraft.type === option.type ? 'is-active' : ''}`}
+                              key={option.type}
+                              onClick={() => chooseMovementType(option.type)}
+                            >
+                              <strong>{option.label}</strong>
+                              <span>{option.detail}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </section>
               )}
@@ -2768,18 +2847,34 @@ export default function MohammadLedgerApp() {
                 <span className={accountNeedsCurrency(accountDraft) ? 'is-current' : 'is-muted'}>3 العملة</span>
               </div>
               <div className="ml3-account-presets">
-                {accountPresets.map((preset) => (
-                  <button
-                    type="button"
-                    key={preset.key}
-                    className={`ml3-account-preset--${preset.key} ${accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'is-active' : ''}`}
-                    onClick={() => chooseAccountPreset(preset)}
-                  >
-                    <i aria-hidden="true">{accountPresetMark(preset.key)}</i>
-                    <strong>{preset.title}</strong>
-                    <span>{preset.detail}</span>
-                  </button>
-                ))}
+                {accountPresetGroups.map((group) => {
+                  const presets = group.keys
+                    .map((key) => accountPresets.find((preset) => preset.key === key))
+                    .filter(Boolean)
+                  if (!presets.length) return null
+                  return (
+                    <div className={`ml3-option-group ml3-account-preset-group ml3-account-preset-group--${group.key}`} key={group.key}>
+                      <div className="ml3-option-group-head">
+                        <strong>{group.title}</strong>
+                        <span>{group.hint}</span>
+                      </div>
+                      <div className="ml3-option-grid">
+                        {presets.map((preset) => (
+                          <button
+                            type="button"
+                            key={preset.key}
+                            className={`ml3-account-preset--${preset.key} ${accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'is-active' : ''}`}
+                            onClick={() => chooseAccountPreset(preset)}
+                          >
+                            <i aria-hidden="true">{accountPresetMark(preset.key)}</i>
+                            <strong>{preset.title}</strong>
+                            <span>{preset.detail}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
               <label>
                 {selectedAccountPreset.nameLabel || 'الاسم'}
