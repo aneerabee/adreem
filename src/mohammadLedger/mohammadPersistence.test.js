@@ -233,7 +233,7 @@ describe('adreem local persistence migration', () => {
     const store = installLocalStorage({
       [ADREEM_STORAGE_KEY]: JSON.stringify(staleLocalState),
     })
-    globalThis.window.location.hash = '#ledger_token=valid-token'
+    store.set(ADREEM_API_TOKEN_PERSIST_KEY, 'valid-token')
     vi.stubEnv('VITE_ADREEM_API_URL', 'https://example.com/adreem-api')
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,

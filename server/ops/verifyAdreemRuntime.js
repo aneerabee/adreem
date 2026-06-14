@@ -12,8 +12,12 @@ function envStatus() {
   return [
     ...required.map((key) => ({ key, ok: Boolean(process.env[key]) })),
     {
-      key: 'ADREEM_WEB_LEDGER_TOKEN_HASHES or ADREEM_WEB_LEDGER_TOKENS',
-      ok: Boolean(process.env.ADREEM_WEB_LEDGER_TOKEN_HASHES || process.env.ADREEM_WEB_LEDGER_TOKENS),
+      key: 'ADREEM_RUNTIME_TEST_EMAIL',
+      ok: Boolean(process.env.ADREEM_RUNTIME_TEST_EMAIL),
+    },
+    {
+      key: 'ADREEM_RUNTIME_TEST_PASSWORD',
+      ok: Boolean(process.env.ADREEM_RUNTIME_TEST_PASSWORD),
     },
   ]
 }
@@ -21,7 +25,16 @@ function envStatus() {
 function requestJson(url, options = {}) {
   const client = url.startsWith('https:') ? request : httpRequest
   return new Promise((resolve) => {
-    const req = client(url, options, (res) => {
+    const body = options.body ? JSON.stringify(options.body) : ''
+    const requestOptions = {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        ...(body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : {}),
+      },
+    }
+    delete requestOptions.body
+    const req = client(url, requestOptions, (res) => {
       let body = ''
       res.setEncoding('utf8')
       res.on('data', (chunk) => {
@@ -39,15 +52,22 @@ function requestJson(url, options = {}) {
     req.setTimeout(8000, () => {
       req.destroy(new Error('timeout'))
     })
+    if (body) req.write(body)
     req.end()
   })
 }
 
-function firstLedgerToken() {
-  if (process.env.ADREEM_RUNTIME_TEST_TOKEN) return process.env.ADREEM_RUNTIME_TEST_TOKEN
-  const raw = String(process.env.ADREEM_WEB_LEDGER_TOKENS || '')
-  const first = raw.split(',').map((item) => item.trim()).filter(Boolean)[0] || ''
-  return first.split('=')[0] || ''
+async function login(apiBase) {
+  if (!process.env.ADREEM_RUNTIME_TEST_EMAIL || !process.env.ADREEM_RUNTIME_TEST_PASSWORD) {
+    return { ok: false, skipped: true, reason: 'Set ADREEM_RUNTIME_TEST_EMAIL and ADREEM_RUNTIME_TEST_PASSWORD.' }
+  }
+  return requestJson(`${apiBase}/api/auth/login`, {
+    method: 'POST',
+    body: {
+      email: process.env.ADREEM_RUNTIME_TEST_EMAIL,
+      password: process.env.ADREEM_RUNTIME_TEST_PASSWORD,
+    },
+  })
 }
 
 async function main() {
@@ -55,17 +75,19 @@ async function main() {
   const checks = {
     env: envStatus(),
     apiHealth: await requestJson(`${apiBase}/health`),
+    login: null,
     ledgerRead: null,
   }
-  const token = firstLedgerToken()
-  if (token) {
+  checks.login = await login(apiBase)
+  const token = checks.login.body?.token || ''
+  if (checks.login.ok && token) {
     checks.ledgerRead = await requestJson(`${apiBase}/api/ledger`, {
       headers: {
         authorization: `Bearer ${token}`,
       },
     })
   } else {
-    checks.ledgerRead = { ok: true, skipped: true, reason: 'Set ADREEM_RUNTIME_TEST_TOKEN to test ledger read with hashed web tokens.' }
+    checks.ledgerRead = { ok: false, skipped: true, reason: 'Runtime login failed or missing test credentials.' }
   }
   const failedEnv = checks.env.filter((item) => !item.ok).map((item) => item.key)
   const ok = !failedEnv.length && checks.apiHealth.ok && (!checks.ledgerRead || checks.ledgerRead.ok)
@@ -73,6 +95,7 @@ async function main() {
     ok,
     failedEnv,
     apiHealth: checks.apiHealth,
+    login: checks.login ? { ok: checks.login.ok, status: checks.login.status, userId: checks.login.body?.user?.userId } : null,
     ledgerRead: checks.ledgerRead ? { ok: checks.ledgerRead.ok, status: checks.ledgerRead.status, source: checks.ledgerRead.body?.source } : null,
   }, null, 2))
   process.exit(ok ? 0 : 1)

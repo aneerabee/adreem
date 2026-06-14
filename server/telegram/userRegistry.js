@@ -60,7 +60,8 @@ export function createPrivateWebToken() {
 }
 
 export function webUrlForToken(token, env = process.env) {
-  return `${webBaseUrl(env).replace(/#.*$/, '').replace(/\/?$/, '/') }#ledger_token=${token}`
+  void token
+  return webBaseUrl(env).replace(/#.*$/, '').replace(/\/?$/, '/')
 }
 
 export function normalizeTelegramUserEntry(entry = {}) {
@@ -168,7 +169,8 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     username = '',
     createWebToken = false,
   }) {
-    const webToken = createWebToken ? createPrivateWebToken() : ''
+    void createWebToken
+    const webToken = ''
     const entry = normalizeTelegramUserEntry({
       userId: userId || telegramUserId,
       email,
@@ -179,7 +181,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
       firstName,
       username,
       passwordHash: password ? createPasswordHash(password) : '',
-      webTokenHash: webToken ? webTokenHash(webToken) : '',
+      webTokenHash: '',
     })
     if (!entry) return { ok: false, error: 'invalid-user-or-ledger' }
     if (email && !entry.email.includes('@')) return { ok: false, error: 'invalid-email' }
@@ -349,7 +351,19 @@ export function registryWebTokenMap(env = process.env, filePath = defaultRegistr
   const now = Date.now()
   const pairs = []
   for (const user of registry.users) {
-    if (user.webTokenHash) pairs.push([user.webTokenHash, user.ledgerId])
+    const expiresAt = new Date(user.sessionExpiresAt || 0).getTime()
+    if (user.sessionTokenHash && Number.isFinite(expiresAt) && expiresAt > now) {
+      pairs.push([user.sessionTokenHash, user.ledgerId])
+    }
+  }
+  return new Map(pairs)
+}
+
+export function registrySessionTokenMap(env = process.env, filePath = defaultRegistryPath(env)) {
+  const registry = loadTelegramUserRegistry(filePath)
+  const now = Date.now()
+  const pairs = []
+  for (const user of registry.users) {
     const expiresAt = new Date(user.sessionExpiresAt || 0).getTime()
     if (user.sessionTokenHash && Number.isFinite(expiresAt) && expiresAt > now) {
       pairs.push([user.sessionTokenHash, user.ledgerId])

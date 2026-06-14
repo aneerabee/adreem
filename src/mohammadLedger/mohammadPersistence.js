@@ -50,26 +50,6 @@ function readBrowserStorageItem(storageName, key) {
   }
 }
 
-function writeBrowserStorageItem(storageName, key, value) {
-  if (typeof window === 'undefined') return
-  try {
-    window[storageName]?.setItem(key, value)
-  } catch {
-    // Ignored: private browsing or disabled storage should not break cloud login.
-  }
-}
-
-function readApiTokenFromLocation() {
-  if (typeof window === 'undefined') return ''
-  const hash = String(window.location?.hash || '').replace(/^#/, '')
-  const params = new URLSearchParams(hash)
-  const token = params.get('ledger_token') || params.get('adreem_token') || ''
-  if (token && window.history?.replaceState) {
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
-  }
-  return token
-}
-
 function clearCloudLocalLedgerData() {
   if (!hasBrowserStorage()) return
   const prefixes = [
@@ -93,12 +73,7 @@ function clearCloudLocalLedgerData() {
 function getAdreemApiConfig() {
   if (!ADREEM_API_URL || typeof window === 'undefined') return null
   clearCloudLocalLedgerData()
-  const tokenFromLocation = readApiTokenFromLocation()
-  if (tokenFromLocation) {
-    writeBrowserStorageItem('sessionStorage', ADREEM_API_TOKEN_SESSION_KEY, tokenFromLocation)
-    writeBrowserStorageItem('localStorage', ADREEM_API_TOKEN_PERSIST_KEY, tokenFromLocation)
-  }
-  const token = tokenFromLocation ||
+  const token =
     readBrowserStorageItem('sessionStorage', ADREEM_API_TOKEN_SESSION_KEY) ||
     readBrowserStorageItem('localStorage', ADREEM_API_TOKEN_PERSIST_KEY)
   return token ? { url: ADREEM_API_URL, token } : null
@@ -335,6 +310,41 @@ async function saveApiMohammadState(state) {
   if (!response.ok) throw new Error(`ADREEM API save failed: ${response.status}`)
   const data = await response.json()
   return data?.state ? normalizeLedgerState(data.state, state) : state
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = String(reader.result || '')
+      resolve(result.includes(',') ? result.split(',').pop() : result)
+    }
+    reader.onerror = () => reject(reader.error || new Error('Attachment read failed.'))
+    reader.readAsDataURL(file)
+  })
+}
+
+export async function uploadAdreemAttachmentFile(file) {
+  const api = getAdreemApiConfig()
+  if (!api) throw new Error('Missing ADREEM login session.')
+  if (!file) return null
+  const base64 = await fileToBase64(file)
+  const response = await fetch(`${api.url}/api/attachments`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${api.token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      fileName: file.name || 'attachment',
+      mimeType: file.type || 'application/octet-stream',
+      sizeBytes: file.size || 0,
+      base64,
+    }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || `ADREEM attachment upload failed: ${response.status}`)
+  return data.attachment || null
 }
 
 export async function loadMohammadPersistedState(fallbackState) {

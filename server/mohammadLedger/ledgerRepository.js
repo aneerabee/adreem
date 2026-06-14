@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import {
   ADREEM_STATE_ROW_ID,
   MOHAMMAD_LEGACY_STATE_ROW_ID,
@@ -12,6 +14,8 @@ import {
 } from '../../src/mohammadLedger/ledgerState.js'
 
 const MAX_SAVE_ATTEMPTS = 4
+const DEFAULT_BACKUP_LIMIT = 60
+const DEFAULT_REGISTRY_FILE = './adreem-telegram-users.json'
 
 export class ConcurrentLedgerUpdateError extends Error {
   constructor(message = 'Ledger state changed during save.') {
@@ -35,7 +39,7 @@ export function createLedgerRepository(env = process.env, options = {}) {
   return {
     ledgerConfig,
     load: () => loadLedgerState(client, ledgerConfig),
-    update: (updater) => updateLedgerState(client, updater, ledgerConfig),
+    update: (updater) => updateLedgerState(client, updater, ledgerConfig, env),
   }
 }
 
@@ -135,7 +139,57 @@ export function prepareLedgerStateForSave(resultState, currentState, savedAt = n
   )
 }
 
-async function updateLedgerState(client, updater, ledgerConfig) {
+function ledgerBackupDirectory(env = process.env) {
+  if (env.ADREEM_BACKUP_DIR) return env.ADREEM_BACKUP_DIR
+  if (env.ADREEM_LEDGER_BACKUP_DIR) return env.ADREEM_LEDGER_BACKUP_DIR
+  const registryPath = env.ADREEM_TELEGRAM_USERS_FILE || env.ADREEM_TELEGRAM_REGISTRY_PATH || DEFAULT_REGISTRY_FILE
+  return join(dirname(registryPath), 'ledger-backups')
+}
+
+function backupFileName(ledgerConfig, phase, savedAt = new Date().toISOString()) {
+  const safeLedgerId = String(ledgerConfig.identity.ledgerId || ledgerConfig.rowId || 'ledger')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .slice(0, 80)
+  const stamp = savedAt.replace(/[:.]/g, '-')
+  return `${safeLedgerId}-${stamp}-${phase}.json`
+}
+
+function pruneLedgerBackups(directory, ledgerConfig, limit = DEFAULT_BACKUP_LIMIT) {
+  const safeLedgerId = String(ledgerConfig.identity.ledgerId || ledgerConfig.rowId || 'ledger')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .slice(0, 80)
+  const files = readdirSync(directory)
+    .filter((file) => file.startsWith(`${safeLedgerId}-`) && file.endsWith('.json'))
+    .sort()
+  const excess = files.length - limit
+  if (excess <= 0) return
+  files.slice(0, excess).forEach((file) => rmSync(join(directory, file), { force: true }))
+}
+
+export function writeLedgerBackup(env, ledgerConfig, phase, state) {
+  if (env.ADREEM_BACKUP_DISABLED === 'true') return
+  if (process.env.NODE_ENV === 'test' && !env.ADREEM_BACKUP_DIR && !env.ADREEM_LEDGER_BACKUP_DIR) return
+  try {
+    const directory = ledgerBackupDirectory(env)
+    mkdirSync(directory, { recursive: true })
+    const savedAt = new Date().toISOString()
+    const payload = {
+      appId: ledgerConfig.identity.appId,
+      tenantId: ledgerConfig.identity.tenantId,
+      ledgerId: ledgerConfig.identity.ledgerId,
+      rowId: ledgerConfig.rowId,
+      phase,
+      savedAt,
+      state,
+    }
+    writeFileSync(join(directory, backupFileName(ledgerConfig, phase, savedAt)), `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 })
+    pruneLedgerBackups(directory, ledgerConfig, Number(env.ADREEM_BACKUP_LIMIT || DEFAULT_BACKUP_LIMIT))
+  } catch (error) {
+    console.error('[adreem-ledger-backup]', error?.message || error)
+  }
+}
+
+async function updateLedgerState(client, updater, ledgerConfig, env = process.env) {
   let lastConflict = null
 
   for (let attempt = 1; attempt <= MAX_SAVE_ATTEMPTS; attempt += 1) {
@@ -146,9 +200,11 @@ async function updateLedgerState(client, updater, ledgerConfig) {
     const nextState = prepareLedgerStateForSave(result.state, current.state, new Date().toISOString(), ledgerConfig.identity)
 
     try {
+      if (current.updatedAt) writeLedgerBackup(env, ledgerConfig, 'before', current.state)
       const updatedAt = current.updatedAt
         ? await replaceLedgerState(client, nextState, current.updatedAt, ledgerConfig)
         : await insertLedgerState(client, nextState, ledgerConfig)
+      writeLedgerBackup(env, ledgerConfig, 'after', nextState)
       return { ...result, state: nextState, updatedAt, attempts: attempt }
     } catch (error) {
       if (!(error instanceof ConcurrentLedgerUpdateError)) throw error

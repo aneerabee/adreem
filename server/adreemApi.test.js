@@ -116,7 +116,6 @@ describe('ADREEM web API auth helpers', () => {
 
   it('allows browser preflight for admin edit and delete requests', async () => {
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -134,9 +133,8 @@ describe('ADREEM web API auth helpers', () => {
     expect(response.headers['access-control-allow-methods']).toContain('DELETE')
   })
 
-  it('rejects unknown web tokens before any ledger access', async () => {
+  it('rejects unknown sessions before any ledger access', async () => {
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -153,9 +151,33 @@ describe('ADREEM web API auth helpers', () => {
     expect(JSON.parse(response.body).error).toMatch(/Invalid ledger token/)
   })
 
-  it('still rejects unknown web tokens when a test repository is installed', async () => {
+  it('does not accept legacy env ledger tokens for ledger access', async () => {
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
+      ADREEM_WEB_LEDGER_TOKENS: 'token-a=main',
+      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-b')}=main`,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    api.__setRepositoryForTest?.({
+      async load() {
+        return { state: { accounts: [], movements: [] }, source: 'test' }
+      },
+    })
+
+    for (const token of ['token-a', 'token-b']) {
+      const response = createMockResponse()
+      await api({
+        method: 'GET',
+        url: '/api/ledger',
+        headers: { authorization: `Bearer ${token}` },
+      }, response)
+
+      expect(response.statusCode).toBe(401)
+    }
+  })
+
+  it('still rejects unknown sessions when a test repository is installed', async () => {
+    const api = createAdreemApiHandler({
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -175,12 +197,30 @@ describe('ADREEM web API auth helpers', () => {
     expect(response.statusCode).toBe(401)
   })
 
-  it('routes different hashed web tokens to isolated repositories', async () => {
+  it('routes different email/password sessions to isolated repositories', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'rabee',
+        displayName: 'Rabee',
+        email: 'rabee@example.com',
+        password: 'rabee-pass-123',
+        ledgerId: 'rabee',
+      }),
+      registryPasswordUser({
+        userId: 'saeed',
+        displayName: 'Saeed',
+        email: 'saeed@example.com',
+        password: 'saeed-pass-123',
+        ledgerId: 'saeed',
+      }),
+    ])
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=rabee,${tokenHash('token-b')}=saeed`,
+      ADREEM_TELEGRAM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
+    const tokenA = await loginForToken(api, 'rabee@example.com', 'rabee-pass-123')
+    const tokenB = await loginForToken(api, 'saeed@example.com', 'saeed-pass-123')
     const requestedLedgers = []
     api.__setRepositoryFactoryForTest?.((ledgerId) => {
       requestedLedgers.push(ledgerId)
@@ -191,7 +231,7 @@ describe('ADREEM web API auth helpers', () => {
       }
     })
 
-    for (const token of ['token-a', 'token-b']) {
+    for (const token of [tokenA, tokenB]) {
       const response = createMockResponse()
       await api({
         method: 'GET',
@@ -204,16 +244,22 @@ describe('ADREEM web API auth helpers', () => {
     expect(requestedLedgers).toEqual(['rabee', 'saeed'])
   })
 
-  it('routes registry web tokens without requiring an API restart', async () => {
-    const token = 'dynamic-user-token'
+  it('routes registry sessions without requiring an API restart', async () => {
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
       ADREEM_TELEGRAM_USERS_FILE: tempRegistry([
-        { telegramUserId: '555', ledgerId: 'saeed-book', webTokenHash: tokenHash(token) },
+        registryPasswordUser({
+          userId: 'saeed-book',
+          displayName: 'Saeed',
+          email: 'saeed@example.com',
+          password: 'saeed-pass-123',
+          ledgerId: 'saeed-book',
+          telegramUserId: '555',
+        }),
       ]),
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
+    const token = await loginForToken(api, 'saeed@example.com', 'saeed-pass-123')
     const requestedLedgers = []
     api.__setRepositoryFactoryForTest?.((ledgerId) => {
       requestedLedgers.push(ledgerId)
@@ -236,11 +282,21 @@ describe('ADREEM web API auth helpers', () => {
   })
 
   it('merges PUT state with the latest repository state instead of replacing arrays', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'main',
+        displayName: 'Main',
+        email: 'main@example.com',
+        password: 'main-pass-123',
+        ledgerId: 'main',
+      }),
+    ])
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKENS: 'token-a=main',
+      ADREEM_TELEGRAM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
     let updateCallback = null
     const currentState = {
       accounts: [{ id: 'from-bot', updatedAt: '2026-01-01T10:00:00.000Z' }],
@@ -263,6 +319,8 @@ describe('ADREEM web API auth helpers', () => {
         savedAt: '2026-01-01T10:03:00.000Z',
         version: 2,
       },
+    }, {
+      token,
     })
     const response = createMockResponse()
     const promise = api(request, response)
@@ -278,7 +336,6 @@ describe('ADREEM web API auth helpers', () => {
 
   it('rejects admin users endpoint without a valid owner session', async () => {
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKENS: 'token-a=main',
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -304,7 +361,6 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
       ADREEM_OWNER_EMAILS: 'owner@example.com',
       ADREEM_TELEGRAM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
@@ -353,7 +409,6 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
       ADREEM_OWNER_EMAILS: 'owner@example.com',
       ADREEM_TELEGRAM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
@@ -389,7 +444,6 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
       ADREEM_OWNER_EMAILS: 'owner@example.com',
       ADREEM_TELEGRAM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
@@ -471,7 +525,6 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${tokenHash('token-a')}=main`,
       ADREEM_OWNER_EMAILS: 'owner@example.com',
       ADREEM_TELEGRAM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
@@ -561,5 +614,39 @@ describe('ADREEM web API auth helpers', () => {
 
     expect(ledgerResponse.statusCode).toBe(200)
     expect(requestedLedgers).toEqual(['saeed-book'])
+  })
+
+  it('rate limits repeated failed login attempts', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'owner-main',
+        displayName: 'Owner',
+        email: 'owner@example.com',
+        password: 'owner-pass-123',
+        ledgerId: 'owner-main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+
+    let lastResponse = null
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      const request = createJsonRequest({ email: 'owner@example.com', password: 'wrong-pass' }, {
+        method: 'POST',
+        url: '/api/auth/login',
+        token: '',
+      })
+      const response = createMockResponse()
+      const promise = api(request, response)
+      request.emitBody()
+      await promise
+      lastResponse = response
+    }
+
+    expect(lastResponse.statusCode).toBe(429)
+    expect(lastResponse.headers['retry-after']).toBeTruthy()
   })
 })

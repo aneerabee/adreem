@@ -44,6 +44,7 @@ import {
   loadLocalMohammadState,
   loadMohammadPersistedState,
   saveMohammadPersistedState,
+  uploadAdreemAttachmentFile,
 } from './mohammadPersistence'
 import {
   createEmptyAdreemState,
@@ -797,6 +798,10 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
               الرابط
               <input name="attachmentUrl" placeholder="اختياري" />
             </label>
+            <label>
+              ملف
+              <input name="attachmentFile" type="file" accept="image/*,.pdf" />
+            </label>
           </div>
           <button type="submit">ربط مرفق</button>
           {accountAttachments.length ? (
@@ -1138,7 +1143,7 @@ function OperationsPanel({
           <strong>حفظ وأدلة</strong>
           <span>{formatCount(attachments.length)}</span>
         </div>
-        <p className="ml3-empty">المرفقات محفوظة كرابط/مرجع داخل الدفتر. الملفات نفسها تحتاج bucket آمن لاحقًا.</p>
+        <p className="ml3-empty">المرفقات تحفظ كرابط أو ملف سحابي عند تفعيل bucket آمن.</p>
         <small>مطابقات محفوظة: {formatCount(reconciliations.length)}</small>
       </article>
     </section>
@@ -1154,6 +1159,7 @@ export default function MohammadLedgerApp() {
   const [activeEntryMode, setActiveEntryMode] = useState('movement')
   const [activeAccountGroup, setActiveAccountGroup] = useState('people')
   const [movementDraft, setMovementDraft] = useState(() => emptyMovementDraft())
+  const [movementAttachmentFile, setMovementAttachmentFile] = useState(null)
   const [movementStep, setMovementStep] = useState(MOVEMENT_ENTRY_STEPS.TYPE)
   const [accountDraft, setAccountDraft] = useState(emptyAccountDraft)
   const [selectedAccountId, setSelectedAccountId] = useState('')
@@ -1512,7 +1518,7 @@ export default function MohammadLedgerApp() {
     }))
   }
 
-  function saveMovement(event) {
+  async function saveMovement(event) {
     event.preventDefault()
     const originalMovement = editingMovementId ? movements.find((movement) => movement.id === editingMovementId) : null
     const validationMovements = originalMovement
@@ -1534,16 +1540,30 @@ export default function MohammadLedgerApp() {
       setFeedback(`لم يتم حفظ التعديل. أصلح الحركة أولًا حتى لا يتغير الرصيد: ${movement.validation.errors.map((error) => error.message).join(' ')}`)
       return
     }
+    let uploadedAttachment = null
+    let attachmentError = ''
+    if (movementAttachmentFile) {
+      try {
+        uploadedAttachment = await uploadAdreemAttachmentFile(movementAttachmentFile)
+      } catch (error) {
+        attachmentError = error?.message || 'تعذر رفع المرفق.'
+      }
+    }
     setMovements((current) =>
       originalMovement
         ? current.map((item) => (item.id === originalMovement.id ? movement : item))
         : [...current, movement],
     )
-    setFeedback(movement.status === MOVEMENT_STATUSES.POSTED ? (originalMovement ? 'تم تعديل الحركة وتحديث الأرصدة.' : 'تم الحفظ وتحديث الأرصدة.') : 'الحركة ناقصة وتحتاج مراجعة.')
+    const baseFeedback = movement.status === MOVEMENT_STATUSES.POSTED ? (originalMovement ? 'تم تعديل الحركة وتحديث الأرصدة.' : 'تم الحفظ وتحديث الأرصدة.') : 'الحركة ناقصة وتحتاج مراجعة.'
+    setFeedback(attachmentError ? `${baseFeedback} لم يتم رفع المرفق: ${attachmentError}` : baseFeedback)
     const attachment = createAttachment({
       movementId: movement.id,
-      label: movementDraft.attachmentLabel,
-      url: movementDraft.attachmentUrl,
+      label: movementDraft.attachmentLabel || uploadedAttachment?.label,
+      url: uploadedAttachment?.url || movementDraft.attachmentUrl,
+      mimeType: uploadedAttachment?.mimeType || '',
+      sizeBytes: uploadedAttachment?.sizeBytes || 0,
+      storagePath: uploadedAttachment?.storagePath || '',
+      source: uploadedAttachment ? 'web-upload' : 'web',
     })
     const recurringRule = movementDraft.recurringEnabled && movement.status === MOVEMENT_STATUSES.POSTED
       ? createRecurringRuleFromMovement(movement, { frequency: movementDraft.recurringFrequency })
@@ -1567,6 +1587,7 @@ export default function MohammadLedgerApp() {
     if (movement.status === MOVEMENT_STATUSES.POSTED || originalMovement) {
       setEditingMovementId('')
       setMovementDraft(emptyMovementDraft(movementDraft.type))
+      setMovementAttachmentFile(null)
       setMovementStep(MOVEMENT_ENTRY_STEPS.TYPE)
     }
   }
@@ -1725,13 +1746,27 @@ export default function MohammadLedgerApp() {
     setFeedback(nextMovements.every((movement) => movement.status === MOVEMENT_STATUSES.POSTED) ? 'تم إنشاء تصحيح الرصيد.' : 'تم حفظ التصحيح في المراجعة.')
   }
 
-  function addAccountAttachment(event, accountId) {
+  async function addAccountAttachment(event, accountId) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
+    let uploadedAttachment = null
+    const file = formData.get('attachmentFile')
+    if (file && typeof file === 'object' && file.size > 0) {
+      try {
+        uploadedAttachment = await uploadAdreemAttachmentFile(file)
+      } catch (error) {
+        setFeedback(`لم يتم رفع المرفق: ${error?.message || 'خطأ غير معروف.'}`)
+        return
+      }
+    }
     const attachment = createAttachment({
       accountId,
-      label: formData.get('attachmentLabel'),
-      url: formData.get('attachmentUrl'),
+      label: formData.get('attachmentLabel') || uploadedAttachment?.label,
+      url: uploadedAttachment?.url || formData.get('attachmentUrl'),
+      mimeType: uploadedAttachment?.mimeType || '',
+      sizeBytes: uploadedAttachment?.sizeBytes || 0,
+      storagePath: uploadedAttachment?.storagePath || '',
+      source: uploadedAttachment ? 'web-upload' : 'web',
     })
     if (!attachment) {
       setFeedback('اكتب اسم المرفق أو رابطه.')
@@ -2223,11 +2258,11 @@ export default function MohammadLedgerApp() {
   ].filter(Boolean)
 
   return (
-    <main className={`adreem-app adreem-app--${activeSection}`} dir="rtl">
-      <section className="adreem-shell">
-        <header className="adreem-header">
-          <div className="adreem-brand">
-            <span className="adreem-mark" aria-hidden="true">
+    <main className={`adreem-app adreem-app--${activeSection} ml3-pocket-app pocket-ledger-app pocket-ledger-app--${activeSection}`} dir="rtl">
+      <section className="adreem-shell pocket-ledger-shell">
+        <header className="adreem-header pocket-ledger-header">
+          <div className="adreem-brand pocket-ledger-brand">
+            <span className="adreem-mark pocket-ledger-mark" aria-hidden="true">
               <svg viewBox="0 0 32 32">
                 <rect x="7" y="5" width="18" height="22" rx="4" />
                 <path d="M12 12h8M12 16h8M12 20h5" />
@@ -2239,7 +2274,7 @@ export default function MohammadLedgerApp() {
               <h1>{activeSectionTitle}</h1>
             </div>
           </div>
-          <div className={`adreem-status ${canLogout || canOpenAdmin ? 'has-cloud-actions' : ''}`}>
+          <div className={`adreem-status pocket-ledger-status ${canLogout || canOpenAdmin ? 'has-cloud-actions' : ''}`}>
             <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
             <b>اليوم {formatCount(todayMovements.length)}</b>
             <b>مراجعة {formatCount(reviewItems.length)}</b>
@@ -2248,7 +2283,7 @@ export default function MohammadLedgerApp() {
           </div>
         </header>
 
-        <nav className="adreem-nav" aria-label="أقسام الدفتر">
+        <nav className="adreem-nav pocket-ledger-nav" aria-label="أقسام الدفتر">
           {sectionTabs.map((tab) => (
             <button
               type="button"
@@ -2277,8 +2312,8 @@ export default function MohammadLedgerApp() {
 
         <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
           {activeSection === 'entry' ? (
-          <aside className="adreem-entry">
-            <section className="adreem-receipt" aria-label="ملخص الحركة الحالي">
+          <aside className="adreem-entry pocket-ledger-entry">
+            <section className="adreem-receipt pocket-ledger-receipt" aria-label="ملخص الحركة الحالي">
               <div className="adreem-receipt-head">
                 <span>{activeEntryMode === 'movement' ? 'ملخص الحركة' : 'ملخص الحساب'}</span>
                 <strong>{activeEntryMode === 'movement' ? movementProgressText : 'جديد'}</strong>
@@ -2634,6 +2669,14 @@ export default function MohammadLedgerApp() {
                       value={movementDraft.attachmentUrl}
                       onChange={(event) => updateMovementDraft('attachmentUrl', event.target.value)}
                       placeholder="اختياري"
+                    />
+                  </label>
+                  <label>
+                    ملف
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(event) => setMovementAttachmentFile(event.target.files?.[0] || null)}
                     />
                   </label>
                   <label className="ml3-checkline">

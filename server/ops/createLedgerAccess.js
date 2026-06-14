@@ -1,10 +1,5 @@
-import { randomBytes, createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { createLedgerIdentity, adreemStateRowId } from '../../src/mohammadLedger/ledgerState.js'
-
-function tokenHash(token = '') {
-  return createHash('sha256').update(String(token || '').trim()).digest('hex')
-}
 
 function readArg(name, fallback = '') {
   const prefix = `--${name}=`
@@ -15,22 +10,17 @@ function readArg(name, fallback = '') {
 export function createLedgerAccess({
   ledgerId,
   tenantId = 'adreem',
-  token = '',
   telegramUserId = '',
   webBaseUrl = 'https://aneerabee.github.io/adreem/',
 } = {}) {
   const identity = createLedgerIdentity({ tenantId, ledgerId })
-  const webToken = token || randomBytes(32).toString('base64url')
-  const hash = tokenHash(webToken)
-  const webUrl = `${webBaseUrl.replace(/#.*$/, '').replace(/\/?$/, '/') }#ledger_token=${webToken}`
+  const webUrl = webBaseUrl.replace(/#.*$/, '').replace(/\/?$/, '/')
   return {
     identity,
     rowId: adreemStateRowId(identity),
-    webToken,
-    webTokenHash: hash,
+    deprecated: true,
+    message: 'Legacy web ledger tokens are disabled. Create users from ADREEM admin with email/password.',
     env: {
-      ADREEM_WEB_LEDGER_TOKEN_HASHES: `${hash}=${identity.ledgerId}`,
-      ADREEM_RUNTIME_TEST_TOKEN: webToken,
       ADREEM_TELEGRAM_LEDGER_IDS: telegramUserId ? `${telegramUserId}=${identity.ledgerId}` : '',
     },
     webUrl,
@@ -42,7 +32,7 @@ function printHelp() {
     'Usage:',
     '  npm run ops:create-ledger-access -- --ledger=ledger-name [--tenant=adreem] [--telegram=278516861]',
     '',
-    'This prints a private web URL once. Store only the hash mapping in adreem.env.',
+    'Legacy web URL tokens are disabled. Use ADREEM admin users with email/password.',
   ].join('\n'))
 }
 
@@ -55,7 +45,6 @@ function main() {
   const access = createLedgerAccess({
     ledgerId,
     tenantId: readArg('tenant', 'adreem'),
-    token: readArg('token'),
     telegramUserId: readArg('telegram'),
     webBaseUrl: readArg('web-url', 'https://aneerabee.github.io/adreem/'),
   })

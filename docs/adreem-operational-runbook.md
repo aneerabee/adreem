@@ -39,13 +39,14 @@ gh secret set VITE_ADREEM_API_URL -R aneerabee/adreem --body "https://your-adree
 
 `VITE_ADREEM_API_URL` يجب أن يكون رابط API فقط، بدون token وبدون أي مفتاح.
 
-لتمكين فحص التشغيل الكامل من السيرفر بدون وضع التوكن الخام في خريطة الدفاتر، ضع التوكن الحقيقي في:
+لتمكين فحص التشغيل الكامل من السيرفر، ضع حساب اختبار حقيقي في registry:
 
 ```text
-ADREEM_RUNTIME_TEST_TOKEN=YOUR_LONG_TOKEN
+ADREEM_RUNTIME_TEST_EMAIL=owner@example.com
+ADREEM_RUNTIME_TEST_PASSWORD=owner-password
 ```
 
-هذا المتغير يبقى على السيرفر فقط، ويستخدمه `npm run verify:runtime` لاختبار `/api/ledger`.
+هذه المتغيرات تبقى على السيرفر فقط، ويستخدمها `npm run verify:runtime` لتسجيل الدخول ثم اختبار `/api/ledger`.
 
 ## الأمان أمام API
 
@@ -54,22 +55,11 @@ ADREEM_RUNTIME_TEST_TOKEN=YOUR_LONG_TOKEN
 - اجعل API خلف HTTPS فقط.
 - دخول المستخدمين يتم بالإيميل وكلمة المرور من صفحة ADREEM العادية.
 - جلسة الدخول تولّد token طويل الأجل لهذا الجهاز داخل `localStorage`، ولا يطلب الدخول مرة أخرى إلا عند تسجيل الخروج أو حذف بيانات الموقع.
-- `ADREEM_WEB_LEDGER_TOKEN_HASHES` يبقى للتوافق وفحص التشغيل فقط، وليس طريقة إنشاء المستخدمين الجديدة.
-- صيغة `ADREEM_WEB_LEDGER_TOKENS` ما زالت مدعومة مؤقتًا للتوافق، لكنها ليست الصيغة المعتمدة للدفاتر الجديدة.
-- ضع rate limiting في reverse proxy أو firewall لأن API نفسه بسيط ومباشر.
+- لا تستخدم `ADREEM_WEB_LEDGER_TOKEN_HASHES` أو `ADREEM_WEB_LEDGER_TOKENS` لتشغيل دفاتر الويب. الوصول يتم من جلسات الإيميل وكلمة المرور فقط.
+- API يحتوي rate limiting داخلي للـ login والإدارة والحفظ والمرفقات، ويمكن إضافة reverse proxy أو firewall كطبقة إضافية.
+- اضبط `ADREEM_AUDIT_LOG_FILE` لحفظ سجل إداري JSONL.
+- اضبط `ADREEM_BACKUP_DIR` لتفعيل snapshots تلقائية قبل/بعد حفظ الدفتر.
 - عند فقدان كلمة مرور مستخدم، أنشئ له كلمة مرور جديدة من صفحة الإدارة بنفس كود الدفتر.
-
-إنشاء hash للتوكن:
-
-```bash
-node -e "const {createHash}=require('crypto'); console.log(createHash('sha256').update('YOUR_LONG_TOKEN').digest('hex'))"
-```
-
-أو استخدم أداة ADREEM لتوليد دفتر مستقل كامل:
-
-```bash
-npm run ops:create-ledger-access -- --ledger=saeed-book --telegram=555
-```
 
 قاعدة العزل: كل مستخدم يحصل على `ledgerId` خاص ويدخل بالإيميل وكلمة المرور. لا تعطي مستخدمين مختلفين نفس `ledgerId`. إدارة المستخدمين تتم من صفحة إدارة ADREEM، وليس من أوامر التلقرام.
 
@@ -154,7 +144,7 @@ https://aneerabee.github.io/adreem/
 
 في الإنتاج، إذا لم توجد جلسة دخول محفوظة يظهر نموذج الإيميل وكلمة المرور. بعد الدخول يفتح الويب دفتر المستخدم المعزول حسب `ledgerId` ويتذكر هذا الجهاز الدخول إلى أن يتم الخروج أو حذف بيانات الموقع.
 
-روابط `#ledger_token=` القديمة مدعومة مؤقتًا للتوافق فقط، ولا تُستخدم لإنشاء مستخدمين جدد.
+روابط `#ledger_token=` القديمة غير معتمدة للتشغيل الجديد. استخدم تسجيل الدخول من صفحة ADREEM.
 
 ## قاعدة عدم الحذف الفعلي
 

@@ -37,28 +37,20 @@ npm run bot:adreem
 
 - `TELEGRAM_BOT_TOKEN`
 - `ADREEM_TELEGRAM_USER_IDS` أو `ADREEM_TELEGRAM_USER_ID`
-- `ADREEM_TELEGRAM_ADMIN_IDS` حتى يستطيع صاحب النظام إضافة مستخدمين مستقلين من داخل البوت
+- `ADREEM_TELEGRAM_ADMIN_IDS` حتى يستطيع صاحب النظام عرض المستخدمين ومعرفة الأرقام
 - `ADREEM_TELEGRAM_LEDGER_IDS` عند وجود أكثر من مستخدم، مثل `user-id=main,user-id-2=second-book`
-- `ADREEM_TELEGRAM_USERS_FILE` لحفظ المستخدمين المضافين من البوت، مثل `/home/argaz/apps/adreem/adreem-telegram-users.json`
+- `ADREEM_TELEGRAM_USERS_FILE` لحفظ المستخدمين الذين تنشئهم صفحة الإدارة، مثل `/home/argaz/apps/adreem/adreem-telegram-users.json`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-أوامر إدارة المستخدمين داخل البوت:
+أوامر البوت الإدارية المتبقية:
 
 ```text
 /myid
 /users
-/adduser TELEGRAM_ID LEDGER_ID
 ```
 
-مثال:
-
-```text
-/adduser 555 saeed-book
-```
-
-لا تجعل البوت مفتوحًا للجميع. أي مستخدم غير مضاف يرى رقمه فقط، وأنت تضيفه إلى دفتر مستقل من الأمر أعلاه.
-عند الإضافة يولّد البوت رابط ويب خاصًا للمستخدم ويحفظ hash الرابط فقط في registry، لذلك يستطيع المستخدم استعمال الويب والبوت لنفس الدفتر بدون إنشاء حساب باسم مستخدم وكلمة مرور.
+لا تنشئ المستخدمين من Telegram. المستخدمون يضافون من صفحة إدارة ADREEM بالإيميل وكلمة المرور، ويمكن ربط Telegram ID اختياريًا بنفس الدفتر.
 
 ## API الويب المعزول
 
@@ -70,24 +62,15 @@ npm run api:adreem
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `ADREEM_WEB_LEDGER_TOKEN_HASHES` بصيغة `sha256-token-rabee=main,sha256-token-saeed=saeed-book`
+- `ADREEM_OWNER_EMAILS` لتحديد مالك صفحة الإدارة
+- `ADREEM_TELEGRAM_USERS_FILE` لمسجل المستخدمين
 - اختياريًا: `ADREEM_API_PORT` و `ADREEM_WEB_ALLOWED_ORIGIN`
+- اختياريًا للمرفقات: `ADREEM_ATTACHMENTS_BUCKET`
+- اختياريًا للنسخ: `ADREEM_BACKUP_DIR` و `ADREEM_BACKUP_LIMIT`
+- اختياريًا للتدقيق: `ADREEM_AUDIT_LOG_FILE`
 
-لإنشاء hash للتوكن:
-
-```bash
-node -e "const {createHash}=require('crypto'); console.log(createHash('sha256').update('token-rabee').digest('hex'))"
-```
-
-`ADREEM_WEB_LEDGER_TOKENS` ما زال مدعومًا مؤقتًا للتوافق، لكنه ليس الصيغة المعتمدة للدفاتر الجديدة.
-
-لإنشاء دفتر مستقل جديد مع رابط ويب خاص وخريطة Telegram آمنة:
-
-```bash
-npm run ops:create-ledger-access -- --ledger=saeed-book --telegram=555
-```
-
-الناتج يعطيك رابط الويب الخاص مرة واحدة، وسطر `ADREEM_WEB_LEDGER_TOKEN_HASHES` الذي يوضع في `adreem.env`، وسطر `ADREEM_TELEGRAM_LEDGER_IDS` عند وجود Telegram user id.
+إضافة المستخدمين تتم من صفحة الإدارة: `https://aneerabee.github.io/adreem/?admin=users`.
+كل مستخدم يدخل من الرابط العام بالإيميل وكلمة المرور، وكل مستخدم له `ledgerId` مستقل.
 
 في الإنتاج يجب ضبط `ADREEM_WEB_ALLOWED_ORIGIN` على رابط GitHub Pages الفعلي، مثل:
 
@@ -95,21 +78,16 @@ npm run ops:create-ledger-access -- --ledger=saeed-book --telegram=555
 https://aneerabee.github.io
 ```
 
-عند ضبط `VITE_ADREEM_API_URL` في الويب، يستخدم التطبيق API فقط إذا فتح المستخدم الرابط برمز خاص في hash:
-
-```text
-https://aneerabee.github.io/adreem/#ledger_token=token-rabee
-```
-
-إذا كان `VITE_ADREEM_API_URL` موجودًا ولا يوجد token، لا يرجع الويب إلى Supabase anon؛ يعمل محليًا فقط إلى أن يدخل token صحيح.
+عند ضبط `VITE_ADREEM_API_URL` في الويب، يستخدم التطبيق API بعد تسجيل الدخول فقط. إذا لم توجد جلسة دخول، تظهر صفحة الدخول ولا يرجع الويب إلى Supabase anon.
 
 في الإنتاج:
 
 - شغّل API خلف HTTPS فقط.
 - شغّله بـ `NODE_ENV=production`.
-- لا تضع token داخل `VITE_ADREEM_API_URL`; هذا المتغير URL عام فقط.
-- استخدم tokens طويلة وعشوائية، وضع hash فقط داخل `ADREEM_WEB_LEDGER_TOKEN_HASHES`.
-- ضع rate limiting في طبقة reverse proxy أو firewall أمام API.
+- لا تضع أسرارًا داخل `VITE_ADREEM_API_URL`; هذا المتغير URL عام فقط.
+- API يحتوي rate limiting داخلي للـ login والحفظ والإدارة، ويمكن إضافة reverse proxy rate limiting كطبقة إضافية.
+- سجلات الإدارة والحفظ تكتب في `ADREEM_AUDIT_LOG_FILE` عند ضبطه.
+- snapshots تلقائية تكتب في `ADREEM_BACKUP_DIR` قبل/بعد الحفظ المهم.
 
 ## التخزين
 

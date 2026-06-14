@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   ADREEM_LEDGER_VERSION,
   createMohammadFallbackState,
@@ -9,7 +12,15 @@ import {
   prepareLedgerStateForSave,
   resolveLedgerConfig,
   resolveTelegramLedgerId,
+  writeLedgerBackup,
 } from './ledgerRepository.js'
+
+let tempDir = null
+
+afterEach(() => {
+  if (tempDir) rmSync(tempDir, { recursive: true, force: true })
+  tempDir = null
+})
 
 describe('ledger repository state preparation', () => {
   it('keeps ADREEM v2 metadata instead of forcing legacy v1 on save', () => {
@@ -101,5 +112,22 @@ describe('ledger repository state preparation', () => {
 
     expect(repository.ledgerConfig.rowId).toBe('adreem:adreem:rabee-book')
     expect(repository.ledgerConfig.readableRowIds).toEqual(['adreem:adreem:rabee-book'])
+  })
+
+  it('writes automatic ledger backups to the configured backup directory', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'adreem-ledger-backups-'))
+    const config = resolveLedgerConfig({ ADREEM_LEDGER_ID: 'rabee-book' })
+
+    writeLedgerBackup(
+      { ADREEM_BACKUP_DIR: tempDir, ADREEM_BACKUP_LIMIT: '10' },
+      config,
+      'before',
+      { accounts: [], movements: [], version: 2 },
+    )
+
+    const files = readdirSync(tempDir)
+    expect(files).toHaveLength(1)
+    expect(files[0]).toContain('rabee-book')
+    expect(files[0]).toContain('before')
   })
 })
