@@ -2405,8 +2405,8 @@ export default function MohammadLedgerApp() {
 
         <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
           {activeSection === 'entry' ? (
-          <aside className="adreem-entry adreem-desk-entry">
-            <section className="adreem-receipt adreem-desk-receipt" aria-label="ملخص الحركة الحالي">
+          <aside className={`adreem-entry adreem-desk-entry adreem-entry--${activeEntryMode}`}>
+            <section className={`adreem-receipt adreem-desk-receipt adreem-receipt--${activeEntryMode}`} aria-label="ملخص الحركة الحالي">
               <div className="adreem-receipt-head">
                 <span>{activeEntryMode === 'movement' ? 'ملخص الحركة' : 'ملخص الحساب'}</span>
                 <strong>{activeEntryMode === 'movement' ? movementProgressText : 'جديد'}</strong>
@@ -2785,8 +2785,9 @@ export default function MohammadLedgerApp() {
                       placeholder="اختياري"
                     />
                   </label>
-                  <label>
+                  <label className="ml3-file-field">
                     ملف
+                    <span>{movementAttachmentFile?.name || 'اختر ملفًا'}</span>
                     <input
                       type="file"
                       accept="image/*,.pdf"
