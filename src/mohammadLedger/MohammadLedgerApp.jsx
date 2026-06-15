@@ -1258,6 +1258,14 @@ export default function MohammadLedgerApp() {
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.scrollTo !== 'function') return
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
+    })
+  }, [activeSection])
+
   const activeAccounts = useMemo(() => getActivePostingAccounts(accounts), [accounts])
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts])
   const balances = useMemo(() => summarizeBalances(accounts, movements), [accounts, movements])
