@@ -1939,6 +1939,1063 @@
   }
 }
 
+/* ADREEM Quiet Ledger: final visual authority.
+   The application keeps its existing behavior while the interface becomes a
+   single, calm work surface instead of a stack of competing cards. */
+.adreem-app.adreem-desk {
+  --desk-primary: #176b62;
+  --desk-primary-ink: #123f3b;
+  --desk-primary-soft: #e5f2ef;
+  --desk-positive: #247a4b;
+  --desk-positive-soft: #eaf4ed;
+  --desk-negative: #bd4f46;
+  --desk-negative-soft: #f7ebe9;
+  --desk-bg: #f3f6f4;
+  --desk-bg-warm: #f3f6f4;
+  --desk-surface: #fbfcfa;
+  --desk-surface-2: #f5f8f6;
+  --desk-surface-3: #edf2ef;
+  --desk-ink: #16221f;
+  --desk-muted: #65736e;
+  --desk-faint: #87918d;
+  --desk-line: #dce4e0;
+  --desk-line-strong: #c7d2cd;
+  --desk-radius: 7px;
+  --desk-shadow: 0 10px 28px rgba(29, 49, 43, 0.055);
+  --desk-shadow-soft: none;
+  --quiet-content: 840px;
+  background: var(--desk-bg) !important;
+}
+
+.adreem-app.adreem-desk .adreem-shell {
+  width: min(calc(100% - 32px), 1080px) !important;
+  min-width: 0 !important;
+  padding: 8px 0 32px !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas:
+    "header"
+    "nav"
+    "alerts"
+    "body" !important;
+  gap: 0 !important;
+}
+
+.adreem-app.adreem-desk .adreem-header {
+  min-height: 64px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  padding: 8px 2px !important;
+  overflow: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.adreem-app.adreem-desk .adreem-header::after {
+  display: none !important;
+}
+
+.adreem-app.adreem-desk .adreem-brand {
+  grid-template-columns: 38px minmax(0, 1fr) !important;
+  gap: 9px !important;
+}
+
+.adreem-app.adreem-desk .adreem-mark {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 6px !important;
+  background: var(--desk-primary-ink) !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .adreem-mark svg {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+.adreem-app.adreem-desk .adreem-brand span:not(.adreem-mark) {
+  color: var(--desk-primary) !important;
+  font-size: 0.66rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-app.adreem-desk .adreem-brand h1 {
+  margin-top: 2px !important;
+  font-size: 1.22rem !important;
+  font-weight: 800 !important;
+  line-height: 1.15 !important;
+}
+
+.adreem-app.adreem-desk .adreem-status {
+  display: flex !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+}
+
+.adreem-app.adreem-desk .adreem-status.has-cloud-actions {
+  grid-template-columns: none !important;
+}
+
+.adreem-app.adreem-desk .adreem-status b,
+.adreem-app.adreem-desk .adreem-status button {
+  min-height: 34px !important;
+  border-color: var(--desk-line) !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 0.7rem !important;
+  font-weight: 750 !important;
+}
+
+.adreem-app.adreem-desk .adreem-status .ml3-save-state--saved {
+  border-color: color-mix(in srgb, var(--desk-primary) 30%, var(--desk-line)) !important;
+  background: var(--desk-primary-soft) !important;
+  color: var(--desk-primary-ink) !important;
+}
+
+.adreem-app.adreem-desk .adreem-status .ml3-save-state--saving,
+.adreem-app.adreem-desk .adreem-status .ml3-save-state--loading,
+.adreem-app.adreem-desk .adreem-status .ml3-save-state--local,
+.adreem-app.adreem-desk .adreem-status .ml3-save-state--local-only {
+  border-color: color-mix(in srgb, var(--desk-negative) 28%, var(--desk-line)) !important;
+  background: var(--desk-negative-soft) !important;
+  color: var(--desk-negative) !important;
+}
+
+.adreem-app.adreem-desk .adreem-nav {
+  grid-area: nav !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  padding: 6px 0 !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+  background: color-mix(in srgb, var(--desk-bg) 94%, transparent) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(14px) !important;
+}
+
+.adreem-app.adreem-desk .adreem-nav button {
+  min-height: 44px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  padding: 5px 8px !important;
+  grid-template-columns: auto auto !important;
+  place-items: center !important;
+  justify-content: center !important;
+  align-content: center !important;
+  gap: 7px !important;
+  background: transparent !important;
+  color: var(--desk-muted) !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .adreem-nav button span {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 5px !important;
+  background: var(--desk-surface-3) !important;
+  font-size: 0.7rem !important;
+}
+
+.adreem-app.adreem-desk .adreem-nav button strong {
+  font-size: 0.78rem !important;
+  font-weight: 750 !important;
+  white-space: nowrap !important;
+}
+
+.adreem-app.adreem-desk .adreem-nav button.is-active {
+  background: var(--desk-surface) !important;
+  color: var(--desk-primary-ink) !important;
+  box-shadow: inset 0 0 0 1px var(--desk-line) !important;
+}
+
+.adreem-app.adreem-desk .adreem-nav button.is-active span {
+  background: var(--desk-primary) !important;
+  color: var(--desk-surface) !important;
+}
+
+.adreem-app.adreem-desk .ml3-layout,
+.adreem-app.adreem-desk .ml3-content,
+.adreem-app.adreem-desk .ml3-alert-board {
+  width: min(100%, var(--quiet-content)) !important;
+  margin-inline: auto !important;
+}
+
+.adreem-app.adreem-desk .ml3-layout {
+  padding-top: 18px !important;
+  contain: layout paint style !important;
+}
+
+.adreem-app.adreem-desk .ml3-alert-board {
+  margin-top: 14px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .adreem-entry {
+  width: min(100%, 720px) !important;
+  margin-inline: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 12px !important;
+}
+
+.adreem-app.adreem-desk .ml3-entry-mode {
+  order: -4 !important;
+  width: min(100%, 420px) !important;
+  margin-inline: auto !important;
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 7px !important;
+  padding: 3px !important;
+  gap: 3px !important;
+  background: var(--desk-surface-3) !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-entry-mode button {
+  min-height: 40px !important;
+  border-radius: 5px !important;
+  background: transparent !important;
+  color: var(--desk-muted) !important;
+  font-weight: 750 !important;
+}
+
+.adreem-app.adreem-desk .ml3-entry-mode button.is-active {
+  background: var(--desk-surface) !important;
+  color: var(--desk-primary-ink) !important;
+  box-shadow: 0 2px 7px rgba(29, 49, 43, 0.07) !important;
+}
+
+.adreem-app.adreem-desk .adreem-receipt {
+  order: -3 !important;
+  position: static !important;
+  width: 100% !important;
+  border: 0 !important;
+  border-block: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  padding: 7px 0 !important;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)) !important;
+  gap: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .adreem-receipt-head {
+  min-height: 30px !important;
+  border-radius: 0 !important;
+  padding: 2px 6px 7px !important;
+  background: transparent !important;
+  color: var(--desk-muted) !important;
+}
+
+.adreem-app.adreem-desk .adreem-receipt-head span,
+.adreem-app.adreem-desk .adreem-receipt-head strong {
+  color: inherit !important;
+  font-size: 0.69rem !important;
+  font-weight: 750 !important;
+}
+
+.adreem-app.adreem-desk .adreem-receipt button {
+  min-height: 48px !important;
+  border: 0 !important;
+  border-inline-start: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  padding: 5px 9px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .adreem-receipt button:last-child {
+  border-inline-start: 0 !important;
+}
+
+.adreem-app.adreem-desk .adreem-receipt button span {
+  font-size: 0.63rem !important;
+  font-weight: 700 !important;
+}
+
+.adreem-app.adreem-desk .adreem-receipt button strong {
+  font-size: 0.76rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-app.adreem-desk .ml3-entry-card,
+.adreem-app.adreem-desk .ml3-add-account,
+.adreem-app.adreem-desk .ml3-panel,
+.adreem-app.adreem-desk .ml3-list-block,
+.adreem-app.adreem-desk .ml3-review-card,
+.adreem-app.adreem-desk .ml3-ops-card,
+.adreem-app.adreem-desk .ml3-home-focus {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+  background: var(--desk-surface) !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-today-panel,
+.adreem-app.adreem-desk .ml3-alert-board {
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 12px 0 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-entry-head,
+.adreem-app.adreem-desk .ml3-panel-head,
+.adreem-app.adreem-desk .ml3-today-head,
+.adreem-app.adreem-desk .ml3-alert-title,
+.adreem-app.adreem-desk .ml3-ops-head {
+  min-height: 42px !important;
+  border-radius: 0 !important;
+  padding: 0 0 11px !important;
+  background: transparent !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+}
+
+.adreem-app.adreem-desk .ml3-entry-head h2,
+.adreem-app.adreem-desk .ml3-panel-head h2,
+.adreem-app.adreem-desk .ml3-today-head h2,
+.adreem-app.adreem-desk .ml3-alert-title h2,
+.adreem-app.adreem-desk .ml3-ops-head h2 {
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-app.adreem-desk .ml3-entry-head span,
+.adreem-app.adreem-desk .ml3-entry-head b,
+.adreem-app.adreem-desk .ml3-panel-head p,
+.adreem-app.adreem-desk .ml3-panel-head span,
+.adreem-app.adreem-desk .ml3-today-head span,
+.adreem-app.adreem-desk .ml3-alert-title span {
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-meter {
+  margin: 10px 0 16px !important;
+  gap: 4px !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-meter span {
+  height: 3px !important;
+}
+
+.adreem-app.adreem-desk .ml3-step {
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 11px 0 !important;
+  overflow: hidden !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-step + .ml3-step {
+  margin-top: 0 !important;
+  border-top: 1px solid var(--desk-line) !important;
+}
+
+.adreem-app.adreem-desk .ml3-step.is-open {
+  margin-inline: -6px !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  padding: 12px !important;
+  overflow: visible !important;
+  background: var(--desk-surface-2) !important;
+  box-shadow: none !important;
+  animation: quiet-step-in 220ms var(--desk-ease) both !important;
+}
+
+.adreem-app.adreem-desk .ml3-step.is-done {
+  min-height: 48px !important;
+  opacity: 0.62 !important;
+}
+
+@keyframes quiet-step-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.adreem-app.adreem-desk .ml3-step-head {
+  min-height: 32px !important;
+  margin-bottom: 8px !important;
+  gap: 8px !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-head span,
+.adreem-app.adreem-desk .ml3-step.is-done .ml3-step-head span {
+  flex-basis: 26px !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 50% !important;
+  background: var(--desk-primary-ink) !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-head strong {
+  font-size: 0.91rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-head button {
+  min-height: 30px !important;
+  border: 0 !important;
+  padding: 5px 8px !important;
+  background: transparent !important;
+  color: var(--desk-primary) !important;
+  font-size: 0.72rem !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-summary {
+  min-height: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 34px 0 0 !important;
+  background: transparent !important;
+  font-size: 0.78rem !important;
+  font-weight: 750 !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-tabs {
+  border: 0 !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 16px !important;
+  background: transparent !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-tabs button {
+  min-height: 44px !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  padding: 6px 4px 8px !important;
+  background: transparent !important;
+  color: var(--desk-muted) !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-tabs button.is-active {
+  border-bottom-color: var(--desk-primary) !important;
+  background: transparent !important;
+  color: var(--desk-primary-ink) !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-tabs button.is-active strong,
+.adreem-app.adreem-desk .ml3-choice-tabs button.is-active span,
+.adreem-app.adreem-desk .ml3-action-choice.is-active strong,
+.adreem-app.adreem-desk .ml3-action-choice.is-active span,
+.adreem-app.adreem-desk .ml3-account-presets button.is-active strong,
+.adreem-app.adreem-desk .ml3-account-presets button.is-active span {
+  color: inherit !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-tabs button strong {
+  font-size: 0.79rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-tabs button span {
+  font-size: 0.62rem !important;
+  font-weight: 650 !important;
+}
+
+.adreem-app.adreem-desk .ml3-option-group,
+.adreem-app.adreem-desk .ml3-picker-lane {
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 8px 0 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-option-grid {
+  gap: 6px !important;
+}
+
+.adreem-app.adreem-desk .ml3-option-group--daily .ml3-option-grid,
+.adreem-app.adreem-desk .ml3-account-preset-group--tracking .ml3-option-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.adreem-app.adreem-desk .ml3-action-choice,
+.adreem-app.adreem-desk .ml3-account-presets button,
+.adreem-app.adreem-desk .ml3-account-detail-choice button,
+.adreem-app.adreem-desk .ml3-picker-results button,
+.adreem-app.adreem-desk .ml3-picker-favorites button,
+.adreem-app.adreem-desk .ml3-picker-chips button,
+.adreem-app.adreem-desk .ml3-balance-ledger button,
+.adreem-app.adreem-desk .ml3-account-switcher button,
+.adreem-app.adreem-desk .ml3-account-toolbar button {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-surface) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-action-choice {
+  min-height: 58px !important;
+  padding: 9px 10px !important;
+}
+
+.adreem-app.adreem-desk .ml3-action-choice.is-active,
+.adreem-app.adreem-desk .ml3-account-presets button.is-active,
+.adreem-app.adreem-desk .ml3-account-detail-choice button.is-active,
+.adreem-app.adreem-desk .ml3-picker-chips button.is-active,
+.adreem-app.adreem-desk .ml3-account-switcher button.is-active {
+  border-color: var(--desk-primary) !important;
+  background: var(--desk-primary-soft) !important;
+  color: var(--desk-primary-ink) !important;
+}
+
+.adreem-app.adreem-desk .ml3-action-choice--expense.is-active,
+.adreem-app.adreem-desk .ml3-action-choice--purchase.is-active,
+.adreem-app.adreem-desk .ml3-action-choice--buy.is-active {
+  border-color: var(--desk-negative) !important;
+  background: var(--desk-negative-soft) !important;
+  color: var(--desk-negative) !important;
+}
+
+.adreem-app.adreem-desk .ml3-action-choice--income.is-active,
+.adreem-app.adreem-desk .ml3-action-choice--sale.is-active {
+  border-color: var(--desk-positive) !important;
+  background: var(--desk-positive-soft) !important;
+  color: var(--desk-positive) !important;
+}
+
+.adreem-app.adreem-desk .ml3-action-choice strong {
+  font-weight: 800 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-build-steps {
+  margin: 12px 0 !important;
+  gap: 0 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-build-steps span {
+  position: relative !important;
+  min-height: 34px !important;
+  border: 0 !important;
+  border-bottom: 2px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  padding: 6px 4px !important;
+  background: transparent !important;
+  color: var(--desk-faint) !important;
+  font-size: 0.69rem !important;
+  font-weight: 700 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-build-steps span.is-done,
+.adreem-app.adreem-desk .ml3-account-build-steps span.is-current {
+  border-bottom-color: var(--desk-primary) !important;
+  background: transparent !important;
+  color: var(--desk-primary-ink) !important;
+  opacity: 1 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-build-steps span.is-current {
+  font-weight: 800 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-presets button.is-active i {
+  background: color-mix(in srgb, var(--desk-primary) 12%, var(--desk-surface)) !important;
+  color: var(--desk-primary-ink) !important;
+}
+
+.adreem-app.adreem-desk input,
+.adreem-app.adreem-desk select,
+.adreem-app.adreem-desk textarea {
+  min-height: 44px !important;
+  border-color: var(--desk-line-strong) !important;
+  border-radius: 6px !important;
+  background: var(--desk-surface) !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk input:focus,
+.adreem-app.adreem-desk select:focus,
+.adreem-app.adreem-desk textarea:focus {
+  border-color: var(--desk-primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--desk-primary) 10%, transparent) !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-controls {
+  justify-content: flex-start !important;
+  padding-top: 10px !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-back,
+.adreem-app.adreem-desk .ml3-step-next,
+.adreem-app.adreem-desk .ml3-save,
+.adreem-app.adreem-desk .ml3-add-account > button,
+.adreem-app.adreem-desk .ml3-mini-action {
+  min-height: 40px !important;
+  border-radius: 6px !important;
+  padding: 8px 14px !important;
+  box-shadow: none !important;
+  font-weight: 800 !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-next,
+.adreem-app.adreem-desk .ml3-save,
+.adreem-app.adreem-desk .ml3-add-account > button,
+.adreem-app.adreem-desk .ml3-mini-action.is-confirm {
+  background: var(--desk-primary-ink) !important;
+}
+
+.adreem-app.adreem-desk .ml3-number-display,
+.adreem-app.adreem-desk .ml3-account-picker,
+.adreem-app.adreem-desk .ml3-picked-account,
+.adreem-app.adreem-desk .ml3-preview,
+.adreem-app.adreem-desk .ml3-effect,
+.adreem-app.adreem-desk .ml3-account-summary,
+.adreem-app.adreem-desk .ml3-currency-lock,
+.adreem-app.adreem-desk .ml3-merge-box,
+.adreem-app.adreem-desk .ml3-profile-reconcile,
+.adreem-app.adreem-desk .ml3-profile-editor,
+.adreem-app.adreem-desk .ml3-profile-movement {
+  border-color: var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-surface) !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-sections,
+.adreem-app.adreem-desk .ml3-review-workspace,
+.adreem-app.adreem-desk .ml3-ops-grid {
+  gap: 16px !important;
+}
+
+.adreem-app.adreem-desk .ml3-balance-ledger {
+  margin-block: 14px !important;
+  padding-bottom: 14px !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+  gap: 4px !important;
+}
+
+.adreem-app.adreem-desk .ml3-balance-ledger button {
+  min-height: 62px !important;
+  border-color: transparent !important;
+  background: var(--desk-surface-2) !important;
+}
+
+.adreem-app.adreem-desk .ml3-balance-ledger button.is-positive {
+  color: var(--desk-positive) !important;
+}
+
+.adreem-app.adreem-desk .ml3-balance-ledger button.is-negative,
+.adreem-app.adreem-desk .ml3-balance-ledger button.is-review {
+  color: var(--desk-negative) !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-switcher {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+  margin-block: 12px !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-switcher button {
+  min-height: 48px !important;
+  padding: 6px !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-row,
+.adreem-app.adreem-desk .ml3-history-row,
+.adreem-app.adreem-desk .ml3-today-row,
+.adreem-app.adreem-desk .ml3-review-ticket,
+.adreem-app.adreem-desk .ml3-home-card,
+.adreem-app.adreem-desk .ml3-ops-row,
+.adreem-app.adreem-desk .ml3-alert {
+  min-height: 64px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  padding: 10px 4px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-row.is-positive,
+.adreem-app.adreem-desk .ml3-home-card.is-positive,
+.adreem-app.adreem-desk .ml3-account-row--person {
+  background: color-mix(in srgb, var(--desk-positive-soft) 52%, transparent) !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-row.is-negative,
+.adreem-app.adreem-desk .ml3-home-card.is-negative,
+.adreem-app.adreem-desk .ml3-account-row--expense,
+.adreem-app.adreem-desk .ml3-account-row--review,
+.adreem-app.adreem-desk .ml3-history-row--purchase {
+  background: color-mix(in srgb, var(--desk-negative-soft) 52%, transparent) !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-row--cash,
+.adreem-app.adreem-desk .ml3-account-row--bank,
+.adreem-app.adreem-desk .ml3-account-row--person-bank,
+.adreem-app.adreem-desk .ml3-account-row--person-usd,
+.adreem-app.adreem-desk .ml3-account-row--asset,
+.adreem-app.adreem-desk .ml3-home-card.is-money {
+  background: color-mix(in srgb, var(--desk-primary-soft) 55%, transparent) !important;
+}
+
+.adreem-app.adreem-desk .ml3-list,
+.adreem-app.adreem-desk .ml3-history-list,
+.adreem-app.adreem-desk .ml3-today-list,
+.adreem-app.adreem-desk .ml3-review-queue,
+.adreem-app.adreem-desk .ml3-review-active,
+.adreem-app.adreem-desk .ml3-alert-list {
+  gap: 0 !important;
+}
+
+.adreem-app.adreem-desk .ml3-alert-title {
+  min-height: 34px !important;
+  padding-bottom: 6px !important;
+}
+
+.adreem-app.adreem-desk .ml3-alert-list {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+  gap: 6px !important;
+  padding-top: 6px !important;
+}
+
+.adreem-app.adreem-desk .ml3-alert {
+  min-height: 42px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  padding: 7px 9px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: var(--desk-surface-2) !important;
+}
+
+.adreem-app.adreem-desk .ml3-alert::before,
+.adreem-app.adreem-desk .ml3-review-ticket::before {
+  display: none !important;
+}
+
+.adreem-app.adreem-desk .ml3-alert--danger {
+  background: var(--desk-negative-soft) !important;
+  color: var(--desk-negative) !important;
+}
+
+.adreem-app.adreem-desk .ml3-alert--warning {
+  background: #f4f0e5 !important;
+  color: #755d26 !important;
+}
+
+.adreem-app.adreem-desk .ml3-alert--info {
+  background: var(--desk-primary-soft) !important;
+  color: var(--desk-primary-ink) !important;
+}
+
+.adreem-app.adreem-desk .ml3-alert strong,
+.adreem-app.adreem-desk .ml3-alert span {
+  color: inherit !important;
+  font-size: 0.72rem !important;
+  font-weight: 750 !important;
+}
+
+.adreem-app.adreem-desk .ml3-review-ticket {
+  grid-template-columns: 28px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  text-align: right !important;
+}
+
+.adreem-app.adreem-desk .ml3-review-ticket.is-active {
+  background: var(--desk-negative-soft) !important;
+  color: var(--desk-negative) !important;
+}
+
+.adreem-app.adreem-desk .ml3-review-ticket.is-active :where(span, strong, b) {
+  color: inherit !important;
+}
+
+.adreem-app.adreem-desk .ml3-empty {
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 24px 12px !important;
+  background: transparent !important;
+  color: var(--desk-faint) !important;
+}
+
+.adreem-app.adreem-desk .ml3-history-filters {
+  margin-block: 14px !important;
+  gap: 6px !important;
+}
+
+.adreem-app.adreem-desk .ml3-feedback,
+.adreem-app.adreem-desk .ml3-undo-banner,
+.adreem-app.adreem-desk .ml3-edit-banner {
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: var(--desk-primary-soft) !important;
+  box-shadow: none !important;
+}
+
+.adreem-app.adreem-desk :where(button, input, select, textarea) {
+  transition:
+    color 140ms var(--desk-ease),
+    background-color 140ms var(--desk-ease),
+    border-color 140ms var(--desk-ease),
+    opacity 140ms var(--desk-ease),
+    transform 140ms var(--desk-ease) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .adreem-app.adreem-desk button:not(:disabled):hover {
+    border-color: var(--desk-line-strong) !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-nav button:hover,
+  .adreem-app.adreem-desk .ml3-step-head button:hover {
+    color: var(--desk-primary-ink) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .adreem-app.adreem-desk {
+    font-size: 15px !important;
+    padding-bottom: calc(68px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-shell {
+    width: min(100%, 100vw) !important;
+    padding: 0 10px 24px !important;
+    overflow: clip !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-header {
+    min-height: 58px !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    padding-inline: 2px !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-brand {
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-mark {
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-brand h1 {
+    max-width: 13ch !important;
+    overflow: hidden !important;
+    font-size: 1.04rem !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-status {
+    max-width: 48vw !important;
+    justify-content: flex-start !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-status b:nth-of-type(n + 2) {
+    display: none !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-status b,
+  .adreem-app.adreem-desk .adreem-status button {
+    min-height: 32px !important;
+    padding: 5px 7px !important;
+    font-size: 0.65rem !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-nav {
+    position: fixed !important;
+    inset: auto 0 0 0 !important;
+    z-index: 40 !important;
+    min-height: calc(62px + env(safe-area-inset-bottom)) !important;
+    border-top: 1px solid var(--desk-line) !important;
+    border-bottom: 0 !important;
+    padding: 6px 8px max(6px, env(safe-area-inset-bottom)) !important;
+    background: color-mix(in srgb, var(--desk-surface) 96%, transparent) !important;
+    box-shadow: 0 -8px 24px rgba(29, 49, 43, 0.06) !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-nav button {
+    min-height: 50px !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 22px auto !important;
+    gap: 2px !important;
+    padding: 4px 2px !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-nav button span {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-nav button strong {
+    font-size: 0.67rem !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-layout {
+    width: 100% !important;
+    padding-top: 12px !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-entry {
+    width: 100% !important;
+    gap: 10px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-entry-mode {
+    width: 100% !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-receipt {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    padding-block: 5px !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-receipt button:nth-of-type(n + 4) {
+    display: none !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-receipt button {
+    min-width: 0 !important;
+    min-height: 44px !important;
+    padding-inline: 6px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-entry-card,
+  .adreem-app.adreem-desk .ml3-add-account,
+  .adreem-app.adreem-desk .ml3-panel,
+  .adreem-app.adreem-desk .ml3-list-block,
+  .adreem-app.adreem-desk .ml3-review-card,
+  .adreem-app.adreem-desk .ml3-ops-card,
+  .adreem-app.adreem-desk .ml3-home-focus {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 12px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-step.is-open {
+    margin-inline: 0 !important;
+    padding: 10px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-option-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-option-group--daily .ml3-option-grid,
+  .adreem-app.adreem-desk .ml3-account-preset-group--tracking .ml3-option-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-action-choice {
+    min-height: 56px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-choice-tabs {
+    gap: 5px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-presets button {
+    min-height: 58px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-balance-ledger {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-switcher {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-switcher button {
+    min-height: 44px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-sections,
+  .adreem-app.adreem-desk .ml3-review-workspace,
+  .adreem-app.adreem-desk .ml3-ops-grid,
+  .adreem-app.adreem-desk .ml3-history-filters,
+  .adreem-app.adreem-desk .ml3-account-toolbar,
+  .adreem-app.adreem-desk .ml3-extra-grid,
+  .adreem-app.adreem-desk .ml3-profile-editor-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-number-pad {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-number-pad button {
+    min-height: 46px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-alert-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-review-queue {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-row,
+  .adreem-app.adreem-desk .ml3-history-row,
+  .adreem-app.adreem-desk .ml3-today-row {
+    min-width: 0 !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-history-route,
+  .adreem-app.adreem-desk .ml3-today-route {
+    max-width: 100% !important;
+    white-space: normal !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .adreem-app.adreem-desk .adreem-status button {
+    display: none !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-option-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-option-group--daily .ml3-option-grid,
+  .adreem-app.adreem-desk .ml3-account-preset-group--tracking .ml3-option-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-switcher {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-alert-list {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .adreem-desk *,
   .adreem-desk *::before,
