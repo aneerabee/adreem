@@ -2996,6 +2996,306 @@
   }
 }
 
+/* Login and owner administration use the same quiet visual language. */
+.adreem-login-app,
+.adreem-admin-app {
+  --quiet-primary: #176b62;
+  --quiet-primary-ink: #123f3b;
+  --quiet-primary-soft: #e5f2ef;
+  --quiet-negative: #bd4f46;
+  --quiet-negative-soft: #f7ebe9;
+  --quiet-bg: #f3f6f4;
+  --quiet-surface: #fbfcfa;
+  --quiet-surface-2: #f5f8f6;
+  --quiet-ink: #16221f;
+  --quiet-muted: #65736e;
+  --quiet-line: #dce4e0;
+  --quiet-line-strong: #c7d2cd;
+  min-height: 100dvh;
+  background: var(--quiet-bg) !important;
+  color: var(--quiet-ink) !important;
+  font-family: "SF Arabic", "Noto Sans Arabic", "IBM Plex Sans Arabic", Tahoma, system-ui, sans-serif !important;
+}
+
+.adreem-login-app {
+  padding: 24px !important;
+}
+
+.adreem-login-card {
+  width: min(100%, 390px) !important;
+  border: 1px solid var(--quiet-line) !important;
+  border-radius: 8px !important;
+  padding: 22px !important;
+  gap: 14px !important;
+  background: var(--quiet-surface) !important;
+  box-shadow: none !important;
+}
+
+.adreem-login-brand {
+  gap: 5px !important;
+  margin-bottom: 8px !important;
+  padding-bottom: 16px !important;
+  border-bottom: 1px solid var(--quiet-line) !important;
+}
+
+.adreem-login-brand span {
+  color: var(--quiet-primary) !important;
+  font-size: 0.7rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-login-brand h1 {
+  color: var(--quiet-ink) !important;
+  font-size: 1.45rem !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+
+.adreem-login-brand p {
+  color: var(--quiet-muted) !important;
+  font-size: 0.86rem !important;
+  font-weight: 650 !important;
+  line-height: 1.65 !important;
+}
+
+.adreem-login-card label,
+.adreem-admin-card label {
+  color: var(--quiet-muted) !important;
+  font-size: 0.78rem !important;
+  font-weight: 750 !important;
+}
+
+.adreem-login-card input,
+.adreem-admin-card input {
+  min-height: 46px !important;
+  border: 1px solid var(--quiet-line-strong) !important;
+  border-radius: 6px !important;
+  padding: 9px 11px !important;
+  background: var(--quiet-surface) !important;
+  color: var(--quiet-ink) !important;
+  box-shadow: none !important;
+}
+
+.adreem-login-card input:focus,
+.adreem-admin-card input:focus {
+  border-color: var(--quiet-primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--quiet-primary) 10%, transparent) !important;
+}
+
+.adreem-login-card button,
+.adreem-admin-card button,
+.adreem-admin-token button,
+.adreem-admin-head-actions button {
+  min-height: 42px !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  font-weight: 800 !important;
+}
+
+.adreem-login-card button {
+  background: var(--quiet-primary-ink) !important;
+  color: var(--quiet-surface) !important;
+}
+
+.adreem-login-card .adreem-login-secondary {
+  border: 1px solid var(--quiet-line-strong) !important;
+  background: transparent !important;
+  color: var(--quiet-primary-ink) !important;
+}
+
+.adreem-login-card > p {
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: var(--quiet-negative-soft) !important;
+  color: var(--quiet-negative) !important;
+  font-size: 0.78rem !important;
+}
+
+.adreem-admin-shell {
+  width: min(calc(100% - 32px), 980px) !important;
+  padding: 10px 0 36px !important;
+}
+
+.adreem-admin-head {
+  position: sticky !important;
+  top: 0 !important;
+  min-height: 64px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--quiet-line) !important;
+  border-radius: 0 !important;
+  padding: 8px 2px !important;
+  background: color-mix(in srgb, var(--quiet-bg) 94%, transparent) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(14px) !important;
+}
+
+.adreem-admin-head span,
+.adreem-admin-card-head span {
+  color: var(--quiet-primary) !important;
+  font-size: 0.7rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-admin-head h1 {
+  font-size: 1.25rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-admin-head-actions {
+  gap: 6px !important;
+}
+
+.adreem-admin-head-actions button {
+  min-height: 34px !important;
+  border: 1px solid var(--quiet-line) !important;
+  padding-inline: 10px !important;
+  background: transparent !important;
+  color: var(--quiet-primary-ink) !important;
+}
+
+.adreem-admin-head b {
+  border-radius: 6px !important;
+  padding: 6px 9px !important;
+  background: var(--quiet-primary-soft) !important;
+  color: var(--quiet-primary-ink) !important;
+  font-size: 0.7rem !important;
+}
+
+.adreem-admin-grid {
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr) !important;
+  gap: 16px !important;
+  margin-top: 16px !important;
+}
+
+.adreem-admin-card,
+.adreem-admin-head {
+  border-color: var(--quiet-line) !important;
+  border-radius: 8px !important;
+  background: var(--quiet-surface) !important;
+  box-shadow: none !important;
+}
+
+.adreem-admin-card {
+  margin-top: 0 !important;
+  padding: 16px !important;
+}
+
+.adreem-admin-card-head {
+  margin-bottom: 14px !important;
+  padding-bottom: 10px !important;
+  border-bottom: 1px solid var(--quiet-line) !important;
+}
+
+.adreem-admin-card h2 {
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+}
+
+.adreem-admin-card button,
+.adreem-admin-token button {
+  background: var(--quiet-primary-ink) !important;
+  color: var(--quiet-surface) !important;
+}
+
+.adreem-admin-card-head button {
+  min-height: 32px !important;
+  padding-inline: 10px !important;
+  background: transparent !important;
+  color: var(--quiet-primary) !important;
+}
+
+.adreem-admin-users {
+  gap: 0 !important;
+}
+
+.adreem-admin-user {
+  min-height: 60px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--quiet-line) !important;
+  border-radius: 0 !important;
+  padding: 10px 2px !important;
+  background: transparent !important;
+}
+
+.adreem-admin-user span {
+  color: var(--quiet-muted) !important;
+  font-weight: 650 !important;
+}
+
+.adreem-admin-user b {
+  border-radius: 5px !important;
+  background: var(--quiet-primary-soft) !important;
+  color: var(--quiet-primary) !important;
+}
+
+.adreem-admin-user-actions button {
+  min-width: 58px !important;
+  min-height: 32px !important;
+  border: 1px solid var(--quiet-line) !important;
+  background: transparent !important;
+  color: var(--quiet-primary-ink) !important;
+  font-size: 0.72rem !important;
+}
+
+.adreem-admin-user-actions button:last-child {
+  border-color: color-mix(in srgb, var(--quiet-negative) 28%, var(--quiet-line)) !important;
+  background: var(--quiet-negative-soft) !important;
+  color: var(--quiet-negative) !important;
+}
+
+.adreem-admin-message {
+  border-radius: 6px !important;
+  background: var(--quiet-primary-soft) !important;
+  color: var(--quiet-primary-ink) !important;
+}
+
+@media (max-width: 720px) {
+  .adreem-login-app {
+    align-items: start !important;
+    padding: 12px !important;
+  }
+
+  .adreem-login-card {
+    margin-top: min(14vh, 100px) !important;
+    padding: 16px !important;
+  }
+
+  .adreem-admin-shell {
+    width: min(100%, 100vw) !important;
+    padding: 0 10px 24px !important;
+  }
+
+  .adreem-admin-head {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+    padding-block: 10px !important;
+  }
+
+  .adreem-admin-head-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .adreem-admin-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .adreem-admin-card {
+    padding: 12px !important;
+  }
+
+  .adreem-admin-user {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  .adreem-admin-user-actions {
+    grid-column: 1 / -1 !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .adreem-desk *,
   .adreem-desk *::before,
