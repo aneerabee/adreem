@@ -421,12 +421,12 @@ function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
     <article className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
         <strong>{account.ownerName}</strong>
-        <span>{detailText}</span>
+        <span>
+          {detailText}
+          {showKind ? <small> · {kindText}</small> : null}
+          {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b> · تأكيد</b> : null}
+        </span>
       </button>
-      <div className="ml3-account-meta">
-        {showKind ? <span>{kindText}</span> : null}
-        {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b>تأكيد</b> : null}
-      </div>
       <div className={`ml3-account-values ${balanceTone}`}>
         {Math.round(Math.abs(dinar)) !== 0 ? <strong>{formatDisplayMeaning(account, dinar)}</strong> : <span>صفر</span>}
         {Math.round(Math.abs(usd)) !== 0 ? <strong>{money(usd, CURRENCIES.USD)}</strong> : null}
