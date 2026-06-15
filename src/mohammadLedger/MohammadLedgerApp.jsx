@@ -1221,6 +1221,8 @@ export default function MohammadLedgerApp() {
   const [activeSection, setActiveSection] = useState('entry')
   const [activeEntryMode, setActiveEntryMode] = useState('movement')
   const [activeAccountGroup, setActiveAccountGroup] = useState('people')
+  const [activeMovementOptionGroup, setActiveMovementOptionGroup] = useState('daily')
+  const [activeAccountPresetGroup, setActiveAccountPresetGroup] = useState('people')
   const [movementDraft, setMovementDraft] = useState(() => emptyMovementDraft())
   const [movementAttachmentFile, setMovementAttachmentFile] = useState(null)
   const [movementStep, setMovementStep] = useState(MOVEMENT_ENTRY_STEPS.TYPE)
@@ -1261,6 +1263,8 @@ export default function MohammadLedgerApp() {
   const balances = useMemo(() => summarizeBalances(accounts, movements), [accounts, movements])
   const balanceByAccountId = useMemo(() => new Map(balances.map((bucket) => [bucket.account.id, bucket])), [balances])
   const selectedAccountPreset = accountPresetFor(accountDraft.type, accountDraft.valueKind)
+  const selectedMovementOptionGroup = movementOptionGroups.find((group) => group.key === activeMovementOptionGroup) || movementOptionGroups[0]
+  const selectedAccountPresetGroup = accountPresetGroups.find((group) => group.key === activeAccountPresetGroup) || accountPresetGroups[0]
   const selectedAccountDetails = accountDetailOptionsFor(accountDraft.type, accountDraft.valueKind)
   const accountDraftNameValue = accountNameValue(accountDraft)
   const balancesByKind = useMemo(() => {
@@ -1506,6 +1510,8 @@ export default function MohammadLedgerApp() {
   function chooseMovementType(type) {
     const config = movementConfigFor(type)
     const defaults = movementDefaultsFor(type)
+    const optionGroup = movementOptionGroups.find((group) => group.types.includes(type))
+    if (optionGroup) setActiveMovementOptionGroup(optionGroup.key)
     setMovementStep(MOVEMENT_ENTRY_STEPS.AMOUNT)
     setMovementDraft((current) => ({
       ...current,
@@ -1549,6 +1555,10 @@ export default function MohammadLedgerApp() {
   }
 
   function editMovementStep(step) {
+    if (step === MOVEMENT_ENTRY_STEPS.TYPE) {
+      const optionGroup = movementOptionGroups.find((group) => group.types.includes(movementDraft.type))
+      if (optionGroup) setActiveMovementOptionGroup(optionGroup.key)
+    }
     setMovementStep(step)
   }
 
@@ -1571,6 +1581,8 @@ export default function MohammadLedgerApp() {
   }
 
   function chooseAccountPreset(preset) {
+    const presetGroup = accountPresetGroups.find((group) => group.keys.includes(preset.key))
+    if (presetGroup) setActiveAccountPresetGroup(presetGroup.key)
     setAccountDraft((current) => ({
       ...current,
       ownerName: preset.ownerName || '',
@@ -1579,6 +1591,16 @@ export default function MohammadLedgerApp() {
       subAccountName: preset.subAccountName,
       currencyKind: accountNeedsCurrency(preset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
     }))
+  }
+
+  function chooseAccountPresetGroup(groupKey) {
+    const group = accountPresetGroups.find((item) => item.key === groupKey)
+    if (!group) return
+    setActiveAccountPresetGroup(group.key)
+    const currentPresetIsVisible = group.keys.includes(selectedAccountPreset.key)
+    if (currentPresetIsVisible) return
+    const firstPreset = accountPresets.find((preset) => preset.key === group.keys[0])
+    if (firstPreset) chooseAccountPreset(firstPreset)
   }
 
   async function saveMovement(event) {
@@ -2451,7 +2473,7 @@ export default function MohammadLedgerApp() {
               <div className="ml3-entry-head">
                 <div>
                   <span>إدخال حركة · {movementProgressText}</span>
-                  <h2>{movementLabels[movementDraft.type]}</h2>
+                  <h2>{movementStep === MOVEMENT_ENTRY_STEPS.TYPE ? 'اختر الحركة' : movementLabels[movementDraft.type]}</h2>
                 </div>
                 <b>{preview.validation.ok ? 'جاهزة' : 'ناقصة'}</b>
               </div>
@@ -2480,33 +2502,37 @@ export default function MohammadLedgerApp() {
                   <strong>نوع الحركة</strong>
                 </div>
                 <div className="ml3-quick-actions">
-                  {movementOptionGroups.map((group) => {
-                    const options = group.types
-                      .map((type) => movementTypeOptions.find((option) => option.type === type))
-                      .filter(Boolean)
-                    if (!options.length) return null
-                    return (
-                      <div className={`ml3-option-group ml3-option-group--${group.key}`} key={group.key}>
-                        <div className="ml3-option-group-head">
-                          <strong>{group.title}</strong>
-                          <span>{group.hint}</span>
-                        </div>
-                        <div className="ml3-option-grid">
-                          {options.map((option) => (
-                            <button
-                              type="button"
-                              className={`ml3-action-choice ml3-action-choice--${option.tone} ${movementDraft.type === option.type ? 'is-active' : ''}`}
-                              key={option.type}
-                              onClick={() => chooseMovementType(option.type)}
-                            >
-                              <strong>{option.label}</strong>
-                              <span>{option.detail}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
+                  <div className="ml3-choice-tabs" aria-label="فئة الحركة">
+                    {movementOptionGroups.map((group) => (
+                      <button
+                        type="button"
+                        className={activeMovementOptionGroup === group.key ? 'is-active' : ''}
+                        key={group.key}
+                        onClick={() => setActiveMovementOptionGroup(group.key)}
+                      >
+                        <strong>{group.title}</strong>
+                        <span>{group.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className={`ml3-option-group ml3-option-group--${selectedMovementOptionGroup.key}`} key={selectedMovementOptionGroup.key}>
+                    <div className="ml3-option-grid">
+                      {selectedMovementOptionGroup.types
+                        .map((type) => movementTypeOptions.find((option) => option.type === type))
+                        .filter(Boolean)
+                        .map((option) => (
+                          <button
+                            type="button"
+                            className={`ml3-action-choice ml3-action-choice--${option.tone} ${movementDraft.type === option.type ? 'is-active' : ''}`}
+                            key={option.type}
+                            onClick={() => chooseMovementType(option.type)}
+                          >
+                            <strong>{option.label}</strong>
+                            <span>{option.detail}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
                 </div>
               </section>
               )}
@@ -2847,34 +2873,38 @@ export default function MohammadLedgerApp() {
                 <span className={accountNeedsCurrency(accountDraft) ? 'is-current' : 'is-muted'}>3 العملة</span>
               </div>
               <div className="ml3-account-presets">
-                {accountPresetGroups.map((group) => {
-                  const presets = group.keys
-                    .map((key) => accountPresets.find((preset) => preset.key === key))
-                    .filter(Boolean)
-                  if (!presets.length) return null
-                  return (
-                    <div className={`ml3-option-group ml3-account-preset-group ml3-account-preset-group--${group.key}`} key={group.key}>
-                      <div className="ml3-option-group-head">
-                        <strong>{group.title}</strong>
-                        <span>{group.hint}</span>
-                      </div>
-                      <div className="ml3-option-grid">
-                        {presets.map((preset) => (
-                          <button
-                            type="button"
-                            key={preset.key}
-                            className={`ml3-account-preset--${preset.key} ${accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'is-active' : ''}`}
-                            onClick={() => chooseAccountPreset(preset)}
-                          >
-                            <i aria-hidden="true">{accountPresetMark(preset.key)}</i>
-                            <strong>{preset.title}</strong>
-                            <span>{preset.detail}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
+                <div className="ml3-choice-tabs is-three" aria-label="فئة الحساب">
+                  {accountPresetGroups.map((group) => (
+                    <button
+                      type="button"
+                      className={activeAccountPresetGroup === group.key ? 'is-active' : ''}
+                      key={group.key}
+                      onClick={() => chooseAccountPresetGroup(group.key)}
+                    >
+                      <strong>{group.title}</strong>
+                      <span>{group.hint}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className={`ml3-option-group ml3-account-preset-group ml3-account-preset-group--${selectedAccountPresetGroup.key}`} key={selectedAccountPresetGroup.key}>
+                  <div className="ml3-option-grid">
+                    {selectedAccountPresetGroup.keys
+                      .map((key) => accountPresets.find((preset) => preset.key === key))
+                      .filter(Boolean)
+                      .map((preset) => (
+                        <button
+                          type="button"
+                          key={preset.key}
+                          className={`ml3-account-preset--${preset.key} ${accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'is-active' : ''}`}
+                          onClick={() => chooseAccountPreset(preset)}
+                        >
+                          <i aria-hidden="true">{accountPresetMark(preset.key)}</i>
+                          <strong>{preset.title}</strong>
+                          <span>{preset.detail}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
               </div>
               <label>
                 {selectedAccountPreset.nameLabel || 'الاسم'}
