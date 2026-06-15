@@ -684,10 +684,10 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDe
       </div>
       <div className="ml3-number-pad" aria-label={label}>
         {keys.map((key) => (
-          <button type="button" key={key} onClick={() => pushKey(key)}>{key}</button>
+          <button type="button" className="ml3-number-key" key={key} onClick={() => pushKey(key)}>{key}</button>
         ))}
-        <button type="button" onClick={() => onChange(textValue.slice(0, -1))}>حذف</button>
-        <button type="button" onClick={() => onChange('')}>مسح</button>
+        <button type="button" className="ml3-number-action is-delete" onClick={() => onChange(textValue.slice(0, -1))}>حذف</button>
+        <button type="button" className="ml3-number-action is-clear" onClick={() => onChange('')}>مسح</button>
       </div>
     </div>
   )
