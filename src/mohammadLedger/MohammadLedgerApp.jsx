@@ -130,20 +130,20 @@ const movementOptionGroups = [
 const accountPresetGroups = [
   {
     key: 'people',
-    title: 'العلاقات',
-    hint: 'أشخاص وجهات',
+    title: 'ناس',
+    hint: 'أشخاص',
     keys: ['person-cash'],
   },
   {
     key: 'money',
-    title: 'فلوسي',
-    hint: 'كاش ومصرف',
+    title: 'فلوس',
+    hint: 'كاش/شيك',
     keys: ['own-cash', 'own-bank'],
   },
   {
     key: 'tracking',
     title: 'تتبع',
-    hint: 'أصول ومصاريف',
+    hint: 'أصول',
     keys: ['asset', 'project', 'expense'],
   },
 ]
@@ -2073,14 +2073,15 @@ export default function MohammadLedgerApp() {
       review: filterRows(balancesByKind.review || []),
     }
     const rows = accountRowsByGroup[activeGroup.key] || []
+    const activeGroupCount = accountRowsByGroup[activeGroup.key]?.length || 0
     return (
       <section className="ml3-panel ml3-balances-surface" key={`accounts-${activeAccountGroup}`}>
         <div className="ml3-panel-head">
           <div>
             <h2>الأرصدة</h2>
-            <p>{activeGroup.title} · {formatCount(rows.length)} عنصر</p>
+            <p>{activeGroup.title} · {formatCount(activeGroupCount)} عنصر</p>
           </div>
-          <span>{formatCount(balances.length)}</span>
+          <span>{money(totals.cash + totals.bank)}</span>
         </div>
 
         <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة">
@@ -2104,11 +2105,12 @@ export default function MohammadLedgerApp() {
 
         <div className="ml3-account-toolbar">
           <label>
-            بحث
+            بحث سريع
             <input
+              aria-label="بحث في الأرصدة"
               value={accountQuery}
               onChange={(event) => setAccountQuery(event.target.value)}
-              placeholder="اسم، كاش، مصرف..."
+              placeholder="اسم، كاش، شيك..."
             />
           </label>
           <button
@@ -2123,14 +2125,15 @@ export default function MohammadLedgerApp() {
         <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
           {accountGroupTabs.map((group) => (
             <button
-              type="button"
-              key={group.key}
-              className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`}
-              onClick={() => setActiveAccountGroup(group.key)}
-            >
-              <strong>{group.label}</strong>
-              <span>{formatCount(accountRowsByGroup[group.key]?.length || 0)}</span>
-            </button>
+            type="button"
+            key={group.key}
+            className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`}
+              aria-current={activeAccountGroup === group.key ? 'true' : undefined}
+            onClick={() => setActiveAccountGroup(group.key)}
+          >
+            <strong>{group.label}</strong>
+            <span>{formatCount(accountRowsByGroup[group.key]?.length || 0)}</span>
+          </button>
           ))}
         </div>
         {activeGroup.key === 'people' ? (
@@ -2869,20 +2872,25 @@ export default function MohammadLedgerApp() {
               </section>
             ) : null}
             {activeEntryMode === 'account' ? (
-            <form className="ml3-add-account" onSubmit={addAccount}>
+            <form className="ml3-add-account ml3-account-wizard" onSubmit={addAccount}>
               <div className="ml3-entry-head">
                 <div>
                   <span>حساب جديد</span>
-                  <h2>{selectedAccountPreset.title}</h2>
+                  <h2>ابني الحساب خطوة بخطوة</h2>
                 </div>
-                <b>{accountDraftSummary(accountDraft)}</b>
+                <b>{selectedAccountPreset.title}</b>
               </div>
               <div className="ml3-account-build-steps" aria-label="خطوات إنشاء الحساب">
-                <span className="is-done">1 التصنيف</span>
-                <span className={accountDraftNameValue ? 'is-done' : 'is-current'}>2 الاسم</span>
-                <span className={accountNeedsCurrency(accountDraft) ? 'is-current' : 'is-muted'}>3 العملة</span>
+                <span className="is-done"><b>1</b><strong>النوع</strong><small>{selectedAccountPresetGroup.title}</small></span>
+                <span className="is-done"><b>2</b><strong>الشكل</strong><small>{selectedAccountPreset.title}</small></span>
+                <span className={accountDraftNameValue ? 'is-done' : 'is-current'}><b>3</b><strong>الاسم</strong><small>{accountDraftNameValue || 'اكتب الاسم'}</small></span>
+                <span className={accountNeedsCurrency(accountDraft) ? 'is-current' : 'is-done'}><b>4</b><strong>الحفظ</strong><small>{accountNeedsCurrency(accountDraft) ? (accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'دولار' : 'دينار') : 'جاهز'}</small></span>
               </div>
               <div className="ml3-account-presets">
+                <div className="ml3-account-section-title">
+                  <span>أولًا</span>
+                  <strong>ماذا تريد أن تضيف؟</strong>
+                </div>
                 <div className="ml3-choice-tabs is-three" aria-label="فئة الحساب">
                   {accountPresetGroups.map((group) => (
                     <button
@@ -2907,6 +2915,7 @@ export default function MohammadLedgerApp() {
                           key={preset.key}
                           className={`ml3-account-preset--${preset.key} ${accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'is-active' : ''}`}
                           onClick={() => chooseAccountPreset(preset)}
+                          aria-current={accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'true' : undefined}
                         >
                           <i aria-hidden="true">{accountPresetMark(preset.key)}</i>
                           <strong>{preset.title}</strong>
@@ -2916,17 +2925,18 @@ export default function MohammadLedgerApp() {
                   </div>
                 </div>
               </div>
-              <label>
-                {selectedAccountPreset.nameLabel || 'الاسم'}
+              <label className="ml3-account-field">
+                <span>{selectedAccountPreset.nameLabel || 'الاسم'}</span>
                 <input
                   value={accountDraftNameValue}
                   onChange={(event) => setAccountDraft((current) => applyAccountName(current, event.target.value))}
                   placeholder={selectedAccountPreset.namePlaceholder || 'اكتب الاسم'}
                 />
+                <small>اكتب الاسم كما تريد أن يظهر في الأرصدة والبحث.</small>
               </label>
               {!selectedAccountPreset.skipDetail ? (
               <>
-              <span className="ml3-choice-label">{selectedAccountPreset.detailLabel || 'التفصيل'}</span>
+              <span className="ml3-choice-label">{selectedAccountPreset.detailLabel || 'نوع الفلوس'}</span>
               <div className="ml3-account-detail-choice" aria-label={selectedAccountPreset.detailLabel || 'الوصف'}>
                 {selectedAccountDetails.map((option) => (
                   <button
@@ -2943,7 +2953,7 @@ export default function MohammadLedgerApp() {
               ) : null}
               {accountNeedsCurrency(accountDraft) ? (
               <>
-              <span className="ml3-choice-label">عملة الحساب</span>
+              <span className="ml3-choice-label">العملة</span>
               <div className="ml3-account-detail-choice is-currency" aria-label="عملة الحساب">
                 <button
                   type="button"
@@ -2963,9 +2973,10 @@ export default function MohammadLedgerApp() {
               </>
               ) : null}
               <div className="ml3-account-summary">
+                <span>سيظهر الحساب بهذا الشكل</span>
                 <strong>{accountDraftSummary(accountDraft)}</strong>
               </div>
-              <button type="submit">إضافة حساب</button>
+              <button type="submit">حفظ الحساب</button>
             </form>
             ) : null}
           </aside>
