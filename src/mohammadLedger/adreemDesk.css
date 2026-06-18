@@ -4858,6 +4858,83 @@ html:has(.adreem-admin-app) {
   }
 }
 
+/* Advanced viewport audit fixes: keep mobile content above bottom navigation,
+   preserve compact touch targets, and avoid clipped balance labels at 320px. */
+@media (max-width: 899px) {
+  .adreem-app.adreem-desk {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .adreem-app.adreem-desk .adreem-shell,
+  .adreem-app.adreem-desk .ml3-layout--accounts,
+  .adreem-app.adreem-desk .ml3-layout--history,
+  .adreem-app.adreem-desk .ml3-layout--review {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-sections,
+  .adreem-app.adreem-desk .ml3-history-list,
+  .adreem-app.adreem-desk .ml3-review-workspace {
+    scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-balances-surface .ml3-account-sections,
+  .adreem-app.adreem-desk .ml3-balances-surface > .ml3-list-block,
+  .adreem-app.adreem-desk .ml3-balances-surface > .ml3-panel {
+    max-height: calc(100dvh - 330px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    padding-bottom: calc(94px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-entry-mode button {
+    min-height: 38px !important;
+    height: auto !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-step-head button,
+  .adreem-app.adreem-desk .ml3-step.is-done .ml3-step-head button {
+    min-width: 44px !important;
+    min-height: 34px !important;
+    height: auto !important;
+    padding-inline: 8px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-balance-ledger button strong,
+  .adreem-app.adreem-desk .ml3-balance-ledger button span {
+    display: block !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .adreem-app.adreem-desk .ml3-balances-surface .ml3-account-sections,
+  .adreem-app.adreem-desk .ml3-balances-surface > .ml3-list-block,
+  .adreem-app.adreem-desk .ml3-balances-surface > .ml3-panel {
+    max-height: calc(100dvh - 338px) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-balance-ledger button {
+    padding-inline: 2px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-balance-ledger button strong {
+    font-size: 0.66rem !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-balance-ledger button span {
+    font-size: 0.56rem !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-row span {
+    font-size: 0.58rem !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .adreem-desk *,
   .adreem-desk *::before,

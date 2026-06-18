@@ -101,8 +101,8 @@ const accountGroupTabs = [
   { key: 'people', label: 'الناس', title: 'الناس' },
   { key: 'money', label: 'فلوسي', title: 'فلوسي' },
   { key: 'assets', label: 'أصول', title: 'الأصول' },
-  { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
-  { key: 'review', label: 'مراجعة', title: 'مراجعة' },
+  { key: 'expenses', label: 'صرف', title: 'المصروفات' },
+  { key: 'review', label: 'ناقص', title: 'مراجعة' },
 ]
 
 const sectionTitles = {
@@ -2234,24 +2234,25 @@ export default function MohammadLedgerApp() {
           </div>
           <div className="ml3-history-filters" aria-label="فلترة الحركات">
             <input
+              aria-label="بحث في السجل"
               value={historyQuery}
               onChange={(event) => setHistoryQuery(event.target.value)}
               placeholder="بحث باسم أو ملاحظة"
             />
-            <select value={historyType} onChange={(event) => setHistoryType(event.target.value)}>
+            <select aria-label="نوع الحركة" value={historyType} onChange={(event) => setHistoryType(event.target.value)}>
               <option value="">كل الأنواع</option>
               {movementTypeOptions.map((option) => (
                 <option key={option.type} value={option.type}>{option.label}</option>
               ))}
               <option value={MOVEMENT_TYPES.CORRECTION}>تعديل رصيد</option>
             </select>
-            <select value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value)}>
+            <select aria-label="حالة الحركة" value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value)}>
               <option value="">كل الحالات</option>
               <option value={MOVEMENT_STATUSES.POSTED}>تم</option>
               <option value={MOVEMENT_STATUSES.NEEDS_REVIEW}>ناقص</option>
               <option value={MOVEMENT_STATUSES.VOIDED}>ملغي</option>
             </select>
-            <select value={historyAccountId} onChange={(event) => setHistoryAccountId(event.target.value)}>
+            <select aria-label="حساب السجل" value={historyAccountId} onChange={(event) => setHistoryAccountId(event.target.value)}>
               <option value="">كل الحسابات</option>
               {activeAccounts.map((account) => (
                 <option key={account.id} value={account.id}>{accountLabel(account)}</option>
