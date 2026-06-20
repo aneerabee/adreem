@@ -5042,6 +5042,7 @@ html:has(.adreem-admin-app) {
   background: color-mix(in srgb, var(--desk-surface-2) 78%, transparent) !important;
   color: var(--desk-muted) !important;
   text-align: start !important;
+  transition: background 180ms var(--desk-ease), border-color 180ms var(--desk-ease), opacity 180ms var(--desk-ease), transform 180ms var(--desk-ease) !important;
 }
 
 .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button b {
@@ -5081,6 +5082,11 @@ html:has(.adreem-admin-app) {
   background: var(--wizard-rail) !important;
 }
 
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button.is-current {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--desk-primary) 12%, transparent) !important;
+}
+
 .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button.is-current b,
 .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button.is-done b {
   background: var(--desk-primary-ink) !important;
@@ -5089,6 +5095,46 @@ html:has(.adreem-admin-app) {
 
 .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button.is-locked {
   opacity: 0.48 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-step-focus {
+  display: grid !important;
+  grid-template-columns: auto auto minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 7px !important;
+  min-width: 0 !important;
+  border: 1px solid color-mix(in srgb, var(--desk-primary) 18%, var(--desk-line)) !important;
+  border-radius: 999px !important;
+  padding: 6px 9px !important;
+  background: color-mix(in srgb, var(--desk-primary-soft) 58%, var(--desk-surface)) !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-step-focus span {
+  border-radius: 999px !important;
+  padding: 3px 7px !important;
+  background: var(--desk-primary-ink) !important;
+  color: var(--desk-surface) !important;
+  font-size: 0.64rem !important;
+  font-weight: 950 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-step-focus strong,
+.adreem-app.adreem-desk .ml3-account-step-focus small {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-step-focus strong {
+  color: var(--desk-ink) !important;
+  font-size: 0.76rem !important;
+  font-weight: 950 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-step-focus small {
+  color: var(--desk-muted) !important;
+  font-size: 0.68rem !important;
 }
 
 .adreem-app.adreem-desk .ml3-account-stage {
@@ -5176,11 +5222,14 @@ html:has(.adreem-admin-app) {
   grid-row: 1 / span 2 !important;
   display: grid !important;
   place-items: center !important;
-  width: 32px !important;
+  width: auto !important;
+  min-width: 32px !important;
   height: 32px !important;
   border-radius: 10px !important;
+  padding-inline: 7px !important;
   background: color-mix(in srgb, var(--desk-primary-soft) 70%, var(--desk-surface)) !important;
   color: var(--desk-primary-ink) !important;
+  font-size: 0.66rem !important;
   font-style: normal !important;
   font-weight: 950 !important;
 }

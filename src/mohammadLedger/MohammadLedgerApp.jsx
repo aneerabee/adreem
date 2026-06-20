@@ -140,30 +140,48 @@ const accountPresetGroups = [
   {
     key: 'people',
     title: 'ناس',
-    hint: 'أشخاص',
+    hint: 'له أو عليه',
     keys: ['person-cash'],
   },
   {
     key: 'money',
-    title: 'فلوس',
-    hint: 'كاش/شيك',
+    title: 'فلوسي',
+    hint: 'كاش أو مصرف',
     keys: ['own-cash', 'own-bank'],
   },
   {
     key: 'tracking',
     title: 'تتبع',
-    hint: 'أصول',
+    hint: 'أصل أو مشروع',
     keys: ['asset', 'project', 'expense'],
   },
 ]
 
+const accountPresetStepCopy = {
+  people: {
+    title: 'العلاقة',
+    question: 'ما نوع الحساب بينكم؟',
+    hint: 'هذا للحسابات التي بينك وبين شخص أو جهة.',
+  },
+  money: {
+    title: 'مكان الفلوس',
+    question: 'أين موجودة فلوسك؟',
+    hint: 'اختر هل هي كاش عندك أو في مصرف/محفظة.',
+  },
+  tracking: {
+    title: 'نوع التتبع',
+    question: 'ماذا تريد أن تتابع؟',
+    hint: 'أصل، مشروع، أو نوع مصروف مستقل.',
+  },
+}
+
 function accountPresetMark(key) {
-  if (key === 'person-cash') return 'ش'
-  if (key === 'own-cash') return 'ك'
-  if (key === 'own-bank') return 'م'
-  if (key === 'asset') return 'أ'
-  if (key === 'project') return 'ع'
-  if (key === 'expense') return 'ص'
+  if (key === 'person-cash') return 'شخص'
+  if (key === 'own-cash') return 'كاش'
+  if (key === 'own-bank') return 'مصرف'
+  if (key === 'asset') return 'أصل'
+  if (key === 'project') return 'مشروع'
+  if (key === 'expense') return 'مصروف'
   return 'ح'
 }
 
@@ -1283,18 +1301,19 @@ export default function MohammadLedgerApp() {
   const selectedAccountPreset = accountPresetFor(accountDraft.type, accountDraft.valueKind)
   const selectedMovementOptionGroup = movementOptionGroups.find((group) => group.key === activeMovementOptionGroup) || movementOptionGroups[0]
   const selectedAccountPresetGroup = accountPresetGroups.find((group) => group.key === activeAccountPresetGroup) || accountPresetGroups[0]
+  const selectedAccountPresetCopy = accountPresetStepCopy[selectedAccountPresetGroup.key] || accountPresetStepCopy.people
   const selectedAccountDetails = accountDetailOptionsFor(accountDraft.type, accountDraft.valueKind)
   const accountDraftNameValue = accountNameValue(accountDraft)
   const hasAccountDraftName = Boolean(accountDraftNameValue.trim())
   const accountNeedsDetailChoice = !selectedAccountPreset.skipDetail && selectedAccountDetails.length > 0
   const accountNeedsCurrencyChoice = accountNeedsCurrency(accountDraft)
   const accountWizardStages = [
-    { key: ACCOUNT_WIZARD_STEPS.GROUP, title: 'النوع', summary: selectedAccountPresetGroup.title },
-    { key: ACCOUNT_WIZARD_STEPS.PRESET, title: 'الشكل', summary: selectedAccountPreset.title },
+    { key: ACCOUNT_WIZARD_STEPS.GROUP, title: 'القسم', summary: selectedAccountPresetGroup.title },
+    { key: ACCOUNT_WIZARD_STEPS.PRESET, title: selectedAccountPresetCopy.title, summary: selectedAccountPreset.title },
     { key: ACCOUNT_WIZARD_STEPS.NAME, title: 'الاسم', summary: accountDraftNameValue || 'اكتب الاسم' },
-    ...(accountNeedsDetailChoice ? [{ key: ACCOUNT_WIZARD_STEPS.DETAIL, title: selectedAccountPreset.detailLabel || 'نوع الفلوس', summary: accountDraft.subAccountName || 'اختر' }] : []),
+    ...(accountNeedsDetailChoice ? [{ key: ACCOUNT_WIZARD_STEPS.DETAIL, title: selectedAccountPreset.detailLabel || 'طريقة الرصيد', summary: accountDraft.subAccountName || 'اختر' }] : []),
     ...(accountNeedsCurrencyChoice ? [{ key: ACCOUNT_WIZARD_STEPS.CURRENCY, title: 'العملة', summary: accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'دولار' : 'دينار' }] : []),
-    { key: ACCOUNT_WIZARD_STEPS.SAVE, title: 'الحفظ', summary: hasAccountDraftName ? 'جاهز' : 'ناقص الاسم' },
+    { key: ACCOUNT_WIZARD_STEPS.SAVE, title: 'المراجعة', summary: hasAccountDraftName ? 'جاهز للحفظ' : 'ناقص الاسم' },
   ]
   const accountWizardStageKeys = accountWizardStages.map((step) => step.key)
   const currentAccountWizardStep = accountWizardStageKeys.includes(accountWizardStep) ? accountWizardStep : ACCOUNT_WIZARD_STEPS.GROUP
@@ -2956,25 +2975,30 @@ export default function MohammadLedgerApp() {
                   )
                 })}
               </div>
+              <div className="ml3-account-step-focus" aria-live="polite">
+                <span>الآن</span>
+                <strong>{accountWizardStages[currentAccountWizardIndex]?.title}</strong>
+                <small>{accountWizardStages[currentAccountWizardIndex]?.summary}</small>
+              </div>
 
               <section className={`ml3-account-stage ml3-account-stage--${currentAccountWizardStep}`}>
                 <div className="ml3-account-stage-head">
                   <span>{formatCount(currentAccountWizardIndex + 1)} من {formatCount(accountWizardStages.length)}</span>
                   <h3>
-                    {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر نوع الحساب'
-                      : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? 'اختر الشكل المناسب'
+                    {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر القسم'
+                      : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.question
                         : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? 'اكتب الاسم'
-                          : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? (selectedAccountPreset.detailLabel || 'اختر نوع الفلوس')
+                          : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? (selectedAccountPreset.detailLabel || 'طريقة الرصيد')
                             : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'اختر العملة'
                               : 'راجع ثم احفظ'}
                   </h3>
                   <p>
-                    {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'ابدأ بأقرب وصف: ناس، فلوسي، أو تتبع.'
-                      : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? 'اختر الشكل الذي سيظهر في الأرصدة.'
+                    {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر أقرب قسم لما تريد إضافته.'
+                      : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.hint
                         : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? 'اكتب اسمًا قصيرًا وواضحًا للبحث لاحقًا.'
-                          : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'هذا يحدد طريقة قراءة الرصيد.'
+                          : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'اختر هل الرصيد كاش بينكم أو شيك بينكم.'
                             : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'اختر دينار أو دولار لهذا الحساب.'
-                              : 'تأكد أن الاسم والشكل صحيحان قبل الحفظ.'}
+                              : 'تأكد أن الاسم والنوع والعملة صحيحون.'}
                   </p>
                 </div>
 
@@ -2996,7 +3020,7 @@ export default function MohammadLedgerApp() {
                 ) : null}
 
                 {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? (
-                  <div className="ml3-account-choice-list" aria-label="شكل الحساب">
+                  <div className="ml3-account-choice-list" aria-label={selectedAccountPresetCopy.title}>
                     {selectedAccountPresetGroup.keys
                       .map((key) => accountPresets.find((preset) => preset.key === key))
                       .filter(Boolean)
@@ -3073,7 +3097,7 @@ export default function MohammadLedgerApp() {
 
                 {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
                   <div className="ml3-account-summary">
-                    <span>سيظهر الحساب بهذا الشكل</span>
+                    <span>سيُحفظ الحساب كالتالي</span>
                     <strong>{accountDraftSummary(accountDraft)}</strong>
                   </div>
                 ) : null}
