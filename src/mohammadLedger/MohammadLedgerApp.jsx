@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import './adreemDesk.css'
 import {
   ACCOUNT_STATUSES,
@@ -366,6 +367,17 @@ function movementVisibleSteps(config, needsSource) {
     MOVEMENT_ENTRY_STEPS.NOTE,
     MOVEMENT_ENTRY_STEPS.REVIEW,
   ].filter(Boolean)
+}
+
+function movementStepCopy(step, config = {}) {
+  if (step === MOVEMENT_ENTRY_STEPS.TYPE) return { title: 'نوع الحركة', summary: 'اختر العملية التي تريد تسجيلها.' }
+  if (step === MOVEMENT_ENTRY_STEPS.AMOUNT) return { title: 'المبلغ', summary: 'اكتب الرقم فقط، بدون فواصل.' }
+  if (step === MOVEMENT_ENTRY_STEPS.CURRENCY) return { title: 'العملة', summary: 'اختر العملة قبل اختيار الحسابات.' }
+  if (step === MOVEMENT_ENTRY_STEPS.RATE) return { title: 'سعر الصرف', summary: config.rateLabel || 'اكتب سعر البيع أو الشراء.' }
+  if (step === MOVEMENT_ENTRY_STEPS.SOURCE) return { title: config.sourceLabel || 'من', summary: config.sourceQuestion || 'اختر من أين تخرج الفلوس.' }
+  if (step === MOVEMENT_ENTRY_STEPS.DESTINATION) return { title: config.destinationLabel || 'إلى', summary: config.destinationQuestion || 'اختر أين تدخل الفلوس.' }
+  if (step === MOVEMENT_ENTRY_STEPS.NOTE) return { title: 'ملاحظة ومرفق', summary: 'اختياري: ملاحظة، ملف، أو ربط بمشروع.' }
+  return { title: 'المراجعة', summary: 'راجع التأثير قبل الحفظ.' }
 }
 
 function nonZero(bucket) {
@@ -1550,6 +1562,32 @@ export default function MohammadLedgerApp() {
     return () => window.clearTimeout(timer)
   }, [activeSection, activeReviewKey, reviewItems])
 
+  function commitFlowChange(update, direction = 'forward') {
+    if (typeof document === 'undefined' || typeof document.startViewTransition !== 'function') {
+      update()
+      return
+    }
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (reducedMotion) {
+      update()
+      return
+    }
+    const root = document.documentElement
+    root.classList.remove('adreem-flow-forward', 'adreem-flow-back')
+    root.classList.add(direction === 'back' ? 'adreem-flow-back' : 'adreem-flow-forward')
+    try {
+      const transition = document.startViewTransition(() => {
+        flushSync(update)
+      })
+      transition.finished.finally(() => {
+        root.classList.remove('adreem-flow-forward', 'adreem-flow-back')
+      })
+    } catch {
+      root.classList.remove('adreem-flow-forward', 'adreem-flow-back')
+      update()
+    }
+  }
+
   function updateMovementDraft(field, value) {
     setMovementDraft((current) => {
       const next = { ...current, [field]: value }
@@ -1565,17 +1603,19 @@ export default function MohammadLedgerApp() {
     const config = movementConfigFor(type)
     const defaults = movementDefaultsFor(type)
     const optionGroup = movementOptionGroups.find((group) => group.types.includes(type))
-    if (optionGroup) setActiveMovementOptionGroup(optionGroup.key)
-    setMovementStep(MOVEMENT_ENTRY_STEPS.AMOUNT)
-    setMovementDraft((current) => ({
-      ...current,
-      type,
-      currency: config.currency || current.currency,
-      sourceAccountId: movementNeedsSource(type) ? defaults.sourceAccountId : '',
-      destinationAccountId: config.needsDestination ? defaults.destinationAccountId : '',
-      rate: config.needsRate ? current.rate : '',
-      dimensionId: movementSupportsDimension(type) ? current.dimensionId : '',
-    }))
+    commitFlowChange(() => {
+      if (optionGroup) setActiveMovementOptionGroup(optionGroup.key)
+      setMovementStep(MOVEMENT_ENTRY_STEPS.AMOUNT)
+      setMovementDraft((current) => ({
+        ...current,
+        type,
+        currency: config.currency || current.currency,
+        sourceAccountId: movementNeedsSource(type) ? defaults.sourceAccountId : '',
+        destinationAccountId: config.needsDestination ? defaults.destinationAccountId : '',
+        rate: config.needsRate ? current.rate : '',
+        dimensionId: movementSupportsDimension(type) ? current.dimensionId : '',
+      }))
+    }, 'forward')
   }
 
   function nextMovementStep(step = movementStep) {
@@ -1595,7 +1635,9 @@ export default function MohammadLedgerApp() {
   }
 
   function advanceMovementStep() {
-    setMovementStep((current) => nextMovementStep(current))
+    commitFlowChange(() => {
+      setMovementStep((current) => nextMovementStep(current))
+    }, 'forward')
   }
 
   function previousMovementStep(step = movementStep) {
@@ -1605,15 +1647,20 @@ export default function MohammadLedgerApp() {
   }
 
   function retreatMovementStep() {
-    setMovementStep((current) => previousMovementStep(current))
+    commitFlowChange(() => {
+      setMovementStep((current) => previousMovementStep(current))
+    }, 'back')
   }
 
   function goToAccountWizardStep(step) {
-    if ([ACCOUNT_WIZARD_STEPS.DETAIL, ACCOUNT_WIZARD_STEPS.CURRENCY, ACCOUNT_WIZARD_STEPS.SAVE].includes(step) && !hasAccountDraftName) {
-      setAccountWizardStep(ACCOUNT_WIZARD_STEPS.NAME)
-      return
-    }
-    setAccountWizardStep(step)
+    const targetStep = [ACCOUNT_WIZARD_STEPS.DETAIL, ACCOUNT_WIZARD_STEPS.CURRENCY, ACCOUNT_WIZARD_STEPS.SAVE].includes(step) && !hasAccountDraftName
+      ? ACCOUNT_WIZARD_STEPS.NAME
+      : step
+    const currentIndex = accountWizardStageKeys.indexOf(currentAccountWizardStep)
+    const targetIndex = accountWizardStageKeys.indexOf(targetStep)
+    commitFlowChange(() => {
+      setAccountWizardStep(targetStep)
+    }, targetIndex >= 0 && targetIndex < currentIndex ? 'back' : 'forward')
   }
 
   function advanceAccountWizard() {
@@ -1625,12 +1672,30 @@ export default function MohammadLedgerApp() {
     goToAccountWizardStep(accountWizardPreviousStep)
   }
 
+  function switchEntryMode(mode) {
+    if (mode === activeEntryMode) return
+    commitFlowChange(() => {
+      setActiveEntryMode(mode)
+    }, mode === 'account' ? 'forward' : 'back')
+  }
+
+  function switchSection(section) {
+    if (section === activeSection) return
+    commitFlowChange(() => {
+      setActiveSection(section)
+    }, section === 'entry' ? 'back' : 'forward')
+  }
+
   function editMovementStep(step) {
-    if (step === MOVEMENT_ENTRY_STEPS.TYPE) {
-      const optionGroup = movementOptionGroups.find((group) => group.types.includes(movementDraft.type))
-      if (optionGroup) setActiveMovementOptionGroup(optionGroup.key)
-    }
-    setMovementStep(step)
+    const targetIndex = visibleMovementSteps.indexOf(step)
+    const direction = targetIndex >= 0 && targetIndex < currentMovementStepIndex ? 'back' : 'forward'
+    commitFlowChange(() => {
+      if (step === MOVEMENT_ENTRY_STEPS.TYPE) {
+        const optionGroup = movementOptionGroups.find((group) => group.types.includes(movementDraft.type))
+        if (optionGroup) setActiveMovementOptionGroup(optionGroup.key)
+      }
+      setMovementStep(step)
+    }, direction)
   }
 
   function movementAccountsFor(role) {
@@ -1644,6 +1709,7 @@ export default function MohammadLedgerApp() {
   const visibleMovementSteps = movementVisibleSteps(movementConfig, movementSourceRequired)
   const currentMovementStepIndex = Math.max(0, visibleMovementSteps.indexOf(movementStep))
   const movementProgressText = `${formatCount(currentMovementStepIndex + 1)}/${formatCount(visibleMovementSteps.length)}`
+  const currentMovementStepCopy = movementStepCopy(movementStep, movementConfig)
 
   function movementStepNumber(step) {
     const visibleSteps = visibleMovementSteps
@@ -1653,27 +1719,39 @@ export default function MohammadLedgerApp() {
 
   function chooseAccountPreset(preset, nextStep = ACCOUNT_WIZARD_STEPS.NAME) {
     const presetGroup = accountPresetGroups.find((group) => group.keys.includes(preset.key))
-    if (presetGroup) setActiveAccountPresetGroup(presetGroup.key)
-    if (nextStep) setAccountWizardStep(nextStep)
-    setAccountDraft((current) => ({
-      ...current,
-      ownerName: preset.ownerName || '',
-      type: preset.type,
-      valueKind: preset.valueKind,
-      subAccountName: preset.subAccountName,
-      currencyKind: accountNeedsCurrency(preset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
-    }))
+    commitFlowChange(() => {
+      if (presetGroup) setActiveAccountPresetGroup(presetGroup.key)
+      if (nextStep) setAccountWizardStep(nextStep)
+      setAccountDraft((current) => ({
+        ...current,
+        ownerName: preset.ownerName || '',
+        type: preset.type,
+        valueKind: preset.valueKind,
+        subAccountName: preset.subAccountName,
+        currencyKind: accountNeedsCurrency(preset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
+      }))
+    }, nextStep === ACCOUNT_WIZARD_STEPS.PRESET ? 'back' : 'forward')
   }
 
   function chooseAccountPresetGroup(groupKey) {
     const group = accountPresetGroups.find((item) => item.key === groupKey)
     if (!group) return
-    setActiveAccountPresetGroup(group.key)
-    setAccountWizardStep(ACCOUNT_WIZARD_STEPS.PRESET)
-    const currentPresetIsVisible = group.keys.includes(selectedAccountPreset.key)
-    if (currentPresetIsVisible) return
-    const firstPreset = accountPresets.find((preset) => preset.key === group.keys[0])
-    if (firstPreset) chooseAccountPreset(firstPreset, ACCOUNT_WIZARD_STEPS.PRESET)
+    commitFlowChange(() => {
+      setActiveAccountPresetGroup(group.key)
+      setAccountWizardStep(ACCOUNT_WIZARD_STEPS.PRESET)
+      const currentPresetIsVisible = group.keys.includes(selectedAccountPreset.key)
+      if (currentPresetIsVisible) return
+      const firstPreset = accountPresets.find((preset) => preset.key === group.keys[0])
+      if (!firstPreset) return
+      setAccountDraft((current) => ({
+        ...current,
+        ownerName: firstPreset.ownerName || '',
+        type: firstPreset.type,
+        valueKind: firstPreset.valueKind,
+        subAccountName: firstPreset.subAccountName,
+        currencyKind: accountNeedsCurrency(firstPreset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
+      }))
+    }, 'forward')
   }
 
   async function saveMovement(event) {
@@ -2355,25 +2433,25 @@ export default function MohammadLedgerApp() {
                 : 'افتح قسم الإدخال للحركة الجديدة، واترك الأرصدة للعرض والمراجعة فقط.'}
             </p>
           </div>
-          <button type="button" onClick={() => setActiveSection(reviewMovements.length || balancesByKind.review.length ? 'review' : 'entry')}>
+          <button type="button" onClick={() => switchSection(reviewMovements.length || balancesByKind.review.length ? 'review' : 'entry')}>
             {reviewMovements.length || balancesByKind.review.length ? 'فتح المراجعة' : 'إضافة حركة'}
           </button>
         </div>
 
         <div className="ml3-home-grid">
-          <button type="button" className="ml3-home-card is-positive" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('people') }}>
+          <button type="button" className="ml3-home-card is-positive" onClick={() => { switchSection('accounts'); setActiveAccountGroup('people') }}>
             <span>أقبض من الناس</span>
             <strong>{money(totals.peopleOweMe)}</strong>
           </button>
-          <button type="button" className="ml3-home-card is-negative" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('people') }}>
+          <button type="button" className="ml3-home-card is-negative" onClick={() => { switchSection('accounts'); setActiveAccountGroup('people') }}>
             <span>أدفع لهم</span>
             <strong>{money(totals.iOwePeople)}</strong>
           </button>
-          <button type="button" className="ml3-home-card is-money" onClick={() => { setActiveSection('accounts'); setActiveAccountGroup('money') }}>
+          <button type="button" className="ml3-home-card is-money" onClick={() => { switchSection('accounts'); setActiveAccountGroup('money') }}>
             <span>أماكن الفلوس</span>
             <strong>{formatCount(balancesByKind.money.length)} حساب</strong>
           </button>
-          <button type="button" className="ml3-home-card is-review" onClick={() => setActiveSection('review')}>
+          <button type="button" className="ml3-home-card is-review" onClick={() => switchSection('review')}>
             <span>مراجعة</span>
             <strong>{formatCount(balancesByKind.review.length + reviewMovements.length + unresolvedExternalAccounts.length)}</strong>
           </button>
@@ -2451,7 +2529,7 @@ export default function MohammadLedgerApp() {
               type="button"
               className={activeSection === tab.key ? 'is-active' : ''}
               key={tab.key}
-              onClick={() => setActiveSection(tab.key)}
+              onClick={() => switchSection(tab.key)}
             >
               <span aria-hidden="true">{tab.mark}</span>
               <strong>{tab.label}</strong>
@@ -2533,14 +2611,14 @@ export default function MohammadLedgerApp() {
               <button
                 type="button"
                 className={activeEntryMode === 'movement' ? 'is-active' : ''}
-                onClick={() => setActiveEntryMode('movement')}
+                onClick={() => switchEntryMode('movement')}
               >
                 إدخال حركة
               </button>
               <button
                 type="button"
                 className={activeEntryMode === 'account' ? 'is-active' : ''}
-                onClick={() => setActiveEntryMode('account')}
+                onClick={() => switchEntryMode('account')}
               >
                 حساب جديد
               </button>
@@ -2561,6 +2639,11 @@ export default function MohammadLedgerApp() {
                     className={step < movementStep ? 'is-done' : step === movementStep ? 'is-current' : ''}
                   />
                 ))}
+              </div>
+              <div className="ml3-flow-focus" aria-live="polite">
+                <span>الآن</span>
+                <strong>{currentMovementStepCopy.title}</strong>
+                <small>{currentMovementStepCopy.summary}</small>
               </div>
 
               {movementStep > MOVEMENT_ENTRY_STEPS.TYPE ? (
