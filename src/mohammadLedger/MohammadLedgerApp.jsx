@@ -105,6 +105,15 @@ const accountGroupTabs = [
   { key: 'review', label: 'ناقص', title: 'مراجعة' },
 ]
 
+const ACCOUNT_WIZARD_STEPS = {
+  GROUP: 'group',
+  PRESET: 'preset',
+  NAME: 'name',
+  DETAIL: 'detail',
+  CURRENCY: 'currency',
+  SAVE: 'save',
+}
+
 const sectionTitles = {
   entry: 'عملية جديدة',
   accounts: 'الأرصدة',
@@ -1243,6 +1252,7 @@ export default function MohammadLedgerApp() {
   const [historyAccountId, setHistoryAccountId] = useState('')
   const [accountQuery, setAccountQuery] = useState('')
   const [showZeroAccounts, setShowZeroAccounts] = useState(false)
+  const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const todayPanelRef = useRef(null)
 
   useEffect(() => {
@@ -1275,6 +1285,23 @@ export default function MohammadLedgerApp() {
   const selectedAccountPresetGroup = accountPresetGroups.find((group) => group.key === activeAccountPresetGroup) || accountPresetGroups[0]
   const selectedAccountDetails = accountDetailOptionsFor(accountDraft.type, accountDraft.valueKind)
   const accountDraftNameValue = accountNameValue(accountDraft)
+  const hasAccountDraftName = Boolean(accountDraftNameValue.trim())
+  const accountNeedsDetailChoice = !selectedAccountPreset.skipDetail && selectedAccountDetails.length > 0
+  const accountNeedsCurrencyChoice = accountNeedsCurrency(accountDraft)
+  const accountWizardStages = [
+    { key: ACCOUNT_WIZARD_STEPS.GROUP, title: 'النوع', summary: selectedAccountPresetGroup.title },
+    { key: ACCOUNT_WIZARD_STEPS.PRESET, title: 'الشكل', summary: selectedAccountPreset.title },
+    { key: ACCOUNT_WIZARD_STEPS.NAME, title: 'الاسم', summary: accountDraftNameValue || 'اكتب الاسم' },
+    ...(accountNeedsDetailChoice ? [{ key: ACCOUNT_WIZARD_STEPS.DETAIL, title: selectedAccountPreset.detailLabel || 'نوع الفلوس', summary: accountDraft.subAccountName || 'اختر' }] : []),
+    ...(accountNeedsCurrencyChoice ? [{ key: ACCOUNT_WIZARD_STEPS.CURRENCY, title: 'العملة', summary: accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'دولار' : 'دينار' }] : []),
+    { key: ACCOUNT_WIZARD_STEPS.SAVE, title: 'الحفظ', summary: hasAccountDraftName ? 'جاهز' : 'ناقص الاسم' },
+  ]
+  const accountWizardStageKeys = accountWizardStages.map((step) => step.key)
+  const currentAccountWizardStep = accountWizardStageKeys.includes(accountWizardStep) ? accountWizardStep : ACCOUNT_WIZARD_STEPS.GROUP
+  const currentAccountWizardIndex = Math.max(0, accountWizardStageKeys.indexOf(currentAccountWizardStep))
+  const accountWizardPreviousStep = accountWizardStages[Math.max(0, currentAccountWizardIndex - 1)]?.key || ACCOUNT_WIZARD_STEPS.GROUP
+  const accountWizardNextStep = accountWizardStages[Math.min(accountWizardStages.length - 1, currentAccountWizardIndex + 1)]?.key || ACCOUNT_WIZARD_STEPS.SAVE
+  const canAdvanceAccountWizard = currentAccountWizardStep !== ACCOUNT_WIZARD_STEPS.NAME || hasAccountDraftName
   const balancesByKind = useMemo(() => {
     const groups = {
       people: [],
@@ -1562,6 +1589,23 @@ export default function MohammadLedgerApp() {
     setMovementStep((current) => previousMovementStep(current))
   }
 
+  function goToAccountWizardStep(step) {
+    if ([ACCOUNT_WIZARD_STEPS.DETAIL, ACCOUNT_WIZARD_STEPS.CURRENCY, ACCOUNT_WIZARD_STEPS.SAVE].includes(step) && !hasAccountDraftName) {
+      setAccountWizardStep(ACCOUNT_WIZARD_STEPS.NAME)
+      return
+    }
+    setAccountWizardStep(step)
+  }
+
+  function advanceAccountWizard() {
+    if (!canAdvanceAccountWizard) return
+    goToAccountWizardStep(accountWizardNextStep)
+  }
+
+  function retreatAccountWizard() {
+    goToAccountWizardStep(accountWizardPreviousStep)
+  }
+
   function editMovementStep(step) {
     if (step === MOVEMENT_ENTRY_STEPS.TYPE) {
       const optionGroup = movementOptionGroups.find((group) => group.types.includes(movementDraft.type))
@@ -1588,9 +1632,10 @@ export default function MohammadLedgerApp() {
     return index >= 0 ? index + 1 : step
   }
 
-  function chooseAccountPreset(preset) {
+  function chooseAccountPreset(preset, nextStep = ACCOUNT_WIZARD_STEPS.NAME) {
     const presetGroup = accountPresetGroups.find((group) => group.keys.includes(preset.key))
     if (presetGroup) setActiveAccountPresetGroup(presetGroup.key)
+    if (nextStep) setAccountWizardStep(nextStep)
     setAccountDraft((current) => ({
       ...current,
       ownerName: preset.ownerName || '',
@@ -1605,10 +1650,11 @@ export default function MohammadLedgerApp() {
     const group = accountPresetGroups.find((item) => item.key === groupKey)
     if (!group) return
     setActiveAccountPresetGroup(group.key)
+    setAccountWizardStep(ACCOUNT_WIZARD_STEPS.PRESET)
     const currentPresetIsVisible = group.keys.includes(selectedAccountPreset.key)
     if (currentPresetIsVisible) return
     const firstPreset = accountPresets.find((preset) => preset.key === group.keys[0])
-    if (firstPreset) chooseAccountPreset(firstPreset)
+    if (firstPreset) chooseAccountPreset(firstPreset, ACCOUNT_WIZARD_STEPS.PRESET)
   }
 
   async function saveMovement(event) {
@@ -2514,7 +2560,12 @@ export default function MohammadLedgerApp() {
                   <strong>نوع الحركة</strong>
                 </div>
                 <div className="ml3-quick-actions">
-                  <div className="ml3-choice-tabs" aria-label="فئة الحركة">
+                  <div className="ml3-choice-rail">
+                    <div className="ml3-choice-rail-head">
+                      <span>أولًا</span>
+                      <strong>اختر المجال</strong>
+                    </div>
+                    <div className="ml3-choice-tabs" aria-label="فئة الحركة">
                     {movementOptionGroups.map((group) => (
                       <button
                         type="button"
@@ -2526,9 +2577,14 @@ export default function MohammadLedgerApp() {
                         <span>{group.hint}</span>
                       </button>
                     ))}
+                    </div>
                   </div>
                   <div className={`ml3-option-group ml3-option-group--${selectedMovementOptionGroup.key}`} key={selectedMovementOptionGroup.key}>
-                    <div className="ml3-option-grid">
+                    <div className="ml3-choice-rail-head">
+                      <span>ثانيًا</span>
+                      <strong>{selectedMovementOptionGroup.title}</strong>
+                    </div>
+                    <div className="ml3-option-grid ml3-step-choice-list">
                       {selectedMovementOptionGroup.types
                         .map((type) => movementTypeOptions.find((option) => option.type === type))
                         .filter(Boolean)
@@ -2881,31 +2937,66 @@ export default function MohammadLedgerApp() {
                 <b>{selectedAccountPreset.title}</b>
               </div>
               <div className="ml3-account-build-steps" aria-label="خطوات إنشاء الحساب">
-                <span className="is-done"><b>1</b><strong>النوع</strong><small>{selectedAccountPresetGroup.title}</small></span>
-                <span className="is-done"><b>2</b><strong>الشكل</strong><small>{selectedAccountPreset.title}</small></span>
-                <span className={accountDraftNameValue ? 'is-done' : 'is-current'}><b>3</b><strong>الاسم</strong><small>{accountDraftNameValue || 'اكتب الاسم'}</small></span>
-                <span className={accountNeedsCurrency(accountDraft) ? 'is-current' : 'is-done'}><b>4</b><strong>الحفظ</strong><small>{accountNeedsCurrency(accountDraft) ? (accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'دولار' : 'دينار') : 'جاهز'}</small></span>
-              </div>
-              <div className="ml3-account-presets">
-                <div className="ml3-account-section-title">
-                  <span>أولًا</span>
-                  <strong>ماذا تريد أن تضيف؟</strong>
-                </div>
-                <div className="ml3-choice-tabs is-three" aria-label="فئة الحساب">
-                  {accountPresetGroups.map((group) => (
+                {accountWizardStages.map((step, index) => {
+                  const isCurrent = step.key === currentAccountWizardStep
+                  const isDone = index < currentAccountWizardIndex
+                  const isLocked = [ACCOUNT_WIZARD_STEPS.DETAIL, ACCOUNT_WIZARD_STEPS.CURRENCY, ACCOUNT_WIZARD_STEPS.SAVE].includes(step.key) && !hasAccountDraftName
+                  return (
                     <button
                       type="button"
-                      className={activeAccountPresetGroup === group.key ? 'is-active' : ''}
-                      key={group.key}
-                      onClick={() => chooseAccountPresetGroup(group.key)}
+                      key={step.key}
+                      className={isCurrent ? 'is-current' : isDone ? 'is-done' : isLocked ? 'is-locked' : ''}
+                      disabled={isLocked}
+                      onClick={() => goToAccountWizardStep(step.key)}
                     >
-                      <strong>{group.title}</strong>
-                      <span>{group.hint}</span>
+                      <b>{formatCount(index + 1)}</b>
+                      <strong>{step.title}</strong>
+                      <small>{step.summary}</small>
                     </button>
-                  ))}
+                  )
+                })}
+              </div>
+
+              <section className={`ml3-account-stage ml3-account-stage--${currentAccountWizardStep}`}>
+                <div className="ml3-account-stage-head">
+                  <span>{formatCount(currentAccountWizardIndex + 1)} من {formatCount(accountWizardStages.length)}</span>
+                  <h3>
+                    {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر نوع الحساب'
+                      : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? 'اختر الشكل المناسب'
+                        : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? 'اكتب الاسم'
+                          : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? (selectedAccountPreset.detailLabel || 'اختر نوع الفلوس')
+                            : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'اختر العملة'
+                              : 'راجع ثم احفظ'}
+                  </h3>
+                  <p>
+                    {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'ابدأ بأقرب وصف: ناس، فلوسي، أو تتبع.'
+                      : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? 'اختر الشكل الذي سيظهر في الأرصدة.'
+                        : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? 'اكتب اسمًا قصيرًا وواضحًا للبحث لاحقًا.'
+                          : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'هذا يحدد طريقة قراءة الرصيد.'
+                            : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'اختر دينار أو دولار لهذا الحساب.'
+                              : 'تأكد أن الاسم والشكل صحيحان قبل الحفظ.'}
+                  </p>
                 </div>
-                <div className={`ml3-option-group ml3-account-preset-group ml3-account-preset-group--${selectedAccountPresetGroup.key}`} key={selectedAccountPresetGroup.key}>
-                  <div className="ml3-option-grid">
+
+                {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? (
+                  <div className="ml3-account-choice-list" aria-label="نوع الحساب">
+                    {accountPresetGroups.map((group, index) => (
+                      <button
+                        type="button"
+                        className={activeAccountPresetGroup === group.key ? 'is-active' : ''}
+                        key={group.key}
+                        onClick={() => chooseAccountPresetGroup(group.key)}
+                      >
+                        <i>{formatCount(index + 1)}</i>
+                        <strong>{group.title}</strong>
+                        <span>{group.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? (
+                  <div className="ml3-account-choice-list" aria-label="شكل الحساب">
                     {selectedAccountPresetGroup.keys
                       .map((key) => accountPresets.find((preset) => preset.key === key))
                       .filter(Boolean)
@@ -2913,7 +3004,7 @@ export default function MohammadLedgerApp() {
                         <button
                           type="button"
                           key={preset.key}
-                          className={`ml3-account-preset--${preset.key} ${accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'is-active' : ''}`}
+                          className={accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'is-active' : ''}
                           onClick={() => chooseAccountPreset(preset)}
                           aria-current={accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'true' : undefined}
                         >
@@ -2923,60 +3014,83 @@ export default function MohammadLedgerApp() {
                         </button>
                       ))}
                   </div>
-                </div>
-              </div>
-              <label className="ml3-account-field">
-                <span>{selectedAccountPreset.nameLabel || 'الاسم'}</span>
-                <input
-                  value={accountDraftNameValue}
-                  onChange={(event) => setAccountDraft((current) => applyAccountName(current, event.target.value))}
-                  placeholder={selectedAccountPreset.namePlaceholder || 'اكتب الاسم'}
-                />
-                <small>اكتب الاسم كما تريد أن يظهر في الأرصدة والبحث.</small>
-              </label>
-              {!selectedAccountPreset.skipDetail ? (
-              <>
-              <span className="ml3-choice-label">{selectedAccountPreset.detailLabel || 'نوع الفلوس'}</span>
-              <div className="ml3-account-detail-choice" aria-label={selectedAccountPreset.detailLabel || 'الوصف'}>
-                {selectedAccountDetails.map((option) => (
-                  <button
-                    type="button"
-                    key={option}
-                    className={accountDraft.subAccountName === option ? 'is-active' : ''}
-                    onClick={() => setAccountDraft((current) => ({ ...current, subAccountName: option }))}
-                  >
-                    {option}
+                ) : null}
+
+                {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? (
+                  <label className="ml3-account-field">
+                    <span>{selectedAccountPreset.nameLabel || 'الاسم'}</span>
+                    <input
+                      value={accountDraftNameValue}
+                      onChange={(event) => setAccountDraft((current) => applyAccountName(current, event.target.value))}
+                      placeholder={selectedAccountPreset.namePlaceholder || 'اكتب الاسم'}
+                    />
+                    <small>اكتب الاسم كما تريد أن يظهر في الأرصدة والبحث.</small>
+                  </label>
+                ) : null}
+
+                {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? (
+                  <div className="ml3-account-choice-list is-compact" aria-label={selectedAccountPreset.detailLabel || 'الوصف'}>
+                    {selectedAccountDetails.map((option) => (
+                      <button
+                        type="button"
+                        key={option}
+                        className={accountDraft.subAccountName === option ? 'is-active' : ''}
+                        onClick={() => {
+                          setAccountDraft((current) => ({ ...current, subAccountName: option }))
+                          goToAccountWizardStep(accountNeedsCurrencyChoice ? ACCOUNT_WIZARD_STEPS.CURRENCY : ACCOUNT_WIZARD_STEPS.SAVE)
+                        }}
+                      >
+                        <strong>{option}</strong>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? (
+                  <div className="ml3-account-choice-list is-compact" aria-label="عملة الحساب">
+                    <button
+                      type="button"
+                      className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.DINAR ? 'is-active' : ''}
+                      onClick={() => {
+                        setAccountDraft((current) => ({ ...current, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }))
+                        goToAccountWizardStep(ACCOUNT_WIZARD_STEPS.SAVE)
+                      }}
+                    >
+                      <strong>دينار</strong>
+                    </button>
+                    <button
+                      type="button"
+                      className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'is-active' : ''}
+                      onClick={() => {
+                        setAccountDraft((current) => ({ ...current, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }))
+                        goToAccountWizardStep(ACCOUNT_WIZARD_STEPS.SAVE)
+                      }}
+                    >
+                      <strong>دولار</strong>
+                    </button>
+                  </div>
+                ) : null}
+
+                {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
+                  <div className="ml3-account-summary">
+                    <span>سيظهر الحساب بهذا الشكل</span>
+                    <strong>{accountDraftSummary(accountDraft)}</strong>
+                  </div>
+                ) : null}
+
+                <div className="ml3-account-stage-actions">
+                  <button type="button" className="ml3-step-back" disabled={currentAccountWizardIndex === 0} onClick={retreatAccountWizard}>
+                    رجوع
                   </button>
-                ))}
-              </div>
-              </>
-              ) : null}
-              {accountNeedsCurrency(accountDraft) ? (
-              <>
-              <span className="ml3-choice-label">العملة</span>
-              <div className="ml3-account-detail-choice is-currency" aria-label="عملة الحساب">
-                <button
-                  type="button"
-                  className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.DINAR ? 'is-active' : ''}
-                  onClick={() => setAccountDraft((current) => ({ ...current, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }))}
-                >
-                  دينار
-                </button>
-                <button
-                  type="button"
-                  className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'is-active' : ''}
-                  onClick={() => setAccountDraft((current) => ({ ...current, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }))}
-                >
-                  دولار
-                </button>
-              </div>
-              </>
-              ) : null}
-              <div className="ml3-account-summary">
-                <span>سيظهر الحساب بهذا الشكل</span>
-                <strong>{accountDraftSummary(accountDraft)}</strong>
-              </div>
-              <button type="submit">حفظ الحساب</button>
+                  {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
+                    <button type="submit" className="ml3-step-next" disabled={!hasAccountDraftName}>حفظ الحساب</button>
+                  ) : (
+                    <button type="button" className="ml3-step-next" disabled={!canAdvanceAccountWizard} onClick={advanceAccountWizard}>
+                      التالي
+                    </button>
+                  )}
+                </div>
+              </section>
             </form>
             ) : null}
           </aside>

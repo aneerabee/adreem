@@ -5029,6 +5029,351 @@ html:has(.adreem-admin-app) {
   color: var(--desk-surface) !important;
 }
 
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button {
+  display: grid !important;
+  grid-template-columns: 26px minmax(0, 1fr) !important;
+  grid-template-rows: auto auto !important;
+  column-gap: 7px !important;
+  align-items: center !important;
+  min-height: 52px !important;
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 10px !important;
+  padding: 6px !important;
+  background: color-mix(in srgb, var(--desk-surface-2) 78%, transparent) !important;
+  color: var(--desk-muted) !important;
+  text-align: start !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button b {
+  grid-row: 1 / span 2 !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 999px !important;
+  background: var(--desk-line) !important;
+  color: var(--desk-muted) !important;
+  font-size: 0.72rem !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button strong,
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button small {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button strong {
+  color: var(--desk-ink) !important;
+  font-size: 0.72rem !important;
+  font-weight: 950 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button small {
+  color: var(--desk-faint) !important;
+  font-size: 0.62rem !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button.is-current,
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button.is-done {
+  border-color: color-mix(in srgb, var(--desk-primary) 32%, var(--desk-line)) !important;
+  background: var(--wizard-rail) !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button.is-current b,
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button.is-done b {
+  background: var(--desk-primary-ink) !important;
+  color: var(--desk-surface) !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button.is-locked {
+  opacity: 0.48 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-stage {
+  grid-column: 1 / -1 !important;
+  display: grid !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+  border: 1px solid color-mix(in srgb, var(--desk-primary) 20%, var(--desk-line)) !important;
+  border-radius: 14px !important;
+  padding: 12px !important;
+  background: color-mix(in srgb, var(--desk-surface) 90%, var(--desk-primary-soft)) !important;
+  animation: adreemStageIn 220ms ease-out both !important;
+}
+
+@keyframes adreemStageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.adreem-app.adreem-desk .ml3-account-stage-head {
+  display: grid !important;
+  gap: 3px !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-stage-head span {
+  width: fit-content !important;
+  border-radius: 999px !important;
+  padding: 4px 8px !important;
+  background: var(--desk-primary-ink) !important;
+  color: var(--desk-surface) !important;
+  font-size: 0.68rem !important;
+  font-weight: 950 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-stage-head h3 {
+  margin: 0 !important;
+  color: var(--desk-ink) !important;
+  font-size: clamp(1rem, 2vw, 1.22rem) !important;
+  line-height: 1.15 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-stage-head p {
+  margin: 0 !important;
+  color: var(--desk-muted) !important;
+  font-size: 0.74rem !important;
+  line-height: 1.55 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-choice-list {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-choice-list.is-compact {
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)) !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-choice-list.is-compact button {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-choice-list button {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  grid-template-rows: auto auto !important;
+  gap: 2px 8px !important;
+  align-items: center !important;
+  min-height: 58px !important;
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 12px !important;
+  padding: 9px !important;
+  background: var(--desk-surface) !important;
+  color: var(--desk-ink) !important;
+  text-align: start !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-choice-list button i {
+  grid-row: 1 / span 2 !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 10px !important;
+  background: color-mix(in srgb, var(--desk-primary-soft) 70%, var(--desk-surface)) !important;
+  color: var(--desk-primary-ink) !important;
+  font-style: normal !important;
+  font-weight: 950 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-choice-list button strong,
+.adreem-app.adreem-desk .ml3-account-choice-list button span {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-choice-list button strong {
+  color: var(--desk-ink) !important;
+  font-size: 0.9rem !important;
+  font-weight: 950 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-choice-list button span {
+  color: var(--desk-muted) !important;
+  font-size: 0.7rem !important;
+  line-height: 1.35 !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-choice-list button.is-active {
+  border-color: var(--desk-primary) !important;
+  background: color-mix(in srgb, var(--desk-primary-soft) 78%, var(--desk-surface)) !important;
+  box-shadow: inset 4px 0 0 var(--desk-primary) !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-stage-actions {
+  display: grid !important;
+  grid-template-columns: minmax(88px, 0.35fr) minmax(0, 1fr) !important;
+  gap: 8px !important;
+}
+
+.adreem-app.adreem-desk .ml3-account-stage-actions button {
+  min-height: 42px !important;
+}
+
+.adreem-app.adreem-desk .ml3-step--type.is-open .ml3-quick-actions {
+  display: grid !important;
+  gap: 10px !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-rail,
+.adreem-app.adreem-desk .ml3-step--type.is-open .ml3-option-group {
+  display: grid !important;
+  gap: 7px !important;
+  min-width: 0 !important;
+  padding: 9px !important;
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--desk-surface) 90%, var(--desk-primary-soft)) !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-rail-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-rail-head span {
+  flex: 0 0 auto !important;
+  border-radius: 999px !important;
+  padding: 3px 7px !important;
+  background: var(--desk-primary-ink) !important;
+  color: var(--desk-surface) !important;
+  font-size: 0.66rem !important;
+  font-weight: 950 !important;
+}
+
+.adreem-app.adreem-desk .ml3-choice-rail-head strong {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  color: var(--desk-ink) !important;
+  font-size: 0.82rem !important;
+  font-weight: 950 !important;
+}
+
+.adreem-app.adreem-desk .ml3-step--type.is-open .ml3-choice-tabs {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.adreem-app.adreem-desk .ml3-step--type.is-open .ml3-choice-tabs button {
+  min-height: 46px !important;
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 10px !important;
+  background: var(--desk-surface) !important;
+  padding: 7px !important;
+  text-align: start !important;
+}
+
+.adreem-app.adreem-desk .ml3-step--type.is-open .ml3-choice-tabs button.is-active {
+  border-color: var(--desk-primary) !important;
+  background: var(--wizard-rail) !important;
+  box-shadow: inset 0 -3px 0 var(--desk-primary) !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-choice-list {
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr)) !important;
+  gap: 7px !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-choice-list .ml3-action-choice {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 3px 8px !important;
+  min-height: 54px !important;
+  padding: 9px !important;
+  border-radius: 12px !important;
+  align-items: center !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-choice-list .ml3-action-choice::after {
+  content: "" !important;
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 999px !important;
+  background: var(--desk-line) !important;
+  grid-row: 1 / span 2 !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-choice-list .ml3-action-choice.is-active::after {
+  background: var(--desk-primary) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--desk-primary) 14%, transparent) !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-choice-list .ml3-action-choice strong,
+.adreem-app.adreem-desk .ml3-step-choice-list .ml3-action-choice span {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.adreem-app.adreem-desk .ml3-step-choice-list .ml3-action-choice span {
+  white-space: normal !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+}
+
+@media (max-width: 560px) {
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+    min-height: 30px !important;
+    padding: 2px !important;
+    border-radius: 999px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button b {
+    grid-row: auto !important;
+    width: 24px !important;
+    height: 24px !important;
+    margin: auto !important;
+    font-size: 0.68rem !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button strong,
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button small {
+    display: none !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-stage {
+    padding: 10px !important;
+    border-radius: 12px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-choice-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-choice-list button {
+    min-height: 52px !important;
+    padding: 8px !important;
+  }
+}
+
 .adreem-app.adreem-desk .ml3-account-section-title {
   display: flex !important;
   align-items: center !important;
@@ -5481,6 +5826,33 @@ html:has(.adreem-admin-app) {
   .adreem-app.adreem-desk .ml3-balances-surface .ml3-account-values span {
     padding-inline: 7px !important;
     font-size: 0.72rem !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button {
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 26px !important;
+    height: 26px !important;
+    padding: 1px !important;
+    border-radius: 999px !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button b {
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 0.62rem !important;
+  }
+
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button strong,
+  .adreem-app.adreem-desk .ml3-account-wizard .ml3-account-build-steps button small {
+    display: none !important;
   }
 }
 
