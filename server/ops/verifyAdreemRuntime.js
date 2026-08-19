@@ -1,5 +1,6 @@
 import { request } from 'node:https'
 import { request as httpRequest } from 'node:http'
+import { pathToFileURL } from 'node:url'
 
 const required = [
   'SUPABASE_URL',
@@ -8,16 +9,19 @@ const required = [
   'TELEGRAM_BOT_TOKEN',
 ]
 
-function envStatus() {
+export function runtimeCredentialStatus(env = process.env) {
+  const hasLogin = Boolean(env.ADREEM_RUNTIME_TEST_EMAIL && env.ADREEM_RUNTIME_TEST_PASSWORD)
+  const hasToken = Boolean(env.ADREEM_RUNTIME_TEST_TOKEN)
+  return { hasLogin, hasToken, ok: hasLogin || hasToken }
+}
+
+export function envStatus(env = process.env) {
+  const credentials = runtimeCredentialStatus(env)
   return [
-    ...required.map((key) => ({ key, ok: Boolean(process.env[key]) })),
+    ...required.map((key) => ({ key, ok: Boolean(env[key]) })),
     {
-      key: 'ADREEM_RUNTIME_TEST_EMAIL',
-      ok: Boolean(process.env.ADREEM_RUNTIME_TEST_EMAIL),
-    },
-    {
-      key: 'ADREEM_RUNTIME_TEST_PASSWORD',
-      ok: Boolean(process.env.ADREEM_RUNTIME_TEST_PASSWORD),
+      key: 'ADREEM_RUNTIME_CREDENTIALS',
+      ok: credentials.ok,
     },
   ]
 }
@@ -79,7 +83,8 @@ async function main() {
     ledgerRead: null,
   }
   checks.login = await login(apiBase)
-  const token = checks.login.body?.token || ''
+  const credentials = runtimeCredentialStatus()
+  const token = checks.login.body?.token || process.env.ADREEM_RUNTIME_TEST_TOKEN || ''
   if (checks.login.ok && token) {
     checks.ledgerRead = await requestJson(`${apiBase}/api/ledger`, {
       headers: {
@@ -90,7 +95,7 @@ async function main() {
     checks.ledgerRead = { ok: false, skipped: true, reason: 'Runtime login failed or missing test credentials.' }
   }
   const failedEnv = checks.env.filter((item) => !item.ok).map((item) => item.key)
-  const ok = !failedEnv.length && checks.apiHealth.ok && (!checks.ledgerRead || checks.ledgerRead.ok)
+  const ok = !failedEnv.length && checks.apiHealth.ok && checks.ledgerRead?.ok && (!credentials.hasLogin || checks.login.ok)
   console.log(JSON.stringify({
     ok,
     failedEnv,
@@ -101,4 +106,6 @@ async function main() {
   process.exit(ok ? 0 : 1)
 }
 
-main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main()
+}

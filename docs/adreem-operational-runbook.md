@@ -46,7 +46,7 @@ ADREEM_RUNTIME_TEST_EMAIL=owner@example.com
 ADREEM_RUNTIME_TEST_PASSWORD=owner-password
 ```
 
-هذه المتغيرات تبقى على السيرفر فقط، ويستخدمها `pnpm verify:runtime` لتسجيل الدخول ثم اختبار `/api/ledger`.
+هذه المتغيرات تبقى على السيرفر فقط، ويستخدمها `pnpm verify:runtime` لتسجيل الدخول ثم اختبار `/api/ledger`. ويمكن للخادم استخدام `ADREEM_RUNTIME_TEST_TOKEN` مخصصًا لدفتر فحص معزول بدل بيانات الدخول.
 
 ## الأمان أمام API
 
