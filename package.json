@@ -18,7 +18,7 @@
     "ops:create-ledger-access": "node server/ops/createLedgerAccess.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.103.0",
+    "@supabase/supabase-js": "2.103.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
@@ -35,10 +35,5 @@
     "typescript": "^5.9.3",
     "vite": "^8.0.4",
     "vitest": "^3.2.4"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }
