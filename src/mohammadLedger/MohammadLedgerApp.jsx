@@ -1473,11 +1473,11 @@ export default function MohammadLedgerApp() {
   const [accountQuery, setAccountQuery] = useState('')
   const [showZeroAccounts, setShowZeroAccounts] = useState(false)
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
-  const todayPanelRef = useRef(null)
   const saveCoordinatorRef = useRef(null)
   const hasHydratedSnapshotRef = useRef(false)
   const movementSaveLockRef = useRef(false)
   const accountAttachmentLockRef = useRef(false)
+  const motionTimerRef = useRef(null)
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -1493,11 +1493,9 @@ export default function MohammadLedgerApp() {
   }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.scrollTo !== 'function') return
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    window.requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
-    })
+    if (typeof document === 'undefined') return
+    const viewport = document.querySelector('.adreem-view')
+    viewport?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [activeSection])
 
   const activeAccounts = useMemo(() => getActivePostingAccounts(accounts), [accounts])
@@ -1801,6 +1799,7 @@ export default function MohammadLedgerApp() {
     () => () => {
       saveCoordinatorRef.current?.stop()
       saveCoordinatorRef.current = null
+      if (motionTimerRef.current) window.clearTimeout(motionTimerRef.current)
     },
     [],
   )
@@ -1828,8 +1827,8 @@ export default function MohammadLedgerApp() {
     return () => window.clearTimeout(timer)
   }, [activeSection, activeReviewKey, reviewItems])
 
-  function commitFlowChange(update, direction = 'forward') {
-    if (typeof document === 'undefined' || typeof document.startViewTransition !== 'function') {
+  function commitFlowChange(update, direction = 'forward', scope = 'flow') {
+    if (typeof document === 'undefined') {
       update()
       return
     }
@@ -1839,17 +1838,38 @@ export default function MohammadLedgerApp() {
       return
     }
     const root = document.documentElement
-    root.classList.remove('adreem-flow-forward', 'adreem-flow-back')
-    root.classList.add(direction === 'back' ? 'adreem-flow-back' : 'adreem-flow-forward')
+    const motionClasses = [
+      'adreem-flow-forward',
+      'adreem-flow-back',
+      'adreem-mode-forward',
+      'adreem-mode-back',
+      'adreem-section-forward',
+      'adreem-section-back',
+      'adreem-motion-fallback',
+    ]
+    const directionClass = `adreem-${scope}-${direction === 'back' ? 'back' : 'forward'}`
+    const clearMotion = () => {
+      root.classList.remove(...motionClasses)
+      motionTimerRef.current = null
+    }
+
+    if (motionTimerRef.current) window.clearTimeout(motionTimerRef.current)
+    root.classList.remove(...motionClasses)
+    root.classList.add(directionClass)
+
+    if (typeof document.startViewTransition !== 'function') {
+      root.classList.add('adreem-motion-fallback')
+      flushSync(update)
+      motionTimerRef.current = window.setTimeout(clearMotion, 240)
+      return
+    }
     try {
       const transition = document.startViewTransition(() => {
         flushSync(update)
       })
-      transition.finished.finally(() => {
-        root.classList.remove('adreem-flow-forward', 'adreem-flow-back')
-      })
+      transition.finished.finally(clearMotion)
     } catch {
-      root.classList.remove('adreem-flow-forward', 'adreem-flow-back')
+      clearMotion()
       update()
     }
   }
@@ -1940,17 +1960,21 @@ export default function MohammadLedgerApp() {
         setActiveEntryMode(mode)
       },
       mode === 'account' ? 'forward' : 'back',
+      'mode',
     )
   }
 
-  function resetSectionScroll() {
-    if (typeof window === 'undefined') return
-    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }))
+  function resetSectionScroll(behavior = 'auto') {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    window.requestAnimationFrame(() => {
+      document.querySelector('.adreem-view')?.scrollTo({ top: 0, left: 0, behavior })
+    })
   }
 
   function switchSection(section) {
     if (section === activeSection) {
-      resetSectionScroll()
+      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      resetSectionScroll(reducedMotion ? 'auto' : 'smooth')
       return
     }
     commitFlowChange(
@@ -1958,8 +1982,8 @@ export default function MohammadLedgerApp() {
         setActiveSection(section)
       },
       section === 'entry' ? 'back' : 'forward',
+      'section',
     )
-    resetSectionScroll()
   }
 
   function editMovementStep(step) {
@@ -3179,7 +3203,7 @@ export default function MohammadLedgerApp() {
             ) : null}
 
             {activeEntryMode === 'movement' ? (
-              <section className="ml3-today-panel" ref={todayPanelRef}>
+              <section className="ml3-today-panel">
                 <div className="ml3-today-head">
                   <h2>آخر حركات اليوم</h2>
                   <button type="button" onClick={() => switchSection('history')}>
@@ -3208,7 +3232,7 @@ export default function MohammadLedgerApp() {
                 </header>
                 <FlowProgress current={currentAccountWizardIndex + 1} total={accountWizardStages.length} items={completedAccountStages} onEdit={goToAccountWizardStep} />
 
-                <section className={`ml3-account-stage ml3-account-stage--${currentAccountWizardStep}`}>
+                <section key={currentAccountWizardStep} className={`ml3-account-stage ml3-account-stage--${currentAccountWizardStep}`}>
                   <div className="ml3-account-stage-head">
                     <h3>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'ماذا تريد أن تضيف؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.question : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? 'ما الاسم الذي ستبحث به؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'كيف يكون الرصيد بينكما؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'بأي عملة؟' : 'هل كل شيء صحيح؟'}</h3>
                     <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر شخصًا، مكان فلوسك، أو شيئًا تريد متابعته.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.hint : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? 'اسم قصير وواضح يكفي.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'اختر هل الرصيد كاش بينكم أو شيك بينكم.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'دينار أو دولار.' : 'راجع السطر ثم احفظ الحساب.'}</p>

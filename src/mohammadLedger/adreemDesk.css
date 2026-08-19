@@ -1160,9 +1160,27 @@
 .ml3-profile-impact button { min-height: 27px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--green); font-size: 0.65rem; font-weight: 900; cursor: pointer; }
 
 ::view-transition-old(root),
-::view-transition-new(root) { animation-duration: 150ms; animation-timing-function: ease-out; }
-.adreem-flow-forward::view-transition-new(root) { animation-name: adreem-view-next; }
-.adreem-flow-back::view-transition-new(root) { animation-name: adreem-view-back; }
+::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+.adreem-section-forward .ml3-layout,
+.adreem-section-back .ml3-layout { view-transition-name: adreem-workspace; }
+.adreem-mode-forward .adreem-entry,
+.adreem-mode-back .adreem-entry { view-transition-name: adreem-entry-mode; }
+.adreem-flow-forward .ml3-step,
+.adreem-flow-back .ml3-step,
+.adreem-flow-forward .ml3-account-stage,
+.adreem-flow-back .ml3-account-stage { view-transition-name: adreem-flow-step; }
+::view-transition-group(adreem-workspace),
+::view-transition-group(adreem-entry-mode),
+::view-transition-group(adreem-flow-step) { animation-duration: 210ms; animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1); }
+::view-transition-old(adreem-workspace),
+::view-transition-old(adreem-entry-mode),
+::view-transition-old(adreem-flow-step) { animation: adreem-view-out 95ms ease-out both; }
+.adreem-section-forward::view-transition-new(adreem-workspace),
+.adreem-section-back::view-transition-new(adreem-workspace) { animation: adreem-section-in 210ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.adreem-mode-forward::view-transition-new(adreem-entry-mode),
+.adreem-flow-forward::view-transition-new(adreem-flow-step) { animation: adreem-view-next 190ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.adreem-mode-back::view-transition-new(adreem-entry-mode),
+.adreem-flow-back::view-transition-new(adreem-flow-step) { animation: adreem-view-back 190ms cubic-bezier(0.25, 1, 0.5, 1) both; }
 @keyframes adreem-step-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1172,12 +1190,24 @@
   to { opacity: 1; transform: translateX(0); }
 }
 @keyframes adreem-view-next {
-  from { opacity: 0; transform: translateX(-8px); }
+  from { opacity: 0; transform: translateX(-10px); }
   to { opacity: 1; transform: translateX(0); }
 }
 @keyframes adreem-view-back {
-  from { opacity: 0; transform: translateX(8px); }
+  from { opacity: 0; transform: translateX(10px); }
   to { opacity: 1; transform: translateX(0); }
+}
+@keyframes adreem-section-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes adreem-view-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes adreem-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 980px) {
@@ -1817,7 +1847,233 @@
   .ml3-account-choice-list.is-compact { grid-template-columns: 1fr; }
 }
 
+/* Motion and viewport integrity */
+.adreem-app,
+.adreem-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.adreem-frame {
+  height: calc(100dvh - 56px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.adreem-view {
+  height: calc(100dvh - 104px);
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-color: #b8c3be transparent;
+  scroll-padding-block: 12px 24px;
+}
+
+.adreem-header,
+.adreem-nav,
+.ml3-entry-card,
+.ml3-add-account,
+.ml3-today-panel,
+.ml3-panel,
+.ml3-history-day,
+.ml3-list-block,
+.ml3-review-queue { isolation: isolate; }
+
+.adreem-nav button,
+.ml3-entry-mode button,
+.ml3-action-choice,
+.ml3-account-choice-list button,
+.ml3-balance-ledger button,
+.ml3-account-switcher button,
+.ml3-account-row,
+.ml3-history-row,
+.ml3-review-ticket,
+.ml3-step-back,
+.ml3-step-next,
+.ml3-save,
+.ml3-mini-action,
+.ml3-row-actions button,
+.ml3-ops-actions button {
+  transition:
+    color 140ms ease-out,
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    box-shadow 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    opacity 140ms ease-out,
+    transform 140ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.adreem-app button:not(:disabled):active { transform: scale(0.985); }
+.adreem-app button:focus-visible,
+.adreem-app input:focus-visible,
+.adreem-app select:focus-visible,
+.adreem-app textarea:focus-visible,
+.adreem-app summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--green) 72%, white);
+  outline-offset: 2px;
+}
+
+.adreem-nav button { position: relative; overflow: hidden; }
+.adreem-nav button::after {
+  content: "";
+  position: absolute;
+  inset: auto 18% 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0;
+  transform: scaleX(0.35);
+  transition: opacity 150ms ease-out, transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+.adreem-nav button.is-active::after { opacity: 0.72; transform: scaleX(1); }
+
+.ml3-entry-card,
+.ml3-add-account {
+  height: clamp(405px, 50dvh, 470px);
+  min-height: 0;
+  max-height: calc(100dvh - 154px);
+  contain: layout;
+}
+
+.adreem-flow-head,
+.adreem-flow-progress { flex: 0 0 auto; }
+.adreem-flow-head { height: 72px; min-height: 72px; }
+.adreem-flow-progress-meta { overflow: hidden; }
+.adreem-flow-progress-line i { transition: width 220ms cubic-bezier(0.25, 1, 0.5, 1); }
+
+.ml3-step,
+.ml3-account-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scroll-padding-block-end: 58px;
+}
+
+.ml3-step-controls,
+.ml3-account-stage-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  flex: 0 0 auto;
+  box-shadow: 0 -7px 14px rgba(24, 35, 31, 0.035);
+}
+
+.ml3-more-actions[open] .ml3-more-actions-grid,
+.ml3-filter-disclosure[open] .ml3-history-filters,
+.ml3-ops-disclosure[open] .ml3-ops-grid { animation: adreem-reveal 170ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+
+.adreem-motion-fallback.adreem-section-forward .ml3-layout,
+.adreem-motion-fallback.adreem-section-back .ml3-layout { animation: adreem-section-in 210ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.adreem-motion-fallback.adreem-mode-forward .adreem-entry,
+.adreem-motion-fallback.adreem-flow-forward .ml3-step,
+.adreem-motion-fallback.adreem-flow-forward .ml3-account-stage { animation: adreem-view-next 190ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.adreem-motion-fallback.adreem-mode-back .adreem-entry,
+.adreem-motion-fallback.adreem-flow-back .ml3-step,
+.adreem-motion-fallback.adreem-flow-back .ml3-account-stage { animation: adreem-view-back 190ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+
+.ml3-today-row,
+.ml3-history-row,
+.ml3-account-row,
+.ml3-review-ticket,
+.ml3-effect,
+.ml3-ops-row {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ml3-today-row > *,
+.ml3-history-row > *,
+.ml3-account-row > *,
+.ml3-review-ticket > *,
+.ml3-effect > *,
+.ml3-ops-row > * { min-width: 0; }
+
+.ml3-today-route b,
+.ml3-history-route b,
+.ml3-today-effects span,
+.ml3-history-effects span,
+.ml3-account-detail,
+.ml3-review-ticket strong,
+.ml3-review-ticket b {
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
+.ml3-history-day,
+.ml3-list-block,
+.ml3-review-queue { border-color: #d3dbd7; }
+.ml3-history-row:hover,
+.ml3-account-row:hover { background: #fbfcfb; }
+
+@media (min-width: 721px) {
+  .adreem-nav { top: 0; }
+}
+
+@media (max-width: 720px) {
+  .adreem-frame { height: calc(100dvh - 52px); }
+  .adreem-view {
+    height: calc(100dvh - 52px);
+    scroll-padding-block: 7px calc(76px + env(safe-area-inset-bottom));
+  }
+  .ml3-entry-card,
+  .ml3-add-account {
+    height: clamp(390px, 48dvh, 410px);
+    min-height: 0;
+    max-height: none;
+  }
+  .adreem-flow-head { height: 64px; min-height: 64px; }
+  .ml3-step,
+  .ml3-account-stage { min-height: 0; }
+  .ml3-account-switcher {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    overflow: visible;
+    padding: 3px;
+  }
+  .ml3-account-switcher button {
+    min-width: 0;
+    min-height: 40px;
+    flex: initial;
+    gap: 2px;
+    padding-inline: 2px;
+  }
+  .ml3-account-switcher strong { font-size: clamp(0.58rem, 2.6vw, 0.68rem); }
+  .ml3-account-switcher span { font-size: 0.6rem; }
+  .ml3-today-row,
+  .ml3-history-row,
+  .ml3-account-row { contain: layout paint; }
+}
+
+@media (max-width: 380px) {
+  .ml3-balance-ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ml3-balance-ledger button {
+    grid-template-columns: 1fr;
+    align-items: initial;
+    min-height: 52px;
+    padding-inline: 5px;
+  }
+  .ml3-balance-ledger button span { font-size: 0.61rem; }
+  .ml3-balance-ledger button strong { font-size: 0.68rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-old(adreem-workspace),
+  ::view-transition-new(adreem-workspace),
+  ::view-transition-old(adreem-entry-mode),
+  ::view-transition-new(adreem-entry-mode),
+  ::view-transition-old(adreem-flow-step),
+  ::view-transition-new(adreem-flow-step) { animation: none; }
   .adreem-app *,
   .adreem-app *::before,
   .adreem-app *::after {
