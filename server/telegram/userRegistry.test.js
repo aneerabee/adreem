@@ -190,6 +190,55 @@ describe('telegram user registry', () => {
     expect(access.loginUser({ email: 'rabee@example.com', password: 'wrong-password' })).toMatchObject({ ok: false })
   })
 
+  it('persists one supported language per user without changing another user', () => {
+    const filePath = tempFile()
+    const access = createTelegramUserAccess({}, filePath)
+    access.addUser({ userId: 'arabic', email: 'ar@example.com', password: 'secret-password', ledgerId: 'arabic' })
+    access.addUser({ userId: 'english', email: 'en@example.com', password: 'secret-password', ledgerId: 'english', language: 'en' })
+
+    const result = access.updateUser('arabic', { language: 'en' })
+    const users = loadTelegramUserRegistry(filePath).users
+
+    expect(result).toMatchObject({ ok: true, entry: { language: 'en' } })
+    expect(users.find((user) => user.userId === 'arabic')?.language).toBe('en')
+    expect(users.find((user) => user.userId === 'english')?.language).toBe('en')
+  })
+
+  it('defaults old users to Arabic and resolves the Telegram user language', () => {
+    const filePath = tempFile()
+    saveTelegramUserRegistry(filePath, {
+      users: [{ userId: 'old-user', telegramUserId: '100', ledgerId: 'old-ledger' }],
+      removed: [],
+    })
+    const access = createTelegramUserAccess({}, filePath)
+
+    expect(loadTelegramUserRegistry(filePath).users[0].language).toBe('ar')
+    expect(access.userForTelegramId('100')).toMatchObject({ userId: 'old-user' })
+    expect(access.languageForTelegramUser('100')).toBe('ar')
+    expect(access.languageForTelegramUser('unknown')).toBe('ar')
+  })
+
+  it('preserves optional user fields during a language-only update', () => {
+    const filePath = tempFile()
+    const access = createTelegramUserAccess({}, filePath)
+    access.addUser({
+      userId: 'rabee',
+      displayName: 'ربيع شعبان',
+      email: 'rabee@example.com',
+      password: 'secret-password',
+      telegramUserId: '100',
+      ledgerId: 'rabee',
+    })
+
+    access.updateUser('rabee', { language: 'en' })
+
+    expect(loadTelegramUserRegistry(filePath).users[0]).toMatchObject({
+      displayName: 'ربيع شعبان',
+      telegramUserId: '100',
+      language: 'en',
+    })
+  })
+
   it('allows web access to an env ledger only when it explicitly links the same telegram owner', () => {
     const filePath = tempFile()
     const access = createTelegramUserAccess({

@@ -1,6 +1,13 @@
+/** @jsxImportSource ./i18nRuntime */
+/** @jsxRuntime automatic */
+import { normalizeUiLanguage, uiLanguageDirection } from './uiLanguage'
+import { readRememberedUiLanguage, setActiveUiLanguage } from './uiTranslation'
+
 export default function ConfigurationErrorPage() {
+  const language = normalizeUiLanguage(readRememberedUiLanguage())
+  setActiveUiLanguage(language)
   return (
-    <main className="adreem-login-app" dir="rtl">
+    <main className="adreem-login-app" dir={uiLanguageDirection(language)} lang={language}>
       <section className="adreem-login-card" role="alert">
         <div className="adreem-login-brand">
           <span>ADREEM</span>

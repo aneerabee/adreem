@@ -79,13 +79,14 @@ describe('ADREEM cloud-only persistence', () => {
     })
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
-      json: async () => ({ state: apiState, access: { canManageUsers: true } }),
+      json: async () => ({ state: apiState, access: { canManageUsers: true }, profile: { userId: 'owner', language: 'en' } }),
     })))
 
     const result = await module.loadMohammadPersistedState({ accounts: [], movements: [] })
 
     expect(result.source).toBe('api')
     expect(result.access.canManageUsers).toBe(true)
+    expect(result.profile).toMatchObject({ userId: 'owner', language: 'en' })
     expect(result.state.accounts.map((account) => account.id)).toEqual(['cloud-account'])
     expect(browser.store.has('adreem-ledger-v1')).toBe(false)
     expect(browser.store.get('adreem-ledger-api-login-token-v1')).toBe('valid-token')

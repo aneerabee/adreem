@@ -1,3 +1,5 @@
+/** @jsxImportSource ./i18nRuntime */
+/** @jsxRuntime automatic */
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -7,12 +9,14 @@ import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { accountClassificationOptions, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, voidMovement } from './ledgerCore'
-import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammadPersistenceMode, loadMohammadPersistedState, logoutAdreemCloudSession, resolveAdreemAttachmentUrl, saveMohammadPersistedState, uploadAdreemAttachmentFile } from './mohammadPersistence'
+import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammadPersistenceMode, loadMohammadPersistedState, logoutAdreemCloudSession, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
 import { MOVEMENT_ENTRY_STEPS, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
 import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccounts, sameLogicalAccount } from './movementAccounts'
 import { RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, buildReconciliationCorrectionDrafts, createAttachment, createAuditEvent, createReconciliation, createRecurringRuleFromMovement, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, hideAttachment, lastReconciliationForAccount, syncRecurringRulesFromMovement, updateRecurringRule } from './ledgerOperations'
+import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
+import { getActiveUiLanguage, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage } from './uiTranslation'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -254,7 +258,7 @@ function movementErrorFieldLabel(field) {
 function movementTime(value) {
   const date = new Date(value || Date.now())
   if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleTimeString('ar-LY', {
+  return date.toLocaleTimeString(uiLanguageLocale(getActiveUiLanguage()), {
     hour: '2-digit',
     minute: '2-digit',
   })
@@ -263,7 +267,7 @@ function movementTime(value) {
 function movementDateTime(value) {
   const date = new Date(value || Date.now())
   if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleString('ar-LY', {
+  return date.toLocaleString(uiLanguageLocale(getActiveUiLanguage()), {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -284,7 +288,7 @@ function movementDayLabel(value) {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
   if (date.getFullYear() === yesterday.getFullYear() && date.getMonth() === yesterday.getMonth() && date.getDate() === yesterday.getDate()) return 'أمس'
-  return date.toLocaleDateString('ar-LY', {
+  return date.toLocaleDateString(uiLanguageLocale(getActiveUiLanguage()), {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
@@ -1461,6 +1465,10 @@ export default function MohammadLedgerApp() {
   const [loadFailed, setLoadFailed] = useState(false)
   const [storageMode, setStorageMode] = useState(getMohammadPersistenceMode)
   const [canManageUsers, setCanManageUsers] = useState(false)
+  const [userProfile, setUserProfile] = useState(null)
+  const [uiLanguage, setUiLanguage] = useState(readRememberedUiLanguage)
+  const [languageStatus, setLanguageStatus] = useState('idle')
+  const [languageMessage, setLanguageMessage] = useState('')
   const [saveStatus, setSaveStatus] = useState('loading')
   const [, setSyncProblem] = useState(false)
   const [pendingUndo, setPendingUndo] = useState(null)
@@ -1480,6 +1488,9 @@ export default function MohammadLedgerApp() {
   const movementSaveLockRef = useRef(false)
   const accountAttachmentLockRef = useRef(false)
   const motionTimerRef = useRef(null)
+  const normalizedUiLanguage = normalizeUiLanguage(uiLanguage)
+  const uiDirection = uiLanguageDirection(normalizedUiLanguage)
+  setActiveUiLanguage(normalizedUiLanguage)
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -1493,6 +1504,12 @@ export default function MohammadLedgerApp() {
       if (previousIcon) favicon?.setAttribute('href', previousIcon)
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    document.documentElement.lang = normalizedUiLanguage
+    document.documentElement.dir = uiDirection
+  }, [normalizedUiLanguage, uiDirection])
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -1720,6 +1737,11 @@ export default function MohammadLedgerApp() {
       const normalizedState = normalizeLedgerState(result.state, initialState)
       setStorageMode(result.mode)
       setCanManageUsers(Boolean(result.access?.canManageUsers))
+      setUserProfile(result.profile || null)
+      if (result.profile?.language) {
+        const nextLanguage = rememberUiLanguage(result.profile.language)
+        setUiLanguage(nextLanguage)
+      }
       setLedgerExtras(ledgerExtrasFromState(normalizedState))
       setAccounts(normalizeMohammadAccounts(normalizedState.accounts))
       setMovements(normalizedState.movements)
@@ -1738,6 +1760,24 @@ export default function MohammadLedgerApp() {
       cancelled = true
     }
   }, [initialState])
+
+  async function changeUiLanguage(language) {
+    const nextLanguage = normalizeUiLanguage(language)
+    if (nextLanguage === normalizedUiLanguage || languageStatus === 'saving') return
+    setLanguageStatus('saving')
+    setLanguageMessage('')
+    try {
+      const profile = await updateAdreemUserProfile({ language: nextLanguage })
+      if (!profile?.language) throw new Error('profile-language-not-confirmed')
+      const confirmedLanguage = rememberUiLanguage(profile.language)
+      setUserProfile(profile)
+      setUiLanguage(confirmedLanguage)
+      setLanguageStatus('saved')
+    } catch {
+      setLanguageStatus('error')
+      setLanguageMessage('تعذر حفظ اللغة. حاول مرة أخرى.')
+    }
+  }
 
   useEffect(() => {
     if (!isHydrated || !canPersist) return
@@ -2904,7 +2944,7 @@ export default function MohammadLedgerApp() {
 
   if (!isHydrated || loadFailed) {
     return (
-      <main className="adreem-app adreem-cloud-gate" dir="rtl">
+      <main className="adreem-app adreem-cloud-gate" dir={uiDirection} lang={normalizedUiLanguage}>
         <section role="status" aria-live="polite">
           <span>ADREEM</span>
           <h1>{isHydrated ? 'تعذر فتح الدفتر' : 'جاري فتح الدفتر'}</h1>
@@ -2925,7 +2965,7 @@ export default function MohammadLedgerApp() {
   }
 
   return (
-    <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovements.length} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} onRetrySave={() => saveCoordinatorRef.current?.retryNow()} onOpenAdmin={openAdminUsersPage} onLogout={logoutFromCloudSession} onSectionChange={switchSection}>
+    <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovements.length} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} profile={userProfile} language={normalizedUiLanguage} languageStatus={languageStatus} languageMessage={languageMessage} onLanguageChange={changeUiLanguage} onRetrySave={() => saveCoordinatorRef.current?.retryNow()} onOpenAdmin={openAdminUsersPage} onLogout={logoutFromCloudSession} onSectionChange={switchSection}>
       {activeSection !== 'entry' ? <AlertBoard reviewAccounts={balancesByKind.review} reviewMovements={reviewMovements} externalMissing={unresolvedExternalAccounts} balances={balances} movements={postedUserMovements} totals={totals} dueRecurringCount={dueRules.length} reconciliationDiffCount={reconciliationDiffCount} /> : null}
 
       <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>

@@ -72,6 +72,7 @@ function registryPasswordUser({
   password,
   ledgerId,
   telegramUserId = '',
+  language = 'ar',
 }) {
   return {
     userId,
@@ -80,6 +81,7 @@ function registryPasswordUser({
     passwordHash: createPasswordHash(password),
     ledgerId,
     telegramUserId,
+    language,
   }
 }
 
@@ -835,6 +837,72 @@ describe('ADREEM web API auth helpers', () => {
     }, adminResponse)
 
     expect(adminResponse.statusCode).toBe(401)
+  })
+
+  it('persists profile language per user and rejects unsupported languages', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'first',
+        displayName: 'First',
+        email: 'first@example.com',
+        password: 'first-pass-123',
+        ledgerId: 'first',
+      }),
+      registryPasswordUser({
+        userId: 'second',
+        displayName: 'Second',
+        email: 'second@example.com',
+        password: 'second-pass-123',
+        ledgerId: 'second',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const firstToken = await loginForToken(api, 'first@example.com', 'first-pass-123')
+    const secondToken = await loginForToken(api, 'second@example.com', 'second-pass-123')
+
+    const updateRequest = createJsonRequest({ language: 'en' }, {
+      method: 'PATCH',
+      url: '/api/profile',
+      token: firstToken,
+    })
+    const updateResponse = createMockResponse()
+    const updatePromise = api(updateRequest, updateResponse)
+    updateRequest.emitBody()
+    await updatePromise
+
+    const firstProfileResponse = createMockResponse()
+    await api({
+      method: 'GET',
+      url: '/api/profile',
+      headers: { authorization: 'Bearer ' + firstToken },
+    }, firstProfileResponse)
+    const secondProfileResponse = createMockResponse()
+    await api({
+      method: 'GET',
+      url: '/api/profile',
+      headers: { authorization: 'Bearer ' + secondToken },
+    }, secondProfileResponse)
+
+    expect(updateResponse.statusCode).toBe(200)
+    expect(JSON.parse(firstProfileResponse.body).user.language).toBe('en')
+    expect(JSON.parse(secondProfileResponse.body).user.language).toBe('ar')
+
+    const invalidRequest = createJsonRequest({ language: 'fr' }, {
+      method: 'PATCH',
+      url: '/api/profile',
+      token: firstToken,
+    })
+    const invalidResponse = createMockResponse()
+    const invalidPromise = api(invalidRequest, invalidResponse)
+    invalidRequest.emitBody()
+    await invalidPromise
+
+    expect(invalidResponse.statusCode).toBe(400)
+    expect(JSON.parse(invalidResponse.body).error).toBe('Unsupported language.')
   })
 
   it('lets the owner update and remove user access while protecting the owner account', async () => {

@@ -114,12 +114,22 @@ export async function loadMohammadPersistedState(fallbackState) {
       mode,
       state: data?.state ? normalizeLedgerState(data.state, fallback) : fallback,
       access: { canManageUsers: Boolean(data?.access?.canManageUsers) },
+      profile: data?.profile && typeof data.profile === 'object' ? data.profile : null,
       source: data?.state ? 'api' : 'empty-api',
     }
   } catch (error) {
     console.warn('[adreem-persistence] cloud load failed:', error?.message || error)
     return { mode, state: fallback, source: 'api-error', loadError: true, error }
   }
+}
+
+export async function updateAdreemUserProfile({ language }) {
+  const data = await apiJson('/api/profile', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ language }),
+  })
+  return data?.user || null
 }
 
 export async function saveMohammadPersistedState(state) {

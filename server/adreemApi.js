@@ -9,6 +9,7 @@ import { validateLedgerStateTransition } from './mohammadLedger/stateValidation.
 import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './mohammadLedger/attachmentValidation.js'
 import { mergeLedgerStates } from '../src/mohammadLedger/ledgerState.js'
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/mohammadLedger/ledgerOperations.js'
+import { isSupportedUiLanguage, normalizeUiLanguage } from '../src/mohammadLedger/uiLanguage.js'
 import {
   createTelegramUserAccess,
   defaultRegistryPath,
@@ -327,19 +328,21 @@ export function createAdreemApiHandler(env = process.env) {
   }
 
   function publicUser(user) {
+    const safeUser = user || {}
     return {
-      userId: user.userId || '',
-      email: user.email || '',
-      telegramUserId: user.telegramUserId || '',
-      ledgerId: user.ledgerId || '',
-      source: user.source || 'registry',
-      displayName: user.displayName || user.firstName || user.username || '',
-      firstName: user.firstName || '',
-      username: user.username || '',
-      addedAt: user.addedAt || '',
-      addedBy: user.addedBy || '',
+      userId: safeUser.userId || '',
+      email: safeUser.email || '',
+      telegramUserId: safeUser.telegramUserId || '',
+      ledgerId: safeUser.ledgerId || '',
+      source: safeUser.source || 'registry',
+      displayName: safeUser.displayName || safeUser.firstName || safeUser.username || '',
+      firstName: safeUser.firstName || '',
+      username: safeUser.username || '',
+      addedAt: safeUser.addedAt || '',
+      addedBy: safeUser.addedBy || '',
       hasWebToken: false,
-      hasPassword: Boolean(user.passwordHash),
+      hasPassword: Boolean(safeUser.passwordHash),
+      language: normalizeUiLanguage(safeUser.language),
     }
   }
 
@@ -418,6 +421,39 @@ export function createAdreemApiHandler(env = process.env) {
         return sendJson(res, 500, { error: 'ADREEM logout failed.' }, allowedOrigin)
       }
     }
+    if (url.pathname === '/api/profile') {
+      const token = tokenFromAuthHeader(req.headers.authorization)
+      const currentUser = userAccess.userForSessionToken(token)
+      if (!currentUser) return sendJson(res, 401, { error: 'Valid user session required.' }, allowedOrigin)
+      try {
+        if (req.method === 'GET') {
+          return sendJson(res, 200, { user: publicUser(currentUser) }, allowedOrigin)
+        }
+        if (req.method === 'PATCH') {
+          const body = await readJsonBody(req)
+          if (!isSupportedUiLanguage(body.language)) {
+            return sendJson(res, 400, { error: 'Unsupported language.' }, allowedOrigin)
+          }
+          const result = userAccess.updateUser(currentUser.userId, {
+            language: body.language,
+            updatedBy: currentUser.userId,
+          })
+          if (!result.ok) {
+            audit(env, { action: 'profile.language.update.failed', userId: currentUser.userId, error: result.error })
+            return sendJson(res, result.error === 'not-found' ? 404 : 400, { error: result.error }, allowedOrigin)
+          }
+          audit(env, { action: 'profile.language.updated', userId: currentUser.userId, language: result.entry.language })
+          return sendJson(res, 200, { user: publicUser(result.entry) }, allowedOrigin)
+        }
+        return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
+      } catch (error) {
+        console.error('[adreem-api-profile]', error?.message || error)
+        if (error instanceof ApiRequestError) {
+          return sendJson(res, error.statusCode, { error: error.message }, allowedOrigin)
+        }
+        return sendJson(res, 500, { error: 'ADREEM profile update failed.' }, allowedOrigin)
+      }
+    }
     if (url.pathname === '/api/admin/users' || userIdFromAdminPath(url.pathname)) {
       const adminLimit = rateLimiter.check(rateKey(req, 'admin'), RATE_LIMITS.admin)
       if (!adminLimit.ok) {
@@ -447,6 +483,7 @@ export function createAdreemApiHandler(env = process.env) {
             telegramUserId: body.telegramUserId,
             ledgerId: body.ledgerId,
             displayName: body.displayName,
+            language: body.language,
             firstName: body.firstName,
             username: body.username,
             addedBy: ownerUser.userId,
@@ -471,6 +508,7 @@ export function createAdreemApiHandler(env = process.env) {
             telegramUserId: body.telegramUserId,
             ledgerId: body.ledgerId,
             displayName: body.displayName,
+            language: body.language,
             updatedBy: ownerUser.userId,
           })
           if (!result.ok) {
@@ -562,6 +600,7 @@ export function createAdreemApiHandler(env = process.env) {
           source: result.source || 'api',
           updatedAt: result.updatedAt || null,
           access: { canManageUsers: Boolean(ownerForToken(token)) },
+          profile: publicUser(userAccess.userForSessionToken(token)),
         }, allowedOrigin)
       }
       if (req.method === 'PUT') {

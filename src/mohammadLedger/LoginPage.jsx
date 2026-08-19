@@ -1,8 +1,12 @@
+/** @jsxImportSource ./i18nRuntime */
+/** @jsxRuntime automatic */
 import { useState } from 'react'
 import {
   ADREEM_API_TOKEN_PERSIST_KEY,
   ADREEM_API_TOKEN_SESSION_KEY,
 } from './mohammadPersistence'
+import { normalizeUiLanguage, uiLanguageDirection } from './uiLanguage'
+import { readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage } from './uiTranslation'
 
 const ADREEM_API_URL = String(import.meta.env.VITE_ADREEM_API_URL || '').replace(/\/+$/, '')
 
@@ -31,6 +35,10 @@ function rememberLoginToken(token) {
 }
 
 export default function LoginPage() {
+  const [language] = useState(readRememberedUiLanguage)
+  const normalizedLanguage = normalizeUiLanguage(language)
+  const direction = uiLanguageDirection(normalizedLanguage)
+  setActiveUiLanguage(normalizedLanguage)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [status, setStatus] = useState('idle')
@@ -43,6 +51,7 @@ export default function LoginPage() {
     try {
       const data = await loginRequest({ email: email.trim(), password })
       rememberLoginToken(data.token)
+      rememberUiLanguage(data.user?.language)
       window.location.assign(`${window.location.pathname}${window.location.search}`)
     } catch {
       setStatus('error')
@@ -59,7 +68,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="adreem-login-app" dir="rtl">
+    <main className="adreem-login-app" dir={direction} lang={normalizedLanguage}>
       <form className="adreem-login-card" onSubmit={submit}>
         <div className="adreem-login-brand">
           <span>ADREEM</span>

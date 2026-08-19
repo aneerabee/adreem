@@ -1,3 +1,6 @@
+/** @jsxImportSource ./i18nRuntime */
+/** @jsxRuntime automatic */
+import { useEffect, useState } from 'react'
 import {
   BookOpenCheck,
   CheckCircle2,
@@ -9,8 +12,12 @@ import {
   LogOut,
   Plus,
   RefreshCw,
+  UserRound,
   UserRoundCog,
+  X,
 } from 'lucide-react'
+import { normalizeUiLanguage, uiLanguageDirection } from './uiLanguage'
+import { setActiveUiLanguage } from './uiTranslation'
 
 const sections = [
   { key: 'entry', label: 'إضافة', icon: Plus },
@@ -45,16 +52,34 @@ export default function AdreemChrome({
   reviewCount,
   canOpenAdmin,
   canLogout,
+  profile,
+  language,
+  languageStatus,
+  languageMessage,
   onRetrySave,
   onOpenAdmin,
   onLogout,
+  onLanguageChange,
   onSectionChange,
   children,
 }) {
+  const [profileOpen, setProfileOpen] = useState(false)
+  const normalizedLanguage = normalizeUiLanguage(language)
+  const direction = uiLanguageDirection(normalizedLanguage)
+  setActiveUiLanguage(normalizedLanguage)
   const counts = { today: todayCount, review: reviewCount }
 
+  useEffect(() => {
+    if (!profileOpen) return undefined
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setProfileOpen(false)
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [profileOpen])
+
   return (
-    <main className={`adreem-app adreem-app--${activeSection}`} dir="rtl">
+    <main className={`adreem-app adreem-app--${activeSection}`} dir={direction} lang={normalizedLanguage}>
       <section className="adreem-shell">
         <header className="adreem-header">
           <div className="adreem-brand">
@@ -74,6 +99,9 @@ export default function AdreemChrome({
           </div>
 
           <div className="adreem-header-actions">
+            <button type="button" onClick={() => setProfileOpen(true)} aria-label="ملفي" title="ملفي">
+              <UserRound aria-hidden="true" size={18} />
+            </button>
             {canOpenAdmin ? (
               <button type="button" onClick={onOpenAdmin} aria-label="إدارة المستخدمين" title="إدارة المستخدمين">
                 <UserRoundCog aria-hidden="true" size={18} />
@@ -112,6 +140,59 @@ export default function AdreemChrome({
           <section className="adreem-view">{children}</section>
         </div>
       </section>
+      {profileOpen ? (
+        <div className="adreem-profile-layer" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setProfileOpen(false)
+        }}>
+          <section className="adreem-profile-dialog" role="dialog" aria-modal="true" aria-labelledby="adreem-profile-title">
+            <header>
+              <div>
+                <span>ADREEM</span>
+                <h2 id="adreem-profile-title">ملفي</h2>
+              </div>
+              <button type="button" onClick={() => setProfileOpen(false)} aria-label="إغلاق" title="إغلاق">
+                <X aria-hidden="true" size={18} />
+              </button>
+            </header>
+            <div className="adreem-profile-identity" data-i18n="off">
+              <strong>{profile?.displayName || profile?.email || profile?.userId || 'ADREEM'}</strong>
+              {profile?.email ? <span>{profile.email}</span> : null}
+            </div>
+            <div className="adreem-profile-language">
+              <div>
+                <strong>لغة الواجهة</strong>
+                <p>اختر لغتك. سيبقى هذا الاختيار في كل مرة تدخل فيها.</p>
+              </div>
+              <div className="adreem-language-options" role="radiogroup" aria-label="لغة الواجهة">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={normalizedLanguage === 'ar'}
+                  className={normalizedLanguage === 'ar' ? 'is-active' : ''}
+                  disabled={languageStatus === 'saving'}
+                  onClick={() => onLanguageChange('ar')}
+                >
+                  <span>AR</span>
+                  <strong>العربية</strong>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={normalizedLanguage === 'en'}
+                  className={normalizedLanguage === 'en' ? 'is-active' : ''}
+                  disabled={languageStatus === 'saving'}
+                  onClick={() => onLanguageChange('en')}
+                >
+                  <span>EN</span>
+                  <strong>الإنجليزية</strong>
+                </button>
+              </div>
+              {languageStatus === 'saving' ? <small role="status">جاري حفظ اللغة</small> : null}
+              {languageMessage ? <small className="is-error" role="alert">{languageMessage}</small> : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   )
 }

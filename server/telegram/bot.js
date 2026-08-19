@@ -27,6 +27,7 @@ import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountI
 import { buildHistorySession, HISTORY_ACTION_LIMIT, recentHistoryMovements, voidRecentMovementInState } from './historyActions.js'
 import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
+import { createLocalizedTelegramClient } from './localizedTelegram.js'
 import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './handlers/account.js'
 import { handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './handlers/movement.js'
 import { handleReconciliationCallback, handleReconciliationText, startReconciliation } from './handlers/reconciliation.js'
@@ -98,8 +99,9 @@ function isAllowed(user) {
 
 function contextFor(update) {
   const user = getUser(update)
+  const language = userAccess.languageForTelegramUser(user?.id)
   return {
-    telegram,
+    telegram: createLocalizedTelegramClient(telegram, language),
     repository: null,
     sessions,
     user,
@@ -107,13 +109,14 @@ function contextFor(update) {
     chatId: getChatId(update),
     messageId: getMessageId(update),
     isCallback: Boolean(update.callback_query),
+    language,
   }
 }
 
 async function sendScreen(ctx, text, replyMarkup = mainMenuKeyboard()) {
   if (ctx.isCallback && ctx.messageId) {
     try {
-      return await telegram.editMessageText({
+      return await ctx.telegram.editMessageText({
         chat_id: ctx.chatId,
         message_id: ctx.messageId,
         text,
@@ -124,7 +127,7 @@ async function sendScreen(ctx, text, replyMarkup = mainMenuKeyboard()) {
       // Fall back to a new message if the selected Telegram message is no longer editable.
     }
   }
-  return telegram.sendMessage({
+  return ctx.telegram.sendMessage({
     chat_id: ctx.chatId,
     text,
     parse_mode: 'HTML',
@@ -135,7 +138,7 @@ async function sendScreen(ctx, text, replyMarkup = mainMenuKeyboard()) {
 async function deleteUserInput(ctx) {
   if (!ctx.messageId || ctx.isCallback) return
   try {
-    await telegram.deleteMessage({ chat_id: ctx.chatId, message_id: ctx.messageId })
+    await ctx.telegram.deleteMessage({ chat_id: ctx.chatId, message_id: ctx.messageId })
   } catch {
     // Some Telegram clients or message ages can reject deletion; this should not block the flow.
   }
@@ -463,7 +466,7 @@ async function handleSearchText(ctx, text) {
   const replyMarkup = results.length ? accountsBrowserKeyboard(results, resultSession) : mainMenuKeyboard()
   if (targetMessageId) {
     try {
-      return await telegram.editMessageText({
+      return await ctx.telegram.editMessageText({
         chat_id: ctx.chatId,
         message_id: targetMessageId,
         text: textResult,
@@ -474,7 +477,7 @@ async function handleSearchText(ctx, text) {
       // Fall back to a new result if Telegram can no longer edit the search card.
     }
   }
-  return telegram.sendMessage({ chat_id: ctx.chatId, text: textResult, parse_mode: 'HTML', reply_markup: replyMarkup })
+  return ctx.telegram.sendMessage({ chat_id: ctx.chatId, text: textResult, parse_mode: 'HTML', reply_markup: replyMarkup })
 }
 
 function helpAdminText() {
@@ -490,7 +493,7 @@ function helpAdminText() {
 
 async function handleAdminCommand(ctx, text) {
   if (text === '/myid') {
-    return telegram.sendMessage({
+    return ctx.telegram.sendMessage({
       chat_id: ctx.chatId,
       text: `<b>رقم تيليغرام</b>\n<blockquote>${escapeHtml(String(ctx.userId || ''))}</blockquote>`,
       parse_mode: 'HTML',
@@ -498,21 +501,21 @@ async function handleAdminCommand(ctx, text) {
   }
   if (!userAccess.isAdmin(ctx.userId)) return false
   if (text === '/admin' || text === '/helpadmin') {
-    return telegram.sendMessage({ chat_id: ctx.chatId, text: helpAdminText(), parse_mode: 'HTML' })
+    return ctx.telegram.sendMessage({ chat_id: ctx.chatId, text: helpAdminText(), parse_mode: 'HTML' })
   }
   if (text === '/users') {
     const users = userAccess.listUsers()
     const rows = users.length
       ? users.map((user) => `${user.source === 'env' ? 'ثابت' : 'مضاف'} · ${user.telegramUserId} · ${user.ledgerId}`).join('\n')
       : 'لا يوجد مستخدمون.'
-    return telegram.sendMessage({
+    return ctx.telegram.sendMessage({
       chat_id: ctx.chatId,
       text: `<b>ADREEM · المستخدمون</b>\n<blockquote>${escapeHtml(rows)}</blockquote>`,
       parse_mode: 'HTML',
     })
   }
   if (text.startsWith('/adduser')) {
-    return telegram.sendMessage({
+    return ctx.telegram.sendMessage({
       chat_id: ctx.chatId,
       text: [
         '<b>إضافة المستخدمين من الويب فقط</b>',
@@ -531,7 +534,7 @@ async function handleCallback(ctx, update) {
     userId: ctx.userId,
     data,
   })
-  await telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
+  await ctx.telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
 
   if (data === 'main:movement') return startMovement(ctx)
   if (data === 'main:home') return showMainMenu(ctx)
@@ -585,7 +588,7 @@ async function handleMessage(ctx, update) {
     return null
   }
   if (await handleSearchText(ctx, text)) return null
-  return telegram.sendMessage({
+  return ctx.telegram.sendMessage({
     chat_id: ctx.chatId,
     text: '<b>افتح ADREEM من /start</b>',
     parse_mode: 'HTML',
@@ -597,10 +600,10 @@ async function handleUpdate(update) {
   const ctx = contextFor(update)
   if (!isPrivateTelegramUpdate(update)) {
     if (update.callback_query?.id) {
-      await telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
+      await ctx.telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
     }
     if (ctx.chatId) {
-      await telegram.sendMessage({
+      await ctx.telegram.sendMessage({
         chat_id: ctx.chatId,
         text: '<b>استخدم ADREEM في محادثة خاصة فقط.</b>',
         parse_mode: 'HTML',
@@ -610,7 +613,7 @@ async function handleUpdate(update) {
   }
   if (!isAllowed(ctx.user)) {
     if (ctx.chatId) {
-      await telegram.sendMessage({
+      await ctx.telegram.sendMessage({
         chat_id: ctx.chatId,
         text: `<b>هذا الدفتر خاص.</b>\n<blockquote>أرسل هذا الرقم لصاحب النظام ليضيفك:\n${escapeHtml(String(ctx.user?.id || ''))}</blockquote>`,
         parse_mode: 'HTML',
@@ -623,9 +626,9 @@ async function handleUpdate(update) {
     const text = String(update.message?.text || '').trim()
     if (text && await handleAdminCommand(ctx, text)) return
     if (update.callback_query?.id) {
-      await telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
+      await ctx.telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
     }
-    await telegram.sendMessage({
+    await ctx.telegram.sendMessage({
       chat_id: ctx.chatId,
       text: '<b>لا يوجد دفتر معيّن لهذا المستخدم.</b>\n<blockquote>عيّن دفترًا صريحًا قبل استخدام البوت.</blockquote>',
       parse_mode: 'HTML',

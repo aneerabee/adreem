@@ -2,6 +2,7 @@ import { closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unl
 import { randomBytes, createHash, pbkdf2Sync, timingSafeEqual } from 'node:crypto'
 import { dirname } from 'node:path'
 import { ADREEM_DEFAULT_LEDGER_ID, createLedgerIdentity, adreemStateRowId } from '../../src/mohammadLedger/ledgerState.js'
+import { DEFAULT_UI_LANGUAGE, normalizeUiLanguage } from '../../src/mohammadLedger/uiLanguage.js'
 import { parseTelegramLedgerMap } from '../mohammadLedger/ledgerRepository.js'
 
 const HASH_PATTERN = /^[a-f0-9]{64}$/i
@@ -120,6 +121,7 @@ export function normalizeTelegramUserEntry(entry = {}) {
     displayName: entry.displayName ? String(entry.displayName).slice(0, 80) : '',
     firstName: entry.firstName ? String(entry.firstName).slice(0, 80) : '',
     username: entry.username ? String(entry.username).slice(0, 80) : '',
+    language: normalizeUiLanguage(entry.language, DEFAULT_UI_LANGUAGE),
   }
 }
 
@@ -333,6 +335,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     displayName = '',
     firstName = '',
     username = '',
+    language = DEFAULT_UI_LANGUAGE,
     createWebToken = false,
   }) {
     void createWebToken
@@ -346,6 +349,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
       displayName,
       firstName,
       username,
+      language,
       passwordHash: password ? createPasswordHash(password) : '',
       webTokenHash: '',
     })
@@ -399,9 +403,10 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
   function updateUser(userId, {
     email,
     password = '',
-    telegramUserId = '',
+    telegramUserId,
     ledgerId,
-    displayName = '',
+    displayName,
+    language,
     updatedBy = '',
   } = {}) {
     const targetUserId = String(userId || '').trim()
@@ -427,6 +432,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
         telegramUserId: telegramUserId === undefined ? target.telegramUserId : telegramUserId,
         ledgerId: target.ledgerId,
         displayName: displayName === undefined ? target.displayName : displayName,
+        language: language === undefined ? target.language : language,
         passwordHash: password ? passwordHash : target.passwordHash,
         sessions: password ? [] : target.sessions,
         updatedAt: new Date().toISOString(),
@@ -551,6 +557,16 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     return target || null
   }
 
+  function userForTelegramId(userId = '') {
+    const telegramUserId = String(userId || '').trim()
+    if (!telegramUserId) return null
+    return loadTelegramUserRegistry(filePath).users.find((user) => user.telegramUserId === telegramUserId) || null
+  }
+
+  function languageForTelegramUser(userId = '') {
+    return normalizeUiLanguage(userForTelegramId(userId)?.language, DEFAULT_UI_LANGUAGE)
+  }
+
   function revokeSessionToken(token = '') {
     const cleanToken = String(token || '').trim()
     if (!cleanToken) return { ok: false, error: 'invalid-token' }
@@ -602,6 +618,8 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     removeUserAccess,
     loginUser,
     userForSessionToken,
+    userForTelegramId,
+    languageForTelegramUser,
     revokeSessionToken,
     listUsers,
   }

@@ -1,8 +1,12 @@
+/** @jsxImportSource ./i18nRuntime */
+/** @jsxRuntime automatic */
 import { useEffect, useMemo, useState } from 'react'
 import {
   ADREEM_API_TOKEN_PERSIST_KEY,
   ADREEM_API_TOKEN_SESSION_KEY,
 } from './mohammadPersistence'
+import { normalizeUiLanguage, uiLanguageDirection } from './uiLanguage'
+import { readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage } from './uiTranslation'
 
 const ADREEM_API_URL = String(import.meta.env.VITE_ADREEM_API_URL || '').replace(/\/+$/, '')
 
@@ -68,7 +72,7 @@ function UserRow({ user, owner, onEdit, onRemove }) {
   const isOwner = owner?.userId && user.userId === owner.userId
   return (
     <article className="adreem-admin-user">
-      <div>
+      <div data-i18n="off">
         <strong>{user.displayName || user.userId || user.ledgerId}</strong>
         <span>{user.email || user.ledgerId}</span>
       </div>
@@ -89,6 +93,9 @@ function UserRow({ user, owner, onEdit, onRemove }) {
 }
 
 export default function AdminUsersPage() {
+  const [language, setLanguage] = useState(readRememberedUiLanguage)
+  const normalizedLanguage = normalizeUiLanguage(language)
+  setActiveUiLanguage(normalizedLanguage)
   const initialToken = useMemo(() => ledgerLoginToken(), [])
   const [token, setToken] = useState(initialToken)
   const [users, setUsers] = useState([])
@@ -113,6 +120,10 @@ export default function AdminUsersPage() {
       const data = await adminRequest('/api/admin/users', { token: nextToken })
       setUsers(Array.isArray(data.users) ? data.users : [])
       setOwner(data.owner || null)
+      if (data.owner?.language) {
+        const nextLanguage = rememberUiLanguage(data.owner.language)
+        setLanguage(nextLanguage)
+      }
       setStatus('ready')
     } catch (error) {
       setStatus('error')
@@ -130,6 +141,10 @@ export default function AdminUsersPage() {
         if (cancelled) return
         setUsers(Array.isArray(data.users) ? data.users : [])
         setOwner(data.owner || null)
+        if (data.owner?.language) {
+          const nextLanguage = rememberUiLanguage(data.owner.language)
+          setLanguage(nextLanguage)
+        }
         setStatus('ready')
       } catch (error) {
         if (cancelled) return
@@ -257,7 +272,7 @@ export default function AdminUsersPage() {
   const normalizedLedgerId = defaultLedgerId(draft.ledgerId || draft.displayName)
 
   return (
-    <main className="adreem-admin-app" dir="rtl">
+    <main className="adreem-admin-app" dir={uiLanguageDirection(normalizedLanguage)} lang={normalizedLanguage}>
       <section className="adreem-admin-shell">
         <header className="adreem-admin-head">
           <div>
