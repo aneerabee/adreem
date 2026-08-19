@@ -15,6 +15,8 @@ export const CURRENCIES = {
 export const MOVEMENT_TYPES = {
   OPENING_BALANCE: 'opening_balance',
   TRANSFER: 'transfer',
+  CASH_DEPOSIT: 'cash_deposit',
+  CASH_WITHDRAWAL: 'cash_withdrawal',
   EXPENSE: 'expense',
   TRUCK_EXPENSE: 'truck_expense',
   TRUCK_INCOME: 'truck_income',
@@ -33,12 +35,16 @@ export const MOVEMENT_STATUSES = {
 
 const TWO_SIDED_TYPES = new Set([
   MOVEMENT_TYPES.TRANSFER,
+  MOVEMENT_TYPES.CASH_DEPOSIT,
+  MOVEMENT_TYPES.CASH_WITHDRAWAL,
   MOVEMENT_TYPES.USD_SALE,
   MOVEMENT_TYPES.USD_PURCHASE,
 ])
 
 const SOURCE_REQUIRED_TYPES = new Set([
   MOVEMENT_TYPES.TRANSFER,
+  MOVEMENT_TYPES.CASH_DEPOSIT,
+  MOVEMENT_TYPES.CASH_WITHDRAWAL,
   MOVEMENT_TYPES.EXPENSE,
   MOVEMENT_TYPES.TRUCK_EXPENSE,
   MOVEMENT_TYPES.USD_SALE,
@@ -47,6 +53,8 @@ const SOURCE_REQUIRED_TYPES = new Set([
 
 const DESTINATION_REQUIRED_TYPES = new Set([
   MOVEMENT_TYPES.TRANSFER,
+  MOVEMENT_TYPES.CASH_DEPOSIT,
+  MOVEMENT_TYPES.CASH_WITHDRAWAL,
   MOVEMENT_TYPES.TRUCK_INCOME,
   MOVEMENT_TYPES.USD_SALE,
   MOVEMENT_TYPES.USD_PURCHASE,
@@ -183,6 +191,22 @@ export function validateMovement(movement, accounts = [], movements = []) {
   }
   const sourceAccount = sourceId ? accountMap.get(sourceId) : null
   const destinationAccount = destinationId ? accountMap.get(destinationId) : null
+  if (type === MOVEMENT_TYPES.CASH_DEPOSIT || type === MOVEMENT_TYPES.CASH_WITHDRAWAL) {
+    const expectedSourceKind = type === MOVEMENT_TYPES.CASH_DEPOSIT ? VALUE_KINDS.CASH : VALUE_KINDS.BANK
+    const expectedDestinationKind = type === MOVEMENT_TYPES.CASH_DEPOSIT ? VALUE_KINDS.BANK : VALUE_KINDS.CASH
+    if (sourceAccount && sourceAccount.valueKind !== expectedSourceKind) {
+      errors.push({ field: 'sourceAccountId', message: type === MOVEMENT_TYPES.CASH_DEPOSIT ? 'الإيداع يبدأ من حساب كاش.' : 'السحب يبدأ من حساب مصرفي.' })
+    }
+    if (destinationAccount && destinationAccount.valueKind !== expectedDestinationKind) {
+      errors.push({ field: 'destinationAccountId', message: type === MOVEMENT_TYPES.CASH_DEPOSIT ? 'الإيداع ينتهي في حساب مصرفي.' : 'السحب ينتهي في حساب كاش.' })
+    }
+    if (sourceAccount && !accountSupportsTransferCurrency(sourceAccount, currency)) {
+      errors.push({ field: 'sourceAccountId', message: 'حساب المصدر لا يدعم عملة الحركة.' })
+    }
+    if (destinationAccount && !accountSupportsTransferCurrency(destinationAccount, currency)) {
+      errors.push({ field: 'destinationAccountId', message: 'حساب الوجهة لا يدعم عملة الحركة.' })
+    }
+  }
   if ((type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) && sourceAccount && !accountSupportsTransferCurrency(sourceAccount, currency)) {
     errors.push({ field: 'sourceAccountId', message: 'حساب المصروف لا يدعم عملة الحركة.' })
   }
@@ -222,6 +246,9 @@ export function validateMovement(movement, accounts = [], movements = []) {
     if (account.type === ACCOUNT_TYPES.SUMMARY) {
       errors.push({ field, message: 'حسابات الملخص لا تستخدم كطرف حركة.' })
     }
+    if (account.valueKind === VALUE_KINDS.PROJECT || account.valueKind === VALUE_KINDS.EXPENSE) {
+      errors.push({ field, message: 'المشروع أو نوع المصروف يستخدم للتصنيف فقط، وليس كحساب فلوس.' })
+    }
     if (account.status === ACCOUNT_STATUSES.INACTIVE) {
       errors.push({ field, message: 'الحساب مخفي ولا يستخدم كطرف حركة.' })
     }
@@ -232,6 +259,12 @@ export function validateMovement(movement, accounts = [], movements = []) {
 
   if (type === MOVEMENT_TYPES.CORRECTION && !movement?.note) {
     errors.push({ field: 'note', message: 'التصحيح يحتاج ملاحظة توضح السبب.' })
+  }
+  if ((type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) && movement?.expenseCategoryId) {
+    const category = accountMap.get(movement.expenseCategoryId)
+    if (!category || category.valueKind !== VALUE_KINDS.EXPENSE || category.status !== ACCOUNT_STATUSES.ACTIVE) {
+      errors.push({ field: 'expenseCategoryId', message: 'نوع المصروف المختار غير صالح.' })
+    }
   }
 
   if (errors.length === 0) {
@@ -261,6 +294,8 @@ export function buildPostingEntries(movement) {
     case MOVEMENT_TYPES.TRUCK_EXPENSE:
       return [{ accountId: movement.sourceAccountId, currency, delta: -Math.abs(amount) }]
     case MOVEMENT_TYPES.TRANSFER:
+    case MOVEMENT_TYPES.CASH_DEPOSIT:
+    case MOVEMENT_TYPES.CASH_WITHDRAWAL:
       return [
         { accountId: movement.sourceAccountId, currency, delta: -Math.abs(amount) },
         { accountId: movement.destinationAccountId, currency, delta: Math.abs(amount) },

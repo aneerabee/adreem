@@ -84,6 +84,7 @@ describe('telegram reconciliation flow', () => {
       .filter((movement) => movement.destinationAccountId === 'me-cash' || movement.sourceAccountId === 'me-cash')
       .reduce((total, movement) => {
         if (movement.status !== MOVEMENT_STATUSES.POSTED) return total
+        if (movement.currency !== CURRENCIES.DINAR) return total
         if (movement.destinationAccountId === 'me-cash') return total + Number(movement.amount || 0)
         if (movement.sourceAccountId === 'me-cash') return total - Number(movement.amount || 0)
         return total

@@ -119,4 +119,55 @@ describe('telegram user registry', () => {
 
     expect(duplicate).toMatchObject({ ok: false, error: 'ledger-used', existingUserId: '555' })
   })
+
+  it('keeps independent web sessions active on more than one device', () => {
+    const filePath = tempFile()
+    const access = createTelegramUserAccess({}, filePath)
+    access.addUser({
+      userId: 'rabee',
+      email: 'rabee@example.com',
+      password: 'secret-password',
+      ledgerId: 'rabee',
+    })
+
+    const phone = access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })
+    const computer = access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })
+    const sessions = registrySessionTokenMap({}, filePath)
+
+    expect(phone.ok).toBe(true)
+    expect(computer.ok).toBe(true)
+    expect(sessions.get(webTokenHash(phone.sessionToken))).toBe('rabee')
+    expect(sessions.get(webTokenHash(computer.sessionToken))).toBe('rabee')
+    expect(loadTelegramUserRegistry(filePath).users[0].sessions).toHaveLength(2)
+  })
+
+  it('refuses changing a ledger id without an explicit data migration', () => {
+    const filePath = tempFile()
+    const access = createTelegramUserAccess({}, filePath)
+    access.addUser({
+      userId: 'rabee',
+      email: 'rabee@example.com',
+      password: 'secret-password',
+      ledgerId: 'rabee',
+    })
+
+    const result = access.updateUser('rabee', { ledgerId: 'new-ledger' })
+
+    expect(result).toMatchObject({ ok: false, error: 'ledger-change-requires-migration' })
+    expect(loadTelegramUserRegistry(filePath).users[0].ledgerId).toBe('rabee')
+  })
+
+  it('preserves removed-user history across later registry writes', () => {
+    const filePath = tempFile()
+    const access = createTelegramUserAccess({}, filePath)
+    access.addUser({ userId: 'first', email: 'first@example.com', password: 'secret-password', ledgerId: 'first' })
+    access.addUser({ userId: 'second', email: 'second@example.com', password: 'secret-password', ledgerId: 'second' })
+
+    expect(access.removeUserAccess('first', { requestedBy: 'owner' }).ok).toBe(true)
+    access.addUser({ userId: 'third', email: 'third@example.com', password: 'secret-password', ledgerId: 'third' })
+
+    const registry = loadTelegramUserRegistry(filePath)
+    expect(registry.removed).toHaveLength(1)
+    expect(registry.removed[0]).toMatchObject({ userId: 'first', removedBy: 'owner' })
+  })
 })

@@ -74,7 +74,10 @@ describe('telegram ledger service', () => {
       sourceAccountId: 'me-cash',
       note: 'وقود',
       attachmentLabel: 'إيصال وقود',
-      attachmentUrl: 'https://example.com/fuel.jpg',
+      attachmentUrl: '',
+      attachmentStoragePath: 'main/2026-08-19/fuel.jpg',
+      attachmentMimeType: 'image/jpeg',
+      attachmentSizeBytes: 1024,
     }
 
     await appendTelegramMovement(repository, draft, {
@@ -93,7 +96,10 @@ describe('telegram ledger service', () => {
     expect(attachments).toHaveLength(1)
     expect(attachments[0]).toMatchObject({
       label: 'إيصال وقود',
-      url: 'https://example.com/fuel.jpg',
+      url: '',
+      storagePath: 'main/2026-08-19/fuel.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 1024,
       source: 'telegram',
     })
   })

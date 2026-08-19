@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { accountPresets } from '../../src/mohammadLedger/accountConfig.js'
+import { accountPresetGroups, accountPresets } from '../../src/mohammadLedger/accountConfig.js'
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
 import { movementTypeOptions } from '../../src/mohammadLedger/movementConfig.js'
 import {
@@ -10,11 +10,21 @@ import {
 export function mainMenuKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '+ إدخال', callback_data: 'main:movement', style: 'success' }, { text: '= الأرصدة', callback_data: 'main:accounts', style: 'primary' }],
-      [{ text: '≡ السجل', callback_data: 'main:history' }, { text: '! مراجعة', callback_data: 'main:review' }],
-      [{ text: 'تنبيهات', callback_data: 'main:alerts', style: 'danger' }, { text: 'مطابقة رصيد', callback_data: 'main:reconcile', style: 'success' }],
-      [{ text: '+ حساب جديد', callback_data: 'main:account', style: 'primary' }],
-      [{ text: 'سجل اليوم', callback_data: 'main:today' }, { text: 'بحث عن حساب', callback_data: 'main:search' }],
+      [{ text: '➕ عملية', callback_data: 'main:movement', style: 'success' }],
+      [{ text: 'الأرصدة', callback_data: 'main:accounts', style: 'primary' }, { text: 'الحركات', callback_data: 'main:history', style: 'primary' }],
+      [{ text: 'المراجعة', callback_data: 'main:review', style: 'danger' }, { text: 'المزيد', callback_data: 'main:more' }],
+    ],
+  }
+}
+
+export function moreMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '➕ حساب جديد', callback_data: 'main:account', style: 'success' }],
+      [{ text: 'تنبيهات', callback_data: 'main:alerts', style: 'danger' }, { text: 'مطابقة رصيد', callback_data: 'main:reconcile', style: 'primary' }],
+      [{ text: 'التقارير', callback_data: 'main:reports', style: 'primary' }, { text: 'الحركات الشهرية', callback_data: 'main:recurring' }],
+      [{ text: 'حركات اليوم', callback_data: 'main:today' }, { text: 'بحث عن حساب', callback_data: 'main:search' }],
+      [{ text: '↩️ الرئيسية', callback_data: 'main:home', style: 'primary' }],
     ],
   }
 }
@@ -59,17 +69,38 @@ export function reconciliationConfirmKeyboard() {
   }
 }
 
-export function accountTypeKeyboard(selectedKey = '') {
+export function accountGroupKeyboard(selectedKey = '') {
   return {
     inline_keyboard: [
-      ...accountPresets.map((preset) => ([{
-        text: `${selectedKey === preset.key ? '✓ ' : ''}${accountTypeIcon(preset.key)} ${preset.title} · ${preset.detail}`,
-        callback_data: `acct:type:${preset.key}`,
-        style: selectedKey === preset.key ? 'success' : 'primary',
+      ...accountPresetGroups.map((group) => ([{
+        text: `${selectedKey === group.key ? '✓ ' : ''}${accountGroupIcon(group.key)} ${group.title} · ${group.hint}`,
+        callback_data: `acct:group:${group.key}`,
+        style: selectedKey === group.key ? 'success' : 'primary',
       }])),
       [{ text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
     ],
   }
+}
+
+export function accountTypeKeyboard(selectedKey = '', groupKey = 'people') {
+  const group = accountPresetGroups.find((item) => item.key === groupKey) || accountPresetGroups[0]
+  const presets = group.keys.map((key) => accountPresets.find((preset) => preset.key === key)).filter(Boolean)
+  return {
+    inline_keyboard: [
+      ...presets.map((preset) => ([{
+        text: `${selectedKey === preset.key ? '✓ ' : ''}${accountTypeIcon(preset.key)} ${preset.title} · ${preset.detail}`,
+        callback_data: `acct:type:${preset.key}`,
+        style: selectedKey === preset.key ? 'success' : 'primary',
+      }])),
+      [{ text: '↩️ رجوع', callback_data: 'acct:back' }, { text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
+    ],
+  }
+}
+
+function accountGroupIcon(key) {
+  if (key === 'people') return '👤'
+  if (key === 'money') return '💰'
+  return '📊'
 }
 
 export function accountDetailKeyboard(selectedDetail = '', detailOptions = []) {
@@ -137,6 +168,8 @@ export function movementTypeKeyboard() {
 
 function movementTypeButtonText(option) {
   if (option.tone === 'transfer') return `🔁 ${option.label}`
+  if (option.tone === 'deposit') return `🏦 ${option.label}`
+  if (option.tone === 'withdrawal') return `💵 ${option.label}`
   if (option.tone === 'expense') return `🔴 ${option.label}`
   if (option.tone === 'income') return `🟢 ${option.label}`
   if (option.tone === 'sale') return `🟢 ${option.label}`
@@ -176,6 +209,60 @@ export function accountChoicesKeyboard(accounts, role, balancesByAccountId = new
   return { inline_keyboard: rows }
 }
 
+export function accountsBrowserKeyboard(buckets = [], session = {}) {
+  const rows = buckets.map((bucket) => ([{
+    text: accountChoiceButtonText(bucket.account, bucket),
+    callback_data: `accounts:open:${accountChoiceToken(bucket.account)}`,
+    style: accountChoiceButtonStyle(bucket.account, bucket),
+  }]))
+  rows.push(...paginationRows('accounts', session.page, session.pageCount))
+  rows.push([{ text: '🔎 بحث', callback_data: 'main:search', style: 'primary' }, { text: '↩️ الرئيسية', callback_data: 'main:home' }])
+  return { inline_keyboard: rows }
+}
+
+export function accountProfileKeyboard(page = 0) {
+  return {
+    inline_keyboard: [
+      [{ text: '↩️ الأرصدة', callback_data: `accounts:page:${Math.max(0, Number(page) || 0)}`, style: 'primary' }],
+      [{ text: 'الرئيسية', callback_data: 'main:home' }],
+    ],
+  }
+}
+
+export function recurringRulesKeyboard(session = {}) {
+  const rules = Object.entries(session.choices?.rules || {})
+  const dueRuleIds = new Set(session.dueRuleIds || [])
+  const rows = rules.map(([token, ruleId]) => {
+    const row = []
+    if (dueRuleIds.has(ruleId)) {
+      row.push({ text: `تنفيذ #${Number(token) + 1}`, callback_data: `repeat:run:${token}`, style: 'success' })
+    }
+    row.push({ text: `إيقاف #${Number(token) + 1}`, callback_data: `repeat:disable:${token}`, style: 'danger' })
+    return row
+  })
+  rows.push([{ text: '↩️ المزيد', callback_data: 'main:more', style: 'primary' }])
+  return { inline_keyboard: rows }
+}
+
+export function reportKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '↩️ المزيد', callback_data: 'main:more', style: 'primary' }],
+    ],
+  }
+}
+
+function paginationRows(prefix, page = 0, pageCount = 1) {
+  const current = Math.max(0, Number(page) || 0)
+  const count = Math.max(1, Number(pageCount) || 1)
+  if (count <= 1) return []
+  const buttons = []
+  if (current > 0) buttons.push({ text: 'السابق', callback_data: `${prefix}:page:${current - 1}` })
+  buttons.push({ text: `${current + 1}/${count}`, callback_data: `${prefix}:page:${current}`, style: 'primary' })
+  if (current < count - 1) buttons.push({ text: 'التالي', callback_data: `${prefix}:page:${current + 1}` })
+  return [buttons]
+}
+
 export function accountChoiceToken(account) {
   return createHash('sha1').update(String(account?.id || '')).digest('base64url').slice(0, 10)
 }
@@ -196,6 +283,17 @@ export function dimensionKeyboard(dimensions = []) {
     style: 'primary',
   }]))
   rows.push([{ text: 'بدون مشروع', callback_data: 'mv:dimension:skip', style: 'primary' }])
+  rows.push([{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
+  return { inline_keyboard: rows }
+}
+
+export function expenseCategoryKeyboard(categories = []) {
+  const rows = categories.slice(0, 8).map((category, index) => ([{
+    text: `🧾 ${category.ownerName || category.subAccountName}`,
+    callback_data: `mv:category:${index}`,
+    style: 'primary',
+  }]))
+  rows.push([{ text: 'بدون تصنيف', callback_data: 'mv:category:skip', style: 'primary' }])
   rows.push([{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
   return { inline_keyboard: rows }
 }
@@ -230,21 +328,23 @@ export function confirmKeyboard() {
 
 export function reviewKeyboard(reviewSession) {
   const rows = []
-  const movementTokens = Object.keys(reviewSession?.choices?.movements || {})
-  const accountTokens = Object.keys(reviewSession?.choices?.accounts || {})
+  const pageOffset = Number(reviewSession?.page || 0) * Number(reviewSession?.pageSize || 8)
 
-  movementTokens.forEach((token) => {
+  ;(reviewSession?.items || []).forEach((item) => {
+    const number = pageOffset + Number(item.token) + 1
+    if (item.kind === 'movement') {
+      rows.push([
+        { text: `إصلاح حركة #${number}`, callback_data: `review:movement:fix:${item.token}`, style: 'success' },
+        { text: `إلغاء #${number}`, callback_data: `review:movement:cancel:${item.token}`, style: 'danger' },
+      ])
+      return
+    }
     rows.push([
-      { text: `إصلاح حركة #${Number(token) + 1}`, callback_data: `review:movement:fix:${token}`, style: 'success' },
-      { text: `إلغاء #${Number(token) + 1}`, callback_data: `review:movement:cancel:${token}`, style: 'danger' },
+      { text: `إصلاح حساب #${number}`, callback_data: `review:account:fix:${item.token}`, style: 'success' },
+      { text: `إخفاء إذا صفر #${number}`, callback_data: `review:account:hide:${item.token}`, style: 'primary' },
     ])
   })
-  accountTokens.forEach((token) => {
-    rows.push([
-      { text: `إصلاح حساب #${Number(token) + 1}`, callback_data: `review:account:fix:${token}`, style: 'success' },
-      { text: `إخفاء إذا صفر #${Number(token) + 1}`, callback_data: `review:account:hide:${token}`, style: 'primary' },
-    ])
-  })
+  rows.push(...paginationRows('review', reviewSession?.page, reviewSession?.pageCount))
   rows.push([{ text: '↩️ القائمة', callback_data: 'main:home', style: 'primary' }])
   return { inline_keyboard: rows }
 }
@@ -255,6 +355,7 @@ export function historyKeyboard(historySession) {
   movementTokens.forEach((token) => {
     rows.push([{ text: `إلغاء حركة #${Number(token) + 1}`, callback_data: `history:cancel:${token}`, style: 'danger' }])
   })
+  rows.push(...paginationRows('history', historySession?.page, historySession?.pageCount))
   rows.push([{ text: '↩️ القائمة', callback_data: 'main:home', style: 'primary' }])
   return { inline_keyboard: rows }
 }

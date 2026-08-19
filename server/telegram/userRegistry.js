@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomBytes, createHash, pbkdf2Sync, timingSafeEqual } from 'node:crypto'
 import { dirname } from 'node:path'
 import { ADREEM_DEFAULT_LEDGER_ID, createLedgerIdentity, adreemStateRowId } from '../../src/mohammadLedger/ledgerState.js'
@@ -8,6 +8,7 @@ const HASH_PATTERN = /^[a-f0-9]{64}$/i
 const PASSWORD_ITERATIONS = 210_000
 const PASSWORD_KEYLEN = 32
 const SESSION_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000
+const MAX_ACTIVE_SESSIONS = 12
 
 export function parseIdList(value = '') {
   return String(value || '')
@@ -35,6 +36,32 @@ function normalizeEmail(value = '') {
 function normalizeOptionalHash(value = '') {
   const hash = String(value || '').trim().toLowerCase()
   return HASH_PATTERN.test(hash) ? hash : ''
+}
+
+function normalizeSession(entry = {}) {
+  const tokenHash = normalizeOptionalHash(entry.tokenHash || entry.sessionTokenHash)
+  const expiresAt = String(entry.expiresAt || entry.sessionExpiresAt || '').trim()
+  if (!tokenHash || !expiresAt || !Number.isFinite(new Date(expiresAt).getTime())) return null
+  return {
+    tokenHash,
+    expiresAt,
+    createdAt: String(entry.createdAt || entry.lastLoginAt || '').trim(),
+  }
+}
+
+function normalizeSessions(entry = {}) {
+  const candidates = [
+    ...(Array.isArray(entry.sessions) ? entry.sessions : []),
+    entry.sessionTokenHash ? entry : null,
+  ].filter(Boolean)
+  const byHash = new Map()
+  for (const candidate of candidates) {
+    const session = normalizeSession(candidate)
+    if (session) byHash.set(session.tokenHash, session)
+  }
+  return Array.from(byHash.values())
+    .sort((left, right) => new Date(left.createdAt || 0) - new Date(right.createdAt || 0))
+    .slice(-MAX_ACTIVE_SESSIONS)
 }
 
 export function createPasswordHash(password = '') {
@@ -72,15 +99,15 @@ export function normalizeTelegramUserEntry(entry = {}) {
   const identity = createLedgerIdentity({ ledgerId: rawLedgerId })
   if (!userId || !rawLedgerId || !identity.ledgerId) return null
   if (identity.ledgerId === ADREEM_DEFAULT_LEDGER_ID && rawLedgerId.toLowerCase() !== ADREEM_DEFAULT_LEDGER_ID) return null
-  const sessionExpiresAt = entry.sessionExpiresAt ? String(entry.sessionExpiresAt) : ''
   return {
     userId,
     email,
     telegramUserId,
     ledgerId: identity.ledgerId,
     webTokenHash: normalizeOptionalHash(entry.webTokenHash),
-    sessionTokenHash: normalizeOptionalHash(entry.sessionTokenHash),
-    sessionExpiresAt,
+    sessionTokenHash: '',
+    sessionExpiresAt: '',
+    sessions: normalizeSessions(entry),
     passwordHash: String(entry.passwordHash || '').startsWith('pbkdf2-sha256$') ? String(entry.passwordHash) : '',
     addedAt: entry.addedAt || new Date().toISOString(),
     addedBy: entry.addedBy ? String(entry.addedBy) : '',
@@ -96,16 +123,33 @@ export function loadTelegramUserRegistry(filePath = defaultRegistryPath()) {
   try {
     const data = JSON.parse(readFileSync(filePath, 'utf8'))
     const users = Array.isArray(data?.users) ? data.users.map(normalizeTelegramUserEntry).filter(Boolean) : []
-    return { users }
+    const removed = Array.isArray(data?.removed) ? data.removed.filter((entry) => entry && typeof entry === 'object') : []
+    return { users, removed }
   } catch (error) {
-    if (error?.code === 'ENOENT') return { users: [] }
+    if (error?.code === 'ENOENT') return { users: [], removed: [] }
     throw error
   }
 }
 
 export function saveTelegramUserRegistry(filePath, registry) {
   mkdirSync(dirname(filePath), { recursive: true })
-  writeFileSync(filePath, `${JSON.stringify({ ...registry, users: registry.users || [] }, null, 2)}\n`, { mode: 0o600 })
+  const temporaryPath = `${filePath}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`
+  const payload = `${JSON.stringify({
+    ...registry,
+    users: registry.users || [],
+    removed: registry.removed || [],
+  }, null, 2)}\n`
+  try {
+    writeFileSync(temporaryPath, payload, { mode: 0o600, flag: 'wx' })
+    renameSync(temporaryPath, filePath)
+  } catch (error) {
+    try {
+      unlinkSync(temporaryPath)
+    } catch {
+      // The temporary file may not have been created.
+    }
+    throw error
+  }
 }
 
 export function createTelegramUserAccess(env = process.env, filePath = defaultRegistryPath(env)) {
@@ -214,7 +258,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     const nextUsers = registry.users.filter((user) => user.userId !== entry.userId)
     nextUsers.push(entry)
     nextUsers.sort((a, b) => a.userId.localeCompare(b.userId))
-    saveTelegramUserRegistry(filePath, { users: nextUsers })
+    saveTelegramUserRegistry(filePath, { ...registry, users: nextUsers })
     return { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }), webToken, webUrl: webUrlForToken(webToken, env) }
   }
 
@@ -230,15 +274,20 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     const registry = loadTelegramUserRegistry(filePath)
     const target = registry.users.find((user) => user.userId === targetUserId)
     if (!target) return { ok: false, error: 'not-found' }
+    const requestedLedgerId = ledgerId === undefined
+      ? target.ledgerId
+      : createLedgerIdentity({ ledgerId }).ledgerId
+    if (requestedLedgerId !== target.ledgerId) {
+      return { ok: false, error: 'ledger-change-requires-migration' }
+    }
     const entry = normalizeTelegramUserEntry({
       ...target,
       email: email === undefined ? target.email : email,
       telegramUserId: telegramUserId === undefined ? target.telegramUserId : telegramUserId,
-      ledgerId: ledgerId === undefined ? target.ledgerId : ledgerId,
+      ledgerId: target.ledgerId,
       displayName: displayName === undefined ? target.displayName : displayName,
       passwordHash: password ? createPasswordHash(password) : target.passwordHash,
-      sessionTokenHash: password ? '' : target.sessionTokenHash,
-      sessionExpiresAt: password ? '' : target.sessionExpiresAt,
+      sessions: password ? [] : target.sessions,
       updatedAt: new Date().toISOString(),
       updatedBy,
     })
@@ -263,7 +312,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     }
     const nextUsers = registry.users.map((user) => (user.userId === targetUserId ? entry : user))
     nextUsers.sort((a, b) => a.userId.localeCompare(b.userId))
-    saveTelegramUserRegistry(filePath, { users: nextUsers })
+    saveTelegramUserRegistry(filePath, { ...registry, users: nextUsers })
     return { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }) }
   }
 
@@ -274,7 +323,14 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     if (!target) return { ok: false, error: 'not-found' }
     if (isOwnerUser(target)) return { ok: false, error: 'owner-protected' }
     const nextUsers = registry.users.filter((user) => user.userId !== targetUserId)
-    saveTelegramUserRegistry(filePath, { users: nextUsers, removed: [{ ...target, removedAt: new Date().toISOString(), removedBy: requestedBy }] })
+    saveTelegramUserRegistry(filePath, {
+      ...registry,
+      users: nextUsers,
+      removed: [
+        ...(registry.removed || []),
+        { ...target, removedAt: new Date().toISOString(), removedBy: requestedBy },
+      ],
+    })
     return { ok: true, removed: target }
   }
 
@@ -288,16 +344,23 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     }
     const sessionToken = createPrivateWebToken()
     const sessionExpiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
+    const session = {
+      tokenHash: webTokenHash(sessionToken),
+      expiresAt: sessionExpiresAt,
+      createdAt: new Date().toISOString(),
+    }
     const nextUsers = registry.users.map((user) => user.userId === target.userId
       ? {
           ...user,
-          sessionTokenHash: webTokenHash(sessionToken),
-          sessionExpiresAt,
+          sessions: [
+            ...(user.sessions || []).filter((item) => new Date(item.expiresAt || 0).getTime() > Date.now()),
+            session,
+          ].slice(-MAX_ACTIVE_SESSIONS),
           lastLoginAt: new Date().toISOString(),
         }
       : user)
-    saveTelegramUserRegistry(filePath, { users: nextUsers })
-    const entry = normalizeTelegramUserEntry({ ...target, sessionTokenHash: webTokenHash(sessionToken), sessionExpiresAt })
+    saveTelegramUserRegistry(filePath, { ...registry, users: nextUsers })
+    const entry = normalizeTelegramUserEntry({ ...target, sessions: [...(target.sessions || []), session] })
     return { ok: true, entry, sessionToken, sessionExpiresAt }
   }
 
@@ -307,10 +370,10 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     if (!normalizeOptionalHash(hash)) return null
     const registry = loadTelegramUserRegistry(filePath)
     const now = Date.now()
-    const target = registry.users.find((user) => {
-      const expiresAt = new Date(user.sessionExpiresAt || 0).getTime()
-      return user.sessionTokenHash === hash && Number.isFinite(expiresAt) && expiresAt > now
-    })
+    const target = registry.users.find((user) => (user.sessions || []).some((session) => {
+      const expiresAt = new Date(session.expiresAt || 0).getTime()
+      return session.tokenHash === hash && Number.isFinite(expiresAt) && expiresAt > now
+    }))
     return target || null
   }
 
@@ -351,9 +414,11 @@ export function registryWebTokenMap(env = process.env, filePath = defaultRegistr
   const now = Date.now()
   const pairs = []
   for (const user of registry.users) {
-    const expiresAt = new Date(user.sessionExpiresAt || 0).getTime()
-    if (user.sessionTokenHash && Number.isFinite(expiresAt) && expiresAt > now) {
-      pairs.push([user.sessionTokenHash, user.ledgerId])
+    for (const session of user.sessions || []) {
+      const expiresAt = new Date(session.expiresAt || 0).getTime()
+      if (session.tokenHash && Number.isFinite(expiresAt) && expiresAt > now) {
+        pairs.push([session.tokenHash, user.ledgerId])
+      }
     }
   }
   return new Map(pairs)
@@ -364,9 +429,11 @@ export function registrySessionTokenMap(env = process.env, filePath = defaultReg
   const now = Date.now()
   const pairs = []
   for (const user of registry.users) {
-    const expiresAt = new Date(user.sessionExpiresAt || 0).getTime()
-    if (user.sessionTokenHash && Number.isFinite(expiresAt) && expiresAt > now) {
-      pairs.push([user.sessionTokenHash, user.ledgerId])
+    for (const session of user.sessions || []) {
+      const expiresAt = new Date(session.expiresAt || 0).getTime()
+      if (session.tokenHash && Number.isFinite(expiresAt) && expiresAt > now) {
+        pairs.push([session.tokenHash, user.ledgerId])
+      }
     }
   }
   return new Map(pairs)

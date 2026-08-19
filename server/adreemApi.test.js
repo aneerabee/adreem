@@ -3,12 +3,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  clientIp,
   createAdreemApiHandler,
+  createMemoryRateLimiter,
+  isLedgerStoragePath,
   parseLedgerTokenHashMap,
   parseLedgerTokenMap,
   tokenFromAuthHeader,
   tokenHash,
 } from './adreemApi.js'
+import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './mohammadLedger/attachmentValidation.js'
 import { createPasswordHash } from './telegram/userRegistry.js'
 
 let tempDir = null
@@ -114,6 +118,29 @@ describe('ADREEM web API auth helpers', () => {
     expect(tokenFromAuthHeader('abc123')).toBe('')
   })
 
+  it('keeps attachment paths inside the authenticated ledger folder', () => {
+    expect(isLedgerStoragePath('main/2026-08-19/receipt.pdf', 'main')).toBe(true)
+    expect(isLedgerStoragePath('other/2026-08-19/receipt.pdf', 'main')).toBe(false)
+    expect(isLedgerStoragePath('../main/receipt.pdf', 'main')).toBe(false)
+    expect(isLedgerStoragePath('main', 'main')).toBe(false)
+  })
+
+  it('uses the address added by the trusted proxy instead of a spoofed first value', () => {
+    expect(clientIp({ headers: { 'x-forwarded-for': '198.51.100.9, 203.0.113.7' }, socket: { remoteAddress: '127.0.0.1' } })).toBe('203.0.113.7')
+    expect(clientIp({ headers: {}, socket: { remoteAddress: '127.0.0.1' } })).toBe('127.0.0.1')
+  })
+
+  it('rejects malformed attachment data and verifies file signatures', () => {
+    expect(() => decodeCanonicalBase64('not-base64')).toThrow(/invalid/i)
+    expect(decodeCanonicalBase64(Buffer.from('%PDF-test').toString('base64')).toString()).toBe('%PDF-test')
+
+    expect(attachmentContentMatchesMime(Buffer.from('%PDF-test'), 'application/pdf')).toBe(true)
+    expect(attachmentContentMatchesMime(Buffer.from('%PDF-test'), 'image/jpeg')).toBe(false)
+    expect(attachmentContentMatchesMime(Buffer.from([0xff, 0xd8, 0xff, 0x00]), 'image/jpeg')).toBe(true)
+    expect(attachmentContentMatchesMime(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), 'image/png')).toBe(true)
+    expect(attachmentContentMatchesMime(Buffer.from('RIFF0000WEBP'), 'image/webp')).toBe(true)
+  })
+
   it('allows browser preflight for admin edit and delete requests', async () => {
     const api = createAdreemApiHandler({
       SUPABASE_URL: 'https://example.supabase.co',
@@ -131,6 +158,52 @@ describe('ADREEM web API auth helpers', () => {
     expect(response.body).toBe('')
     expect(response.headers['access-control-allow-methods']).toContain('PATCH')
     expect(response.headers['access-control-allow-methods']).toContain('DELETE')
+  })
+
+  it('marks authenticated responses as private and non-cacheable', async () => {
+    const api = createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: tempRegistry([
+        registryPasswordUser({
+          userId: 'main',
+          displayName: 'Main',
+          email: 'main@example.com',
+          password: 'main-pass-123',
+          ledgerId: 'main',
+        }),
+      ]),
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
+    api.__setRepositoryForTest?.({
+      async load() {
+        return { state: { accounts: [], movements: [] }, source: 'test' }
+      },
+    })
+    const response = createMockResponse()
+
+    await api({
+      method: 'GET',
+      url: '/api/ledger',
+      headers: { authorization: `Bearer ${token}` },
+    }, response)
+
+    expect(response.headers['cache-control']).toBe('no-store, private')
+    expect(response.headers.pragma).toBe('no-cache')
+    expect(response.headers['x-content-type-options']).toBe('nosniff')
+  })
+
+  it('bounds and expires in-memory rate-limit buckets', () => {
+    let now = 1_000
+    const limiter = createMemoryRateLimiter(() => now, { maxBuckets: 3 })
+    const rule = { limit: 2, windowMs: 100 }
+
+    for (const key of ['a', 'b', 'c', 'd']) limiter.check(key, rule)
+    expect(limiter.size()).toBeLessThanOrEqual(3)
+
+    now = 1_200
+    limiter.check('fresh', rule)
+    expect(limiter.size()).toBe(1)
   })
 
   it('rejects unknown sessions before any ledger access', async () => {
@@ -216,6 +289,7 @@ describe('ADREEM web API auth helpers', () => {
     ])
     const api = createAdreemApiHandler({
       ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_OWNER_USER_IDS: 'rabee',
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -231,6 +305,7 @@ describe('ADREEM web API auth helpers', () => {
       }
     })
 
+    const accessResults = []
     for (const token of [tokenA, tokenB]) {
       const response = createMockResponse()
       await api({
@@ -239,9 +314,14 @@ describe('ADREEM web API auth helpers', () => {
         headers: { authorization: `Bearer ${token}` },
       }, response)
       expect(response.statusCode).toBe(200)
+      accessResults.push(JSON.parse(response.body).access)
     }
 
     expect(requestedLedgers).toEqual(['rabee', 'saeed'])
+    expect(accessResults).toEqual([
+      { canManageUsers: true },
+      { canManageUsers: false },
+    ])
   })
 
   it('routes registry sessions without requiring an API restart', async () => {
@@ -299,8 +379,26 @@ describe('ADREEM web API auth helpers', () => {
     const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
     let updateCallback = null
     const currentState = {
-      accounts: [{ id: 'from-bot', updatedAt: '2026-01-01T10:00:00.000Z' }],
-      movements: [{ id: 'bot-movement', updatedAt: '2026-01-01T10:01:00.000Z' }],
+      accounts: [{
+        id: 'from-bot',
+        ownerName: 'Bot',
+        subAccountName: 'Main',
+        type: 'person',
+        valueKind: 'receivable',
+        currencyKind: 'LYD',
+        status: 'active',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        updatedAt: '2026-01-01T10:00:00.000Z',
+      }],
+      movements: [{
+        id: 'bot-movement',
+        type: 'transfer',
+        status: 'needs_review',
+        amount: 1,
+        currency: 'LYD',
+        createdAt: '2026-01-01T10:01:00.000Z',
+        updatedAt: '2026-01-01T10:01:00.000Z',
+      }],
       savedAt: '2026-01-01T10:01:00.000Z',
       version: 2,
     }
@@ -314,8 +412,26 @@ describe('ADREEM web API auth helpers', () => {
 
     const request = createJsonRequest({
       state: {
-        accounts: [{ id: 'from-web', updatedAt: '2026-01-01T10:02:00.000Z' }],
-        movements: [{ id: 'web-movement', updatedAt: '2026-01-01T10:03:00.000Z' }],
+        accounts: [{
+          id: 'from-web',
+          ownerName: 'Web',
+          subAccountName: 'Main',
+          type: 'person',
+          valueKind: 'receivable',
+          currencyKind: 'LYD',
+          status: 'active',
+          createdAt: '2026-01-01T10:02:00.000Z',
+          updatedAt: '2026-01-01T10:02:00.000Z',
+        }],
+        movements: [{
+          id: 'web-movement',
+          type: 'transfer',
+          status: 'needs_review',
+          amount: 1,
+          currency: 'LYD',
+          createdAt: '2026-01-01T10:03:00.000Z',
+          updatedAt: '2026-01-01T10:03:00.000Z',
+        }],
         savedAt: '2026-01-01T10:03:00.000Z',
         version: 2,
       },
@@ -332,6 +448,69 @@ describe('ADREEM web API auth helpers', () => {
     expect(response.statusCode).toBe(200)
     expect(payload.state.accounts.map((account) => account.id).sort()).toEqual(['from-bot', 'from-web'])
     expect(payload.state.movements.map((movement) => movement.id).sort()).toEqual(['bot-movement', 'web-movement'])
+  })
+
+  it('rejects posted web movements that violate ledger integrity', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'main',
+        displayName: 'Main',
+        email: 'main@example.com',
+        password: 'main-pass-123',
+        ledgerId: 'main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
+    const currentState = {
+      accounts: [{
+        id: 'cash-main',
+        ownerName: 'أنا',
+        subAccountName: 'كاش',
+        type: 'cash',
+        valueKind: 'cash',
+        currencyKind: 'LYD',
+        status: 'active',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        updatedAt: '2026-01-01T10:00:00.000Z',
+      }],
+      movements: [],
+      savedAt: '2026-01-01T10:00:00.000Z',
+      version: 2,
+    }
+    api.__setRepositoryForTest?.({
+      ledgerConfig: { identity: { ledgerId: 'main' } },
+      async update(callback) {
+        return callback(currentState)
+      },
+    })
+    const request = createJsonRequest({
+      state: {
+        ...currentState,
+        movements: [{
+          id: 'expense-1',
+          type: 'expense',
+          status: 'posted',
+          amount: 100,
+          currency: 'LYD',
+          sourceAccountId: 'cash-main',
+          createdAt: '2026-01-01T10:01:00.000Z',
+          updatedAt: '2026-01-01T10:01:00.000Z',
+        }],
+        savedAt: '2026-01-01T10:01:00.000Z',
+      },
+    }, { token })
+    const response = createMockResponse()
+    const promise = api(request, response)
+    request.emitBody()
+    await promise
+
+    expect(response.statusCode).toBe(422)
+    expect(JSON.parse(response.body).error).toContain('Ledger integrity check failed')
   })
 
   it('rejects admin users endpoint without a valid owner session', async () => {

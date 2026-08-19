@@ -4,19 +4,31 @@ import { buildLedgerSnapshot } from '../mohammadLedger/ledgerService.js'
 
 export const REVIEW_ACTION_LIMIT = 8
 
-export function buildReviewSession(state, limit = REVIEW_ACTION_LIMIT) {
-  const accounts = state.accounts
-    .filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW)
-    .slice(0, limit)
-  const movements = state.movements
-    .filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
-    .slice(0, limit)
+export function buildReviewSession(state, limit = REVIEW_ACTION_LIMIT, requestedPage = 0) {
+  const allItems = [
+    ...state.accounts
+      .filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW)
+      .map((account) => ({ kind: 'account', id: account.id, value: account })),
+    ...state.movements
+      .filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
+      .map((movement) => ({ kind: 'movement', id: movement.id, value: movement })),
+  ]
+  const pageCount = Math.max(1, Math.ceil(allItems.length / limit))
+  const page = Math.min(Math.max(0, Number(requestedPage) || 0), pageCount - 1)
+  const items = allItems
+    .slice(page * limit, page * limit + limit)
+    .map((item, index) => ({ ...item, token: String(index) }))
 
   return {
     flow: 'review',
+    page,
+    pageCount,
+    pageSize: limit,
+    total: allItems.length,
+    items,
     choices: {
-      accounts: Object.fromEntries(accounts.map((account, index) => [String(index), account.id])),
-      movements: Object.fromEntries(movements.map((movement, index) => [String(index), movement.id])),
+      accounts: Object.fromEntries(items.filter((item) => item.kind === 'account').map((item) => [item.token, item.id])),
+      movements: Object.fromEntries(items.filter((item) => item.kind === 'movement').map((item) => [item.token, item.id])),
     },
   }
 }

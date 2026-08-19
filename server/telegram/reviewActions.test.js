@@ -80,7 +80,36 @@ describe('telegram review actions', () => {
     expect(session.flow).toBe('review')
     expect(session.choices.accounts['0']).toBe('review-zero')
     expect(session.choices.accounts['1']).toBe('review-funded')
-    expect(session.choices.movements['0']).toBe('bad-transfer')
+    expect(session.choices.movements['2']).toBe('bad-transfer')
+  })
+
+  it('paginates accounts and movements as one review queue', () => {
+    const base = stateWithReviewItems()
+    const state = {
+      ...base,
+      accounts: [
+        ...base.accounts,
+        ...Array.from({ length: 7 }, (_, index) => ({
+          id: `review-extra-${index}`,
+          ownerName: `مراجعة إضافية ${index}`,
+          subAccountName: 'كاش',
+          type: 'review',
+          valueKind: 'review',
+          currencyKind: CURRENCIES.DINAR,
+          status: ACCOUNT_STATUSES.NEEDS_REVIEW,
+        })),
+      ],
+    }
+
+    const first = buildReviewSession(state, 8, 0)
+    const second = buildReviewSession(state, 8, 1)
+
+    expect(first.total).toBe(10)
+    expect(first.pageCount).toBe(2)
+    expect(first.items).toHaveLength(8)
+    expect(second.items).toHaveLength(2)
+    expect(second.choices.accounts['0']).toBe('review-extra-6')
+    expect(second.choices.movements['1']).toBe('bad-transfer')
   })
 
   it('voids a needs-review movement without changing posted balances', () => {

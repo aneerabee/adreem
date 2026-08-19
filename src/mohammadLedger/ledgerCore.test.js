@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, mohammadAccountCatalog, mohammadSummaryAccounts } from './accountCatalog'
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS, mohammadAccountCatalog, mohammadSummaryAccounts } from './accountCatalog'
 import {
   CURRENCIES,
   MOVEMENT_STATUSES,
@@ -22,11 +22,11 @@ describe('mohammad ledger core', () => {
     const openings = createOpeningMovements(mohammadAccountCatalog)
     const balances = summarizeBalances(mohammadAccountCatalog, openings)
 
-    expect(getAccountBalance('me-cash', mohammadAccountCatalog, openings).dinar).toBe(47164.675)
-    expect(getAccountBalance('me-cash', mohammadAccountCatalog, openings).usd).toBe(0.220779)
-    expect(getAccountBalance('me-jumhouria', mohammadAccountCatalog, openings).dinar).toBe(-27290)
-    expect(balances.find((bucket) => bucket.account.id === 'saeed-cash').dinar).toBe(18260)
-    expect(balances.find((bucket) => bucket.account.id === 'saeed-bank').dinar).toBe(13569.99889)
+    expect(getAccountBalance('me-cash', mohammadAccountCatalog, openings).dinar).toBe(50000)
+    expect(getAccountBalance('me-cash', mohammadAccountCatalog, openings).usd).toBe(500)
+    expect(getAccountBalance('me-jumhouria', mohammadAccountCatalog, openings).dinar).toBe(30000)
+    expect(balances.find((bucket) => bucket.account.id === 'saeed-cash').dinar).toBe(12000)
+    expect(balances.find((bucket) => bucket.account.id === 'saeed-bank').dinar).toBe(8000)
   })
 
   it('previews transfer effects before posting', () => {
@@ -45,8 +45,8 @@ describe('mohammad ledger core', () => {
 
     expect(preview.validation.ok).toBe(true)
     expect(preview.effects).toEqual([
-      expect.objectContaining({ accountId: 'me-cash', before: 47164.675, delta: -500, after: 46664.675 }),
-      expect.objectContaining({ accountId: 'saeed-cash', before: 18260, delta: 500, after: 18760 }),
+      expect.objectContaining({ accountId: 'me-cash', before: 50000, delta: -500, after: 49500 }),
+      expect.objectContaining({ accountId: 'saeed-cash', before: 12000, delta: 500, after: 12500 }),
     ])
   })
 
@@ -66,7 +66,7 @@ describe('mohammad ledger core', () => {
 
     expect(preview.validation.ok).toBe(true)
     expect(preview.effects).toEqual([
-      expect.objectContaining({ accountId: 'me-cash', before: 47164.675, delta: -100, after: 47064.675 }),
+      expect.objectContaining({ accountId: 'me-cash', before: 50000, delta: -100, after: 49900 }),
     ])
   })
 
@@ -143,7 +143,7 @@ describe('mohammad ledger core', () => {
     expect(badMovement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
     expect(buildPostingEntries(badMovement)).toEqual([])
     const balance = getAccountBalance('saeed-cash', mohammadAccountCatalog, [...openings, badMovement])
-    expect(balance.dinar).toBe(18260)
+    expect(balance.dinar).toBe(12000)
   })
 
   it('rejects summary accounts as posting endpoints', () => {
@@ -196,6 +196,85 @@ describe('mohammad ledger core', () => {
 
     expect(movement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
     expect(movement.validation.errors.some((error) => error.message.includes('نفس النوع'))).toBe(true)
+  })
+
+  it('supports cash deposits and withdrawals as explicit same-currency bank routes', () => {
+    const accounts = [
+      createAccount({ id: 'cash', ownerName: 'أنا', subAccountName: 'الخزنة', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, openingDinar: 1_000 }),
+      createAccount({ id: 'bank', ownerName: 'أنا', subAccountName: 'الجمهورية', type: ACCOUNT_TYPES.BANK, valueKind: VALUE_KINDS.BANK, openingDinar: 500 }),
+    ]
+    const openings = createOpeningMovements(accounts)
+    const deposit = postMovement({
+      type: MOVEMENT_TYPES.CASH_DEPOSIT,
+      amount: 300,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash',
+      destinationAccountId: 'bank',
+    }, accounts, openings)
+    const afterDeposit = [...openings, deposit]
+    const withdrawal = postMovement({
+      type: MOVEMENT_TYPES.CASH_WITHDRAWAL,
+      amount: 200,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'bank',
+      destinationAccountId: 'cash',
+    }, accounts, afterDeposit)
+
+    expect(deposit.status).toBe(MOVEMENT_STATUSES.POSTED)
+    expect(withdrawal.status).toBe(MOVEMENT_STATUSES.POSTED)
+    expect(getAccountBalance('cash', accounts, [...afterDeposit, withdrawal]).dinar).toBe(900)
+    expect(getAccountBalance('bank', accounts, [...afterDeposit, withdrawal]).dinar).toBe(600)
+  })
+
+  it('rejects reversed or mixed-currency cash and bank routes', () => {
+    const accounts = [
+      createAccount({ id: 'cash', ownerName: 'أنا', subAccountName: 'الخزنة', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.DINAR, openingDinar: 1_000 }),
+      createAccount({ id: 'bank', ownerName: 'أنا', subAccountName: 'الجمهورية', type: ACCOUNT_TYPES.BANK, valueKind: VALUE_KINDS.BANK, currencyKind: CURRENCIES.DINAR, openingDinar: 500 }),
+    ]
+    const reversed = postMovement({
+      type: MOVEMENT_TYPES.CASH_DEPOSIT,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'bank',
+      destinationAccountId: 'cash',
+    }, accounts, createOpeningMovements(accounts))
+    const wrongCurrency = postMovement({
+      type: MOVEMENT_TYPES.CASH_WITHDRAWAL,
+      amount: 100,
+      currency: CURRENCIES.USD,
+      sourceAccountId: 'bank',
+      destinationAccountId: 'cash',
+    }, accounts, createOpeningMovements(accounts))
+
+    expect(reversed.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(wrongCurrency.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+  })
+
+  it('keeps projects and expense categories out of financial posting endpoints', () => {
+    const accounts = [
+      createAccount({ id: 'cash', ownerName: 'أنا', subAccountName: 'الخزنة', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, openingDinar: 1_000 }),
+      createAccount({ id: 'truck-project', ownerName: 'الشاحنة', subAccountName: 'مشروع', type: ACCOUNT_TYPES.PROJECT, valueKind: VALUE_KINDS.PROJECT }),
+      createAccount({ id: 'fuel', ownerName: 'وقود', subAccountName: 'مصروف', type: ACCOUNT_TYPES.EXPENSE, valueKind: VALUE_KINDS.EXPENSE }),
+    ]
+    const invalidDestination = postMovement({
+      type: MOVEMENT_TYPES.TRANSFER,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash',
+      destinationAccountId: 'truck-project',
+    }, accounts, createOpeningMovements(accounts))
+    const categorizedExpense = postMovement({
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash',
+      destinationAccountId: null,
+      expenseCategoryId: 'fuel',
+    }, accounts, createOpeningMovements(accounts))
+
+    expect(invalidDestination.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(categorizedExpense.status).toBe(MOVEMENT_STATUSES.POSTED)
+    expect(buildPostingEntries(categorizedExpense)).toHaveLength(1)
   })
 
   it('keeps currency exchange flows available for cash-to-bank conversion', () => {
@@ -321,12 +400,12 @@ describe('mohammad ledger core', () => {
       openings,
     )
     const withMovement = getAccountBalance('omar-gold', mohammadAccountCatalog, [...openings, movement])
-    expect(withMovement.dinar).toBe(25500)
+    expect(withMovement.dinar).toBe(21000)
 
     const result = voidMovement(movement, 'إدخال بالخطأ')
     expect(result.ok).toBe(true)
     const afterVoid = getAccountBalance('omar-gold', mohammadAccountCatalog, [...openings, result.movement])
-    expect(afterVoid.dinar).toBe(24500)
+    expect(afterVoid.dinar).toBe(20000)
     expect(result.movement.status).toBe(MOVEMENT_STATUSES.VOIDED)
   })
 
@@ -544,10 +623,10 @@ describe('mohammad ledger core', () => {
     const expense = mohammadAccountCatalog.find((account) => account.id === 'personal-expense')
     const asset = mohammadAccountCatalog.find((account) => account.type === ACCOUNT_TYPES.ASSET)
 
-    expect(formatBalanceMeaning(person, -24942.2)).toBe('أدفع له 24,942')
-    expect(formatBalanceMeaning(bank, -27290)).toBe('ناقص 27,290')
-    expect(formatBalanceMeaning(expense, 112240)).toBe('تكلفة 112,240')
-    expect(formatBalanceMeaning(asset, 15550)).toBe('قيمة/رصيد أصل 15,550')
+    expect(formatBalanceMeaning(person, -20000)).toBe('أدفع له 20,000')
+    expect(formatBalanceMeaning(bank, -30000)).toBe('ناقص 30,000')
+    expect(formatBalanceMeaning(expense, 100000)).toBe('تكلفة 100,000')
+    expect(formatBalanceMeaning(asset, 15000)).toBe('قيمة/رصيد أصل 15,000')
   })
 
   it('creates dynamic accounts with validation before use', () => {
@@ -567,15 +646,15 @@ describe('mohammad ledger core', () => {
   it('rejects duplicate active accounts with the same owner and detail', () => {
     const account = createAccount({
       id: 'duplicate-saeed-cash',
-      ownerName: 'سعيد',
-      subAccountName: 'كاش',
+      ownerName: 'شخص أ',
+      subAccountName: 'كاش بيننا',
       type: ACCOUNT_TYPES.PERSON,
       valueKind: 'receivable',
     })
     const inactiveAccount = createAccount({
       id: 'inactive-saeed-cash',
-      ownerName: 'سعيد',
-      subAccountName: 'كاش',
+      ownerName: 'شخص أ',
+      subAccountName: 'كاش بيننا',
       type: ACCOUNT_TYPES.PERSON,
       valueKind: 'receivable',
       status: ACCOUNT_STATUSES.INACTIVE,

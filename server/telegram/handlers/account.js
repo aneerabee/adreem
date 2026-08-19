@@ -3,6 +3,7 @@ import {
   accountDetailOptionsFor,
   accountNeedsCurrency,
   accountPresetFor,
+  accountPresetGroupFor,
   accountPresets,
   applyAccountName,
   emptyAccountDraft,
@@ -15,6 +16,7 @@ import {
 } from '../../mohammadLedger/accountService.js'
 import { accountLabel } from '../../mohammadLedger/ledgerService.js'
 import {
+  accountGroupKeyboard,
   accountConfirmKeyboard,
   accountCurrencyKeyboard,
   accountDetailKeyboard,
@@ -25,6 +27,7 @@ import {
 import { accountCreatedText, accountReviewText, accountStepText } from '../messages.js'
 
 const STEPS = {
+  GROUP: 'group',
   TYPE: 'type',
   OWNER: 'owner',
   DETAIL: 'detail',
@@ -33,16 +36,35 @@ const STEPS = {
 }
 
 function createAccountSession(options = {}) {
+  const hasExistingDraft = Boolean(options.draft)
   return {
     flow: 'account',
     mode: options.mode || 'create',
-    step: STEPS.TYPE,
+    step: STEPS.GROUP,
     sessionId: randomUUID(),
     draft: options.draft || emptyAccountDraft(),
+    presetGroup: options.presetGroup ?? (hasExistingDraft
+      ? accountPresetGroupFor(accountPresetFor(options.draft?.type, options.draft?.valueKind)).key
+      : ''),
     reviewAccountId: options.reviewAccountId || '',
     reviewOriginalLabel: options.reviewOriginalLabel || '',
     uiMessageId: null,
   }
+}
+
+function applyPresetToSession(session, preset) {
+  session.draft = {
+    ...session.draft,
+    ownerName: preset.ownerName || '',
+    type: preset.type,
+    valueKind: preset.valueKind,
+    subAccountName: preset.subAccountName,
+    currencyKind: session.draft.currencyKind,
+  }
+}
+
+function groupNeedsTypeStep(groupOrKey) {
+  return accountPresetGroupFor(groupOrKey).keys.length > 1
 }
 
 async function upsertAccountMessage(ctx, session, payload) {
@@ -77,11 +99,17 @@ async function upsertAccountMessage(ctx, session, payload) {
 }
 
 async function sendStep(ctx, session, result = null) {
+  if (session.step === STEPS.GROUP) {
+    return upsertAccountMessage(ctx, session, {
+      text: accountStepText(session),
+      reply_markup: accountGroupKeyboard(session.presetGroup),
+    })
+  }
   if (session.step === STEPS.TYPE) {
     const preset = accountPresetFor(session.draft.type, session.draft.valueKind)
     return upsertAccountMessage(ctx, session, {
       text: accountStepText(session),
-      reply_markup: accountTypeKeyboard(preset.key),
+      reply_markup: accountTypeKeyboard(preset.key, session.presetGroup),
     })
   }
   if (session.step === STEPS.OWNER) {
@@ -146,6 +174,9 @@ export async function startReviewAccount(ctx, accountId) {
       ...emptyAccountDraft(),
       ownerName: account.ownerName || '',
       subAccountName: account.subAccountName || 'كاش بيننا',
+      type: account.type,
+      valueKind: account.valueKind,
+      currencyKind: account.currencyKind,
       notes: account.notes || '',
     },
   })
@@ -180,17 +211,27 @@ export async function handleAccountCallback(ctx, data) {
     return sendStep(ctx, session)
   }
 
+  if (!callbackMatchesCurrentAccountStep(data, session.step)) return sendStep(ctx, session)
+
+  if (data.startsWith('acct:group:')) {
+    const key = data.slice('acct:group:'.length)
+    const group = accountPresetGroupFor(key)
+    if (group.key !== key) return sendStep(ctx, session)
+    session.presetGroup = group.key
+    const solePreset = group.keys.length === 1
+      ? accountPresets.find((preset) => preset.key === group.keys[0])
+      : null
+    if (solePreset) applyPresetToSession(session, solePreset)
+    session.step = solePreset ? STEPS.OWNER : STEPS.TYPE
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
   if (data.startsWith('acct:type:')) {
     const key = data.slice('acct:type:'.length)
-    const preset = accountPresets.find((item) => item.key === key) || accountPresets[0]
-    session.draft = {
-      ...session.draft,
-      ownerName: preset.ownerName || '',
-      type: preset.type,
-      valueKind: preset.valueKind,
-      subAccountName: preset.subAccountName,
-      currencyKind: session.draft.currencyKind,
-    }
+    const preset = accountPresets.find((item) => item.key === key)
+    if (!preset || accountPresetGroupFor(preset).key !== session.presetGroup) return sendStep(ctx, session)
+    applyPresetToSession(session, preset)
     session.step = STEPS.OWNER
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -352,9 +393,19 @@ export async function handleAccountText(ctx, text) {
 function previousStep(session) {
   const step = session?.step
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
-  if (step === STEPS.OWNER) return STEPS.TYPE
+  if (step === STEPS.TYPE) return STEPS.GROUP
+  if (step === STEPS.OWNER) return groupNeedsTypeStep(session?.presetGroup) ? STEPS.TYPE : STEPS.GROUP
   if (step === STEPS.DETAIL) return STEPS.OWNER
   if (step === STEPS.CURRENCY) return preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL
   if (step === STEPS.REVIEW) return accountNeedsCurrency(session?.draft) ? STEPS.CURRENCY : (preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL)
-  return STEPS.TYPE
+  return STEPS.GROUP
+}
+
+function callbackMatchesCurrentAccountStep(data, step) {
+  if (data.startsWith('acct:group:')) return step === STEPS.GROUP
+  if (data.startsWith('acct:type:')) return step === STEPS.TYPE
+  if (data.startsWith('acct:detail:')) return step === STEPS.DETAIL
+  if (data.startsWith('acct:currency:')) return step === STEPS.CURRENCY
+  if (data === 'acct:confirm') return step === STEPS.REVIEW
+  return true
 }

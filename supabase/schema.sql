@@ -8,6 +8,7 @@ create table if not exists ml_state (
 );
 
 alter table ml_state enable row level security;
+alter table ml_state force row level security;
 
 drop policy if exists "ml_state_all" on ml_state;
 drop policy if exists "ml_state_adreem_main" on ml_state;
@@ -17,3 +18,5 @@ drop policy if exists "ml_state_update_adreem_main" on ml_state;
 
 -- No anon policies by design. Web access must go through ADREEM API with a server-side service role.
 -- The service role bypasses RLS and can still migrate the old "default" row into the ADREEM row.
+revoke all on table ml_state from public, anon, authenticated;
+grant select, insert, update, delete on table ml_state to service_role;

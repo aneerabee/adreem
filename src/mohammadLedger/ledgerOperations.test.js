@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createOpeningMovements } from './ledgerCore.js'
 import {
+  attachmentsForRecord,
   buildDimensionReports,
+  buildExpenseCategoryReports,
   buildLedgerAlerts,
   buildReconciliationCorrectionDrafts,
   createAttachment,
@@ -10,7 +12,11 @@ import {
   createRecurringRuleFromMovement,
   disableRecurringRule,
   dueRecurringRules,
+  executeRecurringRuleInState,
+  hideAttachment,
   runRecurringRule,
+  syncRecurringRulesFromMovement,
+  updateRecurringRule,
   validateAttachmentDraft,
 } from './ledgerOperations.js'
 
@@ -30,7 +36,7 @@ describe('adreem operational features', () => {
       ownerName: 'الشاحنة',
       subAccountName: 'مشروع',
       type: ACCOUNT_TYPES.PROJECT,
-      valueKind: VALUE_KINDS.ASSET,
+      valueKind: VALUE_KINDS.PROJECT,
       status: 'active',
     },
   ]
@@ -103,7 +109,26 @@ describe('adreem operational features', () => {
   it('rejects unsafe attachment drafts before saving metadata', () => {
     expect(validateAttachmentDraft({ label: 'ملف', mimeType: 'application/x-msdownload' }).ok).toBe(false)
     expect(validateAttachmentDraft({ label: 'ملف كبير', sizeBytes: 11 * 1024 * 1024 }).ok).toBe(false)
+    expect(validateAttachmentDraft({ label: 'رابط', url: 'javascript:alert(1)' }).ok).toBe(false)
+    expect(validateAttachmentDraft({ label: 'رابط', url: 'https://example.com/receipt.pdf' }).ok).toBe(true)
     expect(createAttachment({ label: '', url: '' })).toBeNull()
+  })
+
+  it('hides attachments without deleting their storage reference', () => {
+    const attachment = createAttachment({
+      movementId: 'movement-1',
+      label: 'إيصال',
+      storagePath: 'main/2026-08-19/receipt.pdf',
+      mimeType: 'application/pdf',
+    })
+    const hidden = hideAttachment(attachment, '2026-08-19T12:00:00.000Z')
+
+    expect(hidden).toMatchObject({
+      status: 'inactive',
+      storagePath: 'main/2026-08-19/receipt.pdf',
+      disabledAt: '2026-08-19T12:00:00.000Z',
+    })
+    expect(attachmentsForRecord([hidden], { movementId: 'movement-1' })).toEqual([])
   })
 
   it('records reconciliation expectations and actual values', () => {
@@ -148,6 +173,25 @@ describe('adreem operational features', () => {
     ])
   })
 
+  it('reports expense totals by category without treating the category as a money account', () => {
+    const expenseAccounts = [
+      ...accounts,
+      { id: 'fuel', ownerName: 'وقود', subAccountName: 'مصروف', type: ACCOUNT_TYPES.EXPENSE, valueKind: VALUE_KINDS.EXPENSE, status: 'active' },
+    ]
+    const reports = buildExpenseCategoryReports({
+      accounts: expenseAccounts,
+      movements: [
+        { id: 'fuel-1', type: MOVEMENT_TYPES.EXPENSE, status: MOVEMENT_STATUSES.POSTED, amount: 150, currency: CURRENCIES.DINAR, sourceAccountId: 'me-cash', expenseCategoryId: 'fuel' },
+        { id: 'other-1', type: MOVEMENT_TYPES.EXPENSE, status: MOVEMENT_STATUSES.POSTED, amount: 50, currency: CURRENCIES.DINAR, sourceAccountId: 'me-cash' },
+      ],
+    })
+
+    expect(reports).toEqual([
+      expect.objectContaining({ categoryId: 'fuel', name: 'وقود', dinar: 150, count: 1 }),
+      expect.objectContaining({ categoryId: '', name: 'بدون تصنيف', dinar: 50, count: 1 }),
+    ])
+  })
+
   it('runs monthly recurring rules once per month', () => {
     const movement = {
       id: 'rent-1',
@@ -165,6 +209,76 @@ describe('adreem operational features', () => {
     expect(run.movement.id).toContain('2026-05')
     expect(run.rule.lastRunKey).toBe('2026-05')
     expect(dueRecurringRules([run.rule], date)).toHaveLength(0)
+  })
+
+  it('executes a due recurring rule idempotently in the full ledger state', () => {
+    const rule = createRecurringRuleFromMovement({
+      id: 'rent-1',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      currency: CURRENCIES.DINAR,
+      amount: 100,
+      sourceAccountId: 'me-cash',
+      note: 'إيجار',
+    }, { dayOfMonth: 1 })
+    const state = {
+      accounts,
+      movements: createOpeningMovements([{ ...accounts[0], openingDinar: 500 }]),
+      recurringRules: [rule],
+      auditEvents: [],
+    }
+    const date = new Date('2026-05-25T12:00:00.000Z')
+
+    const first = executeRecurringRuleInState(state, rule.id, date)
+    const second = executeRecurringRuleInState(first.state, rule.id, date)
+
+    expect(first.ok).toBe(true)
+    expect(first.state.movements.filter((item) => item.recurringRuleId === rule.id)).toHaveLength(1)
+    expect(first.state.recurringRules[0].lastRunKey).toBe('2026-05')
+    expect(second.ok).toBe(false)
+    expect(second.state.movements).toHaveLength(first.state.movements.length)
+  })
+
+  it('marks a repaired recurring movement as completed for its month', () => {
+    const rule = {
+      ...createRecurringRuleFromMovement({
+        id: 'rent-1',
+        type: MOVEMENT_TYPES.EXPENSE,
+        status: MOVEMENT_STATUSES.POSTED,
+        currency: CURRENCIES.DINAR,
+        amount: 100,
+        sourceAccountId: 'me-cash',
+      }),
+      lastFailedRunKey: '2026-05',
+    }
+    const repaired = {
+      id: `recurring-${rule.id}-2026-05`,
+      recurringRuleId: rule.id,
+      recurringRunKey: '2026-05',
+      status: MOVEMENT_STATUSES.POSTED,
+      updatedAt: '2026-05-25T12:00:00.000Z',
+    }
+
+    const [synced] = syncRecurringRulesFromMovement([rule], repaired, '2026-05-25T12:01:00.000Z')
+
+    expect(synced.lastRunKey).toBe('2026-05')
+    expect(dueRecurringRules([synced], new Date('2026-05-30T12:00:00.000Z'))).toHaveLength(0)
+  })
+
+  it('only marks a monthly rule due on or after its chosen day', () => {
+    const movement = {
+      id: 'rent-1',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      currency: CURRENCIES.DINAR,
+      amount: 100,
+      sourceAccountId: 'me-cash',
+      note: 'إيجار',
+    }
+    const rule = createRecurringRuleFromMovement(movement, { dayOfMonth: 20 })
+
+    expect(dueRecurringRules([rule], new Date('2026-05-19T12:00:00.000Z'))).toHaveLength(0)
+    expect(dueRecurringRules([rule], new Date('2026-05-20T12:00:00.000Z'))).toHaveLength(1)
   })
 
   it('keeps an invalid recurring rule due after a failed review run', () => {
@@ -206,6 +320,30 @@ describe('adreem operational features', () => {
       disabledAt: '2026-05-26T00:00:00.000Z',
     })
     expect(dueRecurringRules([disabled], new Date('2026-06-01T00:00:00.000Z'))).toHaveLength(0)
+  })
+
+  it('updates the recurring day without losing execution history', () => {
+    const rule = {
+      ...createRecurringRuleFromMovement({
+        id: 'rent-1',
+        type: MOVEMENT_TYPES.EXPENSE,
+        status: MOVEMENT_STATUSES.POSTED,
+        currency: CURRENCIES.DINAR,
+        amount: 100,
+        sourceAccountId: 'me-cash',
+      }, { dayOfMonth: 5 }),
+      lastRunKey: '2026-04',
+    }
+
+    const updated = updateRecurringRule(rule, { dayOfMonth: 20, name: 'إيجار المقر' }, '2026-05-01T00:00:00.000Z')
+
+    expect(updated).toMatchObject({
+      id: rule.id,
+      dayOfMonth: 20,
+      name: 'إيجار المقر',
+      lastRunKey: '2026-04',
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    })
   })
 
   it('builds actionable ledger alerts without false positives', () => {

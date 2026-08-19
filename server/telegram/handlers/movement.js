@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
 import { CURRENCIES } from '../../../src/mohammadLedger/ledgerCore.js'
 import {
   movementConfigFor,
@@ -7,10 +8,15 @@ import {
   movementNeedsDestination,
   movementNeedsRate,
   movementNeedsSource,
-  movementPreferredAccountIds,
   movementSupportsDimension,
+  movementSupportsExpenseCategory,
+  movementTypeOptions,
 } from '../../../src/mohammadLedger/movementConfig.js'
-import { dimensionsFromAccounts } from '../../../src/mohammadLedger/ledgerOperations.js'
+import {
+  ALLOWED_ATTACHMENT_MIME_TYPES,
+  ATTACHMENT_MAX_SIZE_BYTES,
+  dimensionsFromAccounts,
+} from '../../../src/mohammadLedger/ledgerOperations.js'
 import {
   appendTelegramMovement,
   buildLedgerSnapshot,
@@ -28,6 +34,7 @@ import {
   confirmKeyboard,
   currencyKeyboard,
   dimensionKeyboard,
+  expenseCategoryKeyboard,
   mainMenuKeyboard,
   movementTypeKeyboard,
   noteKeyboard,
@@ -44,6 +51,7 @@ const STEPS = {
   DESTINATION: 'destination',
   NOTE: 'note',
   DIMENSION: 'dimension',
+  CATEGORY: 'category',
   ATTACHMENT: 'attachment',
   RECURRING: 'recurring',
   REVIEW: 'review',
@@ -66,8 +74,13 @@ function createMovementSession(options = {}) {
       rate: undefined,
       note: '',
       dimensionId: '',
+      expenseCategoryId: '',
       attachmentLabel: '',
       attachmentUrl: '',
+      attachmentStoragePath: '',
+      attachmentMimeType: '',
+      attachmentSizeBytes: 0,
+      attachmentPending: null,
       recurringEnabled: false,
     },
     choices: {},
@@ -90,6 +103,16 @@ function nextAfterSource(type) {
   return movementNeedsDestination(type) ? STEPS.DESTINATION : STEPS.NOTE
 }
 
+function nextAfterNote(type) {
+  if (movementSupportsDimension(type)) return STEPS.DIMENSION
+  if (movementSupportsExpenseCategory(type)) return STEPS.CATEGORY
+  return STEPS.ATTACHMENT
+}
+
+function nextAfterDimension(type) {
+  return movementSupportsExpenseCategory(type) ? STEPS.CATEGORY : STEPS.ATTACHMENT
+}
+
 async function sendStep(ctx, session, textPrefix = '') {
   let state
   try {
@@ -105,7 +128,9 @@ async function sendStep(ctx, session, textPrefix = '') {
   const snapshot = buildLedgerSnapshot(state)
   const dimensions = dimensionsFromAccounts(state.accounts, state.dimensions)
   const dimensionById = new Map(dimensions.map((dimension) => [dimension.id, dimension]))
-  const header = movementStepText(session, snapshot.accountById, dimensionById)
+  const expenseCategories = state.accounts.filter((account) => account.status === 'active' && account.valueKind === VALUE_KINDS.EXPENSE)
+  const expenseCategoryById = new Map(expenseCategories.map((category) => [category.id, category]))
+  const header = movementStepText(session, snapshot.accountById, dimensionById, expenseCategoryById)
   const text = textPrefix ? `${header}\n\n${textPrefix}` : header
 
   if (session.step === STEPS.TYPE) {
@@ -128,7 +153,7 @@ async function sendStep(ctx, session, textPrefix = '') {
   }
   if (session.step === STEPS.DIMENSION) {
     if (!movementSupportsDimension(session.draft.type) || !dimensions.length) {
-      session.step = STEPS.ATTACHMENT
+      session.step = nextAfterDimension(session.draft.type)
       ctx.sessions.set(ctx.chatId, ctx.userId, session)
       return sendStep(ctx, session)
     }
@@ -140,6 +165,22 @@ async function sendStep(ctx, session, textPrefix = '') {
     return upsertFlowMessage(ctx, session, {
       text: `${text}\n\n${stepPromptText(session)}`,
       reply_markup: dimensionKeyboard(dimensions),
+    })
+  }
+  if (session.step === STEPS.CATEGORY) {
+    if (!movementSupportsExpenseCategory(session.draft.type) || !expenseCategories.length) {
+      session.step = STEPS.ATTACHMENT
+      ctx.sessions.set(ctx.chatId, ctx.userId, session)
+      return sendStep(ctx, session)
+    }
+    session.choices = {
+      ...session.choices,
+      category: Object.fromEntries(expenseCategories.slice(0, 8).map((category, index) => [String(index), category.id])),
+    }
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return upsertFlowMessage(ctx, session, {
+      text: `${text}\n\n${stepPromptText(session)}`,
+      reply_markup: expenseCategoryKeyboard(expenseCategories),
     })
   }
   if (session.step === STEPS.ATTACHMENT) {
@@ -195,14 +236,8 @@ async function upsertFlowMessage(ctx, session, payload) {
 
 async function sendAccountChoices(ctx, session, state, role, query = '') {
   const accounts = getMovementAccounts(state, session.draft.type, role, session.draft)
-  const preferredIds = movementPreferredAccountIds(session.draft.type, role)
   const rankedAll = rankAccountsForTelegram(accounts, state, query)
-  const ranked = [
-    ...preferredIds
-      .map((id) => rankedAll.find((account) => account.id === id))
-      .filter(Boolean),
-    ...rankedAll.filter((account) => !preferredIds.includes(account.id)),
-  ].slice(0, 8)
+  const ranked = rankedAll.slice(0, 8)
   session.choices = {
     ...session.choices,
     [role]: Object.fromEntries(ranked.map((account) => [accountChoiceToken(account), account.id])),
@@ -212,7 +247,8 @@ async function sendAccountChoices(ctx, session, state, role, query = '') {
   const snapshot = buildLedgerSnapshot(state)
   const dimensions = dimensionsFromAccounts(state.accounts, state.dimensions)
   const dimensionById = new Map(dimensions.map((dimension) => [dimension.id, dimension]))
-  const lines = [movementStepText(session, snapshot.accountById, dimensionById), '']
+  const expenseCategoryById = new Map(state.accounts.filter((account) => account.valueKind === VALUE_KINDS.EXPENSE).map((category) => [category.id, category]))
+  const lines = [movementStepText(session, snapshot.accountById, dimensionById, expenseCategoryById), '']
   lines.push(stepPromptText(session))
   if (query) lines.push(`<b>بحث:</b> ${escapeHtml(query)}`)
   lines.push(ranked.length ? `<b>${ranked.length} اختيارات مناسبة.</b> اضغط الاسم المطلوب.` : '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
@@ -252,8 +288,13 @@ export async function startReviewMovement(ctx, movementId) {
       rate: movement.rate,
       note: movement.note || '',
       dimensionId: movement.dimensionId || '',
+      expenseCategoryId: movement.expenseCategoryId || '',
       attachmentLabel: '',
       attachmentUrl: '',
+      attachmentStoragePath: '',
+      attachmentMimeType: '',
+      attachmentSizeBytes: 0,
+      attachmentPending: null,
       recurringEnabled: false,
     },
   })
@@ -265,6 +306,9 @@ export async function handleMovementCallback(ctx, data) {
   const session = ctx.sessions.get(ctx.chatId, ctx.userId)
   if (!session || session.flow !== 'movement') return sendExpiredMovementMessage(ctx)
   if (isStaleMovementCallback(ctx, session)) return sendExpiredMovementMessage(ctx)
+  if (!callbackMatchesCurrentStep(data, session.step)) {
+    return sendStep(ctx, session, 'هذا زر من خطوة سابقة. أكمل من الخطوة الظاهرة الآن.')
+  }
 
   if (data === 'mv:cancel') {
     const cancelText = session.mode === 'review' ? 'تم إلغاء إصلاح الحركة.' : 'تم إلغاء الإدخال.'
@@ -290,6 +334,9 @@ export async function handleMovementCallback(ctx, data) {
 
   if (data.startsWith('mv:type:')) {
     const type = data.slice('mv:type:'.length)
+    if (!movementTypeOptions.some((option) => option.type === type)) {
+      return sendStep(ctx, session, 'نوع الحركة غير صالح. اختر من الأزرار الظاهرة.')
+    }
     const config = movementConfigFor(type)
     session.draft = {
       ...session.draft,
@@ -300,8 +347,13 @@ export async function handleMovementCallback(ctx, data) {
       destinationAccountId: '',
       rate: movementNeedsRate(type) ? session.draft.rate : undefined,
       dimensionId: movementSupportsDimension(type) ? session.draft.dimensionId || '' : '',
+      expenseCategoryId: movementSupportsExpenseCategory(type) ? session.draft.expenseCategoryId || '' : '',
       attachmentLabel: session.draft.attachmentLabel || '',
       attachmentUrl: session.draft.attachmentUrl || '',
+      attachmentStoragePath: session.draft.attachmentStoragePath || '',
+      attachmentMimeType: session.draft.attachmentMimeType || '',
+      attachmentSizeBytes: Number(session.draft.attachmentSizeBytes || 0),
+      attachmentPending: session.draft.attachmentPending || null,
       recurringEnabled: Boolean(session.draft.recurringEnabled),
     }
     session.step = STEPS.AMOUNT
@@ -338,7 +390,7 @@ export async function handleMovementCallback(ctx, data) {
 
   if (data === 'mv:note:skip') {
     session.draft.note = ''
-    session.step = movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.REVIEW
+    session.step = nextAfterNote(session.draft.type)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
   }
@@ -346,6 +398,14 @@ export async function handleMovementCallback(ctx, data) {
   if (data.startsWith('mv:dimension:')) {
     const token = data.slice('mv:dimension:'.length)
     session.draft.dimensionId = token === 'skip' ? '' : session.choices?.dimension?.[token] || ''
+    session.step = nextAfterDimension(session.draft.type)
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
+  if (data.startsWith('mv:category:')) {
+    const token = data.slice('mv:category:'.length)
+    session.draft.expenseCategoryId = token === 'skip' ? '' : session.choices?.category?.[token] || ''
     session.step = STEPS.ATTACHMENT
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -354,6 +414,10 @@ export async function handleMovementCallback(ctx, data) {
   if (data === 'mv:attachment:skip') {
     session.draft.attachmentLabel = ''
     session.draft.attachmentUrl = ''
+    session.draft.attachmentStoragePath = ''
+    session.draft.attachmentMimeType = ''
+    session.draft.attachmentSizeBytes = 0
+    session.draft.attachmentPending = null
     session.step = STEPS.RECURRING
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -368,6 +432,27 @@ export async function handleMovementCallback(ctx, data) {
 
   if (data === 'mv:confirm') {
     session.draft.currency = session.draft.currency || movementCurrencyFor(session.draft.type, CURRENCIES.DINAR)
+    if (session.draft.attachmentPending) {
+      try {
+        const uploaded = await ctx.repository.uploadAttachmentFile(session.draft.attachmentPending)
+        session.draft = {
+          ...session.draft,
+          attachmentLabel: uploaded.label,
+          attachmentUrl: '',
+          attachmentStoragePath: uploaded.storagePath,
+          attachmentMimeType: uploaded.mimeType,
+          attachmentSizeBytes: uploaded.sizeBytes,
+          attachmentPending: null,
+        }
+        ctx.sessions.set(ctx.chatId, ctx.userId, session)
+      } catch (error) {
+        console.error('[adreem-telegram-bot] attachment upload failed', error?.message || error)
+        return upsertFlowMessage(ctx, session, {
+          text: '<b>تعذر رفع المرفق.</b>\n<blockquote>لم تُحفظ الحركة. حاول مرة أخرى أو ارجع واحذف المرفق.</blockquote>',
+          reply_markup: confirmKeyboard(),
+        })
+      }
+    }
     let result
     try {
       if (session.mode === 'review') {
@@ -390,6 +475,7 @@ export async function handleMovementCallback(ctx, data) {
       })
     }
     if (result.rejected) {
+      await removeRejectedUploadedAttachment(ctx, session)
       return upsertFlowMessage(ctx, session, {
         text: `<b>لم يتم الحفظ.</b>\n<blockquote>${escapeHtml(result.error || 'الحركة لم تعد قابلة للإصلاح من هنا.')}</blockquote>`,
         reply_markup: confirmKeyboard(),
@@ -420,6 +506,22 @@ export async function handleMovementCallback(ctx, data) {
   }
 
   return sendStep(ctx, session, 'أمر غير معروف.')
+}
+
+function callbackMatchesCurrentStep(data, step) {
+  if (data === 'mv:cancel' || data === 'mv:back') return true
+  if (data.startsWith('mv:type:')) return step === STEPS.TYPE
+  if (data.startsWith('mv:currency:')) return step === STEPS.CURRENCY
+  if (data.startsWith('mv:searchhint:')) return step === STEPS.SOURCE || step === STEPS.DESTINATION
+  if (data.startsWith('mv:account:source:')) return step === STEPS.SOURCE
+  if (data.startsWith('mv:account:destination:')) return step === STEPS.DESTINATION
+  if (data === 'mv:note:skip') return step === STEPS.NOTE
+  if (data.startsWith('mv:dimension:')) return step === STEPS.DIMENSION
+  if (data.startsWith('mv:category:')) return step === STEPS.CATEGORY
+  if (data === 'mv:attachment:skip') return step === STEPS.ATTACHMENT
+  if (data.startsWith('mv:recurring:')) return step === STEPS.RECURRING
+  if (data === 'mv:confirm') return step === STEPS.REVIEW
+  return false
 }
 
 function savedMovementSuffix(result, session = {}) {
@@ -500,7 +602,7 @@ export async function handleMovementText(ctx, text) {
 
   if (session.step === STEPS.NOTE) {
     session.draft.note = String(text || '').trim()
-    session.step = movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.ATTACHMENT
+    session.step = nextAfterNote(session.draft.type)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     await sendStep(ctx, session)
     return true
@@ -508,8 +610,15 @@ export async function handleMovementText(ctx, text) {
 
   if (session.step === STEPS.ATTACHMENT) {
     const attachment = parseAttachmentText(text)
-    session.draft.attachmentLabel = attachment.label
-    session.draft.attachmentUrl = attachment.url
+    session.draft = {
+      ...session.draft,
+      attachmentLabel: attachment.label,
+      attachmentUrl: attachment.url,
+      attachmentStoragePath: '',
+      attachmentMimeType: '',
+      attachmentSizeBytes: 0,
+      attachmentPending: null,
+    }
     session.step = STEPS.RECURRING
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     await sendStep(ctx, session)
@@ -517,6 +626,79 @@ export async function handleMovementText(ctx, text) {
   }
 
   return false
+}
+
+export async function handleMovementMedia(ctx, message = {}) {
+  const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+  if (!session || session.flow !== 'movement' || session.step !== STEPS.ATTACHMENT) return false
+  const media = telegramAttachmentFromMessage(message)
+  if (!media) {
+    await sendStep(ctx, session, 'أرسل صورة أو ملف PDF فقط.')
+    return true
+  }
+  if (media.sizeBytes > ATTACHMENT_MAX_SIZE_BYTES) {
+    await sendStep(ctx, session, 'حجم المرفق أكبر من 10 ميغابايت.')
+    return true
+  }
+  if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(media.mimeType)) {
+    await sendStep(ctx, session, 'المسموح: صورة JPG أو PNG أو WebP، أو ملف PDF.')
+    return true
+  }
+
+  try {
+    const file = await ctx.telegram.getFile({ file_id: media.fileId })
+    const buffer = await ctx.telegram.downloadFile(file.file_path, { maxBytes: ATTACHMENT_MAX_SIZE_BYTES })
+    session.draft = {
+      ...session.draft,
+      attachmentLabel: media.fileName,
+      attachmentUrl: '',
+      attachmentStoragePath: '',
+      attachmentMimeType: media.mimeType,
+      attachmentSizeBytes: buffer.length,
+      attachmentPending: {
+        fileName: media.fileName,
+        mimeType: media.mimeType,
+        buffer,
+      },
+    }
+    session.step = STEPS.RECURRING
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    await sendStep(ctx, session)
+  } catch (error) {
+    console.error('[adreem-telegram-bot] attachment download failed', error?.message || error)
+    await sendStep(ctx, session, 'تعذر قراءة المرفق. حاول إرساله مرة أخرى.')
+  }
+  return true
+}
+
+function telegramAttachmentFromMessage(message = {}) {
+  if (message.document) {
+    return {
+      fileId: message.document.file_id,
+      fileName: message.document.file_name || `telegram-file-${message.document.file_unique_id || Date.now()}`,
+      mimeType: String(message.document.mime_type || '').toLowerCase(),
+      sizeBytes: Number(message.document.file_size || 0),
+    }
+  }
+  const photo = Array.isArray(message.photo) ? message.photo.at(-1) : null
+  if (!photo) return null
+  return {
+    fileId: photo.file_id,
+    fileName: `telegram-photo-${photo.file_unique_id || Date.now()}.jpg`,
+    mimeType: 'image/jpeg',
+    sizeBytes: Number(photo.file_size || 0),
+  }
+}
+
+async function removeRejectedUploadedAttachment(ctx, session) {
+  const storagePath = session.draft.attachmentStoragePath
+  if (!storagePath || typeof ctx.repository.deleteAttachmentFile !== 'function') return
+  try {
+    await ctx.repository.deleteAttachmentFile(storagePath)
+    session.draft.attachmentStoragePath = ''
+  } catch (error) {
+    console.error('[adreem-telegram-bot] rejected attachment cleanup failed', error?.message || error)
+  }
 }
 
 function previousStep(session) {
@@ -527,7 +709,8 @@ function previousStep(session) {
   if (session.step === STEPS.DESTINATION) return movementNeedsSource(session.draft.type) ? STEPS.SOURCE : (movementNeedsRate(session.draft.type) ? STEPS.RATE : (movementConfigFor(session.draft.type).currencyLocked ? STEPS.AMOUNT : STEPS.CURRENCY))
   if (session.step === STEPS.NOTE) return movementNeedsDestination(session.draft.type) ? STEPS.DESTINATION : (movementNeedsSource(session.draft.type) ? STEPS.SOURCE : STEPS.CURRENCY)
   if (session.step === STEPS.DIMENSION) return STEPS.NOTE
-  if (session.step === STEPS.ATTACHMENT) return movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.NOTE
+  if (session.step === STEPS.CATEGORY) return movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.NOTE
+  if (session.step === STEPS.ATTACHMENT) return movementSupportsExpenseCategory(session.draft.type) ? STEPS.CATEGORY : (movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.NOTE)
   if (session.step === STEPS.RECURRING) return STEPS.ATTACHMENT
   if (session.step === STEPS.REVIEW) return STEPS.RECURRING
   return STEPS.TYPE

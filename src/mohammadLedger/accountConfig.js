@@ -4,7 +4,7 @@ import { accountCurrencyLabel } from './accountCompatibility.js'
 export const accountPresets = [
   {
     key: 'person-cash',
-    title: 'شخص / جهة',
+    title: 'شخص أو جهة',
     detail: 'له أو عليه',
     type: ACCOUNT_TYPES.PERSON,
     valueKind: VALUE_KINDS.RECEIVABLE,
@@ -30,8 +30,8 @@ export const accountPresets = [
   },
   {
     key: 'own-bank',
-    title: 'فلوسي في مصرف',
-    detail: 'بنك / بطاقة / محفظة',
+    title: 'فلوسي في حساب مصرفي',
+    detail: 'بنك أو بطاقة أو محفظة',
     type: ACCOUNT_TYPES.BANK,
     valueKind: VALUE_KINDS.BANK,
     ownerName: 'أنا',
@@ -58,7 +58,7 @@ export const accountPresets = [
     title: 'مشروع / مركز تكلفة',
     detail: 'إيراد ومصاريف',
     type: ACCOUNT_TYPES.PROJECT,
-    valueKind: VALUE_KINDS.ASSET,
+    valueKind: VALUE_KINDS.PROJECT,
     subAccountName: 'مشروع',
     nameTarget: 'ownerName',
     nameLabel: 'اسم المشروع',
@@ -78,6 +78,45 @@ export const accountPresets = [
     skipDetail: true,
   },
 ]
+
+export const accountPresetGroups = [
+  {
+    key: 'people',
+    title: 'شخص أو جهة',
+    hint: 'حساب بيننا',
+    keys: ['person-cash'],
+  },
+  {
+    key: 'money',
+    title: 'فلوسي',
+    hint: 'كاش أو حساب مصرفي',
+    keys: ['own-cash', 'own-bank'],
+  },
+  {
+    key: 'tracking',
+    title: 'مشروع أو أصل',
+    hint: 'إيراد وتكلفة وقيمة',
+    keys: ['asset', 'project', 'expense'],
+  },
+]
+
+export const accountPresetStepCopy = {
+  people: {
+    title: 'العلاقة',
+    question: 'ما نوع الحساب بينكم؟',
+    hint: 'هذا للحسابات التي بينك وبين شخص أو جهة.',
+  },
+  money: {
+    title: 'مكان الفلوس',
+    question: 'أين موجودة فلوسك؟',
+    hint: 'اختر هل هي كاش عندك أو في مصرف أو محفظة.',
+  },
+  tracking: {
+    title: 'نوع التتبع',
+    question: 'ماذا تريد أن تتابع؟',
+    hint: 'أصل، مشروع، أو نوع مصروف مستقل.',
+  },
+}
 
 export const accountClassificationOptions = accountPresets.map((preset) => ({
   value: `${preset.type}|${preset.valueKind}`,
@@ -101,6 +140,11 @@ export function accountPresetFor(type, valueKind) {
   return accountPresets.find((preset) => preset.type === type && preset.valueKind === valueKind) || accountPresets[0]
 }
 
+export function accountPresetGroupFor(presetOrKey = '') {
+  const presetKey = typeof presetOrKey === 'string' ? presetOrKey : presetOrKey?.key
+  return accountPresetGroups.find((group) => group.key === presetKey || group.keys.includes(presetKey)) || accountPresetGroups[0]
+}
+
 export function accountDetailOptionsFor(type, valueKind) {
   const preset = accountPresetFor(type, valueKind)
   return preset.detailOptions || [preset.subAccountName].filter(Boolean)
@@ -110,6 +154,15 @@ export function displaySubAccountName(value = '') {
   const text = String(value || '').trim()
   if (text === 'مصرفي بيننا') return 'شيك بيننا'
   return text
+}
+
+export function accountDetailName(account = {}) {
+  const text = String(account.subAccountName || '').trim()
+  const isPersonBalance = account.valueKind === VALUE_KINDS.RECEIVABLE || account.type === ACCOUNT_TYPES.PERSON
+  if (!isPersonBalance) return displaySubAccountName(text)
+  if (/^(كاش|نقد|نقدي)$/i.test(text)) return 'كاش بيننا'
+  if (/^(مصرفي|مصرفي بيننا|حساب|شيك)$/i.test(text)) return 'شيك بيننا'
+  return displaySubAccountName(text)
 }
 
 export function accountNeedsCurrency(draftOrPreset = {}) {
@@ -133,7 +186,7 @@ export function applyAccountName(draft = {}, value = '') {
     return {
       ...draft,
       ownerName: preset.ownerName || draft.ownerName || '',
-      subAccountName: cleanValue || preset.subAccountName,
+      subAccountName: cleanValue,
       currencyKind: accountCurrencyKindFor(draft),
     }
   }
@@ -147,7 +200,7 @@ export function applyAccountName(draft = {}, value = '') {
 
 export function accountDisplayName(account = {}) {
   const ownerName = String(account.ownerName || '').trim()
-  const subAccountName = displaySubAccountName(account.subAccountName)
+  const subAccountName = accountDetailName(account)
   const isMine = /^أنا$|^انا$/i.test(ownerName)
   const currencySuffix = accountNeedsCurrency(account) ? ` · ${accountCurrencyLabel(account)}` : ''
   if (account.valueKind === VALUE_KINDS.CASH || (isMine && /كاش|نقد|خزنة|cash/i.test(subAccountName))) return `كاش: ${subAccountName || ownerName || 'كاش'}${currencySuffix}`
@@ -167,7 +220,7 @@ export function accountKindLabel(account = {}) {
   if (account.valueKind === VALUE_KINDS.ASSET) return 'أصل أملكه'
   if (account.valueKind === VALUE_KINDS.EXPENSE) return 'مصروف'
   if (account.valueKind === VALUE_KINDS.REVIEW || account.type === ACCOUNT_TYPES.REVIEW) return 'مراجعة'
-  return `شخص / جهة${currencySuffix}`
+  return `شخص أو جهة${currencySuffix}`
 }
 
 export function accountDraftSummary(draft = {}) {

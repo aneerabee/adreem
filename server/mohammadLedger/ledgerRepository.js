@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createHash } from 'node:crypto'
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
@@ -12,6 +13,8 @@ import {
   normalizeLedgerState,
   selectPersistedLedgerRows,
 } from '../../src/mohammadLedger/ledgerState.js'
+import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../../src/mohammadLedger/ledgerOperations.js'
+import { attachmentContentMatchesMime } from './attachmentValidation.js'
 
 const MAX_SAVE_ATTEMPTS = 4
 const DEFAULT_BACKUP_LIMIT = 60
@@ -40,7 +43,55 @@ export function createLedgerRepository(env = process.env, options = {}) {
     ledgerConfig,
     load: () => loadLedgerState(client, ledgerConfig),
     update: (updater) => updateLedgerState(client, updater, ledgerConfig, env),
+    uploadAttachmentFile: (file) => uploadLedgerAttachmentFile(client, ledgerConfig, env, file),
+    deleteAttachmentFile: (storagePath) => deleteLedgerAttachmentFile(client, ledgerConfig, env, storagePath),
   }
+}
+
+function cleanAttachmentFileName(value = '') {
+  const cleaned = String(value || 'attachment')
+    .trim()
+    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+  return cleaned || 'attachment'
+}
+
+function attachmentBucket(env = process.env) {
+  const bucket = String(env.ADREEM_ATTACHMENTS_BUCKET || '').trim()
+  if (!bucket) throw new Error('Attachments bucket is not configured.')
+  return bucket
+}
+
+async function uploadLedgerAttachmentFile(client, ledgerConfig, env, file = {}) {
+  const buffer = Buffer.isBuffer(file.buffer) ? file.buffer : Buffer.from(file.buffer || '')
+  const mimeType = String(file.mimeType || '').trim().toLowerCase()
+  if (!buffer.length) throw new Error('Attachment file is empty.')
+  if (buffer.length > ATTACHMENT_MAX_SIZE_BYTES) throw new Error('Attachment is larger than 10MB.')
+  if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType)) throw new Error('Attachment type is not allowed.')
+  if (!attachmentContentMatchesMime(buffer, mimeType)) throw new Error('Attachment content does not match its file type.')
+
+  const fileName = cleanAttachmentFileName(file.fileName)
+  const ledgerId = ledgerConfig.identity.ledgerId
+  const date = new Date().toISOString().slice(0, 10)
+  const hash = createHash('sha256').update(`${ledgerId}:${fileName}:${Date.now()}:${buffer.length}`).digest('hex').slice(0, 16)
+  const storagePath = `${ledgerId}/${date}/${hash}-${fileName}`
+  const { error } = await client.storage.from(attachmentBucket(env)).upload(storagePath, buffer, {
+    contentType: mimeType || 'application/octet-stream',
+    upsert: false,
+  })
+  if (error) throw new Error(error.message || 'Attachment upload failed.')
+  return { label: fileName, storagePath, mimeType, sizeBytes: buffer.length }
+}
+
+async function deleteLedgerAttachmentFile(client, ledgerConfig, env, storagePath = '') {
+  const cleanPath = String(storagePath || '').trim()
+  if (!cleanPath.startsWith(`${ledgerConfig.identity.ledgerId}/`) || cleanPath.includes('..')) {
+    throw new Error('Attachment path is outside this ledger.')
+  }
+  const { error } = await client.storage.from(attachmentBucket(env)).remove([cleanPath])
+  if (error) throw new Error(error.message || 'Attachment deletion failed.')
+  return { ok: true }
 }
 
 export function resolveLedgerConfig(env = process.env, options = {}) {

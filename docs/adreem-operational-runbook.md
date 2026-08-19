@@ -46,7 +46,7 @@ ADREEM_RUNTIME_TEST_EMAIL=owner@example.com
 ADREEM_RUNTIME_TEST_PASSWORD=owner-password
 ```
 
-هذه المتغيرات تبقى على السيرفر فقط، ويستخدمها `npm run verify:runtime` لتسجيل الدخول ثم اختبار `/api/ledger`.
+هذه المتغيرات تبقى على السيرفر فقط، ويستخدمها `pnpm verify:runtime` لتسجيل الدخول ثم اختبار `/api/ledger`.
 
 ## الأمان أمام API
 
@@ -86,11 +86,11 @@ https://aneerabee.github.io/adreem/?admin=users
 - اكتب اسم المستخدم.
 - اكتب إيميل المستخدم.
 - اكتب كلمة مرور 8 أحرف على الأقل.
-- اكتب كود دفتر إنجليزي واضح مثل `mohammad` أو `saeed-book`.
-- ضع Telegram ID اختياريًا فقط إذا كان هذا المستخدم سيستعمل البوت.
+- اكتب كود دفتر إنجليزي واضح مثل `main-ledger` أو `business-book`.
+- ضع رقم تيليغرام اختياريًا فقط إذا كان هذا المستخدم سيستعمل البوت.
 - بعد الإنشاء يدخل المستخدم من الرابط العام: `https://aneerabee.github.io/adreem/`.
 
-أي مستخدم غير مضاف لا يستطيع الدخول للدفتر، لكنه يرى Telegram ID الخاص به فقط حتى يرسله لك. لا تفعّل وضع "الجميع مسموح" للدفتر المالي؛ هذا يكسر العزل.
+أي مستخدم غير مضاف لا يستطيع الدخول للدفتر، لكنه يرى رقم تيليغرام الخاص به فقط حتى يرسله لك. لا تفعّل وضع "الجميع مسموح" للدفتر المالي؛ هذا يكسر العزل.
 
 الأوامر المتبقية من داخل البوت:
 
@@ -127,7 +127,7 @@ systemctl --user enable --now adreem-api.service adreem-bot.service
 بعد تشغيل API:
 
 ```bash
-npm run verify:runtime
+pnpm verify:runtime
 systemctl --user status adreem-api.service --no-pager
 systemctl --user status adreem-bot.service --no-pager
 ```

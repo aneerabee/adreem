@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import './adreemDesk.css'
+import AdreemChrome from './AdreemChrome'
 import {
   ACCOUNT_STATUSES,
   ACCOUNT_CURRENCY_KINDS,
@@ -11,17 +12,19 @@ import {
 } from './accountCatalog'
 import {
   accountClassificationOptions,
+  accountDetailName,
   accountDisplayName,
   accountDraftSummary,
   accountKindLabel,
   accountDetailOptionsFor,
   accountNameValue,
   accountNeedsCurrency,
+  accountPresetGroups,
   accountPresetFor,
   accountPresets,
+  accountPresetStepCopy,
   applyAccountName,
   classificationValueFor as classificationValue,
-  displaySubAccountName,
   emptyAccountDraft,
   parseAccountClassification as parseClassification,
 } from './accountConfig'
@@ -43,14 +46,14 @@ import {
   ADREEM_API_TOKEN_PERSIST_KEY,
   ADREEM_API_TOKEN_SESSION_KEY,
   getMohammadPersistenceMode,
-  loadLocalMohammadState,
   loadMohammadPersistedState,
+  resolveAdreemAttachmentUrl,
   saveMohammadPersistedState,
   uploadAdreemAttachmentFile,
 } from './mohammadPersistence'
+import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import {
   createEmptyAdreemState,
-  createMohammadFallbackState,
   normalizeLedgerState,
   normalizeMohammadAccounts,
   sameRecordVersions,
@@ -58,22 +61,22 @@ import {
 import {
   MOVEMENT_ENTRY_STEPS,
   movementConfigFor,
-  movementDefaultsFor,
   movementLabels,
   movementNeedsSource,
-  movementPreferredAccountIds,
   movementSupportsDimension,
   movementTone,
   movementTypeOptions,
 } from './movementConfig'
 import {
   getMovementAccounts,
+  rankMovementAccounts,
   sameLogicalAccount,
 } from './movementAccounts'
 import {
   RECURRING_FREQUENCIES,
   attachmentsForRecord,
   buildDimensionReports,
+  buildExpenseCategoryReports,
   buildLedgerAlerts,
   buildReconciliationCorrectionDrafts,
   createAttachment,
@@ -83,17 +86,12 @@ import {
   disableRecurringRule,
   dimensionsFromAccounts,
   dueRecurringRules,
+  executeRecurringRuleInState,
+  hideAttachment,
   lastReconciliationForAccount,
-  runRecurringRule,
+  syncRecurringRulesFromMovement,
+  updateRecurringRule,
 } from './ledgerOperations'
-
-const sectionTabs = [
-  { key: 'entry', label: 'عملية', mark: '+' },
-  { key: 'accounts', label: 'أرصدة', mark: '=' },
-  { key: 'history', label: 'حركات', mark: '≡' },
-  { key: 'review', label: 'مراجعة', mark: '!' },
-]
-
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -101,8 +99,8 @@ const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
 const accountGroupTabs = [
   { key: 'people', label: 'الناس', title: 'الناس' },
   { key: 'money', label: 'فلوسي', title: 'فلوسي' },
-  { key: 'assets', label: 'أصول', title: 'الأصول' },
-  { key: 'expenses', label: 'صرف', title: 'المصروفات' },
+  { key: 'assets', label: 'متابعة', title: 'الأصول والمشاريع' },
+  { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
   { key: 'review', label: 'ناقص', title: 'مراجعة' },
 ]
 
@@ -130,51 +128,18 @@ const movementOptionGroups = [
     types: [MOVEMENT_TYPES.TRANSFER, MOVEMENT_TYPES.EXPENSE, MOVEMENT_TYPES.EXTERNAL_INCOME],
   },
   {
+    key: 'banking',
+    title: 'المصرف',
+    hint: 'إيداع أو سحب',
+    types: [MOVEMENT_TYPES.CASH_DEPOSIT, MOVEMENT_TYPES.CASH_WITHDRAWAL],
+  },
+  {
     key: 'exchange',
     title: 'الدولار',
     hint: 'بيع أو شراء',
     types: [MOVEMENT_TYPES.USD_SALE, MOVEMENT_TYPES.USD_PURCHASE],
   },
 ]
-
-const accountPresetGroups = [
-  {
-    key: 'people',
-    title: 'ناس',
-    hint: 'له أو عليه',
-    keys: ['person-cash'],
-  },
-  {
-    key: 'money',
-    title: 'فلوسي',
-    hint: 'كاش أو مصرف',
-    keys: ['own-cash', 'own-bank'],
-  },
-  {
-    key: 'tracking',
-    title: 'تتبع',
-    hint: 'أصل أو مشروع',
-    keys: ['asset', 'project', 'expense'],
-  },
-]
-
-const accountPresetStepCopy = {
-  people: {
-    title: 'العلاقة',
-    question: 'ما نوع الحساب بينكم؟',
-    hint: 'هذا للحسابات التي بينك وبين شخص أو جهة.',
-  },
-  money: {
-    title: 'مكان الفلوس',
-    question: 'أين موجودة فلوسك؟',
-    hint: 'اختر هل هي كاش عندك أو في مصرف/محفظة.',
-  },
-  tracking: {
-    title: 'نوع التتبع',
-    question: 'ماذا تريد أن تتابع؟',
-    hint: 'أصل، مشروع، أو نوع مصروف مستقل.',
-  },
-}
 
 function accountPresetMark(key) {
   if (key === 'person-cash') return 'شخص'
@@ -187,14 +152,8 @@ function accountPresetMark(key) {
 }
 
 function loadInitialLedgerState() {
-  const mode = getMohammadPersistenceMode()
-  const fallback = mode === 'api' || mode === 'api-missing-token'
-    ? createEmptyAdreemState()
-    : createMohammadFallbackState()
-  const state = mode === 'api' || mode === 'api-missing-token'
-    ? fallback
-    : loadLocalMohammadState(fallback)
-  return { ...state, accounts: normalizeMohammadAccounts(state.accounts) }
+  const fallback = createEmptyAdreemState()
+  return { ...fallback, accounts: normalizeMohammadAccounts(fallback.accounts) }
 }
 
 function ledgerExtrasFromState(state) {
@@ -266,16 +225,16 @@ function parseWholeAmount(value) {
 
 function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
   const config = movementConfigFor(type)
-  const defaults = movementDefaultsFor(type)
   return {
     type,
     amount: '',
     currency: config.currency || CURRENCIES.DINAR,
-    sourceAccountId: config.needsSource === false ? '' : defaults.sourceAccountId,
-    destinationAccountId: config.needsDestination ? defaults.destinationAccountId : '',
+    sourceAccountId: '',
+    destinationAccountId: '',
     rate: '',
     note: '',
     dimensionId: '',
+    expenseCategoryId: '',
     attachmentLabel: '',
     attachmentUrl: '',
     recurringEnabled: false,
@@ -327,6 +286,7 @@ function storageTextForStatus(saveStatus, storageMode) {
   return {
     loading: 'تحميل',
     saving: 'حفظ',
+    retrying: 'إعادة الحفظ',
     saved: storageMode === 'supabase' || storageMode === 'api' ? 'سحابي' : 'تطوير',
     local: storageMode === 'api-missing-token' ? 'دخول ناقص' : 'تطوير',
     'local-only': storageMode === 'api-missing-token' ? 'دخول ناقص' : 'سحابة متوقفة',
@@ -454,14 +414,16 @@ function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
   const { account, dinar, usd } = bucket
   const balanceTone = dinar > 0 ? 'is-positive' : dinar < 0 ? 'is-negative' : 'is-zero'
   const kindText = accountKindText(account)
-  const detailText = displaySubAccountName(account.subAccountName)
-  const showKind = kindText && kindText !== detailText
+  const detailText = accountDetailName(account)
+  const isPersonBalance = account.valueKind === VALUE_KINDS.RECEIVABLE
+  const showKind = kindText && kindText !== detailText && !isPersonBalance
   return (
     <article className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
         <strong>{account.ownerName}</strong>
         <span>
           {detailText}
+          {isPersonBalance ? <small> · {account.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'دولار' : account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI ? 'دينار ودولار' : 'دينار'}</small> : null}
           {showKind ? <small> · {kindText}</small> : null}
           {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b> · تأكيد</b> : null}
         </span>
@@ -578,7 +540,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   }
   const filteredAccounts = accounts
     .filter((account) => {
-      const haystack = `${account.ownerName} ${account.subAccountName} ${displaySubAccountName(account.subAccountName)} ${account.legacyName || ''}`.toLowerCase()
+      const haystack = `${account.ownerName} ${account.subAccountName} ${accountDetailName(account)} ${account.legacyName || ''}`.toLowerCase()
       if (normalizedQuery) return haystack.includes(normalizedQuery)
       return matchesQuickFilter(account)
     })
@@ -641,7 +603,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
                     onClick={() => chooseAccount(account.id)}
                   >
                     <strong>{account.ownerName}</strong>
-                    <span>{displaySubAccountName(account.subAccountName)}</span>
+                    <span>{accountDetailName(account)}</span>
                   </button>
                 ))}
               </div>
@@ -682,7 +644,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
                 >
                   <span className={`ml3-picker-dot ml3-picker-dot--${visualKind(account)}`} aria-hidden="true" />
                   <strong>{account.ownerName}</strong>
-                  <span>{displaySubAccountName(account.subAccountName)}</span>
+                  <span>{accountDetailName(account)}</span>
                   <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
                   {account.id === value ? <em>مختار</em> : null}
                 </button>
@@ -699,6 +661,12 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
       ) : null}
     </div>
   )
+}
+
+function preferredAccountIdsFor(accounts, balanceByAccountId) {
+  return rankMovementAccounts(accounts, balanceByAccountId)
+    .slice(0, 4)
+    .map((account) => account.id)
 }
 
 function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDecimal = false }) {
@@ -732,12 +700,43 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDe
   )
 }
 
-function MovementMiniRow({ movement, accountById, attachments = [], dimensions = [], onCancel }) {
+function AttachmentLink({ attachment, onDelete }) {
+  const [status, setStatus] = useState('idle')
+
+  async function openAttachment() {
+    const popup = typeof window !== 'undefined' ? window.open('', '_blank') : null
+    if (popup) popup.opener = null
+    setStatus('opening')
+    try {
+      const url = await resolveAdreemAttachmentUrl(attachment)
+      if (!url) throw new Error('Attachment link is missing.')
+      if (popup) popup.location.href = url
+      else window.open(url, '_blank', 'noopener,noreferrer')
+      setStatus('idle')
+    } catch {
+      popup?.close()
+      setStatus('error')
+    }
+  }
+
+  return (
+    <span className="ml3-attachment-action">
+      <button type="button" onClick={openAttachment} disabled={status === 'opening'}>
+        {status === 'opening' ? 'فتح...' : attachment.label}
+      </button>
+      {onDelete ? <button type="button" className="is-danger" onClick={() => onDelete(attachment.id)}>حذف</button> : null}
+      {status === 'error' ? <small>تعذر فتحه</small> : null}
+    </span>
+  )
+}
+
+function MovementMiniRow({ movement, accountById, attachments = [], dimensions = [], onCancel, onDeleteAttachment }) {
   const source = accountById.get(movement.sourceAccountId)
   const destination = accountById.get(movement.destinationAccountId)
   const effects = movement.status === MOVEMENT_STATUSES.POSTED ? buildPostingEntries(movement) : []
   const movementAttachments = attachmentsForRecord(attachments, { movementId: movement.id })
   const dimension = dimensions.find((item) => item.id === movement.dimensionId)
+  const expenseCategory = accountById.get(movement.expenseCategoryId)
 
   return (
     <article className={`ml3-today-row ml3-today-row--${movementTone(movement.type)} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
@@ -763,7 +762,12 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
       ) : null}
       {movement.note ? <small>{movement.note}</small> : null}
       {dimension ? <small>ملف: {dimension.name}</small> : null}
-      {movementAttachments.length ? <small>مرفق: {movementAttachments.map((item) => item.label).join('، ')}</small> : null}
+      {expenseCategory ? <small>نوع المصروف: {expenseCategory.ownerName}</small> : null}
+      {movementAttachments.length ? (
+        <div className="ml3-attachment-list">{movementAttachments.map((item) => (
+          <AttachmentLink key={item.id} attachment={item} onDelete={onDeleteAttachment} />
+        ))}</div>
+      ) : null}
       {canCancelMovement(movement) ? (
         <button type="button" onClick={() => onCancel(movement.id)}>إلغاء</button>
       ) : null}
@@ -771,13 +775,14 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
   )
 }
 
-function HistoryMovementRow({ movement, accountById, attachments = [], dimensions = [], onCancel }) {
+function HistoryMovementRow({ movement, accountById, attachments = [], dimensions = [], onCancel, onDeleteAttachment }) {
   const source = accountById.get(movement.sourceAccountId)
   const destination = accountById.get(movement.destinationAccountId)
   const effects = movement.status === MOVEMENT_STATUSES.POSTED ? buildPostingEntries(movement) : []
   const statusTone = movement.status === MOVEMENT_STATUSES.POSTED ? 'تم' : movementStatusLabel(movement.status)
   const movementAttachments = attachmentsForRecord(attachments, { movementId: movement.id })
   const dimension = dimensions.find((item) => item.id === movement.dimensionId)
+  const expenseCategory = accountById.get(movement.expenseCategoryId)
 
   return (
     <article className={`ml3-history-row ml3-history-row--${movementTone(movement.type)} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
@@ -809,7 +814,12 @@ function HistoryMovementRow({ movement, accountById, attachments = [], dimension
       ) : null}
       {movement.note ? <small>{movement.note}</small> : null}
       {dimension ? <small>ملف: {dimension.name}</small> : null}
-      {movementAttachments.length ? <small>مرفق: {movementAttachments.map((item) => item.label).join('، ')}</small> : null}
+      {expenseCategory ? <small>نوع المصروف: {expenseCategory.ownerName}</small> : null}
+      {movementAttachments.length ? (
+        <div className="ml3-attachment-list">{movementAttachments.map((item) => (
+          <AttachmentLink key={item.id} attachment={item} onDelete={onDeleteAttachment} />
+        ))}</div>
+      ) : null}
       {canCancelMovement(movement) ? (
         <button type="button" onClick={() => onCancel(movement.id)}>إلغاء</button>
       ) : null}
@@ -821,7 +831,7 @@ function movementAccountImpact(movement, accountId) {
   return buildPostingEntries(movement).filter((entry) => entry.accountId === accountId)
 }
 
-function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment }) {
+function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment }) {
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
@@ -832,6 +842,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
     .slice()
     .reverse()
   const accountMap = new Map(accounts.map((item) => [item.id, item]))
+  const canReconcileBalance = account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK
 
   return (
     <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
@@ -865,6 +876,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
           </div>
         </div>
 
+        {canReconcileBalance ? (
         <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
           <h3>مطابقة</h3>
           {lastReconciliation ? (
@@ -888,6 +900,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
           </div>
           <button type="submit">إنشاء تصحيح</button>
         </form>
+        ) : null}
 
         <form className="ml3-profile-reconcile ml3-profile-reconcile--attachment" onSubmit={(event) => onAddAttachment(event, account.id)}>
           <h3>مرفقات</h3>
@@ -902,14 +915,14 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
             </label>
             <label>
               ملف
-              <input name="attachmentFile" type="file" accept="image/*,.pdf" />
+              <input name="attachmentFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
             </label>
           </div>
           <button type="submit">ربط مرفق</button>
           {accountAttachments.length ? (
             <div className="ml3-attachment-list">
               {accountAttachments.slice(0, 5).map((attachment) => (
-                <span key={attachment.id}>{attachment.label}</span>
+                <AttachmentLink key={attachment.id} attachment={attachment} onDelete={onDeleteAttachment} />
               ))}
             </div>
           ) : null}
@@ -924,7 +937,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
             </label>
             <label>
               الوصف
-              <input name="subAccountName" defaultValue={displaySubAccountName(account.subAccountName)} />
+              <input name="subAccountName" defaultValue={accountDetailName(account)} />
             </label>
             <label>
               التصنيف
@@ -952,7 +965,11 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
                   <strong>{movementLabels[movement.type] || movement.type}</strong>
                   <span>{accountLabel(source) || 'بدون مصدر'} ← {accountLabel(destination) || 'بدون وجهة'}</span>
                   {movement.note ? <small>{movement.note}</small> : null}
-                  {movementAttachments.length ? <small>مرفق: {movementAttachments.map((item) => item.label).join('، ')}</small> : null}
+                  {movementAttachments.length ? (
+                    <div className="ml3-attachment-list">{movementAttachments.map((item) => (
+                      <AttachmentLink key={item.id} attachment={item} onDelete={onDeleteAttachment} />
+                    ))}</div>
+                  ) : null}
                 </div>
                 <div className="ml3-profile-impact">
                   {impacts.map((impact) => (
@@ -992,7 +1009,7 @@ function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisab
         </label>
         <label>
           الوصف
-          <input name="subAccountName" defaultValue={displaySubAccountName(account.subAccountName)} />
+          <input name="subAccountName" defaultValue={accountDetailName(account)} />
         </label>
         <label>
           التصنيف
@@ -1039,7 +1056,7 @@ function ExternalAccountCard({ account, onCreate, onIgnore }) {
       <form className="ml3-decision-grid" onSubmit={(event) => onCreate(event, account)}>
         <label>
           الوصف
-          <input name="subAccountName" defaultValue={displaySubAccountName(account.subAccountName)} />
+          <input name="subAccountName" defaultValue={accountDetailName(account)} />
         </label>
         <label>
           التصنيف
@@ -1143,7 +1160,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
             value={reviewDraft.sourceAccountId || ''}
             accounts={reviewSourceAccounts}
             onChange={(value) => updateReviewDraft('sourceAccountId', value || '')}
-            preferredAccountIds={movementPreferredAccountIds(reviewDraft.type, 'source')}
+            preferredAccountIds={preferredAccountIdsFor(reviewSourceAccounts, balanceByAccountId)}
             balanceByAccountId={balanceByAccountId}
           />
         </div>
@@ -1155,7 +1172,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
               value={reviewDraft.destinationAccountId || ''}
               accounts={reviewDestinationAccounts}
               onChange={(value) => updateReviewDraft('destinationAccountId', value || '')}
-              preferredAccountIds={movementPreferredAccountIds(reviewDraft.type, 'destination')}
+              preferredAccountIds={preferredAccountIdsFor(reviewDestinationAccounts, balanceByAccountId)}
               balanceByAccountId={balanceByAccountId}
             />
           </div>
@@ -1198,12 +1215,17 @@ function AlertBoard({ reviewAccounts, reviewMovements, externalMissing, balances
 
 function OperationsPanel({
   reports,
+  expenseReports,
   dueRules,
+  recurringRules,
   attachments,
   reconciliations,
   onRunRecurring,
   onDisableRecurring,
+  onUpdateRecurring,
 }) {
+  const activeRecurringRules = recurringRules.filter((rule) => rule.status === 'active')
+  const dueRuleIds = new Set(dueRules.map((rule) => rule.id))
   return (
     <section className="ml3-ops-grid">
       <article className="ml3-ops-card">
@@ -1225,18 +1247,42 @@ function OperationsPanel({
       </article>
       <article className="ml3-ops-card">
         <div className="ml3-ops-head">
+          <strong>المصروفات</strong>
+          <span>{formatCount(expenseReports.length)}</span>
+        </div>
+        {expenseReports.length === 0 ? <p className="ml3-empty">لا توجد مصروفات مصنفة.</p> : null}
+        {expenseReports.slice(0, 6).map((item) => (
+          <div className="ml3-ops-row" key={item.categoryId || 'uncategorized'}>
+            <span>{item.name}</span>
+            <b>{money(item.dinar)}</b>
+            {item.usd ? <small>{money(item.usd, CURRENCIES.USD)}</small> : null}
+          </div>
+        ))}
+      </article>
+      <article className="ml3-ops-card">
+        <div className="ml3-ops-head">
           <strong>متكرر</strong>
           <span>{formatCount(dueRules.length)}</span>
         </div>
-        {dueRules.length === 0 ? <p className="ml3-empty">لا شيء مستحق.</p> : null}
-        {dueRules.slice(0, 5).map((rule) => (
+        {activeRecurringRules.length === 0 ? <p className="ml3-empty">لا توجد حركة شهرية.</p> : null}
+        {activeRecurringRules.slice(0, 5).map((rule) => (
           <div className="ml3-ops-row" key={rule.id}>
             <span>{rule.name}</span>
+            <label className="ml3-recurring-day">
+              يوم
+              <input
+                type="number"
+                min="1"
+                max="31"
+                value={rule.dayOfMonth || 1}
+                onChange={(event) => onUpdateRecurring(rule.id, event.target.value)}
+              />
+            </label>
             <div className="ml3-ops-actions">
-              <button type="button" onClick={() => onRunRecurring(rule.id)}>تنفيذ</button>
+              <button type="button" disabled={!dueRuleIds.has(rule.id)} onClick={() => onRunRecurring(rule.id)}>تنفيذ</button>
               <button type="button" onClick={() => onDisableRecurring(rule.id)}>إيقاف</button>
             </div>
-            <small>شهري · يمنع تكرار نفس الشهر</small>
+            <small>{dueRuleIds.has(rule.id) ? 'مستحقة الآن' : 'ليست مستحقة'} · مرة واحدة في الشهر</small>
           </div>
         ))}
       </article>
@@ -1245,7 +1291,7 @@ function OperationsPanel({
           <strong>حفظ وأدلة</strong>
           <span>{formatCount(attachments.length)}</span>
         </div>
-        <p className="ml3-empty">المرفقات تحفظ كرابط أو ملف سحابي عند تفعيل bucket آمن.</p>
+        <p className="ml3-empty">المرفقات محفوظة في مساحة خاصة وآمنة.</p>
         <small>مطابقات محفوظة: {formatCount(reconciliations.length)}</small>
       </article>
     </section>
@@ -1270,7 +1316,9 @@ export default function MohammadLedgerApp() {
   const [feedback, setFeedback] = useState('')
   const [isHydrated, setIsHydrated] = useState(false)
   const [canPersist, setCanPersist] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [storageMode, setStorageMode] = useState(getMohammadPersistenceMode)
+  const [canManageUsers, setCanManageUsers] = useState(false)
   const [saveStatus, setSaveStatus] = useState('loading')
   const [, setSyncProblem] = useState(false)
   const [pendingUndo, setPendingUndo] = useState(null)
@@ -1284,6 +1332,7 @@ export default function MohammadLedgerApp() {
   const [showZeroAccounts, setShowZeroAccounts] = useState(false)
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const todayPanelRef = useRef(null)
+  const saveCoordinatorRef = useRef(null)
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -1319,9 +1368,10 @@ export default function MohammadLedgerApp() {
   const hasAccountDraftName = Boolean(accountDraftNameValue.trim())
   const accountNeedsDetailChoice = !selectedAccountPreset.skipDetail && selectedAccountDetails.length > 0
   const accountNeedsCurrencyChoice = accountNeedsCurrency(accountDraft)
+  const accountNeedsPresetChoice = selectedAccountPresetGroup.keys.length > 1
   const accountWizardStages = [
     { key: ACCOUNT_WIZARD_STEPS.GROUP, title: 'القسم', summary: selectedAccountPresetGroup.title },
-    { key: ACCOUNT_WIZARD_STEPS.PRESET, title: selectedAccountPresetCopy.title, summary: selectedAccountPreset.title },
+    ...(accountNeedsPresetChoice ? [{ key: ACCOUNT_WIZARD_STEPS.PRESET, title: selectedAccountPresetCopy.title, summary: selectedAccountPreset.title }] : []),
     { key: ACCOUNT_WIZARD_STEPS.NAME, title: 'الاسم', summary: accountDraftNameValue || 'اكتب الاسم' },
     ...(accountNeedsDetailChoice ? [{ key: ACCOUNT_WIZARD_STEPS.DETAIL, title: selectedAccountPreset.detailLabel || 'طريقة الرصيد', summary: accountDraft.subAccountName || 'اختر' }] : []),
     ...(accountNeedsCurrencyChoice ? [{ key: ACCOUNT_WIZARD_STEPS.CURRENCY, title: 'العملة', summary: accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'دولار' : 'دينار' }] : []),
@@ -1346,7 +1396,7 @@ export default function MohammadLedgerApp() {
       if (bucket.account.status === ACCOUNT_STATUSES.NEEDS_REVIEW || kind === VALUE_KINDS.REVIEW) groups.review.push(bucket)
       else if (kind === VALUE_KINDS.RECEIVABLE) groups.people.push(bucket)
       else if (kind === VALUE_KINDS.CASH || kind === VALUE_KINDS.BANK) groups.money.push(bucket)
-      else if (kind === VALUE_KINDS.ASSET) groups.assets.push(bucket)
+      else if (kind === VALUE_KINDS.ASSET || kind === VALUE_KINDS.PROJECT) groups.assets.push(bucket)
       else if (kind === VALUE_KINDS.EXPENSE) groups.expenses.push(bucket)
     }
     for (const key of Object.keys(groups)) {
@@ -1371,7 +1421,7 @@ export default function MohammadLedgerApp() {
       key: `account:${bucket.account.id}`,
       type: 'account',
       label: bucket.account.ownerName,
-      detail: displaySubAccountName(bucket.account.subAccountName),
+      detail: accountDetailName(bucket.account),
       tone: 'danger',
       bucket,
     }))
@@ -1379,7 +1429,7 @@ export default function MohammadLedgerApp() {
       key: `external:${account.id}`,
       type: 'external',
       label: account.ownerName,
-      detail: displaySubAccountName(account.subAccountName),
+      detail: accountDetailName(account),
       tone: 'info',
       account,
     }))
@@ -1415,6 +1465,7 @@ export default function MohammadLedgerApp() {
     })
   }, [accountById, historyAccountId, historyQuery, historyStatus, historyType, postedUserMovements])
   const todayMovements = postedUserMovements.filter((movement) => isToday(movement.createdAt || movement.updatedAt))
+  const todayPreviewMovements = todayMovements.slice(0, 3)
   const totals = useMemo(() => {
     return balances.reduce(
       (acc, bucket) => {
@@ -1443,6 +1494,9 @@ export default function MohammadLedgerApp() {
     destinationAccountId: movementConfig.needsDestination ? movementDraft.destinationAccountId : null,
     rate: movementDraft.rate === '' ? undefined : Number(movementDraft.rate),
     dimensionId: movementUsesDimension ? movementDraft.dimensionId || '' : '',
+    expenseCategoryId: movementDraft.type === MOVEMENT_TYPES.EXPENSE || movementDraft.type === MOVEMENT_TYPES.TRUCK_EXPENSE
+      ? movementDraft.expenseCategoryId || ''
+      : '',
   }
   const preview = previewMovement(normalizedDraft, accounts, movements)
   const hasMovementAmount = Number.isFinite(normalizedDraft.amount) && normalizedDraft.amount > 0
@@ -1451,8 +1505,16 @@ export default function MohammadLedgerApp() {
   const selectedSourceAccount = accountById.get(movementDraft.sourceAccountId)
   const selectedDestinationAccount = accountById.get(movementDraft.destinationAccountId)
   const activeDimensions = useMemo(() => dimensionsFromAccounts(accounts, ledgerExtras.dimensions), [accounts, ledgerExtras.dimensions])
+  const activeExpenseCategories = useMemo(
+    () => accounts.filter((account) => account.status === ACCOUNT_STATUSES.ACTIVE && account.valueKind === VALUE_KINDS.EXPENSE),
+    [accounts],
+  )
   const dimensionReports = useMemo(
     () => buildDimensionReports({ ...ledgerExtras, accounts, movements }),
+    [accounts, movements, ledgerExtras],
+  )
+  const expenseCategoryReports = useMemo(
+    () => buildExpenseCategoryReports({ ...ledgerExtras, accounts, movements }),
     [accounts, movements, ledgerExtras],
   )
   const dueRules = useMemo(() => dueRecurringRules(ledgerExtras.recurringRules), [ledgerExtras.recurringRules])
@@ -1480,10 +1542,12 @@ export default function MohammadLedgerApp() {
       if (cancelled) return
       const normalizedState = normalizeLedgerState(result.state, initialState)
       setStorageMode(result.mode)
+      setCanManageUsers(Boolean(result.access?.canManageUsers))
       setLedgerExtras(ledgerExtrasFromState(normalizedState))
       setAccounts(normalizeMohammadAccounts(normalizedState.accounts))
       setMovements(normalizedState.movements)
       setSaveStatus(result.loadError ? 'local-only' : 'saved')
+      setLoadFailed(Boolean(result.loadError))
       setSyncProblem(Boolean(result.loadError))
       setCanPersist(!result.loadError && result.mode !== 'api-missing-token')
       setIsHydrated(true)
@@ -1501,41 +1565,63 @@ export default function MohammadLedgerApp() {
   }, [initialState])
 
   useEffect(() => {
-    if (!isHydrated || !canPersist) return undefined
-    let cancelled = false
-    const timer = window.setTimeout(() => {
-      if (!cancelled) setSaveStatus('saving')
-    }, 0)
-
-    saveMohammadPersistedState({ ...ledgerExtras, accounts, movements })
-      .then((result) => {
-        if (cancelled) return
-        setStorageMode(result.mode)
-        const hasSyncProblem = (result.mode === 'supabase' || result.mode === 'api' || result.mode === 'api-missing-token') && !result.supabaseOk
-        setSyncProblem(hasSyncProblem)
-        setSaveStatus(result.supabaseOk ? 'saved' : (hasSyncProblem ? 'local-only' : 'local'))
-        if (result.state) {
-          const normalizedState = normalizeLedgerState(result.state, { ...ledgerExtras, accounts, movements })
+    if (!isHydrated || !canPersist) return
+    if (!saveCoordinatorRef.current) {
+      let coordinator = null
+      coordinator = createLatestSaveCoordinator({
+        async save(snapshot) {
+          const result = await saveMohammadPersistedState(snapshot)
+          const cloudMode = result.mode === 'supabase' || result.mode === 'api' || result.mode === 'api-missing-token'
+          if (cloudMode && !result.supabaseOk) {
+            const error = result.error || new Error('Cloud save was not confirmed.')
+            error.persistenceResult = result
+            throw error
+          }
+          return result
+        },
+        onStatus(status) {
+          setSaveStatus(status)
+        },
+        onSaved(result, item) {
+          setStorageMode(result.mode)
+          setSyncProblem(false)
+          setFeedback((current) => current.startsWith('لم يتم تأكيد الحفظ') ? 'تم الحفظ في السحابة.' : current)
+          if (!result.state || coordinator?.hasPending()) return
+          const normalizedState = normalizeLedgerState(result.state, item.value)
           const nextExtras = ledgerExtrasFromState(normalizedState)
           const mergedAccounts = normalizeMohammadAccounts(normalizedState.accounts)
           const mergedMovements = normalizedState.movements || []
-          if (!sameLedgerExtras(ledgerExtras, nextExtras)) setLedgerExtras(nextExtras)
-          if (!sameRecordVersions(accounts, mergedAccounts)) setAccounts(mergedAccounts)
-          if (!sameRecordVersions(movements, mergedMovements)) setMovements(mergedMovements)
-        }
+          setLedgerExtras((current) => sameLedgerExtras(current, nextExtras) ? current : nextExtras)
+          setAccounts((current) => sameRecordVersions(current, mergedAccounts) ? current : mergedAccounts)
+          setMovements((current) => sameRecordVersions(current, mergedMovements) ? current : mergedMovements)
+        },
+        onError(error, _item, retryDelay) {
+          console.warn('[adreem-ledger] cloud save failed:', error?.message || error)
+          setStorageMode(error?.persistenceResult?.mode || getMohammadPersistenceMode())
+          setSyncProblem(true)
+          setFeedback(`لم يتم تأكيد الحفظ. سيحاول النظام تلقائيًا خلال ${Math.max(1, Math.round(retryDelay / 1000))} ث.`)
+        },
       })
-      .catch((err) => {
-        if (cancelled) return
-        console.warn('[mohammad-ledger] save failed:', err?.message || err)
-        setSyncProblem(true)
-        setSaveStatus('local-only')
-      })
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
+      saveCoordinatorRef.current = coordinator
     }
+
+    saveCoordinatorRef.current.submit({ ...ledgerExtras, accounts, movements })
   }, [accounts, movements, ledgerExtras, isHydrated, canPersist])
+
+  useEffect(() => {
+    function warnBeforeClose(event) {
+      if (!saveCoordinatorRef.current?.hasPending()) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeClose)
+    return () => window.removeEventListener('beforeunload', warnBeforeClose)
+  }, [])
+
+  useEffect(() => () => {
+    saveCoordinatorRef.current?.stop()
+    saveCoordinatorRef.current = null
+  }, [])
 
   useEffect(() => {
     if (!pendingUndo) return undefined
@@ -1601,7 +1687,6 @@ export default function MohammadLedgerApp() {
 
   function chooseMovementType(type) {
     const config = movementConfigFor(type)
-    const defaults = movementDefaultsFor(type)
     const optionGroup = movementOptionGroups.find((group) => group.types.includes(type))
     commitFlowChange(() => {
       if (optionGroup) setActiveMovementOptionGroup(optionGroup.key)
@@ -1610,10 +1695,11 @@ export default function MohammadLedgerApp() {
         ...current,
         type,
         currency: config.currency || current.currency,
-        sourceAccountId: movementNeedsSource(type) ? defaults.sourceAccountId : '',
-        destinationAccountId: config.needsDestination ? defaults.destinationAccountId : '',
+        sourceAccountId: '',
+        destinationAccountId: '',
         rate: config.needsRate ? current.rate : '',
         dimensionId: movementSupportsDimension(type) ? current.dimensionId : '',
+        expenseCategoryId: type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE ? current.expenseCategoryId : '',
       }))
     }, 'forward')
   }
@@ -1679,11 +1765,20 @@ export default function MohammadLedgerApp() {
     }, mode === 'account' ? 'forward' : 'back')
   }
 
+  function resetSectionScroll() {
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }))
+  }
+
   function switchSection(section) {
-    if (section === activeSection) return
+    if (section === activeSection) {
+      resetSectionScroll()
+      return
+    }
     commitFlowChange(() => {
       setActiveSection(section)
     }, section === 'entry' ? 'back' : 'forward')
+    resetSectionScroll()
   }
 
   function editMovementStep(step) {
@@ -1703,7 +1798,7 @@ export default function MohammadLedgerApp() {
   }
 
   function preferredMovementAccountIds(role) {
-    return movementPreferredAccountIds(movementDraft.type, role)
+    return preferredAccountIdsFor(movementAccountsFor(role), balanceByAccountId)
   }
 
   const visibleMovementSteps = movementVisibleSteps(movementConfig, movementSourceRequired)
@@ -1727,7 +1822,7 @@ export default function MohammadLedgerApp() {
         ownerName: preset.ownerName || '',
         type: preset.type,
         valueKind: preset.valueKind,
-        subAccountName: preset.subAccountName,
+        subAccountName: preset.nameTarget === 'subAccountName' ? '' : preset.subAccountName,
         currencyKind: accountNeedsCurrency(preset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
       }))
     }, nextStep === ACCOUNT_WIZARD_STEPS.PRESET ? 'back' : 'forward')
@@ -1736,19 +1831,20 @@ export default function MohammadLedgerApp() {
   function chooseAccountPresetGroup(groupKey) {
     const group = accountPresetGroups.find((item) => item.key === groupKey)
     if (!group) return
+    const firstPreset = accountPresets.find((preset) => preset.key === group.keys[0])
+    if (!firstPreset) return
+    const nextStep = group.keys.length > 1 ? ACCOUNT_WIZARD_STEPS.PRESET : ACCOUNT_WIZARD_STEPS.NAME
     commitFlowChange(() => {
       setActiveAccountPresetGroup(group.key)
-      setAccountWizardStep(ACCOUNT_WIZARD_STEPS.PRESET)
+      setAccountWizardStep(nextStep)
       const currentPresetIsVisible = group.keys.includes(selectedAccountPreset.key)
       if (currentPresetIsVisible) return
-      const firstPreset = accountPresets.find((preset) => preset.key === group.keys[0])
-      if (!firstPreset) return
       setAccountDraft((current) => ({
         ...current,
         ownerName: firstPreset.ownerName || '',
         type: firstPreset.type,
         valueKind: firstPreset.valueKind,
-        subAccountName: firstPreset.subAccountName,
+        subAccountName: firstPreset.nameTarget === 'subAccountName' ? '' : firstPreset.subAccountName,
         currencyKind: accountNeedsCurrency(firstPreset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
       }))
     }, 'forward')
@@ -1768,6 +1864,9 @@ export default function MohammadLedgerApp() {
         createdAt: originalMovement?.createdAt,
         note: movementDraft.note.trim(),
         dimensionId: movementSupportsDimension(movementDraft.type) ? movementDraft.dimensionId || '' : '',
+        expenseCategoryId: movementDraft.type === MOVEMENT_TYPES.EXPENSE || movementDraft.type === MOVEMENT_TYPES.TRUCK_EXPENSE
+          ? movementDraft.expenseCategoryId || ''
+          : '',
       },
       accounts,
       validationMovements,
@@ -1795,7 +1894,7 @@ export default function MohammadLedgerApp() {
     const attachment = createAttachment({
       movementId: movement.id,
       label: movementDraft.attachmentLabel || uploadedAttachment?.label,
-      url: uploadedAttachment?.url || movementDraft.attachmentUrl,
+      url: uploadedAttachment?.storagePath ? '' : uploadedAttachment?.url || movementDraft.attachmentUrl,
       mimeType: uploadedAttachment?.mimeType || '',
       sizeBytes: uploadedAttachment?.sizeBytes || 0,
       storagePath: uploadedAttachment?.storagePath || '',
@@ -1838,11 +1937,13 @@ export default function MohammadLedgerApp() {
       current.map((movement) => {
         if (movement.id !== movementId) return movement
         if (movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW) {
+          const now = new Date().toISOString()
           return {
             ...movement,
             status: MOVEMENT_STATUSES.VOIDED,
             voidReason: 'إلغاء حركة ناقصة',
-            voidedAt: new Date().toISOString(),
+            voidedAt: now,
+            updatedAt: now,
           }
         }
         const result = voidMovement(movement, 'إلغاء من سجل الحركات')
@@ -1860,6 +1961,11 @@ export default function MohammadLedgerApp() {
 
   function addAccount(event) {
     event.preventDefault()
+    if (!accountDraftNameValue.trim()) {
+      setAccountWizardStep(ACCOUNT_WIZARD_STEPS.NAME)
+      setFeedback('اكتب اسمًا واضحًا للحساب قبل الحفظ.')
+      return
+    }
     const account = createAccount(accountDraft)
     const validation = validateAccount(account, accounts)
     if (!validation.ok) {
@@ -1876,12 +1982,15 @@ export default function MohammadLedgerApp() {
     }))
     setFeedback('تم إنشاء الحساب.')
     setAccountDraft(emptyAccountDraft())
+    setActiveAccountPresetGroup('people')
+    setAccountWizardStep(ACCOUNT_WIZARD_STEPS.GROUP)
   }
 
   function resolveReviewAccount(event, accountId) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     const classification = parseClassification(formData.get('classification'))
+    const reviewedAt = new Date().toISOString()
     const nextAccount = {
       ownerName: String(formData.get('ownerName') || '').trim(),
       subAccountName: String(formData.get('subAccountName') || '').trim(),
@@ -1896,7 +2005,8 @@ export default function MohammadLedgerApp() {
             ...account,
             ...nextAccount,
             status: ACCOUNT_STATUSES.ACTIVE,
-            reviewedAt: new Date().toISOString(),
+            reviewedAt,
+            updatedAt: reviewedAt,
           }
         : account,
     )
@@ -1998,7 +2108,7 @@ export default function MohammadLedgerApp() {
     const attachment = createAttachment({
       accountId,
       label: formData.get('attachmentLabel') || uploadedAttachment?.label,
-      url: uploadedAttachment?.url || formData.get('attachmentUrl'),
+      url: uploadedAttachment?.storagePath ? '' : uploadedAttachment?.url || formData.get('attachmentUrl'),
       mimeType: uploadedAttachment?.mimeType || '',
       sizeBytes: uploadedAttachment?.sizeBytes || 0,
       storagePath: uploadedAttachment?.storagePath || '',
@@ -2020,23 +2130,30 @@ export default function MohammadLedgerApp() {
     setFeedback('تم ربط المرفق بالحساب.')
   }
 
-  function runRecurring(ruleId) {
-    const rule = (ledgerExtras.recurringRules || []).find((item) => item.id === ruleId)
-    if (!rule) return
-    const result = runRecurringRule(rule, accounts, movements)
-    setMovements((current) => {
-      if (current.some((movement) => movement.id === result.movement.id)) return current
-      return [...current, result.movement]
-    })
+  function deleteAttachment(attachmentId) {
+    const attachment = (ledgerExtras.attachments || []).find((item) => item.id === attachmentId)
+    if (!attachment) return
+    if (typeof window !== 'undefined' && !window.confirm('حذف هذا المرفق؟')) return
+    const hiddenAt = new Date().toISOString()
     setLedgerExtras((current) => ({
       ...current,
-      recurringRules: (current.recurringRules || []).map((item) => (item.id === ruleId ? result.rule : item)),
+      attachments: (current.attachments || []).map((item) =>
+        item.id === attachmentId ? hideAttachment(item, hiddenAt) : item),
       auditEvents: [
         ...(current.auditEvents || []),
-        createAuditEvent('recurring.executed', { ruleId, movementId: result.movement.id }),
+        createAuditEvent('attachment.hidden', { attachmentId, storagePath: attachment.storagePath || '' }),
       ],
     }))
-    setFeedback(result.movement.status === MOVEMENT_STATUSES.POSTED ? 'تم تنفيذ الحركة المتكررة.' : 'تم حفظ الحركة المتكررة في المراجعة.')
+    setFeedback('تم حذف المرفق من العرض وحفظ أثره بأمان.')
+  }
+
+  function runRecurring(ruleId) {
+    const result = executeRecurringRuleInState({ ...ledgerExtras, accounts, movements }, ruleId)
+    if (result.state !== undefined) {
+      setMovements(result.state.movements || movements)
+      setLedgerExtras(ledgerExtrasFromState(result.state))
+    }
+    setFeedback(result.message)
   }
 
   function disableRecurring(ruleId) {
@@ -2053,19 +2170,34 @@ export default function MohammadLedgerApp() {
     setFeedback('تم إيقاف الحركة المتكررة.')
   }
 
+  function changeRecurringDay(ruleId, value) {
+    setLedgerExtras((current) => ({
+      ...current,
+      recurringRules: (current.recurringRules || []).map((item) =>
+        item.id === ruleId ? updateRecurringRule(item, { dayOfMonth: value }) : item,
+      ),
+      auditEvents: [
+        ...(current.auditEvents || []),
+        createAuditEvent('recurring.updated', { ruleId, dayOfMonth: Number(value) }),
+      ],
+    }))
+  }
+
   function disableAccount(accountId) {
     const bucket = balanceByAccountId.get(accountId)
     if (bucket && nonZero(bucket)) {
       setFeedback('لا يمكن إخفاء حساب عليه رصيد. صفّر الرصيد أو ادمجه أولًا.')
       return
     }
+    const disabledAt = new Date().toISOString()
     setAccounts((current) =>
       current.map((account) =>
         account.id === accountId
           ? {
               ...account,
               status: ACCOUNT_STATUSES.INACTIVE,
-              disabledAt: new Date().toISOString(),
+              disabledAt,
+              updatedAt: disabledAt,
             }
           : account,
       ),
@@ -2152,7 +2284,7 @@ export default function MohammadLedgerApp() {
     }
     setEditingMovementId(movement.id)
     setSelectedAccountId('')
-    setActiveSection('entry')
+    switchSection('entry')
     setActiveEntryMode('movement')
     setMovementStep(MOVEMENT_ENTRY_STEPS.AMOUNT)
     setMovementDraft({
@@ -2164,6 +2296,7 @@ export default function MohammadLedgerApp() {
       rate: movement.rate ? String(movement.rate) : '',
       note: movement.note || '',
       dimensionId: movementSupportsDimension(movement.type) ? movement.dimensionId || '' : '',
+      expenseCategoryId: movement.expenseCategoryId || '',
       attachmentLabel: '',
       attachmentUrl: '',
       recurringEnabled: false,
@@ -2186,11 +2319,18 @@ export default function MohammadLedgerApp() {
         rate: reviewDraft.rate === '' ? undefined : Number(reviewDraft.rate),
         note: String(reviewDraft.note || '').trim(),
         dimensionId: movementSupportsDimension(reviewDraft.type) ? movement.dimensionId || '' : '',
+        expenseCategoryId: reviewDraft.expenseCategoryId || movement.expenseCategoryId || '',
       },
       accounts,
       movements.filter((item) => item.id !== movement.id),
     )
     setMovements((current) => current.map((item) => (item.id === movement.id ? candidate : item)))
+    if (candidate.status === MOVEMENT_STATUSES.POSTED && candidate.recurringRuleId) {
+      setLedgerExtras((current) => ({
+        ...current,
+        recurringRules: syncRecurringRulesFromMovement(current.recurringRules, candidate),
+      }))
+    }
     setFeedback(candidate.status === MOVEMENT_STATUSES.POSTED ? 'تم إصلاح الحركة.' : 'ما زالت ناقصة.')
   }
 
@@ -2201,7 +2341,7 @@ export default function MohammadLedgerApp() {
     const normalizedAccountQuery = accountQuery.trim().toLowerCase()
     const accountMatchesQuery = (bucket) => {
       if (!normalizedAccountQuery) return true
-      const haystack = `${bucket.account.ownerName} ${bucket.account.subAccountName} ${displaySubAccountName(bucket.account.subAccountName)} ${bucket.account.legacyName || ''}`.toLowerCase()
+      const haystack = `${bucket.account.ownerName} ${bucket.account.subAccountName} ${accountDetailName(bucket.account)} ${bucket.account.legacyName || ''}`.toLowerCase()
       return haystack.includes(normalizedAccountQuery)
     }
     const filterRows = (rows) => rows.filter(accountMatchesQuery)
@@ -2359,11 +2499,14 @@ export default function MohammadLedgerApp() {
           </div>
           <OperationsPanel
             reports={dimensionReports}
+            expenseReports={expenseCategoryReports}
             dueRules={dueRules}
+            recurringRules={ledgerExtras.recurringRules || []}
             attachments={ledgerExtras.attachments || []}
             reconciliations={ledgerExtras.reconciliations || []}
             onRunRecurring={runRecurring}
             onDisableRecurring={disableRecurring}
+            onUpdateRecurring={changeRecurringDay}
           />
         </section>
       )
@@ -2415,6 +2558,7 @@ export default function MohammadLedgerApp() {
                 attachments={ledgerExtras.attachments || []}
                 dimensions={activeDimensions}
                 onCancel={cancelMovement}
+                onDeleteAttachment={deleteAttachment}
               />
             ))}
           </div>
@@ -2477,7 +2621,7 @@ export default function MohammadLedgerApp() {
 
   const storageText = storageTextForStatus(saveStatus, storageMode)
   const canLogout = storageMode === 'api'
-  const canOpenAdmin = storageMode === 'api'
+  const canOpenAdmin = storageMode === 'api' && canManageUsers
   const activeSectionTitle = sectionTitles[activeSection] || 'ADREEM'
   const movementReceipt = [
     { key: 'type', label: 'الحركة', value: movementLabels[movementDraft.type] },
@@ -2497,46 +2641,39 @@ export default function MohammadLedgerApp() {
     { key: 'note', label: 'ملاحظة', value: movementDraft.note || 'اختياري' },
   ].filter(Boolean)
 
-  return (
-    <main className={`adreem-app adreem-app--${activeSection} adreem-desk adreem-desk--${activeSection}`} dir="rtl">
-      <section className="adreem-shell adreem-desk-shell">
-        <header className="adreem-header adreem-desk-header">
-          <div className="adreem-brand adreem-desk-brand">
-            <span className="adreem-mark adreem-desk-mark" aria-hidden="true">
-              <svg viewBox="0 0 32 32">
-                <rect x="7" y="5" width="18" height="22" rx="4" />
-                <path d="M12 12h8M12 16h8M12 20h5" />
-                <circle cx="23" cy="23" r="5" />
-              </svg>
-            </span>
+  if (!isHydrated || loadFailed) {
+    return (
+      <main className="adreem-app adreem-cloud-gate" dir="rtl">
+        <section role="status" aria-live="polite">
+          <span>ADREEM</span>
+          <h1>{isHydrated ? 'تعذر فتح الدفتر' : 'جاري فتح الدفتر'}</h1>
+          <p>{isHydrated ? 'لم نعرض نسخة فارغة حتى تبقى بياناتك آمنة. أعد المحاولة بعد لحظة.' : 'يتم تحميل بياناتك من السحابة.'}</p>
+          {isHydrated ? (
             <div>
-              <span>ADREEM</span>
-              <h1>{activeSectionTitle}</h1>
+              <button type="button" onClick={() => window.location.reload()}>إعادة المحاولة</button>
+              <button type="button" className="is-secondary" onClick={logoutFromCloudSession}>تسجيل الدخول من جديد</button>
             </div>
-          </div>
-          <div className={`adreem-status adreem-desk-status ${canLogout || canOpenAdmin ? 'has-cloud-actions' : ''}`}>
-            <b className={`ml3-save-state ml3-save-state--${saveStatus}`}>{storageText}</b>
-            <b>اليوم {formatCount(todayMovements.length)}</b>
-            <b>مراجعة {formatCount(reviewItems.length)}</b>
-            {canOpenAdmin ? <button type="button" className="adreem-admin-open" onClick={openAdminUsersPage}>إدارة</button> : null}
-            {canLogout ? <button type="button" className="adreem-logout" onClick={logoutFromCloudSession}>خروج</button> : null}
-          </div>
-        </header>
+          ) : null}
+        </section>
+      </main>
+    )
+  }
 
-        <nav className="adreem-nav adreem-desk-nav" aria-label="أقسام الدفتر">
-          {sectionTabs.map((tab) => (
-            <button
-              type="button"
-              className={activeSection === tab.key ? 'is-active' : ''}
-              key={tab.key}
-              onClick={() => switchSection(tab.key)}
-            >
-              <span aria-hidden="true">{tab.mark}</span>
-              <strong>{tab.label}</strong>
-            </button>
-          ))}
-        </nav>
-
+  return (
+    <AdreemChrome
+      activeSection={activeSection}
+      activeSectionTitle={activeSectionTitle}
+      saveStatus={saveStatus}
+      storageText={storageText}
+      todayCount={todayMovements.length}
+      reviewCount={reviewItems.length}
+      canOpenAdmin={canOpenAdmin}
+      canLogout={canLogout}
+      onRetrySave={() => saveCoordinatorRef.current?.retryNow()}
+      onOpenAdmin={openAdminUsersPage}
+      onLogout={logoutFromCloudSession}
+      onSectionChange={switchSection}
+    >
         {activeSection !== 'entry' ? (
           <AlertBoard
             reviewAccounts={balancesByKind.review}
@@ -2559,38 +2696,40 @@ export default function MohammadLedgerApp() {
                 <strong>{activeEntryMode === 'movement' ? movementProgressText : 'جديد'}</strong>
               </div>
               {activeEntryMode === 'movement' ? (
-                movementReceipt.map((item) => (
-                  <button
+                movementReceipt.map((item) => {
+                  const targetStep = {
+                    type: MOVEMENT_ENTRY_STEPS.TYPE,
+                    amount: MOVEMENT_ENTRY_STEPS.AMOUNT,
+                    currency: MOVEMENT_ENTRY_STEPS.CURRENCY,
+                    rate: MOVEMENT_ENTRY_STEPS.RATE,
+                    source: MOVEMENT_ENTRY_STEPS.SOURCE,
+                    destination: MOVEMENT_ENTRY_STEPS.DESTINATION,
+                    note: MOVEMENT_ENTRY_STEPS.NOTE,
+                  }[item.key]
+                  const targetIndex = visibleMovementSteps.indexOf(targetStep)
+                  const canEditReceiptItem = targetIndex >= 0 && targetIndex <= currentMovementStepIndex
+                  return <button
                     type="button"
                     key={item.key}
+                    disabled={!canEditReceiptItem}
                     onClick={() => {
-                      const targetStep = {
-                        type: MOVEMENT_ENTRY_STEPS.TYPE,
-                        amount: MOVEMENT_ENTRY_STEPS.AMOUNT,
-                        currency: MOVEMENT_ENTRY_STEPS.CURRENCY,
-                        rate: MOVEMENT_ENTRY_STEPS.RATE,
-                        source: MOVEMENT_ENTRY_STEPS.SOURCE,
-                        destination: MOVEMENT_ENTRY_STEPS.DESTINATION,
-                        note: MOVEMENT_ENTRY_STEPS.NOTE,
-                      }[item.key]
-                      const targetIndex = visibleMovementSteps.indexOf(targetStep)
-                      if (targetIndex >= 0 && targetIndex <= currentMovementStepIndex) editMovementStep(targetStep)
+                      if (canEditReceiptItem) editMovementStep(targetStep)
                     }}
                   >
                     <span>{item.label}</span>
                     <strong>{item.value}</strong>
                   </button>
-                ))
+                })
               ) : (
                 <>
-                  <button type="button">
+                  <div className="adreem-receipt-line">
                     <span>التصنيف</span>
                     <strong>{selectedAccountPreset.title}</strong>
-                  </button>
-                  <button type="button">
+                  </div>
+                  <div className="adreem-receipt-line">
                     <span>الاسم</span>
                     <strong>{accountDraftNameValue || 'اكتب الاسم'}</strong>
-                  </button>
+                  </div>
                 </>
               )}
             </section>
@@ -2664,8 +2803,7 @@ export default function MohammadLedgerApp() {
                 <div className="ml3-quick-actions">
                   <div className="ml3-choice-rail">
                     <div className="ml3-choice-rail-head">
-                      <span>أولًا</span>
-                      <strong>اختر المجال</strong>
+                      <strong>المجموعة</strong>
                     </div>
                     <div className="ml3-choice-tabs" aria-label="فئة الحركة">
                     {movementOptionGroups.map((group) => (
@@ -2683,8 +2821,7 @@ export default function MohammadLedgerApp() {
                   </div>
                   <div className={`ml3-option-group ml3-option-group--${selectedMovementOptionGroup.key}`} key={selectedMovementOptionGroup.key}>
                     <div className="ml3-choice-rail-head">
-                      <span>ثانيًا</span>
-                      <strong>{selectedMovementOptionGroup.title}</strong>
+                      <strong>اختر الحركة</strong>
                     </div>
                     <div className="ml3-option-grid ml3-step-choice-list">
                       {selectedMovementOptionGroup.types
@@ -2931,6 +3068,17 @@ export default function MohammadLedgerApp() {
                       </select>
                     </label>
                   ) : null}
+                  {movementDraft.type === MOVEMENT_TYPES.EXPENSE || movementDraft.type === MOVEMENT_TYPES.TRUCK_EXPENSE ? (
+                    <label>
+                      نوع المصروف
+                      <select value={movementDraft.expenseCategoryId} onChange={(event) => updateMovementDraft('expenseCategoryId', event.target.value)}>
+                        <option value="">بدون تصنيف</option>
+                        {activeExpenseCategories.map((category) => (
+                          <option key={category.id} value={category.id}>{category.ownerName}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <label>
                     مرفق
                     <input
@@ -2951,8 +3099,8 @@ export default function MohammadLedgerApp() {
                     ملف
                     <span>{movementAttachmentFile?.name || 'اختر ملفًا'}</span>
                     <input
-                      type="file"
-                      accept="image/*,.pdf"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
                       onChange={(event) => setMovementAttachmentFile(event.target.files?.[0] || null)}
                     />
                   </label>
@@ -3011,12 +3159,14 @@ export default function MohammadLedgerApp() {
             {activeEntryMode === 'movement' ? (
               <section className="ml3-today-panel" ref={todayPanelRef}>
                 <div className="ml3-today-head">
-                  <h2>سجل اليوم</h2>
-                  <span>{formatCount(todayMovements.length)}</span>
+                  <h2>آخر حركات اليوم</h2>
+                  <button type="button" onClick={() => switchSection('history')}>
+                    الكل <span>{formatCount(todayMovements.length)}</span>
+                  </button>
                 </div>
                 <div className="ml3-today-list">
                   {todayMovements.length === 0 ? <p className="ml3-empty">لا توجد حركات اليوم.</p> : null}
-                  {todayMovements.map((movement) => (
+                  {todayPreviewMovements.map((movement) => (
                     <MovementMiniRow
                       key={movement.id}
                       movement={movement}
@@ -3024,6 +3174,7 @@ export default function MohammadLedgerApp() {
                       attachments={ledgerExtras.attachments || []}
                       dimensions={activeDimensions}
                       onCancel={cancelMovement}
+                      onDeleteAttachment={deleteAttachment}
                     />
                   ))}
                 </div>
@@ -3227,8 +3378,8 @@ export default function MohammadLedgerApp() {
           onUpdateAccount={updateAccountClassification}
           onReconcile={reconcileAccount}
           onAddAttachment={addAccountAttachment}
+          onDeleteAttachment={deleteAttachment}
         />
-      </section>
-    </main>
+    </AdreemChrome>
   )
 }

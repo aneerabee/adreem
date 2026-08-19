@@ -14,6 +14,7 @@ import {
   createAttachment,
   createReconciliation,
   createRecurringRuleFromMovement,
+  syncRecurringRulesFromMovement,
 } from '../../src/mohammadLedger/ledgerOperations.js'
 import {
   getMovementAccounts as getSharedMovementAccounts,
@@ -132,7 +133,10 @@ export async function appendTelegramMovement(repository, draft, metadata) {
     )
     const preview = previewDraft(state, movement)
     const attachments = appendTelegramAttachment(state.attachments, movement, draft)
-    const recurringRules = appendTelegramRecurringRule(state.recurringRules, movement, draft)
+    const recurringRules = syncRecurringRulesFromMovement(
+      appendTelegramRecurringRule(state.recurringRules, movement, draft),
+      movement,
+    )
     return {
       state: {
         ...state,
@@ -184,7 +188,10 @@ export async function resolveTelegramReviewMovement(repository, movementId, draf
       movement,
     )
     const attachments = appendTelegramAttachment(state.attachments, movement, draft)
-    const recurringRules = appendTelegramRecurringRule(state.recurringRules, movement, draft)
+    const recurringRules = syncRecurringRulesFromMovement(
+      appendTelegramRecurringRule(state.recurringRules, movement, draft),
+      movement,
+    )
     return {
       state: {
         ...state,
@@ -282,6 +289,9 @@ function appendTelegramAttachment(attachments = [], movement, draft = {}) {
     movementId: movement.id,
     label: draft.attachmentLabel,
     url: draft.attachmentUrl,
+    storagePath: draft.attachmentStoragePath,
+    mimeType: draft.attachmentMimeType,
+    sizeBytes: draft.attachmentSizeBytes,
     source: 'telegram',
   })
   if (!attachment) return attachments
@@ -289,6 +299,7 @@ function appendTelegramAttachment(attachments = [], movement, draft = {}) {
     item?.movementId === attachment.movementId &&
     item?.label === attachment.label &&
     item?.url === attachment.url &&
+    item?.storagePath === attachment.storagePath &&
     item?.source === attachment.source,
   )
   return hasSameAttachment ? attachments : [...(Array.isArray(attachments) ? attachments : []), attachment]

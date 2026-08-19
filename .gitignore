@@ -15,6 +15,8 @@ dist-ssr
 .env.*
 !.env.example
 *.env
+/adreem.env*
+/adreem-telegram-users.json
 
 # Editor directories and files
 .vscode/*

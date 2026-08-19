@@ -49,7 +49,7 @@ export function dimensionsFromAccounts(accounts = [], dimensions = []) {
   const byId = new Map((Array.isArray(dimensions) ? dimensions : []).filter(Boolean).map((dimension) => [dimension.id, dimension]))
   for (const account of accounts) {
     if (account?.status === 'inactive') continue
-    if (account?.type !== 'project' && account?.valueKind !== VALUE_KINDS.ASSET) continue
+    if (account?.valueKind !== VALUE_KINDS.PROJECT && account?.valueKind !== VALUE_KINDS.ASSET) continue
     const id = account.dimensionId || `dimension-account-${account.id}`
     if (byId.has(id)) continue
     byId.set(id, {
@@ -62,6 +62,35 @@ export function dimensionsFromAccounts(accounts = [], dimensions = []) {
     })
   }
   return Array.from(byId.values()).filter((dimension) => dimension?.status !== 'inactive')
+}
+
+export function buildExpenseCategoryReports(state = {}) {
+  const accounts = Array.isArray(state.accounts) ? state.accounts : []
+  const movements = Array.isArray(state.movements) ? state.movements : []
+  const categories = new Map(
+    accounts
+      .filter((account) => account?.valueKind === VALUE_KINDS.EXPENSE && account?.status !== 'inactive')
+      .map((account) => [account.id, account]),
+  )
+  const totals = new Map()
+
+  for (const movement of movements) {
+    if (movement?.status !== MOVEMENT_STATUSES.POSTED) continue
+    if (movement.type !== MOVEMENT_TYPES.EXPENSE && movement.type !== MOVEMENT_TYPES.TRUCK_EXPENSE) continue
+    const categoryId = categories.has(movement.expenseCategoryId) ? movement.expenseCategoryId : ''
+    const current = totals.get(categoryId) || { categoryId, dinar: 0, usd: 0, count: 0 }
+    if (movement.currency === CURRENCIES.USD) current.usd += Math.abs(Number(movement.amount || 0))
+    else current.dinar += Math.abs(Number(movement.amount || 0))
+    current.count += 1
+    totals.set(categoryId, current)
+  }
+
+  return Array.from(totals.values())
+    .map((item) => ({
+      ...item,
+      name: item.categoryId ? categories.get(item.categoryId)?.ownerName || 'مصروف' : 'بدون تصنيف',
+    }))
+    .sort((left, right) => (right.dinar + right.usd) - (left.dinar + left.usd) || right.count - left.count)
 }
 
 export function buildDimensionReports(state = {}) {
@@ -106,6 +135,16 @@ export function validateAttachmentDraft({ label = '', url = '', mimeType = '', s
   const cleanSize = Number(sizeBytes || 0)
 
   if (!cleanLabel && !cleanUrl) errors.push({ field: 'label', message: 'اكتب اسم المرفق أو رابطه.' })
+  if (cleanUrl) {
+    try {
+      const parsed = new URL(cleanUrl)
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        errors.push({ field: 'url', message: 'رابط المرفق يجب أن يبدأ بـ https أو http.' })
+      }
+    } catch {
+      errors.push({ field: 'url', message: 'رابط المرفق غير صالح.' })
+    }
+  }
   if (cleanMimeType && !ALLOWED_ATTACHMENT_MIME_TYPES.has(cleanMimeType)) {
     errors.push({ field: 'mimeType', message: 'نوع المرفق غير مسموح.' })
   }
@@ -133,6 +172,7 @@ export function createAttachment({ movementId = '', accountId = '', label = '', 
     mimeType: cleanMimeType,
     sizeBytes: Math.max(0, Math.round(Number(sizeBytes || 0))),
     storagePath: String(storagePath || '').trim(),
+    status: 'active',
     createdAt,
     updatedAt: createdAt,
   }
@@ -140,10 +180,21 @@ export function createAttachment({ movementId = '', accountId = '', label = '', 
 
 export function attachmentsForRecord(attachments = [], { movementId = '', accountId = '' } = {}) {
   return (Array.isArray(attachments) ? attachments : []).filter((attachment) => {
+    if (attachment?.status === 'inactive') return false
     if (movementId && attachment.movementId === movementId) return true
     if (accountId && attachment.accountId === accountId) return true
     return false
   })
+}
+
+export function hideAttachment(attachment, hiddenAt = nowIso()) {
+  if (!attachment || attachment.status === 'inactive') return attachment || null
+  return {
+    ...attachment,
+    status: 'inactive',
+    disabledAt: hiddenAt,
+    updatedAt: hiddenAt,
+  }
 }
 
 export function createReconciliation({ accountId, actualDinar, actualUsd, expectedDinar, expectedUsd, note = '' }) {
@@ -191,7 +242,7 @@ export function lastReconciliationForAccount(reconciliations = [], accountId) {
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0] || null
 }
 
-export function createRecurringRuleFromMovement(movement, { frequency = RECURRING_FREQUENCIES.MONTHLY, name = '' } = {}) {
+export function createRecurringRuleFromMovement(movement, { frequency = RECURRING_FREQUENCIES.MONTHLY, name = '', dayOfMonth } = {}) {
   if (!movement || movement.status !== MOVEMENT_STATUSES.POSTED) return null
   const createdAt = nowIso()
   return {
@@ -199,6 +250,8 @@ export function createRecurringRuleFromMovement(movement, { frequency = RECURRIN
     name: String(name || `${movementLabels[movement.type] || 'حركة'} ${Math.round(Number(movement.amount || 0)).toLocaleString('en-US')}`).trim(),
     status: 'active',
     frequency,
+    dayOfMonth: Math.min(31, Math.max(1, Math.round(Number(dayOfMonth || new Date(movement.createdAt || createdAt).getDate())))),
+    executionMode: 'manual',
     template: {
       type: movement.type,
       amount: movement.amount,
@@ -208,6 +261,7 @@ export function createRecurringRuleFromMovement(movement, { frequency = RECURRIN
       rate: movement.rate,
       note: movement.note,
       dimensionId: movement.dimensionId || '',
+      expenseCategoryId: movement.expenseCategoryId || '',
     },
     lastRunKey: '',
     createdAt,
@@ -217,9 +271,11 @@ export function createRecurringRuleFromMovement(movement, { frequency = RECURRIN
 
 export function dueRecurringRules(rules = [], date = new Date()) {
   const key = monthKey(date)
+  const day = date.getDate()
   return (Array.isArray(rules) ? rules : [])
     .filter((rule) => rule?.status === 'active')
     .filter((rule) => rule.frequency === RECURRING_FREQUENCIES.MONTHLY)
+    .filter((rule) => day >= Math.min(31, Math.max(1, Number(rule.dayOfMonth || 1))))
     .filter((rule) => rule.lastRunKey !== key)
 }
 
@@ -309,6 +365,75 @@ export function runRecurringRule(rule, accounts = [], movementsOrDate = [], date
   }
 }
 
+export function syncRecurringRulesFromMovement(rules = [], movement, updatedAt = nowIso()) {
+  if (
+    !movement?.recurringRuleId ||
+    !movement?.recurringRunKey ||
+    movement.status !== MOVEMENT_STATUSES.POSTED
+  ) return Array.isArray(rules) ? rules : []
+
+  return (Array.isArray(rules) ? rules : []).map((rule) =>
+    sameId(rule.id, movement.recurringRuleId)
+      ? {
+          ...rule,
+          lastRunKey: movement.recurringRunKey,
+          lastRunAt: movement.updatedAt || movement.createdAt || updatedAt,
+          updatedAt,
+        }
+      : rule,
+  )
+}
+
+export function executeRecurringRuleInState(state = {}, ruleId, date = new Date()) {
+  const rules = Array.isArray(state.recurringRules) ? state.recurringRules : []
+  const rule = rules.find((item) => sameId(item.id, ruleId))
+  if (!rule || rule.status !== 'active') {
+    return { ok: false, state, message: 'الحركة الشهرية غير موجودة أو متوقفة.' }
+  }
+  if (!dueRecurringRules([rule], date).length) {
+    return { ok: false, state, message: 'هذه الحركة ليست مستحقة الآن.' }
+  }
+
+  const accounts = Array.isArray(state.accounts) ? state.accounts : []
+  const movements = Array.isArray(state.movements) ? state.movements : []
+  const result = runRecurringRule(rule, accounts, movements, date)
+  const existing = movements.find((movement) => sameId(movement.id, result.movement.id))
+  const movement = existing || result.movement
+  const nextRules = movement.status === MOVEMENT_STATUSES.POSTED
+    ? syncRecurringRulesFromMovement(rules, movement)
+    : rules.map((item) => (sameId(item.id, rule.id) ? result.rule : item))
+  const duplicate = Boolean(existing)
+  const message = duplicate
+    ? movement.status === MOVEMENT_STATUSES.POSTED
+      ? 'هذه الحركة منفذة لهذا الشهر بالفعل.'
+      : 'هذه الحركة موجودة في المراجعة بالفعل.'
+    : movement.status === MOVEMENT_STATUSES.POSTED
+      ? 'تم تنفيذ الحركة الشهرية.'
+      : 'تعذر اعتماد الحركة وحُفظت في المراجعة.'
+
+  return {
+    ok: !duplicate,
+    duplicate,
+    movement,
+    state: {
+      ...state,
+      movements: duplicate ? movements : [...movements, movement],
+      recurringRules: nextRules,
+      auditEvents: duplicate
+        ? (Array.isArray(state.auditEvents) ? state.auditEvents : [])
+        : [
+            ...(Array.isArray(state.auditEvents) ? state.auditEvents : []),
+            createAuditEvent('recurring.executed', {
+              ruleId: rule.id,
+              movementId: movement.id,
+              status: movement.status,
+            }),
+          ],
+    },
+    message,
+  }
+}
+
 export function disableRecurringRule(rule, disabledAt = nowIso()) {
   if (!rule) return null
   return {
@@ -316,6 +441,19 @@ export function disableRecurringRule(rule, disabledAt = nowIso()) {
     status: 'inactive',
     disabledAt,
     updatedAt: disabledAt,
+  }
+}
+
+export function updateRecurringRule(rule, updates = {}, updatedAt = nowIso()) {
+  if (!rule) return null
+  const dayOfMonth = updates.dayOfMonth === undefined
+    ? rule.dayOfMonth || 1
+    : Math.min(31, Math.max(1, Math.round(Number(updates.dayOfMonth || 1))))
+  return {
+    ...rule,
+    name: updates.name === undefined ? rule.name : String(updates.name || rule.name || '').trim(),
+    dayOfMonth,
+    updatedAt,
   }
 }
 

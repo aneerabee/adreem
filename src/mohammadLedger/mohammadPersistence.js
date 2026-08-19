@@ -1,47 +1,23 @@
-import { createClient } from '@supabase/supabase-js'
-import {
-  ADREEM_STATE_ROW_ID,
-  MOHAMMAD_LEGACY_STATE_ROW_ID,
-  MOHAMMAD_STATE_TABLE,
-  adreemStateRowId,
-  createLedgerIdentity,
-  mergeLedgerStates,
-  normalizeLedgerState,
-  selectPersistedLedgerRows,
-  stateTimestamp,
-} from './ledgerState.js'
+import { normalizeLedgerState } from './ledgerState.js'
 
 export const MOHAMMAD_STORAGE_KEY = 'mohammad-ledger-v1'
 export const ADREEM_STORAGE_KEY = 'adreem-ledger-v1'
 export const ADREEM_API_TOKEN_STORAGE_KEY = 'adreem-ledger-api-token-v1'
 export const ADREEM_API_TOKEN_SESSION_KEY = 'adreem-ledger-api-token-session-v1'
 export const ADREEM_API_TOKEN_PERSIST_KEY = 'adreem-ledger-api-login-token-v1'
-
-const BACKUP_STORAGE_KEY = 'adreem-ledger-backups-v1'
-const LEGACY_BACKUP_STORAGE_KEY = 'mohammad-ledger-backups-v1'
 export const ADREEM_MIGRATION_MARKER_KEY = 'adreem-ledger-migration-v1'
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-const ENABLE_DIRECT_SUPABASE = import.meta.env.VITE_ENABLE_SUPABASE_DIRECT === 'true'
+
 const ADREEM_API_URL = String(import.meta.env.VITE_ADREEM_API_URL || '').replace(/\/+$/, '')
-const BACKUP_LIMIT = 12
-const BROWSER_LEDGER_IDENTITY = createLedgerIdentity({
-  tenantId: import.meta.env.VITE_ADREEM_TENANT_ID,
-  ledgerId: import.meta.env.VITE_ADREEM_LEDGER_ID,
-})
-const BROWSER_STATE_ROW_ID = adreemStateRowId(BROWSER_LEDGER_IDENTITY)
-const BROWSER_READABLE_ROW_IDS = BROWSER_STATE_ROW_ID === ADREEM_STATE_ROW_ID
-  ? [BROWSER_STATE_ROW_ID, MOHAMMAD_LEGACY_STATE_ROW_ID]
-  : [BROWSER_STATE_ROW_ID]
-const DIRECT_BROWSER_STORAGE_KEYS = adreemStorageKeysForRowId(BROWSER_STATE_ROW_ID)
+const LEGACY_LEDGER_STORAGE_PREFIXES = [
+  MOHAMMAD_STORAGE_KEY,
+  ADREEM_STORAGE_KEY,
+  'mohammad-ledger-backups-v1',
+  'adreem-ledger-backups-v1',
+  ADREEM_MIGRATION_MARKER_KEY,
+  ADREEM_API_TOKEN_STORAGE_KEY,
+]
 
-let cachedClient = null
-
-function hasBrowserStorage() {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
-}
-
-function readBrowserStorageItem(storageName, key) {
+function browserStorageItem(storageName, key) {
   if (typeof window === 'undefined') return ''
   try {
     return window[storageName]?.getItem(key) || ''
@@ -50,266 +26,109 @@ function readBrowserStorageItem(storageName, key) {
   }
 }
 
-function clearCloudLocalLedgerData() {
-  if (!hasBrowserStorage()) return
-  const prefixes = [
-    ADREEM_STORAGE_KEY,
-    BACKUP_STORAGE_KEY,
-    ADREEM_MIGRATION_MARKER_KEY,
-    MOHAMMAD_STORAGE_KEY,
-    LEGACY_BACKUP_STORAGE_KEY,
-  ]
-  const keys = []
-  for (let index = 0; index < window.localStorage.length; index += 1) {
-    const key = window.localStorage.key(index)
-    if (key && prefixes.some((prefix) => key === prefix || key.startsWith(`${prefix}:`))) {
-      keys.push(key)
+export function clearLegacyBrowserLedgerData() {
+  if (typeof window === 'undefined' || !window.localStorage) return
+  try {
+    const keys = []
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index)
+      if (key && LEGACY_LEDGER_STORAGE_PREFIXES.some((prefix) => key === prefix || key.startsWith(`${prefix}:`))) {
+        keys.push(key)
+      }
     }
+    keys.forEach((key) => window.localStorage.removeItem(key))
+  } catch {
+    // Browsers can block storage. Cloud operation remains the source of truth.
   }
-  keys.forEach((key) => window.localStorage.removeItem(key))
-  window.localStorage.removeItem(ADREEM_API_TOKEN_STORAGE_KEY)
 }
 
-function getAdreemApiConfig() {
+function apiConfig() {
   if (!ADREEM_API_URL || typeof window === 'undefined') return null
-  clearCloudLocalLedgerData()
+  clearLegacyBrowserLedgerData()
   const token =
-    readBrowserStorageItem('sessionStorage', ADREEM_API_TOKEN_SESSION_KEY) ||
-    readBrowserStorageItem('localStorage', ADREEM_API_TOKEN_PERSIST_KEY)
+    browserStorageItem('sessionStorage', ADREEM_API_TOKEN_SESSION_KEY) ||
+    browserStorageItem('localStorage', ADREEM_API_TOKEN_PERSIST_KEY)
   return token ? { url: ADREEM_API_URL, token } : null
 }
 
-export function adreemStorageKeysForRowId(rowId = ADREEM_STATE_ROW_ID) {
-  const suffix = rowId === ADREEM_STATE_ROW_ID ? '' : `:${rowId}`
-  return {
-    state: `${ADREEM_STORAGE_KEY}${suffix}`,
-    backup: `${BACKUP_STORAGE_KEY}${suffix}`,
-    migrationMarker: `${ADREEM_MIGRATION_MARKER_KEY}${suffix}`,
-    canReadLegacy: rowId === ADREEM_STATE_ROW_ID,
-  }
-}
-
-function tokenFingerprint(token = '') {
-  const text = String(token || '')
-  let hash = 5381
-  for (let index = 0; index < text.length; index += 1) {
-    hash = ((hash << 5) + hash) ^ text.charCodeAt(index)
-  }
-  return (hash >>> 0).toString(36)
-}
-
-export function adreemStorageKeysForApiToken(token = '') {
-  const fingerprint = tokenFingerprint(token)
-  return adreemStorageKeysForRowId(`api:${fingerprint || 'empty'}`)
-}
-
-function browserStorageKeys() {
-  if (ADREEM_API_URL) {
-    const api = getAdreemApiConfig()
-    if (api?.token) return adreemStorageKeysForApiToken(api.token)
-  }
-  return DIRECT_BROWSER_STORAGE_KEYS
-}
-
-function getSupabaseClient() {
-  if (!ENABLE_DIRECT_SUPABASE) return null
-  if (import.meta.env.PROD) return null
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null
-  if (!cachedClient) {
-    cachedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
-  }
-  return cachedClient
-}
-
 export function getMohammadPersistenceMode() {
-  if (ADREEM_API_URL) return getAdreemApiConfig() ? 'api' : 'api-missing-token'
-  return getSupabaseClient() ? 'supabase' : 'local'
+  if (!ADREEM_API_URL) return 'configuration-error'
+  return apiConfig() ? 'api' : 'api-missing-token'
 }
 
-function chooseFreshestState(localState, remoteState, fallbackState) {
-  if (localState && remoteState) {
+async function apiJson(path, options = {}) {
+  const api = apiConfig()
+  if (!api) throw new Error('Missing ADREEM login session.')
+  const response = await fetch(`${api.url}${path}`, {
+    ...options,
+    headers: {
+      authorization: `Bearer ${api.token}`,
+      ...(options.headers || {}),
+    },
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const error = new Error(data.error || `ADREEM cloud request failed: ${response.status}`)
+    error.status = response.status
+    throw error
+  }
+  return data
+}
+
+export async function loadMohammadPersistedState(fallbackState) {
+  const fallback = normalizeLedgerState(fallbackState, fallbackState)
+  const mode = getMohammadPersistenceMode()
+  if (mode !== 'api') {
     return {
-      state: mergeLedgerStates(localState, remoteState, fallbackState),
-      source: stateTimestamp(remoteState) >= stateTimestamp(localState) ? 'merged-supabase' : 'merged-local',
+      mode,
+      state: fallback,
+      source: mode,
+      loadError: true,
+      error: new Error(mode === 'configuration-error' ? 'ADREEM cloud API is not configured.' : 'Missing ADREEM login session.'),
     }
   }
-  if (remoteState) return { state: remoteState, source: 'supabase' }
-  if (localState) return { state: localState, source: 'local' }
-  return { state: fallbackState, source: 'fallback' }
-}
-
-function readLocalStateByKey(key, fallbackState) {
-  if (!hasBrowserStorage()) return null
-  const raw = window.localStorage.getItem(key)
-  if (!raw) return null
   try {
-    return normalizeLedgerState(JSON.parse(raw), fallbackState)
-  } catch (err) {
-    console.warn(`[mohammad-persistence] local ${key} load failed:`, err?.message || err)
-    return null
+    const data = await apiJson('/api/ledger')
+    return {
+      mode,
+      state: data?.state ? normalizeLedgerState(data.state, fallback) : fallback,
+      access: { canManageUsers: Boolean(data?.access?.canManageUsers) },
+      source: data?.state ? 'api' : 'empty-api',
+    }
+  } catch (error) {
+    console.warn('[adreem-persistence] cloud load failed:', error?.message || error)
+    return { mode, state: fallback, source: 'api-error', loadError: true, error }
   }
 }
 
-function writeMigrationMarker() {
-  if (!hasBrowserStorage()) return
-  const storageKeys = browserStorageKeys()
-  window.localStorage.setItem(storageKeys.migrationMarker, JSON.stringify({
-    from: MOHAMMAD_STORAGE_KEY,
-    to: storageKeys.state,
-    migratedAt: new Date().toISOString(),
-  }))
-}
-
-function tryWriteLocalBackup(state) {
+export async function saveMohammadPersistedState(state) {
+  const mode = getMohammadPersistenceMode()
+  const normalizedState = normalizeLedgerState({ ...state, savedAt: new Date().toISOString() }, state)
+  if (mode !== 'api') {
+    return {
+      mode,
+      localOk: false,
+      supabaseOk: false,
+      state: normalizedState,
+      error: new Error(mode === 'configuration-error' ? 'ADREEM cloud API is not configured.' : 'Missing ADREEM login session.'),
+    }
+  }
   try {
-    writeLocalBackup(state)
-  } catch (err) {
-    console.warn('[mohammad-persistence] local backup failed:', err?.message || err)
+    const data = await apiJson('/api/ledger', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ state: normalizedState }),
+    })
+    return {
+      mode,
+      localOk: false,
+      supabaseOk: true,
+      state: data?.state ? normalizeLedgerState(data.state, normalizedState) : normalizedState,
+    }
+  } catch (error) {
+    console.warn('[adreem-persistence] cloud save failed:', error?.message || error)
+    return { mode, localOk: false, supabaseOk: false, state: normalizedState, error }
   }
-}
-
-export function loadLocalMohammadState(fallbackState) {
-  if (!hasBrowserStorage()) return normalizeLedgerState(fallbackState, fallbackState)
-  const storageKeys = browserStorageKeys()
-  const fallback = normalizeLedgerState({ ...fallbackState, ...BROWSER_LEDGER_IDENTITY }, fallbackState)
-  const adreemState = readLocalStateByKey(storageKeys.state, fallback)
-  const legacyState = storageKeys.canReadLegacy ? readLocalStateByKey(MOHAMMAD_STORAGE_KEY, fallback) : null
-
-  if (adreemState && legacyState) {
-    tryWriteLocalBackup(adreemState)
-    tryWriteLocalBackup(legacyState)
-    const mergedState = mergeLedgerStates(adreemState, legacyState, fallback)
-    writeLocalMohammadState(mergedState)
-    writeMigrationMarker()
-    return mergedState
-  }
-
-  if (adreemState) return adreemState
-  if (legacyState) {
-    tryWriteLocalBackup(legacyState)
-    writeLocalMohammadState(legacyState)
-    writeMigrationMarker()
-    return legacyState
-  }
-
-  return fallback
-}
-
-function writeLocalMohammadState(state) {
-  if (!hasBrowserStorage()) return
-  window.localStorage.setItem(browserStorageKeys().state, JSON.stringify(state))
-}
-
-function writeLocalBackup(state) {
-  if (!hasBrowserStorage()) return
-  const storageKeys = browserStorageKeys()
-  const rawBackups = window.localStorage.getItem(storageKeys.backup) ||
-    (storageKeys.canReadLegacy ? window.localStorage.getItem(LEGACY_BACKUP_STORAGE_KEY) : null)
-  let backups = []
-  try {
-    backups = rawBackups ? JSON.parse(rawBackups) : []
-  } catch {
-    backups = []
-  }
-  const nextBackups = [
-    {
-      savedAt: state.savedAt,
-      accountCount: state.accounts.length,
-      movementCount: state.movements.length,
-      state,
-    },
-    ...(Array.isArray(backups) ? backups : []),
-  ].slice(0, BACKUP_LIMIT)
-  window.localStorage.setItem(storageKeys.backup, JSON.stringify(nextBackups))
-}
-
-export function listLocalAdreemBackups() {
-  if (!hasBrowserStorage()) return []
-  try {
-    const storageKeys = browserStorageKeys()
-    const raw = window.localStorage.getItem(storageKeys.backup) ||
-      (storageKeys.canReadLegacy ? window.localStorage.getItem(LEGACY_BACKUP_STORAGE_KEY) : null)
-    const backups = raw ? JSON.parse(raw) : []
-    return Array.isArray(backups) ? backups.filter((backup) => backup?.state) : []
-  } catch {
-    return []
-  }
-}
-
-export function restoreLatestLocalAdreemBackup(fallbackState) {
-  const latest = listLocalAdreemBackups()[0]
-  if (!latest?.state) return null
-  const restored = normalizeLedgerState(
-    {
-      ...latest.state,
-      savedAt: new Date().toISOString(),
-    },
-    fallbackState || latest.state,
-  )
-  writeLocalMohammadState(restored)
-  return restored
-}
-
-async function loadRemoteMohammadState(fallbackState) {
-  const client = getSupabaseClient()
-  if (!client) return null
-  const fallback = normalizeLedgerState({ ...fallbackState, ...BROWSER_LEDGER_IDENTITY }, fallbackState)
-  const { data, error } = await client
-    .from(MOHAMMAD_STATE_TABLE)
-    .select('id, payload, updated_at')
-    .in('id', BROWSER_READABLE_ROW_IDS)
-
-  if (error) throw error
-  const selected = selectPersistedLedgerRows(data, fallback, {
-    primaryRowId: BROWSER_STATE_ROW_ID,
-    legacyRowId: BROWSER_STATE_ROW_ID === ADREEM_STATE_ROW_ID ? MOHAMMAD_LEGACY_STATE_ROW_ID : '__no_legacy_row__',
-  })
-  return selected.source === 'fallback' ? null : selected.state
-}
-
-async function saveRemoteMohammadState(state) {
-  const client = getSupabaseClient()
-  if (!client) return
-  const { error } = await client.from(MOHAMMAD_STATE_TABLE).upsert(
-    {
-      id: BROWSER_STATE_ROW_ID,
-      payload: state,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'id' },
-  )
-  if (error) throw error
-}
-
-async function loadApiMohammadState(fallbackState) {
-  const api = getAdreemApiConfig()
-  if (!api) return null
-  const response = await fetch(`${api.url}/api/ledger`, {
-    headers: {
-      authorization: `Bearer ${api.token}`,
-    },
-  })
-  if (!response.ok) throw new Error(`ADREEM API load failed: ${response.status}`)
-  const data = await response.json()
-  return data?.state ? normalizeLedgerState(data.state, fallbackState) : null
-}
-
-async function saveApiMohammadState(state) {
-  const api = getAdreemApiConfig()
-  if (!api) return null
-  const response = await fetch(`${api.url}/api/ledger`, {
-    method: 'PUT',
-    headers: {
-      authorization: `Bearer ${api.token}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ state }),
-  })
-  if (!response.ok) throw new Error(`ADREEM API save failed: ${response.status}`)
-  const data = await response.json()
-  return data?.state ? normalizeLedgerState(data.state, state) : state
 }
 
 function fileToBase64(file) {
@@ -325,121 +144,24 @@ function fileToBase64(file) {
 }
 
 export async function uploadAdreemAttachmentFile(file) {
-  const api = getAdreemApiConfig()
-  if (!api) throw new Error('Missing ADREEM login session.')
   if (!file) return null
-  const base64 = await fileToBase64(file)
-  const response = await fetch(`${api.url}/api/attachments`, {
+  const data = await apiJson('/api/attachments', {
     method: 'POST',
-    headers: {
-      authorization: `Bearer ${api.token}`,
-      'content-type': 'application/json',
-    },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       fileName: file.name || 'attachment',
       mimeType: file.type || 'application/octet-stream',
       sizeBytes: file.size || 0,
-      base64,
+      base64: await fileToBase64(file),
     }),
   })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.error || `ADREEM attachment upload failed: ${response.status}`)
   return data.attachment || null
 }
 
-export async function loadMohammadPersistedState(fallbackState) {
-  const fallback = normalizeLedgerState(fallbackState, fallbackState)
-  const mode = getMohammadPersistenceMode()
-
-  if (mode !== 'supabase') {
-    if (mode === 'api') {
-      try {
-        const apiState = await loadApiMohammadState(fallback)
-        if (apiState) {
-          return { mode, state: apiState, source: 'api' }
-        }
-        return { mode, state: fallback, source: 'empty-api' }
-      } catch (err) {
-        console.warn('[mohammad-persistence] api load failed:', err?.message || err)
-        return { mode, state: fallback, source: 'api-error', loadError: true, error: err }
-      }
-    }
-    if (mode === 'api-missing-token') {
-      return {
-        mode,
-        state: fallback,
-        source: 'api-missing-token',
-        loadError: true,
-        error: new Error('Missing ADREEM login session.'),
-      }
-    }
-    const localState = loadLocalMohammadState(fallback)
-    return { mode, state: localState, source: 'local' }
-  }
-
-  const localState = loadLocalMohammadState(fallback)
-  try {
-    const remoteState = await loadRemoteMohammadState(fallback)
-    const selected = chooseFreshestState(localState, remoteState, fallback)
-    writeLocalMohammadState(selected.state)
-    return { mode, ...selected }
-  } catch (err) {
-    console.warn('[mohammad-persistence] remote load failed:', err?.message || err)
-    return { mode, state: localState, source: 'local-after-remote-error', loadError: true, error: err }
-  }
-}
-
-export async function saveMohammadPersistedState(state) {
-  const mode = getMohammadPersistenceMode()
-  if (mode === 'api') {
-    const normalizedState = normalizeLedgerState(
-      { ...state, savedAt: new Date().toISOString() },
-      state,
-    )
-    try {
-      const savedState = await saveApiMohammadState(normalizedState)
-      return { mode: 'api', localOk: false, supabaseOk: true, state: savedState || normalizedState }
-    } catch (err) {
-      console.warn('[mohammad-persistence] api save failed:', err?.message || err)
-      return { mode: 'api', localOk: false, supabaseOk: false, state: normalizedState, error: err }
-    }
-  }
-
-  if (mode === 'api-missing-token') {
-    const normalizedState = normalizeLedgerState(
-      { ...state, savedAt: new Date().toISOString() },
-      state,
-    )
-    return {
-      mode,
-      localOk: false,
-      supabaseOk: false,
-      state: normalizedState,
-      error: new Error('Missing ADREEM login session.'),
-    }
-  }
-
-  const baseState = loadLocalMohammadState(state)
-  let normalizedState = normalizeLedgerState(
-    { ...baseState, ...state, savedAt: new Date().toISOString() },
-    baseState,
-  )
-
-  writeLocalMohammadState(normalizedState)
-  tryWriteLocalBackup(normalizedState)
-
-  if (mode !== 'supabase') {
-    return { mode: 'local', localOk: true, supabaseOk: false, state: normalizedState }
-  }
-
-  const remoteState = await loadRemoteMohammadState(normalizedState)
-  if (remoteState) {
-    normalizedState = {
-      ...mergeLedgerStates(normalizedState, remoteState, normalizedState),
-      savedAt: new Date().toISOString(),
-    }
-    writeLocalMohammadState(normalizedState)
-  }
-  await saveRemoteMohammadState(normalizedState)
-  return { mode: 'supabase', localOk: true, supabaseOk: true, state: normalizedState }
+export async function resolveAdreemAttachmentUrl(attachment = {}) {
+  if (!attachment.storagePath) return String(attachment.url || '')
+  const params = new URLSearchParams({ path: attachment.storagePath })
+  const data = await apiJson(`/api/attachments?${params}`)
+  if (!data.signedUrl) throw new Error('Attachment link is missing.')
+  return data.signedUrl
 }

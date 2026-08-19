@@ -30,7 +30,7 @@ export function createLedgerAccess({
 function printHelp() {
   console.log([
     'Usage:',
-    '  npm run ops:create-ledger-access -- --ledger=ledger-name [--tenant=adreem] [--telegram=278516861]',
+    '  pnpm ops:create-ledger-access -- --ledger=ledger-name [--tenant=adreem] [--telegram=278516861]',
     '',
     'Legacy web URL tokens are disabled. Use ADREEM admin users with email/password.',
   ].join('\n'))

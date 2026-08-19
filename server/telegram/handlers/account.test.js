@@ -60,11 +60,17 @@ function createCtx() {
 }
 
 describe('telegram account flow', () => {
-  it('creates an account through type, name, detail, and confirmation steps', async () => {
+  it('creates a person account without a redundant type step', async () => {
     const ctx = createCtx()
 
     await startAccount(ctx)
-    await handleAccountCallback(ctx, 'acct:type:person-cash')
+    await handleAccountCallback(ctx, 'acct:group:people')
+
+    const selectedGroupSession = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(selectedGroupSession.step).toBe('owner')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('<code>2/5</code>')
+    expect(ctx.telegram.calls.at(-1).payload.text).not.toContain('النوع: شخص أو جهة')
+
     await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'سعيد')
     await handleAccountCallback(ctx, 'acct:detail:0')
     await handleAccountCallback(ctx, 'acct:currency:USD')
@@ -81,10 +87,22 @@ describe('telegram account flow', () => {
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
   })
 
+  it('returns from the person name directly to the group choice', async () => {
+    const ctx = createCtx()
+
+    await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:group:people')
+    await handleAccountCallback(ctx, 'acct:back')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.step).toBe('group')
+  })
+
   it('keeps back navigation inside the account flow without touching movement sessions', async () => {
     const ctx = createCtx()
 
     await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:group:money')
     await handleAccountCallback(ctx, 'acct:type:own-bank')
     await handleAccountText({ ...ctx, isCallback: false, messageId: 57 }, 'الجمهورية')
     await handleAccountCallback(ctx, 'acct:back')
@@ -104,6 +122,7 @@ describe('telegram account flow', () => {
     const ctx = createCtx()
 
     await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:group:money')
     await handleAccountCallback(ctx, 'acct:type:own-bank')
     await handleAccountText({ ...ctx, isCallback: false, messageId: 57 }, 'الجمهورية')
     await handleAccountCallback(ctx, 'acct:currency:LYD')
@@ -123,6 +142,7 @@ describe('telegram account flow', () => {
     const ctx = createCtx()
 
     await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:group:tracking')
     await handleAccountCallback(ctx, 'acct:type:project')
     await handleAccountText({ ...ctx, isCallback: false, messageId: 58 }, 'شاحنة العمل')
     await handleAccountCallback(ctx, 'acct:confirm')
@@ -132,7 +152,7 @@ describe('telegram account flow', () => {
       ownerName: 'شاحنة العمل',
       subAccountName: 'مشروع',
       type: ACCOUNT_TYPES.PROJECT,
-      valueKind: VALUE_KINDS.ASSET,
+      valueKind: VALUE_KINDS.PROJECT,
     })
   })
 
@@ -144,6 +164,17 @@ describe('telegram account flow', () => {
     expect(ctx.repository.state.accounts).toHaveLength(0)
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('عملية قديمة')
+  })
+
+  it('does not let an old button jump across account steps', async () => {
+    const ctx = createCtx()
+
+    await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:type:own-bank')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.step).toBe('group')
+    expect(session.draft.valueKind).toBe(VALUE_KINDS.RECEIVABLE)
   })
 
   it('does not overwrite an active movement flow when an old account button is pressed', async () => {
@@ -193,7 +224,7 @@ describe('telegram account flow', () => {
     })
 
     await startReviewAccount(ctx, 'review-person')
-    await handleAccountCallback(ctx, 'acct:type:person-cash')
+    await handleAccountCallback(ctx, 'acct:group:people')
     await handleAccountText({ ...ctx, isCallback: false, messageId: 58 }, 'محمد')
     await handleAccountCallback(ctx, 'acct:detail:1')
     await handleAccountCallback(ctx, 'acct:currency:LYD')
@@ -211,5 +242,32 @@ describe('telegram account flow', () => {
     })
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم إصلاح الحساب')
+  })
+
+  it('keeps the original classification while opening an account for review', async () => {
+    const ctx = createCtx()
+    ctx.repository = memoryRepository({
+      ...emptyState(),
+      accounts: [{
+        id: 'review-asset',
+        ownerName: 'الشاحنة',
+        subAccountName: 'أصل',
+        type: ACCOUNT_TYPES.ASSET,
+        valueKind: VALUE_KINDS.ASSET,
+        currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+        status: ACCOUNT_STATUSES.NEEDS_REVIEW,
+      }],
+    })
+
+    await startReviewAccount(ctx, 'review-asset')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.step).toBe('group')
+    expect(session.presetGroup).toBe('tracking')
+    expect(session.draft).toMatchObject({
+      type: ACCOUNT_TYPES.ASSET,
+      valueKind: VALUE_KINDS.ASSET,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+    })
   })
 })

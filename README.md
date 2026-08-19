@@ -5,7 +5,6 @@
 ## الروابط
 
 - التطبيق: https://aneerabee.github.io/adreem/
-- خيارات التصميم: https://aneerabee.github.io/adreem/adreem-redesign-options.html
 - GitHub: https://github.com/aneerabee/adreem
 
 ملاحظة: اسم المنتج داخل النظام هو ADREEM. مسار GitHub Pages الحالي يبقى `/adreem/` لأنه تابع لاسم مستودع GitHub الحالي.
@@ -13,22 +12,23 @@
 ## التشغيل المحلي
 
 ```bash
-npm ci
-npm run dev
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
 ## الفحص
 
 ```bash
-npm run lint
-npm run test
-npm run build
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
 ```
 
 ## البوت
 
 ```bash
-npm run bot:adreem
+pnpm bot:adreem
 ```
 
 يحتاج البوت إلى متغيرات البيئة الخاصة بـTelegram وSupabase. لا تضع المفاتيح السرية داخل Git.
@@ -50,12 +50,12 @@ npm run bot:adreem
 /users
 ```
 
-لا تنشئ المستخدمين من Telegram. المستخدمون يضافون من صفحة إدارة ADREEM بالإيميل وكلمة المرور، ويمكن ربط Telegram ID اختياريًا بنفس الدفتر.
+لا تنشئ المستخدمين من تيليغرام. المستخدمون يضافون من صفحة إدارة ADREEM بالإيميل وكلمة المرور، ويمكن ربط رقم تيليغرام اختياريًا بنفس الدفتر.
 
 ## API الويب المعزول
 
 ```bash
-npm run api:adreem
+pnpm api:adreem
 ```
 
 متطلبات السيرفر:

@@ -34,12 +34,13 @@ function adminErrorMessage(error, fallback) {
   const code = error?.data?.error || ''
   if (code === 'email-used') return 'هذا الإيميل مستخدم بالفعل.'
   if (code === 'ledger-used') return 'كود الدفتر مستخدم بالفعل.'
-  if (code === 'telegram-used') return 'Telegram ID مستخدم بالفعل.'
+  if (code === 'telegram-used') return 'رقم تيليغرام مستخدم بالفعل.'
   if (code === 'owner-protected') return 'لا يمكن حذف المالك.'
   if (code === 'not-found') return 'المستخدم غير موجود أو تم حذفه.'
   if (code === 'weak-password') return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.'
   if (code === 'invalid-email') return 'الإيميل غير صحيح.'
   if (code === 'invalid-user-or-ledger') return 'كود الدفتر أو بيانات المستخدم غير صحيحة.'
+  if (code === 'ledger-change-requires-migration') return 'لا يمكن تغيير كود الدفتر من التعديل العادي حتى لا تنفصل البيانات.'
   return fallback
 }
 
@@ -73,7 +74,7 @@ function UserRow({ user, owner, onEdit, onRemove }) {
       </div>
       <div>
         <b>{isOwner ? 'مالك' : user.source === 'env' ? 'ثابت' : 'مستقل'}</b>
-        {user.telegramUserId ? <span>Telegram {user.telegramUserId}</span> : <span>{user.hasPassword ? 'دخول ويب' : 'بدون دخول'}</span>}
+        {user.telegramUserId ? <span>تيليغرام {user.telegramUserId}</span> : <span>{user.hasPassword ? 'دخول ويب' : 'بدون دخول'}</span>}
       </div>
       {user.source === 'registry' ? (
         <div className="adreem-admin-user-actions">
@@ -120,8 +121,27 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => {
-    if (initialToken) loadUsers(initialToken)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!initialToken) return undefined
+    let cancelled = false
+
+    async function hydrateUsers() {
+      try {
+        const data = await adminRequest('/api/admin/users', { token: initialToken })
+        if (cancelled) return
+        setUsers(Array.isArray(data.users) ? data.users : [])
+        setOwner(data.owner || null)
+        setStatus('ready')
+      } catch (error) {
+        if (cancelled) return
+        setStatus('error')
+        setMessage(error.status === 401 ? 'هذا الحساب ليس مالكًا أو تحتاج تسجيل الدخول من جديد.' : 'لم أستطع تحميل المستخدمين.')
+      }
+    }
+
+    hydrateUsers()
+    return () => {
+      cancelled = true
+    }
   }, [initialToken])
 
   function refreshOwnerSession() {
@@ -156,11 +176,7 @@ export default function AdminUsersPage() {
       await loadUsers(token)
       setMessage('تم إنشاء المستخدم. يمكنه الدخول الآن بالإيميل وكلمة المرور.')
     } catch (error) {
-      if (error.status === 409) {
-        setMessage('هذا الإيميل أو الدفتر أو Telegram ID مستخدم بالفعل.')
-      } else {
-        setMessage('لم تتم الإضافة. راجع الإيميل وكلمة المرور وكود الدفتر.')
-      }
+      setMessage(adminErrorMessage(error, 'لم تتم الإضافة. راجع الإيميل وكلمة المرور وكود الدفتر.'))
     }
   }
 
@@ -309,12 +325,13 @@ export default function AdminUsersPage() {
                 <input
                   value={draft.ledgerId}
                   onChange={(event) => setDraft((current) => ({ ...current, ledgerId: event.target.value }))}
-                  placeholder="mohammad أو saeed-book"
+                  placeholder="main-book أو saeed-book"
+                  disabled={Boolean(editingUser)}
                   dir="ltr"
                 />
               </label>
               <label>
-                <span>Telegram ID اختياري</span>
+                <span>رقم تيليغرام (اختياري)</span>
                 <input
                   value={draft.telegramUserId}
                   onChange={(event) => setDraft((current) => ({ ...current, telegramUserId: event.target.value.replace(/\D/g, '') }))}

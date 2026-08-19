@@ -14,6 +14,8 @@ describe('mohammad movement config', () => {
       expect(movementConfigFor(type), type).toHaveProperty('amountLabel')
       expect(movementDefaultsFor(type), type).toHaveProperty('sourceAccountId')
       expect(movementDefaultsFor(type), type).toHaveProperty('destinationAccountId')
+      expect(movementDefaultsFor(type).sourceAccountId, type).toBe('')
+      expect(movementDefaultsFor(type).destinationAccountId, type).toBe('')
     }
   })
 

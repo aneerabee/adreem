@@ -5,13 +5,15 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
 import { createLedgerRepository } from './mohammadLedger/ledgerRepository.js'
+import { validateLedgerStateTransition } from './mohammadLedger/stateValidation.js'
+import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './mohammadLedger/attachmentValidation.js'
 import { mergeLedgerStates } from '../src/mohammadLedger/ledgerState.js'
+import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/mohammadLedger/ledgerOperations.js'
 import { createTelegramUserAccess, defaultRegistryPath, registrySessionTokenMap } from './telegram/userRegistry.js'
 
 const DEFAULT_PORT = 8787
 const DEFAULT_JSON_BODY_LIMIT = 5_000_000
 const ATTACHMENT_BODY_LIMIT = 15_000_000
-const ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024
 const RATE_LIMITS = {
   login: { limit: 8, windowMs: 15 * 60 * 1000 },
   admin: { limit: 120, windowMs: 60 * 1000 },
@@ -67,7 +69,11 @@ function sendJson(res, statusCode, payload, origin = '*') {
     'access-control-allow-origin': origin,
     'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'access-control-allow-headers': 'authorization, content-type',
+    'cache-control': 'no-store, private',
     'content-type': 'application/json; charset=utf-8',
+    pragma: 'no-cache',
+    vary: 'Origin',
+    'x-content-type-options': 'nosniff',
   }
   if (statusCode !== 204) headers['content-length'] = Buffer.byteLength(body)
   res.writeHead(statusCode, {
@@ -76,14 +82,27 @@ function sendJson(res, statusCode, payload, origin = '*') {
   res.end(body)
 }
 
-export function createMemoryRateLimiter(now = () => Date.now()) {
+export function createMemoryRateLimiter(now = () => Date.now(), { maxBuckets = 5_000 } = {}) {
   const buckets = new Map()
+
+  function prune(currentTime) {
+    for (const [key, bucket] of buckets) {
+      if (currentTime >= bucket.resetAt) buckets.delete(key)
+    }
+    while (buckets.size >= maxBuckets) {
+      const oldestKey = buckets.keys().next().value
+      if (oldestKey === undefined) break
+      buckets.delete(oldestKey)
+    }
+  }
+
   return {
     check(key, { limit, windowMs }) {
       const safeKey = String(key || 'anonymous')
       const currentTime = now()
       const existing = buckets.get(safeKey)
       if (!existing || currentTime >= existing.resetAt) {
+        if (!existing) prune(currentTime)
         buckets.set(safeKey, { count: 1, resetAt: currentTime + windowMs })
         return { ok: true, remaining: Math.max(0, limit - 1), retryAfterSeconds: 0 }
       }
@@ -96,6 +115,9 @@ export function createMemoryRateLimiter(now = () => Date.now()) {
         remaining: 0,
         retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAt - currentTime) / 1000)),
       }
+    },
+    size() {
+      return buckets.size
     },
   }
 }
@@ -122,9 +144,12 @@ function audit(env, event) {
   }
 }
 
-function clientIp(req) {
-  const forwarded = String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim()
-  return forwarded || req.socket?.remoteAddress || 'unknown'
+export function clientIp(req) {
+  const forwarded = String(req.headers?.['x-forwarded-for'] || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  return forwarded.at(-1) || req.socket?.remoteAddress || 'unknown'
 }
 
 function rateKey(req, scope, extra = '') {
@@ -138,8 +163,12 @@ function rejectRateLimited(res, origin, result) {
     'access-control-allow-origin': origin,
     'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'access-control-allow-headers': 'authorization, content-type',
+    'cache-control': 'no-store, private',
     'content-type': 'application/json; charset=utf-8',
+    pragma: 'no-cache',
     'retry-after': String(result.retryAfterSeconds),
+    vary: 'Origin',
+    'x-content-type-options': 'nosniff',
     'content-length': Buffer.byteLength(body),
   })
   res.end(body)
@@ -196,9 +225,33 @@ function storageClient(env) {
   }
 }
 
-async function uploadAttachment(env, { ledgerId, fileName, mimeType, base64 }) {
+export function isLedgerStoragePath(storagePath = '', ledgerId = '') {
+  const cleanPath = String(storagePath || '').trim()
+  const cleanLedgerId = String(ledgerId || '').trim()
+  const parts = cleanPath.split('/')
+  return Boolean(
+    cleanLedgerId &&
+    parts.length >= 2 &&
+    parts[0] === cleanLedgerId &&
+    parts.every((part) => part && part !== '.' && part !== '..'),
+  )
+}
+
+async function signAttachment(env, { ledgerId, storagePath }) {
+  if (!isLedgerStoragePath(storagePath, ledgerId)) throw new ApiRequestError('Attachment path is outside this ledger.', 403)
   const { bucket, client } = storageClient(env)
-  const buffer = Buffer.from(String(base64 || ''), 'base64')
+  const { data, error } = await client.storage.from(bucket).createSignedUrl(storagePath, 15 * 60)
+  if (error || !data?.signedUrl) throw new ApiRequestError(error?.message || 'Attachment signing failed.', 500)
+  return data.signedUrl
+}
+
+async function uploadAttachment(env, { ledgerId, fileName, mimeType, base64 }) {
+  let buffer
+  try {
+    buffer = decodeCanonicalBase64(base64)
+  } catch (error) {
+    throw new ApiRequestError(error.message, 400)
+  }
   if (!buffer.length) throw new ApiRequestError('Attachment file is empty.', 400)
   if (buffer.length > ATTACHMENT_MAX_SIZE_BYTES) throw new ApiRequestError('Attachment is larger than 10MB.', 413)
   const safeName = cleanFileName(fileName)
@@ -206,12 +259,19 @@ async function uploadAttachment(env, { ledgerId, fileName, mimeType, base64 }) {
   const hash = createHash('sha256').update(`${ledgerId}:${safeName}:${Date.now()}:${buffer.length}`).digest('hex').slice(0, 16)
   const storagePath = `${ledgerId}/${date}/${hash}-${safeName}`
   const contentType = String(mimeType || 'application/octet-stream').trim() || 'application/octet-stream'
+  if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(contentType.toLowerCase())) {
+    throw new ApiRequestError('Attachment type is not allowed.', 415)
+  }
+  if (!attachmentContentMatchesMime(buffer, contentType)) {
+    throw new ApiRequestError('Attachment content does not match its file type.', 415)
+  }
+  const { bucket, client } = storageClient(env)
   const { error } = await client.storage.from(bucket).upload(storagePath, buffer, {
     contentType,
     upsert: false,
   })
   if (error) throw new ApiRequestError(error.message || 'Attachment upload failed.', 500)
-  const { data, error: signedError } = await client.storage.from(bucket).createSignedUrl(storagePath, 60 * 60 * 24 * 7)
+  const { data, error: signedError } = await client.storage.from(bucket).createSignedUrl(storagePath, 15 * 60)
   if (signedError) throw new ApiRequestError(signedError.message || 'Attachment signing failed.', 500)
   return {
     label: safeName,
@@ -367,7 +427,7 @@ export function createAdreemApiHandler(env = process.env) {
           if (!result.ok) {
             audit(env, { action: 'admin.user.update.failed', ownerUserId: ownerUser.userId, targetUserId, error: result.error })
             const status = result.error === 'not-found' ? 404
-              : result.error === 'ledger-used' || result.error === 'telegram-used' || result.error === 'email-used' ? 409
+              : result.error === 'ledger-used' || result.error === 'telegram-used' || result.error === 'email-used' || result.error === 'ledger-change-requires-migration' ? 409
                 : 400
             return sendJson(res, status, { error: result.error, existingUserId: result.existingUserId || '' }, allowedOrigin)
           }
@@ -385,7 +445,7 @@ export function createAdreemApiHandler(env = process.env) {
             return sendJson(res, status, { error: result.error }, allowedOrigin)
           }
           audit(env, { action: 'admin.user.deleted', ownerUserId: ownerUser.userId, targetUserId })
-          return sendJson(res, 200, { ok: true, removedUserId: targetUserId })
+          return sendJson(res, 200, { ok: true, removedUserId: targetUserId }, allowedOrigin)
         }
         return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
       } catch (error) {
@@ -406,23 +466,30 @@ export function createAdreemApiHandler(env = process.env) {
       const ledgerId = ledgerIdForToken(token)
       if (!ledgerId) return sendJson(res, 401, { error: 'Invalid ledger token.' }, allowedOrigin)
       try {
-        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
-        const body = await readJsonBody(req, { maxBytes: ATTACHMENT_BODY_LIMIT })
-        const attachment = await uploadAttachment(env, {
-          ledgerId,
-          fileName: body.fileName,
-          mimeType: body.mimeType,
-          base64: body.base64,
-        })
-        audit(env, { action: 'attachment.uploaded', ledgerId, storagePath: attachment.storagePath, sizeBytes: attachment.sizeBytes })
-        return sendJson(res, 201, { attachment }, allowedOrigin)
+        if (req.method === 'GET') {
+          const storagePath = String(url.searchParams.get('path') || '')
+          const signedUrl = await signAttachment(env, { ledgerId, storagePath })
+          return sendJson(res, 200, { signedUrl, expiresInSeconds: 900 }, allowedOrigin)
+        }
+        if (req.method === 'POST') {
+          const body = await readJsonBody(req, { maxBytes: ATTACHMENT_BODY_LIMIT })
+          const attachment = await uploadAttachment(env, {
+            ledgerId,
+            fileName: body.fileName,
+            mimeType: body.mimeType,
+            base64: body.base64,
+          })
+          audit(env, { action: 'attachment.uploaded', ledgerId, storagePath: attachment.storagePath, sizeBytes: attachment.sizeBytes })
+          return sendJson(res, 201, { attachment }, allowedOrigin)
+        }
+        return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
       } catch (error) {
         console.error('[adreem-api-attachment]', error?.message || error)
-        audit(env, { action: 'attachment.upload.failed', ledgerId, error: error?.message || String(error) })
+        audit(env, { action: req.method === 'POST' ? 'attachment.upload.failed' : 'attachment.access.failed', ledgerId, error: error?.message || String(error) })
         if (error instanceof ApiRequestError) {
           return sendJson(res, error.statusCode, { error: error.message }, allowedOrigin)
         }
-        return sendJson(res, 500, { error: 'Attachment upload failed.' }, allowedOrigin)
+        return sendJson(res, 500, { error: 'Attachment request failed.' }, allowedOrigin)
       }
     }
     if (url.pathname !== '/api/ledger') {
@@ -430,6 +497,7 @@ export function createAdreemApiHandler(env = process.env) {
     }
 
     const token = tokenFromAuthHeader(req.headers.authorization)
+    const ledgerId = ledgerIdForToken(token)
     const repository = repositoryForToken(token)
     if (!repository) {
       return sendJson(res, 401, { error: 'Invalid ledger token.' }, allowedOrigin)
@@ -440,7 +508,11 @@ export function createAdreemApiHandler(env = process.env) {
         const limit = rateLimiter.check(rateKey(req, 'ledger-read'), RATE_LIMITS.ledgerRead)
         if (!limit.ok) return rejectRateLimited(res, allowedOrigin, limit)
         const result = await repository.load()
-        return sendJson(res, 200, { state: result.state, source: result.source || 'api' }, allowedOrigin)
+        return sendJson(res, 200, {
+          state: result.state,
+          source: result.source || 'api',
+          access: { canManageUsers: Boolean(ownerForToken(token)) },
+        }, allowedOrigin)
       }
       if (req.method === 'PUT') {
         const limit = rateLimiter.check(rateKey(req, 'ledger-write'), RATE_LIMITS.ledgerWrite)
@@ -449,17 +521,28 @@ export function createAdreemApiHandler(env = process.env) {
           return rejectRateLimited(res, allowedOrigin, limit)
         }
         const body = await readJsonBody(req)
-        const result = await repository.update((currentState) => ({
-          state: body.state && typeof body.state === 'object'
+        const result = await repository.update((currentState) => {
+          const state = body.state && typeof body.state === 'object'
             ? mergeLedgerStates(body.state, currentState, currentState)
-            : currentState,
-        }))
-        audit(env, { action: 'ledger.saved', source: 'web-api' })
+            : currentState
+          const validation = validateLedgerStateTransition(state, currentState, {
+            ledgerId: repository.ledgerConfig?.identity?.ledgerId || ledgerIdForToken(token),
+          })
+          if (!validation.ok) {
+            throw new ApiRequestError(`Ledger integrity check failed: ${validation.errors[0]?.message || 'invalid state'}`, 422)
+          }
+          return { state }
+        })
+        audit(env, { action: 'ledger.saved', ledgerId, source: 'web-api' })
         return sendJson(res, 200, { state: result.state, source: 'api-save' }, allowedOrigin)
       }
       return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
     } catch (error) {
-      console.error('[adreem-api]', error?.message || error)
+      if (!(error instanceof ApiRequestError) || error.statusCode >= 500) {
+        console.error('[adreem-api]', error?.message || error)
+      } else {
+        audit(env, { action: 'ledger.save.rejected', ledgerId, error: error.message })
+      }
       if (error instanceof ApiRequestError) {
         return sendJson(res, error.statusCode, { error: error.message }, allowedOrigin)
       }

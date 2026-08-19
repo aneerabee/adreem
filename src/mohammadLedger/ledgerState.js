@@ -66,14 +66,20 @@ export function normalizeMohammadAccounts(accounts = []) {
   return accounts.map((account) => {
     const normalizedAccount = {
       ...account,
+      valueKind: account.type === ACCOUNT_TYPES.PROJECT ? VALUE_KINDS.PROJECT : account.valueKind,
       currencyKind: normalizeAccountCurrencyKind(account.currencyKind, inferAccountCurrencyKind(account)),
     }
-    if (account.id === 'saeed-bank' && account.type === ACCOUNT_TYPES.BANK && account.valueKind === VALUE_KINDS.BANK) {
+    if (
+      account.ownerName &&
+      account.ownerName !== 'أنا' &&
+      account.type === ACCOUNT_TYPES.BANK &&
+      account.valueKind === VALUE_KINDS.BANK
+    ) {
       return {
         ...normalizedAccount,
         type: ACCOUNT_TYPES.PERSON,
         valueKind: VALUE_KINDS.RECEIVABLE,
-        notes: account.notes || 'فرع مصرفي لشخص، وليس مكان مال خاص بي.',
+        notes: account.notes || 'رصيد مصرفي بيني وبين شخص أو جهة.',
       }
     }
     return normalizedAccount
@@ -118,7 +124,7 @@ export function createEmptyAdreemState(createdAt = new Date().toISOString(), ide
   }
 }
 
-export function normalizeLedgerState(state, fallbackState = createMohammadFallbackState()) {
+export function normalizeLedgerState(state, fallbackState = createEmptyAdreemState()) {
   const safeState = state && typeof state === 'object' ? state : {}
   const accounts = Array.isArray(safeState.accounts) ? safeState.accounts : fallbackState.accounts
   const movements = Array.isArray(safeState.movements) ? safeState.movements : fallbackState.movements
@@ -147,8 +153,16 @@ export function stateTimestamp(state) {
 }
 
 export function recordTimestamp(record) {
-  const time = new Date(record?.updatedAt || record?.reviewedAt || record?.disabledAt || record?.voidedAt || record?.createdAt || 0).getTime()
-  return Number.isFinite(time) ? time : 0
+  return [
+    record?.updatedAt,
+    record?.reviewedAt,
+    record?.disabledAt,
+    record?.voidedAt,
+    record?.createdAt,
+  ].reduce((latest, value) => {
+    const time = new Date(value || 0).getTime()
+    return Number.isFinite(time) ? Math.max(latest, time) : latest
+  }, 0)
 }
 
 export function mergeRecordsById(left = [], right = []) {
@@ -165,7 +179,7 @@ export function mergeRecordsById(left = [], right = []) {
   return Array.from(byId.values())
 }
 
-export function mergeLedgerStates(localState, remoteState, fallbackState = createMohammadFallbackState()) {
+export function mergeLedgerStates(localState, remoteState, fallbackState = createEmptyAdreemState()) {
   const local = normalizeLedgerState(localState, fallbackState)
   const remote = normalizeLedgerState(remoteState, fallbackState)
   const localReset = stateTimestamp({ savedAt: local.resetAt })
@@ -198,7 +212,7 @@ export function mergeLedgerStates(localState, remoteState, fallbackState = creat
   }
 }
 
-export function selectPersistedLedgerRows(rows = [], fallbackState = createMohammadFallbackState(), options = {}) {
+export function selectPersistedLedgerRows(rows = [], fallbackState = createEmptyAdreemState(), options = {}) {
   const fallback = normalizeLedgerState(fallbackState, fallbackState)
   const primaryRowId = options.primaryRowId || MOHAMMAD_STATE_ROW_ID
   const legacyRowId = options.legacyRowId || MOHAMMAD_LEGACY_STATE_ROW_ID
@@ -214,10 +228,10 @@ export function selectPersistedLedgerRows(rows = [], fallbackState = createMoham
 
   if (primary && legacy) {
     return {
-      state: mergeLedgerStates(primary.state, legacy.state, fallback),
+      state: primary.state,
       updatedAt: primary.updatedAt,
       rowId: primary.id,
-      source: 'merged-primary-legacy',
+      source: 'primary',
     }
   }
   if (primary) {
@@ -247,7 +261,11 @@ export function selectPersistedLedgerRows(rows = [], fallbackState = createMoham
 
 export function sameRecordVersions(left = [], right = []) {
   if (left.length !== right.length) return false
-  const version = (item) => item.updatedAt || item.reviewedAt || item.disabledAt || item.mergedIntoAccountId || item.createdAt || item.voidedAt || item.status || ''
+  const version = (item) => [
+    recordTimestamp(item),
+    item.status || '',
+    item.mergedIntoAccountId || '',
+  ].join(':')
   const leftKeys = left.map((item) => `${item.id}:${version(item)}`).sort()
   const rightKeys = right.map((item) => `${item.id}:${version(item)}`).sort()
   return leftKeys.every((key, index) => key === rightKeys[index])

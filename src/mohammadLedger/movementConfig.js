@@ -2,6 +2,8 @@ import { CURRENCIES, MOVEMENT_TYPES } from './ledgerCore.js'
 
 export const movementLabels = {
   [MOVEMENT_TYPES.TRANSFER]: 'تحويل',
+  [MOVEMENT_TYPES.CASH_DEPOSIT]: 'إيداع في المصرف',
+  [MOVEMENT_TYPES.CASH_WITHDRAWAL]: 'سحب من المصرف',
   [MOVEMENT_TYPES.EXPENSE]: 'مصروف',
   [MOVEMENT_TYPES.TRUCK_EXPENSE]: 'مصروف شاحنة',
   [MOVEMENT_TYPES.TRUCK_INCOME]: 'دخل شاحنة',
@@ -23,6 +25,18 @@ export const movementTypeOptions = [
     label: 'مصروف',
     detail: 'خروج فلوس من حساب واحد',
     tone: 'expense',
+  },
+  {
+    type: MOVEMENT_TYPES.CASH_DEPOSIT,
+    label: 'إيداع',
+    detail: 'من الكاش إلى المصرف',
+    tone: 'deposit',
+  },
+  {
+    type: MOVEMENT_TYPES.CASH_WITHDRAWAL,
+    label: 'سحب',
+    detail: 'من المصرف إلى الكاش',
+    tone: 'withdrawal',
   },
   {
     type: MOVEMENT_TYPES.EXTERNAL_INCOME,
@@ -64,6 +78,28 @@ export const movementConfigs = {
     sourceLabel: 'يخصم من',
     sourceQuestion: 'من أي حساب يخرج المصروف؟',
     routeTitle: 'الحساب',
+  },
+  [MOVEMENT_TYPES.CASH_DEPOSIT]: {
+    amountLabel: 'كم ستودع؟',
+    currencyLocked: false,
+    needsDestination: true,
+    needsRate: false,
+    sourceLabel: 'الكاش',
+    destinationLabel: 'المصرف',
+    sourceQuestion: 'من أي كاش يخرج المبلغ؟',
+    destinationQuestion: 'في أي حساب مصرفي يدخل؟',
+    routeTitle: 'الإيداع',
+  },
+  [MOVEMENT_TYPES.CASH_WITHDRAWAL]: {
+    amountLabel: 'كم ستسحب؟',
+    currencyLocked: false,
+    needsDestination: true,
+    needsRate: false,
+    sourceLabel: 'المصرف',
+    destinationLabel: 'الكاش',
+    sourceQuestion: 'من أي حساب مصرفي يخرج المبلغ؟',
+    destinationQuestion: 'في أي كاش يدخل؟',
+    routeTitle: 'السحب',
   },
   [MOVEMENT_TYPES.TRUCK_EXPENSE]: {
     amountLabel: 'كم مصروف الشاحنة؟',
@@ -141,14 +177,16 @@ export const movementConfigs = {
 }
 
 export const movementDefaultAccounts = {
-  [MOVEMENT_TYPES.TRANSFER]: { sourceAccountId: 'me-cash', destinationAccountId: 'saeed-cash' },
-  [MOVEMENT_TYPES.EXPENSE]: { sourceAccountId: 'me-cash', destinationAccountId: '' },
-  [MOVEMENT_TYPES.TRUCK_EXPENSE]: { sourceAccountId: 'me-cash', destinationAccountId: '' },
-  [MOVEMENT_TYPES.TRUCK_INCOME]: { sourceAccountId: '', destinationAccountId: 'me-cash' },
-  [MOVEMENT_TYPES.USD_SALE]: { sourceAccountId: 'me-cash', destinationAccountId: 'me-jumhouria' },
-  [MOVEMENT_TYPES.USD_PURCHASE]: { sourceAccountId: 'me-jumhouria', destinationAccountId: 'me-cash' },
-  [MOVEMENT_TYPES.EXTERNAL_INCOME]: { sourceAccountId: '', destinationAccountId: 'me-cash' },
-  [MOVEMENT_TYPES.CORRECTION]: { sourceAccountId: '', destinationAccountId: 'me-cash' },
+  [MOVEMENT_TYPES.TRANSFER]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.EXPENSE]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.CASH_DEPOSIT]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.CASH_WITHDRAWAL]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.TRUCK_EXPENSE]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.TRUCK_INCOME]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.USD_SALE]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.USD_PURCHASE]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.EXTERNAL_INCOME]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.CORRECTION]: { sourceAccountId: '', destinationAccountId: '' },
 }
 
 export const MOVEMENT_ENTRY_STEPS = {
@@ -171,12 +209,7 @@ export function movementDefaultsFor(type) {
 }
 
 export function movementPreferredAccountIds(type, role) {
-  const defaults = movementDefaultsFor(type)
-  if ((type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRANSFER || type === MOVEMENT_TYPES.TRUCK_EXPENSE) && role === 'source') {
-    return ['me-cash', 'me-jumhouria', 'saeed-cash', 'saeed-bank']
-  }
-  if (role === 'source') return [defaults.sourceAccountId].filter(Boolean)
-  if (role === 'destination') return [defaults.destinationAccountId].filter(Boolean)
+  if (!type || !role) return []
   return []
 }
 
@@ -201,6 +234,10 @@ export function movementSupportsDimension(type) {
   ].includes(type)
 }
 
+export function movementSupportsExpenseCategory(type) {
+  return type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE
+}
+
 export function movementCurrencyFor(type, fallback = CURRENCIES.DINAR) {
   return movementConfigFor(type).currency || fallback
 }
@@ -211,5 +248,7 @@ export function movementTone(type) {
   if (type === MOVEMENT_TYPES.USD_SALE) return 'sale'
   if (type === MOVEMENT_TYPES.USD_PURCHASE) return 'purchase'
   if (type === MOVEMENT_TYPES.TRANSFER) return 'transfer'
+  if (type === MOVEMENT_TYPES.CASH_DEPOSIT) return 'deposit'
+  if (type === MOVEMENT_TYPES.CASH_WITHDRAWAL) return 'withdrawal'
   return 'neutral'
 }

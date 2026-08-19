@@ -1,15 +1,16 @@
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
 import {
   accountDisplayName,
+  accountDetailName,
   accountDraftSummary,
   accountNeedsCurrency,
   accountKindLabel,
   accountNameValue,
   accountPresetFor,
-  displaySubAccountName,
+  accountPresetGroupFor,
+  accountPresetStepCopy,
 } from '../../src/mohammadLedger/accountConfig.js'
 import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { transferAccountKind } from '../../src/mohammadLedger/accountCompatibility.js'
 import {
   movementConfigFor,
   movementLabels,
@@ -17,6 +18,7 @@ import {
   movementNeedsRate,
   movementNeedsSource,
   movementSupportsDimension,
+  movementSupportsExpenseCategory,
   movementTone,
 } from '../../src/mohammadLedger/movementConfig.js'
 import { accountLabel, formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
@@ -49,6 +51,8 @@ function movementIcon(type) {
   if (tone === 'sale') return '🟢'
   if (tone === 'purchase') return '🔵'
   if (tone === 'transfer') return '🔁'
+  if (tone === 'deposit') return '🏦'
+  if (tone === 'withdrawal') return '💵'
   return '◼'
 }
 
@@ -78,6 +82,7 @@ function currentStepTitle(session) {
   if (session?.step === 'destination') return config.destinationQuestion || `اختر ${config.destinationLabel}`
   if (session?.step === 'note') return 'أضف ملاحظة'
   if (session?.step === 'dimension') return 'اربط مشروعًا'
+  if (session?.step === 'category') return 'اختر نوع المصروف'
   if (session?.step === 'attachment') return 'أضف مرفقًا'
   if (session?.step === 'recurring') return 'هل تتكرر؟'
   if (session?.step === 'review') return 'راجع قبل الحفظ'
@@ -93,6 +98,7 @@ function currentStepHelp(session) {
   if (session?.step === 'destination') return 'اختر أين تدخل القيمة.'
   if (session?.step === 'note') return 'اختياري.'
   if (session?.step === 'dimension') return 'اختياري.'
+  if (session?.step === 'category') return 'اختياري، ويسهّل معرفة أين صُرفت الفلوس.'
   if (session?.step === 'attachment') return 'اختياري.'
   if (session?.step === 'recurring') return 'اختياري.'
   if (session?.step === 'review') return 'تأكد ثم احفظ.'
@@ -101,16 +107,15 @@ function currentStepHelp(session) {
 
 function typeTag(account) {
   if (!account) return ''
-  const route = transferAccountKind(account) === 'cash' ? 'كاش' : 'بنكي'
-  if (account.valueKind === VALUE_KINDS.RECEIVABLE) return `${accountKindLabel(account)} · ${route}`
+  if (account.valueKind === VALUE_KINDS.RECEIVABLE) return accountDetailName(account)
   return accountKindLabel(account)
 }
 
 export function mainMenuText(summary = null) {
-  const lines = ['<b>ADREEM</b>', '<code>إدخال سريع · أرصدة · سجل · مراجعة</code>']
+  const lines = ['<b>ADREEM</b>', '<code>عملية · أرصدة · حركات · مراجعة</code>']
   if (summary) {
     lines.push('')
-    lines.push(`<blockquote>${escapeHtml(`إدخال سريع جاهز\nسجل اليوم: ${summary.todayCount} حركة\nمراجعة: ${summary.reviewCount}`)}</blockquote>`)
+    lines.push(`<blockquote>${escapeHtml(`جاهز لعملية جديدة\nاليوم: ${summary.todayCount} حركة\nالمراجعة: ${summary.reviewCount}`)}</blockquote>`)
   }
   lines.push('', '<b>اختر منطقة العمل</b>')
   return lines.join('\n')
@@ -141,7 +146,9 @@ function alertIcon(tone) {
 
 function accountStepTitle(session) {
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
-  if (session?.step === 'type') return 'اختر التصنيف'
+  const group = accountPresetGroupFor(session?.presetGroup || preset)
+  if (session?.step === 'group') return 'ماذا تريد أن تضيف؟'
+  if (session?.step === 'type') return accountPresetStepCopy[group.key]?.question || 'اختر النوع'
   if (session?.step === 'owner') return preset.nameLabel || 'اكتب الاسم'
   if (session?.step === 'detail') return preset.detailLabel || 'اختر التفصيل'
   if (session?.step === 'currency') return 'اختر العملة'
@@ -151,7 +158,9 @@ function accountStepTitle(session) {
 
 function accountStepHelp(session) {
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
-  if (session?.step === 'type') return 'اختر التصنيف المناسب.'
+  const group = accountPresetGroupFor(session?.presetGroup || preset)
+  if (session?.step === 'group') return 'اختر قسمًا واحدًا.'
+  if (session?.step === 'type') return accountPresetStepCopy[group.key]?.hint || 'اختر النوع المناسب.'
   if (session?.step === 'owner') return preset.namePlaceholder || 'اكتب الاسم فقط.'
   if (session?.step === 'detail') return 'كاش أو شيك بيننا.'
   if (session?.step === 'currency') return 'دينار أو دولار.'
@@ -162,15 +171,18 @@ function accountStepHelp(session) {
 export function accountStepText(session) {
   const draft = session?.draft || {}
   const preset = accountPresetFor(draft.type, draft.valueKind)
-  const steps = ['type', 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), 'review']
+  const group = accountPresetGroupFor(session?.presetGroup || preset)
+  const hasTypeStep = group.keys.length > 1
+  const steps = ['group', ...(hasTypeStep ? ['type'] : []), 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), 'review']
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = `${currentIndex + 1}/${steps.length}`
   const summary = []
-  if (currentIndex > steps.indexOf('type') && draft.type) summary.push(htmlLine('التصنيف', preset.title))
+  if (currentIndex > steps.indexOf('group')) summary.push(htmlLine('القسم', group.title))
+  if (hasTypeStep && currentIndex > steps.indexOf('type') && draft.type) summary.push(htmlLine('النوع', preset.title))
   const nameValue = accountNameValue(draft)
   if (currentIndex > steps.indexOf('owner') && nameValue) summary.push(htmlLine(preset.nameLabel || 'الاسم', nameValue))
   if (!preset.skipDetail && currentIndex > steps.indexOf('detail') && draft.subAccountName) {
-    summary.push(htmlLine(preset.detailLabel || 'التفصيل', displaySubAccountName(draft.subAccountName)))
+    summary.push(htmlLine(preset.detailLabel || 'التفصيل', accountDetailName(draft)))
   }
   if (accountNeedsCurrency(draft) && currentIndex > steps.indexOf('currency') && draft.currencyKind) {
     summary.push(htmlLine('العملة', draft.currencyKind === CURRENCIES.USD ? 'دولار' : 'دينار'))
@@ -229,7 +241,7 @@ export function accountCreatedText(account, { duplicate = false, reviewed = fals
   ].join('')
 }
 
-export function movementStepText(session, accountsById = new Map(), dimensionsById = new Map()) {
+export function movementStepText(session, accountsById = new Map(), dimensionsById = new Map(), expenseCategoriesById = new Map()) {
   const draft = session?.draft || {}
   const config = movementConfigFor(draft.type)
   const amountCurrency = draft.currencyConfirmed ? draft.currency : config.currency
@@ -239,6 +251,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   const source = accountsById.get(draft.sourceAccountId)
   const destination = accountsById.get(draft.destinationAccountId)
   const dimension = dimensionsById.get(draft.dimensionId)
+  const expenseCategory = expenseCategoriesById.get(draft.expenseCategoryId)
   const steps = [
     'type',
     'amount',
@@ -248,6 +261,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
     ...(movementNeedsDestination(draft.type) ? ['destination'] : []),
     'note',
     ...(movementSupportsDimension(draft.type) ? ['dimension'] : []),
+    ...(movementSupportsExpenseCategory(draft.type) ? ['category'] : []),
     'attachment',
     'recurring',
     'review',
@@ -263,6 +277,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, accountLabel(destination)))
   if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
   if (dimension) summary.push(htmlLine('مشروع', dimension.name))
+  if (expenseCategory) summary.push(htmlLine('نوع المصروف', expenseCategory.ownerName || expenseCategory.subAccountName))
   if (draft.attachmentLabel || draft.attachmentUrl) summary.push(htmlLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   if (draft.recurringEnabled) summary.push(htmlLine('تكرار', 'شهري'))
   const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : 'ADREEM · إدخال'
@@ -349,6 +364,7 @@ export function stepPromptText(session) {
   if (session?.step === 'destination') return `اضغط على الحساب الذي ستدخل إليه القيمة.`
   if (session?.step === 'note') return 'اكتب ملاحظة قصيرة أو اضغط بدون ملاحظة.'
   if (session?.step === 'dimension') return 'اختر مشروعًا أو اضغط بدون مشروع.'
+  if (session?.step === 'category') return 'اختر نوع المصروف أو اضغط بدون تصنيف.'
   if (session?.step === 'attachment') return 'اكتب وصف المرفق أو رابطه، أو اضغط بدون مرفق.'
   if (session?.step === 'recurring') return 'اختر هل هذه الحركة شهرية.'
   if (session?.step === 'review') return 'راجع التأثير، ثم اضغط تأكيد الحفظ.'

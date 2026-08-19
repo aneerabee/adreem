@@ -9,6 +9,7 @@ import {
   createLedgerIdentity,
   createMohammadFallbackState,
   mergeLedgerStates,
+  sameRecordVersions,
   normalizeLedgerState,
   selectPersistedLedgerRows,
 } from './ledgerState.js'
@@ -32,6 +33,53 @@ describe('mohammad ledger state reset safety', () => {
     expect(merged.accounts.map((account) => account.id)).toEqual(['me-cash'])
     expect(merged.movements).toEqual([])
     expect(merged.resetAt).toBe(remote.resetAt)
+  })
+
+  it('keeps a newer review decision even when an older updatedAt field exists', () => {
+    const remoteAccount = {
+      id: 'review-account',
+      status: 'needs_review',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const reviewedAccount = {
+      ...remoteAccount,
+      status: 'active',
+      reviewedAt: '2026-08-19T10:00:00.000Z',
+    }
+    const fallback = createMohammadFallbackState('2026-01-01T00:00:00.000Z')
+
+    const merged = mergeLedgerStates(
+      { ...fallback, accounts: [reviewedAccount], movements: [] },
+      { ...fallback, accounts: [remoteAccount], movements: [] },
+      fallback,
+    )
+
+    expect(merged.accounts).toHaveLength(1)
+    expect(merged.accounts[0]).toMatchObject(reviewedAccount)
+    expect(sameRecordVersions([remoteAccount], [reviewedAccount])).toBe(false)
+  })
+
+  it('keeps a newer hide or cancel decision during cloud merge', () => {
+    const remoteMovement = {
+      id: 'review-movement',
+      status: 'needs_review',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const cancelledMovement = {
+      ...remoteMovement,
+      status: 'voided',
+      voidedAt: '2026-08-19T11:00:00.000Z',
+    }
+    const fallback = createMohammadFallbackState('2026-01-01T00:00:00.000Z')
+
+    const merged = mergeLedgerStates(
+      { ...fallback, accounts: [], movements: [cancelledMovement] },
+      { ...fallback, accounts: [], movements: [remoteMovement] },
+      fallback,
+    )
+
+    expect(merged.movements).toEqual([cancelledMovement])
+    expect(sameRecordVersions([remoteMovement], [cancelledMovement])).toBe(false)
   })
 })
 
@@ -114,7 +162,7 @@ describe('adreem ledger state migration', () => {
     ])
   })
 
-  it('selects the ADREEM row while safely migrating useful legacy default row records', () => {
+  it('uses the ADREEM row without restoring records from the legacy default row', () => {
     const fallback = createMohammadFallbackState('2026-05-20T10:00:00.000Z')
     const selected = selectPersistedLedgerRows([
       {
@@ -141,8 +189,8 @@ describe('adreem ledger state migration', () => {
 
     expect(selected.rowId).toBe(ADREEM_STATE_ROW_ID)
     expect(selected.updatedAt).toBe('2026-05-20T12:00:00.000Z')
-    expect(selected.source).toBe('merged-primary-legacy')
-    expect(selected.state.accounts.map((account) => account.id).sort()).toEqual(['legacy-account', 'primary-account'])
+    expect(selected.source).toBe('primary')
+    expect(selected.state.accounts.map((account) => account.id)).toEqual(['primary-account'])
   })
 
   it('loads legacy default rows as a migration source without replacing the legacy row directly', () => {

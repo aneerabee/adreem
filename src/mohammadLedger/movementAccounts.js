@@ -15,7 +15,8 @@ function searchableText(account) {
 function isPostingAccount(account) {
   return account?.status === ACCOUNT_STATUSES.ACTIVE &&
     account.valueKind !== VALUE_KINDS.EXPENSE &&
-    account.valueKind !== VALUE_KINDS.ASSET
+    account.valueKind !== VALUE_KINDS.ASSET &&
+    account.valueKind !== VALUE_KINDS.PROJECT
 }
 
 export function getMovementAccounts(accounts = [], balancesByAccountId = new Map(), movementType, role, selected = {}) {
@@ -52,6 +53,12 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
   if (movementType === MOVEMENT_TYPES.USD_PURCHASE && role === 'destination') {
     return removeDuplicate(moneyOrPerson.filter((account) => supportsCurrency(account, 'USD')), sourceAccount)
   }
+  if (movementType === MOVEMENT_TYPES.CASH_DEPOSIT) {
+    return currencyReadyAccounts.filter((account) => account.valueKind === (role === 'source' ? VALUE_KINDS.CASH : VALUE_KINDS.BANK))
+  }
+  if (movementType === MOVEMENT_TYPES.CASH_WITHDRAWAL) {
+    return currencyReadyAccounts.filter((account) => account.valueKind === (role === 'source' ? VALUE_KINDS.BANK : VALUE_KINDS.CASH))
+  }
   if (role === 'destination') return removeTransferMismatch(removeDuplicate(transferReadyAccounts, sourceAccount), sourceAccount)
   if (role === 'source') return removeTransferMismatch(removeDuplicate(transferReadyAccounts, destinationAccount), destinationAccount)
   return transferReadyAccounts
@@ -67,8 +74,7 @@ export function rankMovementAccounts(accounts = [], balancesByAccountId = new Ma
   return accounts
     .filter((account) => !normalizedQuery || searchableText(account).includes(normalizedQuery))
     .sort((a, b) => {
-      if (a.id === 'me-cash') return -1
-      if (b.id === 'me-cash') return 1
-      return magnitude(b) - magnitude(a) || searchableText(a).localeCompare(searchableText(b), 'ar')
+      const ownRank = (account) => account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK ? 0 : 1
+      return ownRank(a) - ownRank(b) || magnitude(b) - magnitude(a) || searchableText(a).localeCompare(searchableText(b), 'ar')
     })
 }

@@ -28,7 +28,43 @@ describe('telegram history actions', () => {
     })
 
     expect(session.flow).toBe('history')
+    expect(session.total).toBe(1)
+    expect(session.page).toBe(0)
+    expect(session.pageCount).toBe(1)
     expect(Object.values(session.choices.movements)).toEqual(['posted-1'])
+  })
+
+  it('paginates the full posted history and clamps invalid pages', () => {
+    const movements = Array.from({ length: 19 }, (_, index) => movement({ id: `posted-${index + 1}` }))
+
+    const middle = buildHistorySession({ movements }, 8, 1)
+    const afterEnd = buildHistorySession({ movements }, 8, 99)
+    const beforeStart = buildHistorySession({ movements }, 8, -5)
+
+    expect(middle).toMatchObject({ page: 1, pageCount: 3, total: 19 })
+    expect(Object.values(middle.choices.movements)).toEqual([
+      'posted-11',
+      'posted-10',
+      'posted-9',
+      'posted-8',
+      'posted-7',
+      'posted-6',
+      'posted-5',
+      'posted-4',
+    ])
+    expect(afterEnd.page).toBe(2)
+    expect(Object.values(afterEnd.choices.movements)).toEqual(['posted-3', 'posted-2', 'posted-1'])
+    expect(beforeStart.page).toBe(0)
+  })
+
+  it('keeps an empty history on a stable first page', () => {
+    expect(buildHistorySession({ movements: [] })).toEqual({
+      flow: 'history',
+      page: 0,
+      pageCount: 1,
+      total: 0,
+      choices: { movements: {} },
+    })
   })
 
   it('voids a recent posted movement without deleting it', () => {

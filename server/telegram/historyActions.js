@@ -4,10 +4,16 @@ export const HISTORY_ACTION_LIMIT = 8
 export const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
 
-export function buildHistorySession(state, limit = HISTORY_ACTION_LIMIT) {
-  const movements = recentHistoryMovements(state).slice(0, limit)
+export function buildHistorySession(state, limit = HISTORY_ACTION_LIMIT, requestedPage = 0) {
+  const allMovements = recentHistoryMovements(state)
+  const pageCount = Math.max(1, Math.ceil(allMovements.length / limit))
+  const page = Math.min(Math.max(0, Number(requestedPage) || 0), pageCount - 1)
+  const movements = allMovements.slice(page * limit, (page + 1) * limit)
   return {
     flow: 'history',
+    page,
+    pageCount,
+    total: allMovements.length,
     choices: {
       movements: Object.fromEntries(movements.map((movement, index) => [String(index), movement.id])),
     },

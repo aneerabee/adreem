@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
-import { handleMovementCallback, handleMovementText, startMovement, startReviewMovement } from './movement.js'
+import { handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './movement.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
   let state = initialState
@@ -95,6 +95,31 @@ describe('telegram movement flow safety', () => {
     expect(session.step).toBe('amount')
     expect(session.draft.type).toBe(MOVEMENT_TYPES.TRANSFER)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('عملية قديمة')
+  })
+
+  it('refuses callbacks that do not belong to the current movement step', async () => {
+    const ctx = createCtx()
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.TRANSFER}`)
+
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.step).toBe('amount')
+    expect(ctx.repository.state.movements).toHaveLength(createMohammadFallbackState().movements.length)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('زر من خطوة سابقة')
+  })
+
+  it('refuses movement types that are not offered by the shared configuration', async () => {
+    const ctx = createCtx()
+    await startMovement(ctx)
+
+    await handleMovementCallback(ctx, 'mv:type:unknown-type')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.step).toBe('type')
+    expect(session.draft.type).toBe('')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('نوع الحركة غير صالح')
   })
 
   it('clears the chat flow and saves incomplete confirmed movements into review', async () => {
@@ -206,7 +231,7 @@ describe('telegram movement flow safety', () => {
       ownerName: 'شاحنة العمل',
       subAccountName: 'مشروع',
       type: 'project',
-      valueKind: 'asset',
+      valueKind: 'project',
       currencyKind: CURRENCIES.DINAR,
       status: 'active',
     }
@@ -229,6 +254,7 @@ describe('telegram movement flow safety', () => {
     const dimensionId = 'dimension-account-truck-project'
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('dimension')
     await handleMovementCallback(ctx, `mv:dimension:${choiceTokenFor(ctx, 'dimension', dimensionId)}`)
+    await handleMovementCallback(ctx, 'mv:category:skip')
     await handleMovementCallback(ctx, 'mv:attachment:skip')
     await handleMovementCallback(ctx, 'mv:recurring:no')
     await handleMovementCallback(ctx, 'mv:confirm')
@@ -252,6 +278,7 @@ describe('telegram movement flow safety', () => {
     await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
     await handleMovementText({ ...ctx, isCallback: false, messageId: 57 }, 'وقود')
     await handleMovementCallback(ctx, 'mv:dimension:skip')
+    await handleMovementCallback(ctx, 'mv:category:skip')
     await handleMovementCallback(ctx, 'mv:attachment:skip')
     await handleMovementCallback(ctx, 'mv:recurring:no')
     await handleMovementCallback(ctx, 'mv:confirm')
@@ -265,6 +292,7 @@ describe('telegram movement flow safety', () => {
     await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
     await handleMovementText({ ...ctx, isCallback: false, messageId: 59 }, 'ديزل')
     await handleMovementCallback(ctx, 'mv:dimension:skip')
+    await handleMovementCallback(ctx, 'mv:category:skip')
     await handleMovementText({ ...ctx, isCallback: false, messageId: 60 }, 'https://example.com/receipt.jpg')
     await handleMovementCallback(ctx, 'mv:recurring:monthly')
     await handleMovementCallback(ctx, 'mv:confirm')
@@ -278,6 +306,107 @@ describe('telegram movement flow safety', () => {
     })
     expect(ctx.repository.state.recurringRules).toHaveLength(1)
     expect(ctx.repository.state.recurringRules[0].template.note).toBe('ديزل')
+  })
+
+  it('accepts a Telegram photo and stores it in the private ledger attachment path', async () => {
+    const ctx = createCtx()
+    ctx.telegram.getFile = async () => ({ file_path: 'photos/receipt.jpg' })
+    ctx.telegram.downloadFile = async () => Buffer.from('receipt-image')
+    ctx.repository.uploadAttachmentFile = async (file) => ({
+      label: file.fileName,
+      storagePath: 'main/2026-08-19/receipt.jpg',
+      mimeType: file.mimeType,
+      sizeBytes: file.buffer.length,
+    })
+
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.EXPENSE}`)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '140')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+    await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
+    await handleMovementCallback(ctx, 'mv:note:skip')
+    await handleMovementCallback(ctx, 'mv:dimension:skip')
+    await handleMovementCallback(ctx, 'mv:category:skip')
+    await handleMovementMedia(ctx, {
+      photo: [{ file_id: 'photo-small' }, { file_id: 'photo-large', file_unique_id: 'receipt', file_size: 13 }],
+    })
+    await handleMovementCallback(ctx, 'mv:recurring:no')
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const movement = ctx.repository.state.movements.find((item) => item.source === 'telegram')
+    const attachment = ctx.repository.state.attachments.find((item) => item.movementId === movement.id)
+    expect(attachment).toMatchObject({
+      label: 'telegram-photo-receipt.jpg',
+      storagePath: 'main/2026-08-19/receipt.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 13,
+      source: 'telegram',
+    })
+    expect(attachment.url).toBe('')
+  })
+
+  it('offers attachment and recurrence after skipping an optional note', async () => {
+    const ctx = createCtx()
+
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, 'mv:type:transfer')
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '100')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+    await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
+    await handleMovementCallback(ctx, `mv:account:destination:${choiceTokenFor(ctx, 'destination', 'saeed-cash')}`)
+    await handleMovementCallback(ctx, 'mv:note:skip')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('attachment')
+  })
+
+  it('saves a cash deposit through the dedicated cash-to-bank route', async () => {
+    const base = createMohammadFallbackState()
+    const ctx = createCtx()
+    ctx.repository = memoryRepository({
+      ...base,
+      accounts: base.accounts.filter((account) => ['me-cash', 'me-jumhouria'].includes(account.id)),
+      movements: base.movements.filter((movement) => ['me-cash', 'me-jumhouria'].includes(movement.destinationAccountId)),
+    })
+
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.CASH_DEPOSIT}`)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '500')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+    await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
+    await handleMovementCallback(ctx, `mv:account:destination:${choiceTokenFor(ctx, 'destination', 'me-jumhouria')}`)
+    await handleMovementCallback(ctx, 'mv:note:skip')
+    await handleMovementCallback(ctx, 'mv:attachment:skip')
+    await handleMovementCallback(ctx, 'mv:recurring:no')
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const saved = ctx.repository.state.movements.find((movement) => movement.type === MOVEMENT_TYPES.CASH_DEPOSIT)
+    expect(saved).toMatchObject({
+      status: MOVEMENT_STATUSES.POSTED,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: 'me-jumhouria',
+      amount: 500,
+    })
+  })
+
+  it('stores an expense category selected in the bot', async () => {
+    const ctx = createCtx()
+
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.EXPENSE}`)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '100')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+    await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
+    await handleMovementCallback(ctx, 'mv:note:skip')
+    await handleMovementCallback(ctx, 'mv:dimension:skip')
+    const categorySession = ctx.sessions.get(ctx.chatId, ctx.userId)
+    const [categoryToken, categoryId] = Object.entries(categorySession.choices.category)[0]
+    await handleMovementCallback(ctx, `mv:category:${categoryToken}`)
+    await handleMovementCallback(ctx, 'mv:attachment:skip')
+    await handleMovementCallback(ctx, 'mv:recurring:no')
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const saved = ctx.repository.state.movements.find((movement) => movement.source === 'telegram')
+    expect(saved.expenseCategoryId).toBe(categoryId)
   })
 })
 

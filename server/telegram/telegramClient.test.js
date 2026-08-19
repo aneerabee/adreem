@@ -51,4 +51,20 @@ describe('telegram client', () => {
 
     await expectation
   })
+
+  it('downloads Telegram files without exposing them beyond the configured size limit', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      headers: { get: () => '4' },
+      arrayBuffer: async () => Uint8Array.from([1, 2, 3, 4]).buffer,
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = createTelegramClient('secret-token')
+
+    const buffer = await client.downloadFile('documents/receipt.pdf', { maxBytes: 4 })
+
+    expect(buffer).toEqual(Buffer.from([1, 2, 3, 4]))
+    expect(fetchMock.mock.calls[0][0]).toContain('/file/botsecret-token/documents/receipt.pdf')
+    await expect(client.downloadFile('../secret')).rejects.toThrow('Invalid Telegram file path')
+  })
 })

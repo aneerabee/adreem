@@ -13,7 +13,7 @@ import {
   movementStepText,
   reviewMovementText,
 } from './messages.js'
-import { mainMenuKeyboard } from './keyboards.js'
+import { mainMenuKeyboard, moreMenuKeyboard } from './keyboards.js'
 
 const receivable = {
   ownerName: 'سعيد',
@@ -32,18 +32,18 @@ describe('telegram account balance presentation', () => {
     const bucket = { dinar: 12500, usd: 0 }
 
     expect(formatAccountBalance(receivable, bucket)).toBe('أقبض منه 12,500 د.ل')
-    expect(accountChoiceButtonText(receivable, bucket)).toBe('🟢 سعيد · كاش · دينار | أقبض منه 12,500 د.ل')
+    expect(accountChoiceButtonText(receivable, bucket)).toBe('🟢 سعيد · كاش بيننا · دينار | أقبض منه 12,500 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('success')
-    expect(accountBlockquote(receivable, bucket)).toContain('🟢 سعيد · كاش')
+    expect(accountBlockquote(receivable, bucket)).toContain('🟢 سعيد · كاش بيننا')
   })
 
   it('marks money I should pay in red terms', () => {
     const bucket = { dinar: -3200, usd: 0 }
 
     expect(formatAccountBalance(receivable, bucket)).toBe('أدفع له 3,200 د.ل')
-    expect(accountChoiceButtonText(receivable, bucket)).toBe('🔴 سعيد · كاش · دينار | أدفع له 3,200 د.ل')
+    expect(accountChoiceButtonText(receivable, bucket)).toBe('🔴 سعيد · كاش بيننا · دينار | أدفع له 3,200 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('danger')
-    expect(accountBlockquote(receivable, bucket)).toContain('🔴 سعيد · كاش')
+    expect(accountBlockquote(receivable, bucket)).toContain('🔴 سعيد · كاش بيننا')
   })
 
   it('uses the same visual direction for my own money accounts', () => {
@@ -55,23 +55,30 @@ describe('telegram account balance presentation', () => {
 describe('telegram movement presentation', () => {
   it('uses ADREEM as the bot ledger name', () => {
     expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('<b>ADREEM</b>')
-    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('إدخال سريع · أرصدة · سجل · مراجعة')
-    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('سجل اليوم: 2 حركة')
+    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('عملية · أرصدة · حركات · مراجعة')
+    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('اليوم: 2 حركة')
   })
 
   it('aligns the main bot menu with the web work areas', () => {
     const labels = mainMenuKeyboard().inline_keyboard.flat().map((button) => button.text)
 
     expect(labels).toEqual([
-      '+ إدخال',
-      '= الأرصدة',
-      '≡ السجل',
-      '! مراجعة',
+      '➕ عملية',
+      'الأرصدة',
+      'الحركات',
+      'المراجعة',
+      'المزيد',
+    ])
+
+    expect(moreMenuKeyboard().inline_keyboard.flat().map((button) => button.text)).toEqual([
+      '➕ حساب جديد',
       'تنبيهات',
       'مطابقة رصيد',
-      '+ حساب جديد',
-      'سجل اليوم',
+      'التقارير',
+      'الحركات الشهرية',
+      'حركات اليوم',
       'بحث عن حساب',
+      '↩️ الرئيسية',
     ])
   })
 
