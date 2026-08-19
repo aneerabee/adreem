@@ -11,8 +11,8 @@ import { actionCallbackData } from './actionTokens.js'
 export function mainMenuKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '➕ عملية', callback_data: 'main:movement', style: 'success' }],
-      [{ text: 'الأرصدة', callback_data: 'main:accounts', style: 'primary' }, { text: 'الحركات', callback_data: 'main:history', style: 'primary' }],
+      [{ text: '➕ حركة جديدة', callback_data: 'main:movement', style: 'success' }],
+      [{ text: 'الأرصدة', callback_data: 'main:accounts', style: 'primary' }, { text: 'السجل', callback_data: 'main:history', style: 'primary' }],
       [{ text: 'المراجعة', callback_data: 'main:review', style: 'danger' }, { text: 'المزيد', callback_data: 'main:more' }],
     ],
   }
@@ -154,12 +154,17 @@ function accountTypeIcon(key) {
 }
 
 export function movementTypeKeyboard() {
-  const rows = [
-    ...movementTypeOptions.map((option) => ([{
+  const buttonFor = (option) => ({
       text: movementTypeButtonText(option),
       callback_data: `mv:type:${option.type}`,
       style: movementTypeButtonStyle(option.tone),
-    }])),
+    })
+  const optionsByTone = new Map(movementTypeOptions.map((option) => [option.tone, option]))
+  const rows = [
+    [buttonFor(optionsByTone.get('transfer')), buttonFor(optionsByTone.get('expense'))],
+    [buttonFor(optionsByTone.get('income'))],
+    [buttonFor(optionsByTone.get('deposit')), buttonFor(optionsByTone.get('withdrawal'))],
+    [buttonFor(optionsByTone.get('sale')), buttonFor(optionsByTone.get('purchase'))],
   ]
   rows.push([{ text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
   return {

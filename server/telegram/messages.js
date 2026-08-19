@@ -112,12 +112,12 @@ function typeTag(account) {
 }
 
 export function mainMenuText(summary = null) {
-  const lines = ['<b>ADREEM</b>', '<code>عملية · أرصدة · حركات · مراجعة</code>']
+  const lines = ['<b>ADREEM</b>', '<code>إضافة · الأرصدة · السجل · المراجعة</code>']
   if (summary) {
     lines.push('')
     lines.push(`<blockquote>${escapeHtml(`جاهز لعملية جديدة\nاليوم: ${summary.todayCount} حركة\nالمراجعة: ${summary.reviewCount}`)}</blockquote>`)
   }
-  lines.push('', '<b>اختر منطقة العمل</b>')
+  lines.push('', '<b>ماذا تريد الآن؟</b>')
   return lines.join('\n')
 }
 
@@ -197,8 +197,8 @@ export function accountStepText(session) {
       ? [`<blockquote>${escapeHtml(`الحساب الحالي:\n${session.reviewOriginalLabel}`)}</blockquote>`, '']
       : []),
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
-    '<b>الخطوة الحالية</b>',
-    `<blockquote>${escapeHtml(accountStepTitle(session))}\n${escapeHtml(accountStepHelp(session))}</blockquote>`,
+    `<b>${escapeHtml(accountStepTitle(session))}</b>`,
+    `<code>${escapeHtml(accountStepHelp(session))}</code>`,
   ]
   return lines.join('\n')
 }
@@ -287,8 +287,8 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`] : []),
     ...(summary.length ? [''] : []),
-    `<b>الخطوة الحالية</b>`,
-    `<blockquote>${escapeHtml(currentStepTitle(session))}\n${escapeHtml(currentStepHelp(session))}</blockquote>`,
+    `<b>${escapeHtml(currentStepTitle(session))}</b>`,
+    `<code>${escapeHtml(currentStepHelp(session))}</code>`,
   ]
   return lines.join('\n')
 }
@@ -311,8 +311,8 @@ export function reconciliationStepText(session, accountsById = new Map(), balanc
     `<code>${progress}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
-    '<b>الخطوة الحالية</b>',
-    `<blockquote>${escapeHtml(reconciliationStepTitle(session, account, bucket))}\n${escapeHtml(reconciliationStepHelp(session))}</blockquote>`,
+    `<b>${escapeHtml(reconciliationStepTitle(session, account, bucket))}</b>`,
+    `<code>${escapeHtml(reconciliationStepHelp(session))}</code>`,
   ]
   return lines.join('\n')
 }

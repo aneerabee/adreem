@@ -13,10 +13,10 @@ import {
 } from 'lucide-react'
 
 const sections = [
-  { key: 'entry', label: 'عملية', icon: Plus },
-  { key: 'accounts', label: 'أرصدة', icon: Landmark },
-  { key: 'history', label: 'حركات', icon: History, countKey: 'today' },
-  { key: 'review', label: 'مراجعة', icon: ClipboardCheck, countKey: 'review' },
+  { key: 'entry', label: 'إضافة', icon: Plus },
+  { key: 'accounts', label: 'الأرصدة', icon: Landmark },
+  { key: 'history', label: 'السجل', icon: History, countKey: 'today' },
+  { key: 'review', label: 'المراجعة', icon: ClipboardCheck, countKey: 'review' },
 ]
 
 function SaveState({ status, text, onRetry }) {

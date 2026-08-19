@@ -13,7 +13,7 @@ import {
   movementStepText,
   reviewMovementText,
 } from './messages.js'
-import { mainMenuKeyboard, moreMenuKeyboard } from './keyboards.js'
+import { mainMenuKeyboard, moreMenuKeyboard, movementTypeKeyboard } from './keyboards.js'
 
 const receivable = {
   ownerName: 'سعيد',
@@ -55,7 +55,7 @@ describe('telegram account balance presentation', () => {
 describe('telegram movement presentation', () => {
   it('uses ADREEM as the bot ledger name', () => {
     expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('<b>ADREEM</b>')
-    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('عملية · أرصدة · حركات · مراجعة')
+    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('إضافة · الأرصدة · السجل · المراجعة')
     expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('اليوم: 2 حركة')
   })
 
@@ -63,9 +63,9 @@ describe('telegram movement presentation', () => {
     const labels = mainMenuKeyboard().inline_keyboard.flat().map((button) => button.text)
 
     expect(labels).toEqual([
-      '➕ عملية',
+      '➕ حركة جديدة',
       'الأرصدة',
-      'الحركات',
+      'السجل',
       'المراجعة',
       'المزيد',
     ])
@@ -115,8 +115,14 @@ describe('telegram movement presentation', () => {
 
     expect(movementText).toContain('<code>4/9</code>')
     expect(movementText).not.toContain('●')
+    expect(movementText).not.toContain('الخطوة الحالية')
     expect(accountText).toContain('<code>2/5</code>')
     expect(accountText).not.toContain('○')
+    expect(accountText).not.toContain('الخطوة الحالية')
+  })
+
+  it('keeps movement choices in compact visual rows', () => {
+    expect(movementTypeKeyboard().inline_keyboard.map((row) => row.length)).toEqual([2, 1, 2, 2, 1])
   })
 
   it('renders each movement as a clear standalone card', () => {
