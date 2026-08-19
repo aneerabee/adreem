@@ -1,11 +1,17 @@
 const TELEGRAM_API_BASE = 'https://api.telegram.org/bot'
 
+export function telegramRequestTimeoutMs(method, payload = {}) {
+  if (method !== 'getUpdates') return 15_000
+  const longPollSeconds = Math.max(0, Number(payload.timeout) || 0)
+  return Math.max(30_000, (longPollSeconds * 1_000) + 30_000)
+}
+
 export function createTelegramClient(token) {
   if (!token) throw new Error('Missing TELEGRAM_BOT_TOKEN.')
   const apiBase = `${TELEGRAM_API_BASE}${token}`
   const fileApiBase = `https://api.telegram.org/file/bot${token}`
 
-  async function request(method, payload = {}, { timeoutMs = method === 'getUpdates' ? 45_000 : 15_000 } = {}) {
+  async function request(method, payload = {}, { timeoutMs = telegramRequestTimeoutMs(method, payload) } = {}) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
     let response

@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTelegramClient } from './telegramClient.js'
+import { createTelegramClient, telegramRequestTimeoutMs } from './telegramClient.js'
 
 describe('telegram client', () => {
+  it('keeps a safe network margin above Telegram long polling', () => {
+    expect(telegramRequestTimeoutMs('getUpdates', { timeout: 30 })).toBe(60_000)
+    expect(telegramRequestTimeoutMs('getUpdates', { timeout: 0 })).toBe(30_000)
+    expect(telegramRequestTimeoutMs('sendMessage', {})).toBe(15_000)
+  })
+
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
