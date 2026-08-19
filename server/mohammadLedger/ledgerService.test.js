@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../src/mohammadLedger/ledgerState.js'
 import {
@@ -34,6 +35,7 @@ describe('telegram ledger service', () => {
     expect(parseAmountText('-1')).toBe(null)
     expect(parseBalanceText('0')).toBe(0)
     expect(parseBalanceText('١٢٬٥٠٠')).toBe(12500)
+    expect(parseBalanceText('١٢٫٥٠')).toBe(12.5)
     expect(parseBalanceText('-1')).toBe(null)
   })
 
@@ -140,6 +142,75 @@ describe('telegram ledger service', () => {
     })
   })
 
+  it('distinguishes recurring rules by rate and expense category', async () => {
+    const rateRepository = memoryRepository()
+    const saleDraft = {
+      type: MOVEMENT_TYPES.USD_SALE,
+      amount: 10,
+      currency: CURRENCIES.USD,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: 'me-jumhouria',
+      note: 'بيع شهري',
+      recurringEnabled: true,
+    }
+
+    await appendTelegramMovement(rateRepository, { ...saleDraft, rate: 5 }, {
+      idempotencyKey: 'recurring-rate-5',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+    await appendTelegramMovement(rateRepository, { ...saleDraft, rate: 5.1 }, {
+      idempotencyKey: 'recurring-rate-5-1',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    expect(rateRepository.state.recurringRules).toHaveLength(2)
+
+    const initialState = createMohammadFallbackState()
+    const categoryRepository = memoryRepository({
+      ...initialState,
+      accounts: [
+        ...initialState.accounts,
+        {
+          id: 'fuel-expense',
+          ownerName: 'وقود',
+          subAccountName: 'مصروف',
+          type: ACCOUNT_TYPES.EXPENSE,
+          valueKind: VALUE_KINDS.EXPENSE,
+          status: 'active',
+        },
+      ],
+    })
+    const expenseDraft = {
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 75,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      note: 'مصروف شهري',
+      recurringEnabled: true,
+    }
+
+    await appendTelegramMovement(categoryRepository, {
+      ...expenseDraft,
+      expenseCategoryId: 'personal-expense',
+    }, {
+      idempotencyKey: 'recurring-category-personal',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+    await appendTelegramMovement(categoryRepository, {
+      ...expenseDraft,
+      expenseCategoryId: 'fuel-expense',
+    }, {
+      idempotencyKey: 'recurring-category-fuel',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    expect(categoryRepository.state.recurringRules).toHaveLength(2)
+  })
+
   it('records telegram reconciliation and creates one idempotent correction movement', async () => {
     const repository = memoryRepository()
 
@@ -181,6 +252,46 @@ describe('telegram ledger service', () => {
     expect(second.duplicate).toBe(true)
     expect(repository.state.reconciliations).toHaveLength(1)
     expect(repository.state.movements.filter((movement) => movement.reconciliationId === first.reconciliation.id)).toHaveLength(1)
+  })
+
+  it('keeps fractional ledger balances exact when reconciling from telegram', async () => {
+    const initialState = createMohammadFallbackState()
+    const fractionalState = {
+      ...initialState,
+      movements: [
+        ...initialState.movements,
+        {
+          id: 'fractional-adjustment',
+          type: MOVEMENT_TYPES.CORRECTION,
+          status: MOVEMENT_STATUSES.POSTED,
+          amount: 0.25,
+          currency: CURRENCIES.DINAR,
+          destinationAccountId: 'me-cash',
+          note: 'تصحيح كسري',
+        },
+      ],
+    }
+    const expectedDinar = buildLedgerSnapshot(fractionalState).balanceByAccountId.get('me-cash').dinar
+    const repository = memoryRepository(fractionalState)
+
+    const result = await appendTelegramReconciliation(repository, {
+      accountId: 'me-cash',
+      currency: CURRENCIES.DINAR,
+      actualBalance: expectedDinar - 0.1,
+      note: 'مطابقة كسرية',
+    }, {
+      idempotencyKey: 'fractional-reconciliation',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    expect(result.reconciliation).toMatchObject({
+      expectedDinar,
+      actualDinar: expectedDinar - 0.1,
+      diffDinar: -0.1,
+    })
+    expect(result.correctionMovements).toHaveLength(1)
+    expect(result.correctionMovements[0].amount).toBe(-0.1)
   })
 
   it('rejects telegram reconciliation without a clear note', async () => {

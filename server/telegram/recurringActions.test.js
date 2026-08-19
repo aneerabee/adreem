@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildRecurringSession, disableRecurringRuleInState } from './recurringActions.js'
+import { stableActionToken } from './actionTokens.js'
 
 const dueDate = new Date('2026-05-20T12:00:00.000Z')
 
@@ -26,8 +27,21 @@ describe('telegram recurring actions', () => {
     }, dueDate)
 
     expect(session.flow).toBe('recurring')
-    expect(session.choices.rules).toEqual({ 0: 'due', 1: 'done' })
+    expect(session.choices.rules).toEqual({
+      [stableActionToken('due')]: 'due',
+      [stableActionToken('done')]: 'done',
+    })
     expect(session.dueRuleIds).toEqual(['due'])
+  })
+
+  it('rotates the action session so an old recurring button cannot target a new list', () => {
+    const state = { recurringRules: [rule('rent')] }
+
+    const first = buildRecurringSession(state, dueDate)
+    const second = buildRecurringSession(state, dueDate)
+
+    expect(first.actionSessionId).not.toBe(second.actionSessionId)
+    expect(Object.keys(first.choices.rules)).toEqual(Object.keys(second.choices.rules))
   })
 
   it('disables an active rule without deleting it or its audit history', () => {

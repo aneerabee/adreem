@@ -95,4 +95,45 @@ describe('latest cloud save coordinator', () => {
     expect(cancelSchedule).toHaveBeenCalledWith(91)
     expect(coordinator.hasPending()).toBe(false)
   })
+
+  it('does not loop forever on a permanent conflict and keeps a manual retry', async () => {
+    const error = Object.assign(new Error('conflict'), { retryable: false })
+    const save = vi.fn().mockRejectedValueOnce(error).mockResolvedValueOnce({ ok: true })
+    const schedule = vi.fn()
+    const statuses = []
+    const coordinator = createLatestSaveCoordinator({
+      save,
+      schedule,
+      onStatus: (status) => statuses.push(status),
+    })
+
+    coordinator.submit({ version: 1 })
+    await settle()
+
+    expect(schedule).not.toHaveBeenCalled()
+    expect(statuses.at(-1)).toBe('failed')
+    expect(coordinator.hasPending()).toBe(true)
+
+    coordinator.retryNow()
+    await settle()
+
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(statuses.at(-1)).toBe('saved')
+    expect(coordinator.hasPending()).toBe(false)
+  })
+
+  it('respects a longer retry-after delay from the server', async () => {
+    const error = Object.assign(new Error('limited'), { retryable: true, retryAfterMs: 45_000 })
+    const schedule = vi.fn(() => 1)
+    const coordinator = createLatestSaveCoordinator({
+      save: vi.fn().mockRejectedValue(error),
+      retryDelays: [1_000],
+      schedule,
+    })
+
+    coordinator.submit({ version: 1 })
+    await settle()
+
+    expect(schedule).toHaveBeenCalledWith(expect.any(Function), 45_000)
+  })
 })

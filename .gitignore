@@ -16,6 +16,11 @@ dist-ssr
 !.env.example
 *.env
 /adreem.env*
+
+# Runtime state
+/adreem-audit.jsonl*
+/ledger-backups/
+/backups/
 /adreem-telegram-users.json
 
 # Editor directories and files

@@ -85,6 +85,116 @@ describe('server ledger state validation', () => {
     expect(result.errors.some((error) => error.code === 'inactive-account-has-balance')).toBe(true)
   })
 
+  it('rejects hiding an account with a fractional balance', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [opening(0.4)] }
+    const hidden = cashAccount({ status: ACCOUNT_STATUSES.INACTIVE, updatedAt: '2026-08-19T12:02:00.000Z' })
+    const result = validateLedgerStateTransition({ ...current, accounts: [hidden] }, current)
+
+    expect(result.errors.some((error) => error.code === 'inactive-account-has-balance')).toBe(true)
+  })
+
+  it('revalidates unchanged posted movements after a related account classification changes', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [opening()] }
+    const reclassified = cashAccount({
+      type: ACCOUNT_TYPES.SUMMARY,
+      updatedAt: '2026-08-19T12:02:00.000Z',
+    })
+    const result = validateLedgerStateTransition({ ...current, accounts: [reclassified] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'invalid-posted-movement',
+      id: 'opening-1',
+    }))
+  })
+
+  it.each([MOVEMENT_STATUSES.DRAFT, MOVEMENT_STATUSES.NEEDS_REVIEW])(
+    'rejects moving a posted movement back to %s',
+    (status) => {
+      const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [opening()] }
+      const changed = {
+        ...opening(),
+        status,
+        updatedAt: '2026-08-19T12:02:00.000Z',
+      }
+      const result = validateLedgerStateTransition({ ...current, movements: [changed] }, current)
+
+      expect(result.errors).toContainEqual(expect.objectContaining({
+        code: 'invalid-movement-status-transition',
+        id: 'opening-1',
+      }))
+    },
+  )
+
+  it('rejects restoring a voided movement to posted', () => {
+    const voided = {
+      ...opening(),
+      status: MOVEMENT_STATUSES.VOIDED,
+      voidedAt: '2026-08-19T12:01:00.000Z',
+      updatedAt: '2026-08-19T12:01:00.000Z',
+    }
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [voided] }
+    const restored = {
+      ...voided,
+      status: MOVEMENT_STATUSES.POSTED,
+      updatedAt: '2026-08-19T12:02:00.000Z',
+    }
+    const result = validateLedgerStateTransition({ ...current, movements: [restored] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'invalid-movement-status-transition',
+      id: 'opening-1',
+    }))
+  })
+
+  it('requires a reason and timestamp when voiding a posted movement', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [opening()] }
+    const invalidVoid = {
+      ...opening(),
+      status: MOVEMENT_STATUSES.VOIDED,
+      updatedAt: '2026-08-19T12:02:00.000Z',
+    }
+    const result = validateLedgerStateTransition({ ...current, movements: [invalidVoid] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'invalid-movement-status-transition' }))
+  })
+
+  it('requires void metadata when canceling a movement under review', () => {
+    const reviewMovement = { ...opening(), status: MOVEMENT_STATUSES.NEEDS_REVIEW }
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [reviewMovement] }
+    const result = validateLedgerStateTransition({
+      ...current,
+      movements: [{ ...reviewMovement, status: MOVEMENT_STATUSES.VOIDED, updatedAt: '2026-08-19T12:02:00.000Z' }],
+    }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'invalid-movement-status-transition' }))
+  })
+
+  it('does not allow changing the value while voiding or editing an already voided movement', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [opening()] }
+    const changedDuringVoid = {
+      ...opening(),
+      amount: 999,
+      status: MOVEMENT_STATUSES.VOIDED,
+      voidReason: 'إلغاء',
+      voidedAt: '2026-08-19T12:02:00.000Z',
+      updatedAt: '2026-08-19T12:02:00.000Z',
+    }
+    const changedResult = validateLedgerStateTransition({ ...current, movements: [changedDuringVoid] }, current)
+    expect(changedResult.errors).toContainEqual(expect.objectContaining({ code: 'invalid-movement-status-transition' }))
+
+    const voidedState = { ...current, movements: [{ ...opening(), status: MOVEMENT_STATUSES.VOIDED, voidReason: 'إلغاء', voidedAt: at }] }
+    const editedVoid = { ...voidedState.movements[0], note: 'تغيير', updatedAt: '2026-08-19T12:03:00.000Z' }
+    const editedResult = validateLedgerStateTransition({ ...voidedState, movements: [editedVoid] }, voidedState)
+    expect(editedResult.errors).toContainEqual(expect.objectContaining({ code: 'voided-movement-is-immutable' }))
+  })
+
+  it('rejects changing the ledger reset marker through normal client save', () => {
+    const current = createEmptyAdreemState(at)
+    const result = validateLedgerStateTransition({ ...current, resetAt: '2099-01-01T00:00:00.000Z' }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'client-reset-not-allowed' }))
+  })
+
   it('rejects a new attachment path that belongs to another ledger', () => {
     const current = createEmptyAdreemState(at, { ledgerId: 'main' })
     const next = {
@@ -101,5 +211,26 @@ describe('server ledger state validation', () => {
     const result = validateLedgerStateTransition(next, current, { ledgerId: 'main' })
 
     expect(result.errors.some((error) => error.code === 'attachment-outside-ledger')).toBe(true)
+  })
+
+  it('rejects stored attachments that are orphaned or have incomplete file metadata', () => {
+    const current = createEmptyAdreemState(at, { ledgerId: 'main' })
+    const next = {
+      ...current,
+      attachments: [{
+        id: 'attachment-1',
+        label: 'receipt.jpg',
+        storagePath: 'main/2026-08-19/receipt.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 0,
+        createdAt: at,
+        updatedAt: at,
+      }],
+    }
+
+    const result = validateLedgerStateTransition(next, current, { ledgerId: 'main' })
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'orphan-attachment' }))
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'invalid-stored-attachment' }))
   })
 })

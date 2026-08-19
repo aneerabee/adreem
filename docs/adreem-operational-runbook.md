@@ -103,6 +103,24 @@ https://aneerabee.github.io/adreem/?admin=users
 
 ## systemd
 
+اترك `TELEGRAM_SKIP_OLD_UPDATES=false` في التشغيل الحقيقي. تفعيله يحذف الرسائل التي وصلت أثناء توقف البوت عند أول تشغيل، ويُستخدم فقط عند إنشاء بوت جديد بلا بيانات تشغيلية.
+
+### توافق Node
+
+- تشغيل API والبوت على الخادم يحتاج Node `20.19` فأحدث ضمن الإصدار 20، أو `22.12` فأحدث ضمن الإصدار 22.
+- أدوات التطوير يفضّل لها Node `22.20` فأحدث بسبب اعتماد اختياري خاص بلينكس داخل ملف القفل.
+- بتاريخ 2026-08-19: الجهاز المحلي يعمل على `22.16.0` والخادم على `20.20.1`. كلاهما متوافق مع التشغيل الحالي، وتم التحقق من تحليل ملفات API والبوت وتحميل مكتبة Supabase على الخادم.
+- `pnpm` غير موجود في المسار غير التفاعلي للخادم، ولا تحتاجه الخدمتان وقت التشغيل لأنهما تستدعيان `/usr/bin/node` مباشرة. نفّذ البناء والاختبارات محليًا أو في التكامل المستمر، ولا تفترض أن الخادم مناسب للبناء.
+
+قبل أي تحديث تشغيلي، افحص النسخ دون تغيير الخدمة:
+
+```bash
+node --version
+pnpm --version
+/usr/bin/node --version
+systemctl --version
+```
+
 المسارات القياسية المقترحة:
 
 ```text
@@ -121,6 +139,31 @@ cp deploy/systemd/adreem-bot.service ~/.config/systemd/user/adreem-bot.service
 systemctl --user daemon-reload
 systemctl --user enable --now adreem-api.service adreem-bot.service
 ```
+
+الوحدتان تمنعان اكتساب صلاحيات جديدة ومساحات الأسماء غير اللازمة، وتبقيان الشبكة والكتابة داخل مجلد المستخدم متاحتين. تم اختبار القيود فعليًا بوحدة مستخدم مؤقتة على الخادم الحالي. لا تضف قيود إسقاط صلاحيات النواة مثل `PrivateDevices=true` إلى وحدات المستخدم الحالية؛ مدير الخدمات يفشل معها برمز `218/CAPABILITIES`. أعد تقييمها فقط عند الانتقال إلى وحدات نظام.
+
+لا تضف `ProtectHome=true` لأن ملفات المستخدمين والنسخ الاحتياطية وسجل التدقيق محفوظة تحت `/home/argaz`، ولا تضف `MemoryDenyWriteExecute=true` لأنه غير مناسب لمحرك Node.
+
+تحقق من الوحدات قبل نسخها، ثم راجع مستوى الحماية بعد التثبيت:
+
+```bash
+systemd-analyze verify deploy/systemd/adreem-api.service
+systemd-analyze verify deploy/systemd/adreem-bot.service
+systemd-analyze security --user adreem-api.service adreem-bot.service
+```
+
+## تدوير السجلات
+
+ملف `deploy/logrotate/adreem` يحتفظ بـ14 دورة لسجلات الخدمتين و30 دورة لسجل التدقيق، مع ضغط وصلاحية `0600`. سجلات الخدمتين تستخدم النسخ ثم التفريغ لأن systemd يبقي الملفات مفتوحة؛ سجل التدقيق لا يستخدم ذلك لأن التطبيق يفتح الملف عند كل كتابة.
+
+ثبّت الإعداد كمسؤول نظام ثم افحصه دون إجبار التدوير:
+
+```bash
+sudo install -o root -g root -m 0644 deploy/logrotate/adreem /etc/logrotate.d/adreem
+sudo logrotate --debug /etc/logrotate.d/adreem
+```
+
+لا يحتاج تدوير السجلات إلى إعادة تشغيل API أو البوت.
 
 ## فحص التشغيل
 

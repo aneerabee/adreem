@@ -5,6 +5,7 @@ export function createLatestSaveCoordinator({
   onStatus = () => {},
   onSaved = () => {},
   onError = () => {},
+  shouldRetry = (error) => error?.retryable !== false,
   retryDelays = DEFAULT_RETRY_DELAYS,
   schedule = (callback, delay) => window.setTimeout(callback, delay),
   cancelSchedule = (timer) => window.clearTimeout(timer),
@@ -15,6 +16,7 @@ export function createLatestSaveCoordinator({
   let stopped = false
   let retryIndex = 0
   let retryTimer = null
+  let failed = null
 
   function clearRetryTimer() {
     if (retryTimer === null) return
@@ -41,15 +43,23 @@ export function createLatestSaveCoordinator({
       }
     } catch (error) {
       running = false
+      if (!shouldRetry(error)) {
+        failed = pending && pending.id > item.id ? pending : item
+        pending = null
+        onError(error, item, null)
+        onStatus('failed')
+        return
+      }
       if (!pending || pending.id < item.id) pending = item
       const delay = retryDelays[Math.min(retryIndex, retryDelays.length - 1)] || 30_000
+      const retryDelay = Math.max(delay, Number(error?.retryAfterMs || 0))
       retryIndex += 1
-      onError(error, item, delay)
+      onError(error, item, retryDelay)
       onStatus('retrying')
       retryTimer = schedule(() => {
         retryTimer = null
         void run()
-      }, delay)
+      }, retryDelay)
     }
   }
 
@@ -58,6 +68,7 @@ export function createLatestSaveCoordinator({
       if (stopped) return 0
       const item = { id: sequence + 1, value }
       sequence = item.id
+      failed = null
       pending = item
       if (retryTimer !== null) {
         clearRetryTimer()
@@ -69,14 +80,19 @@ export function createLatestSaveCoordinator({
     retryNow() {
       if (stopped) return
       clearRetryTimer()
+      if (!pending && failed) {
+        pending = failed
+        failed = null
+      }
       void run()
     },
     hasPending() {
-      return !stopped && (running || Boolean(pending) || retryTimer !== null)
+      return !stopped && (running || Boolean(pending) || Boolean(failed) || retryTimer !== null)
     },
     stop() {
       stopped = true
       pending = null
+      failed = null
       clearRetryTimer()
     },
   }

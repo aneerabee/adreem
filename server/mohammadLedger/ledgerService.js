@@ -7,6 +7,7 @@ import {
   buildPostingEntries,
   postMovement,
   previewMovement,
+  roundMoney,
   summarizeBalances,
 } from '../../src/mohammadLedger/ledgerCore.js'
 import {
@@ -73,7 +74,7 @@ export function parseBalanceText(text) {
     .replace(/[٫]/g, '.')
   const number = Number(normalized)
   if (!Number.isFinite(number) || number < 0) return null
-  return Math.round(number)
+  return roundMoney(number)
 }
 
 export function buildLedgerSnapshot(state) {
@@ -233,8 +234,8 @@ export async function appendTelegramReconciliation(repository, draft, metadata =
       return { state, rejected: true, error: 'المطابقة تحتاج ملاحظة واضحة.' }
     }
 
-    const expectedDinar = Math.round(Number(bucket?.dinar || 0))
-    const expectedUsd = Math.round(Number(bucket?.usd || 0))
+    const expectedDinar = roundMoney(Number(bucket?.dinar || 0))
+    const expectedUsd = roundMoney(Number(bucket?.usd || 0))
     const currency = draft.currency || CURRENCIES.DINAR
     const actualDinar = currency === CURRENCIES.DINAR ? draft.actualBalance : expectedDinar
     const actualUsd = currency === CURRENCIES.USD ? draft.actualBalance : expectedUsd
@@ -316,7 +317,9 @@ function appendTelegramRecurringRule(recurringRules = [], movement, draft = {}) 
     item?.template?.currency === rule.template.currency &&
     item?.template?.sourceAccountId === rule.template.sourceAccountId &&
     item?.template?.destinationAccountId === rule.template.destinationAccountId &&
+    item?.template?.rate === rule.template.rate &&
     item?.template?.dimensionId === rule.template.dimensionId &&
+    item?.template?.expenseCategoryId === rule.template.expenseCategoryId &&
     item?.template?.note === rule.template.note,
   )
   return hasSameRule ? recurringRules : [...existingRules, { ...rule, source: 'telegram' }]

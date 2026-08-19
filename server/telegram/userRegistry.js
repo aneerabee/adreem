@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomBytes, createHash, pbkdf2Sync, timingSafeEqual } from 'node:crypto'
 import { dirname } from 'node:path'
 import { ADREEM_DEFAULT_LEDGER_ID, createLedgerIdentity, adreemStateRowId } from '../../src/mohammadLedger/ledgerState.js'
@@ -9,6 +9,10 @@ const PASSWORD_ITERATIONS = 210_000
 const PASSWORD_KEYLEN = 32
 const SESSION_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000
 const MAX_ACTIVE_SESSIONS = 12
+const REGISTRY_LOCK_TIMEOUT_MS = 1_000
+const REGISTRY_LOCK_RETRY_MS = 10
+const REGISTRY_STALE_LOCK_MS = 30_000
+const lockWaitBuffer = new Int32Array(new SharedArrayBuffer(4))
 
 export function parseIdList(value = '') {
   return String(value || '')
@@ -131,7 +135,7 @@ export function loadTelegramUserRegistry(filePath = defaultRegistryPath()) {
   }
 }
 
-export function saveTelegramUserRegistry(filePath, registry) {
+function writeTelegramUserRegistryFile(filePath, registry) {
   mkdirSync(dirname(filePath), { recursive: true })
   const temporaryPath = `${filePath}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`
   const payload = `${JSON.stringify({
@@ -152,6 +156,112 @@ export function saveTelegramUserRegistry(filePath, registry) {
   }
 }
 
+function acquireRegistryLock(filePath, {
+  lockTimeoutMs = REGISTRY_LOCK_TIMEOUT_MS,
+  retryDelayMs = REGISTRY_LOCK_RETRY_MS,
+} = {}) {
+  mkdirSync(dirname(filePath), { recursive: true })
+  const lockPath = `${filePath}.lock`
+  const lockToken = `${process.pid}-${randomBytes(12).toString('hex')}`
+  const deadline = Date.now() + Math.max(0, Number(lockTimeoutMs) || 0)
+
+  while (true) {
+    try {
+      const descriptor = openSync(lockPath, 'wx', 0o600)
+      try {
+        writeFileSync(descriptor, lockToken)
+      } finally {
+        closeSync(descriptor)
+      }
+      return () => {
+        try {
+          if (readFileSync(lockPath, 'utf8') === lockToken) unlinkSync(lockPath)
+        } catch (error) {
+          if (error?.code !== 'ENOENT') throw error
+        }
+      }
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error
+      try {
+        if (Date.now() - statSync(lockPath).mtimeMs > REGISTRY_STALE_LOCK_MS) {
+          unlinkSync(lockPath)
+          continue
+        }
+      } catch (staleError) {
+        if (staleError?.code === 'ENOENT') continue
+        throw staleError
+      }
+      if (Date.now() >= deadline) {
+        const timeoutError = new Error(`Timed out waiting for Telegram user registry lock: ${filePath}`)
+        timeoutError.code = 'REGISTRY_LOCK_TIMEOUT'
+        throw timeoutError
+      }
+      const waitMs = Math.min(Math.max(1, Number(retryDelayMs) || REGISTRY_LOCK_RETRY_MS), deadline - Date.now())
+      Atomics.wait(lockWaitBuffer, 0, 0, waitMs)
+    }
+  }
+}
+
+function withRegistryLock(filePath, callback, options) {
+  const release = acquireRegistryLock(filePath, options)
+  try {
+    return callback()
+  } finally {
+    release()
+  }
+}
+
+export function saveTelegramUserRegistry(filePath, registry, options) {
+  return withRegistryLock(filePath, () => writeTelegramUserRegistryFile(filePath, registry), options)
+}
+
+export function updateTelegramUserRegistry(filePath, updater, options) {
+  return withRegistryLock(filePath, () => {
+    const current = loadTelegramUserRegistry(filePath)
+    const next = updater(current)
+    if (next === null || next === undefined) return current
+    writeTelegramUserRegistryFile(filePath, next)
+    return next
+  }, options)
+}
+
+export function validateTelegramLedgerAssignments(access) {
+  const registry = loadTelegramUserRegistry(access.filePath)
+  const ledgerByTelegramUser = new Map()
+  const ownerByLedger = new Map()
+
+  function addAssignment(telegramUserId, ledgerId, source, ownerId = telegramUserId) {
+    const userKey = String(telegramUserId || '').trim()
+    const ownerKey = String(ownerId || '').trim()
+    const ledgerKey = String(ledgerId || '').trim()
+    if (!ownerKey || !ledgerKey) return ''
+    if (userKey) {
+      const existingLedger = ledgerByTelegramUser.get(userKey)
+      if (existingLedger && existingLedger.ledgerId !== ledgerKey) {
+        return `Telegram user ${userKey} is assigned to ledger "${existingLedger.ledgerId}" in ${existingLedger.source} and "${ledgerKey}" in ${source}`
+      }
+      ledgerByTelegramUser.set(userKey, { ledgerId: ledgerKey, source })
+    }
+    const existingOwner = ownerByLedger.get(ledgerKey)
+    if (existingOwner && existingOwner.ownerId !== ownerKey) {
+      return `ledger "${ledgerKey}" is assigned to ${existingOwner.ownerId} in ${existingOwner.source} and ${ownerKey} in ${source}`
+    }
+    ownerByLedger.set(ledgerKey, { ownerId: ownerKey, source })
+    return ''
+  }
+
+  for (const [telegramUserId, ledgerId] of access.envLedgerMap.entries()) {
+    const problem = addAssignment(telegramUserId, ledgerId, 'configuration', `telegram user ${telegramUserId}`)
+    if (problem) return problem
+  }
+  for (const user of registry.users) {
+    const ownerId = user.telegramUserId ? `telegram user ${user.telegramUserId}` : `registry user ${user.userId}`
+    const problem = addAssignment(user.telegramUserId, user.ledgerId, 'registry', ownerId)
+    if (problem) return problem
+  }
+  return ''
+}
+
 export function createTelegramUserAccess(env = process.env, filePath = defaultRegistryPath(env)) {
   const envUserIds = parseIdList(
     env.ADREEM_TELEGRAM_USER_IDS ||
@@ -160,7 +270,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     env.MOHAMMAD_TELEGRAM_USER_ID ||
     '',
   )
-  const adminIds = parseIdList(env.ADREEM_TELEGRAM_ADMIN_IDS || envUserIds.join(','))
+  const adminIds = parseIdList(env.ADREEM_TELEGRAM_ADMIN_IDS)
   const ownerEmails = parseIdList(env.ADREEM_OWNER_EMAILS || env.ADREEM_OWNER_EMAIL).map(normalizeEmail)
   const ownerUserIds = parseIdList(env.ADREEM_OWNER_USER_IDS || env.ADREEM_OWNER_USER_ID)
   const ownerLedgerIds = parseIdList(env.ADREEM_OWNER_LEDGER_IDS || env.ADREEM_OWNER_LEDGER_ID)
@@ -175,7 +285,12 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
 
   function ledgerIdForUser(userId) {
     const key = String(userId || '')
-    return envLedgerMap.get(key) || registryMap().get(key) || ''
+    const configuredLedgerId = envLedgerMap.get(key) || ''
+    const registryLedgerId = registryMap().get(key) || ''
+    if (configuredLedgerId && registryLedgerId && configuredLedgerId !== registryLedgerId) {
+      throw new Error(`Conflicting ledger assignments for Telegram user ${key}.`)
+    }
+    return configuredLedgerId || registryLedgerId
   }
 
   function isAdmin(userId) {
@@ -199,6 +314,13 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
   function isAllowed(userId) {
     const key = String(userId || '')
     return isAdmin(key) || Boolean(ledgerIdForUser(key))
+  }
+
+  function envTelegramConflict(entry) {
+    if (!entry.telegramUserId) return null
+    const configuredLedgerId = envLedgerMap.get(entry.telegramUserId)
+    if (!configuredLedgerId || configuredLedgerId === entry.ledgerId) return null
+    return { ok: false, error: 'telegram-used', existingUserId: entry.telegramUserId }
   }
 
   function addUser({
@@ -230,36 +352,48 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     if (!entry) return { ok: false, error: 'invalid-user-or-ledger' }
     if (email && !entry.email.includes('@')) return { ok: false, error: 'invalid-email' }
     if (password && !entry.passwordHash) return { ok: false, error: 'weak-password' }
-    const registry = loadTelegramUserRegistry(filePath)
-    const envLedgerOwner = [...envLedgerMap.entries()].find(([envUserId, mappedLedgerId]) =>
-      entry.telegramUserId && envUserId !== entry.telegramUserId && mappedLedgerId === entry.ledgerId)
-    if (envLedgerOwner) {
-      return { ok: false, error: 'ledger-used', existingUserId: envLedgerOwner[0] }
-    }
-    const existingLedgerOwner = registry.users.find((user) =>
-      user.userId !== entry.userId && user.ledgerId === entry.ledgerId)
-    if (existingLedgerOwner) {
-      return { ok: false, error: 'ledger-used', existingUserId: existingLedgerOwner.userId }
-    }
-    if (entry.telegramUserId) {
-      const existingTelegramOwner = registry.users.find((user) =>
-        user.userId !== entry.userId && user.telegramUserId === entry.telegramUserId)
-      if (existingTelegramOwner) {
-        return { ok: false, error: 'telegram-used', existingUserId: existingTelegramOwner.userId }
+    let result
+    updateTelegramUserRegistry(filePath, (registry) => {
+      const telegramConflict = envTelegramConflict(entry)
+      if (telegramConflict) {
+        result = telegramConflict
+        return null
       }
-    }
-    if (entry.email) {
-      const existingEmailOwner = registry.users.find((user) =>
-        user.userId !== entry.userId && normalizeEmail(user.email) === entry.email)
-      if (existingEmailOwner) {
-        return { ok: false, error: 'email-used', existingUserId: existingEmailOwner.userId }
+      const envLedgerOwner = [...envLedgerMap.entries()].find(([envUserId, mappedLedgerId]) =>
+        envUserId !== entry.telegramUserId && mappedLedgerId === entry.ledgerId)
+      if (envLedgerOwner) {
+        result = { ok: false, error: 'ledger-used', existingUserId: envLedgerOwner[0] }
+        return null
       }
-    }
-    const nextUsers = registry.users.filter((user) => user.userId !== entry.userId)
-    nextUsers.push(entry)
-    nextUsers.sort((a, b) => a.userId.localeCompare(b.userId))
-    saveTelegramUserRegistry(filePath, { ...registry, users: nextUsers })
-    return { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }), webToken, webUrl: webUrlForToken(webToken, env) }
+      const existingLedgerOwner = registry.users.find((user) =>
+        user.userId !== entry.userId && user.ledgerId === entry.ledgerId)
+      if (existingLedgerOwner) {
+        result = { ok: false, error: 'ledger-used', existingUserId: existingLedgerOwner.userId }
+        return null
+      }
+      if (entry.telegramUserId) {
+        const existingTelegramOwner = registry.users.find((user) =>
+          user.userId !== entry.userId && user.telegramUserId === entry.telegramUserId)
+        if (existingTelegramOwner) {
+          result = { ok: false, error: 'telegram-used', existingUserId: existingTelegramOwner.userId }
+          return null
+        }
+      }
+      if (entry.email) {
+        const existingEmailOwner = registry.users.find((user) =>
+          user.userId !== entry.userId && normalizeEmail(user.email) === entry.email)
+        if (existingEmailOwner) {
+          result = { ok: false, error: 'email-used', existingUserId: existingEmailOwner.userId }
+          return null
+        }
+      }
+      const nextUsers = registry.users.filter((user) => user.userId !== entry.userId)
+      nextUsers.push(entry)
+      nextUsers.sort((a, b) => a.userId.localeCompare(b.userId))
+      result = { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }), webToken, webUrl: webUrlForToken(webToken, env) }
+      return { ...registry, users: nextUsers }
+    })
+    return result
   }
 
   function updateUser(userId, {
@@ -271,97 +405,137 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     updatedBy = '',
   } = {}) {
     const targetUserId = String(userId || '').trim()
-    const registry = loadTelegramUserRegistry(filePath)
-    const target = registry.users.find((user) => user.userId === targetUserId)
-    if (!target) return { ok: false, error: 'not-found' }
-    const requestedLedgerId = ledgerId === undefined
-      ? target.ledgerId
-      : createLedgerIdentity({ ledgerId }).ledgerId
-    if (requestedLedgerId !== target.ledgerId) {
-      return { ok: false, error: 'ledger-change-requires-migration' }
-    }
-    const entry = normalizeTelegramUserEntry({
-      ...target,
-      email: email === undefined ? target.email : email,
-      telegramUserId: telegramUserId === undefined ? target.telegramUserId : telegramUserId,
-      ledgerId: target.ledgerId,
-      displayName: displayName === undefined ? target.displayName : displayName,
-      passwordHash: password ? createPasswordHash(password) : target.passwordHash,
-      sessions: password ? [] : target.sessions,
-      updatedAt: new Date().toISOString(),
-      updatedBy,
+    const passwordHash = password ? createPasswordHash(password) : ''
+    if (password && !passwordHash) return { ok: false, error: 'weak-password' }
+    let result
+    updateTelegramUserRegistry(filePath, (registry) => {
+      const target = registry.users.find((user) => user.userId === targetUserId)
+      if (!target) {
+        result = { ok: false, error: 'not-found' }
+        return null
+      }
+      const requestedLedgerId = ledgerId === undefined
+        ? target.ledgerId
+        : createLedgerIdentity({ ledgerId }).ledgerId
+      if (requestedLedgerId !== target.ledgerId) {
+        result = { ok: false, error: 'ledger-change-requires-migration' }
+        return null
+      }
+      const entry = normalizeTelegramUserEntry({
+        ...target,
+        email: email === undefined ? target.email : email,
+        telegramUserId: telegramUserId === undefined ? target.telegramUserId : telegramUserId,
+        ledgerId: target.ledgerId,
+        displayName: displayName === undefined ? target.displayName : displayName,
+        passwordHash: password ? passwordHash : target.passwordHash,
+        sessions: password ? [] : target.sessions,
+        updatedAt: new Date().toISOString(),
+        updatedBy,
+      })
+      if (!entry) {
+        result = { ok: false, error: 'invalid-user-or-ledger' }
+        return null
+      }
+      if (entry.email && !entry.email.includes('@')) {
+        result = { ok: false, error: 'invalid-email' }
+        return null
+      }
+      const telegramConflict = envTelegramConflict(entry)
+      if (telegramConflict) {
+        result = telegramConflict
+        return null
+      }
+      const envLedgerOwner = [...envLedgerMap.entries()].find(([envUserId, mappedLedgerId]) =>
+        envUserId !== entry.telegramUserId && mappedLedgerId === entry.ledgerId)
+      if (envLedgerOwner) {
+        result = { ok: false, error: 'ledger-used', existingUserId: envLedgerOwner[0] }
+        return null
+      }
+      const existingLedgerOwner = registry.users.find((user) =>
+        user.userId !== entry.userId && user.ledgerId === entry.ledgerId)
+      if (existingLedgerOwner) {
+        result = { ok: false, error: 'ledger-used', existingUserId: existingLedgerOwner.userId }
+        return null
+      }
+      if (entry.telegramUserId) {
+        const existingTelegramOwner = registry.users.find((user) =>
+          user.userId !== entry.userId && user.telegramUserId === entry.telegramUserId)
+        if (existingTelegramOwner) {
+          result = { ok: false, error: 'telegram-used', existingUserId: existingTelegramOwner.userId }
+          return null
+        }
+      }
+      if (entry.email) {
+        const existingEmailOwner = registry.users.find((user) =>
+          user.userId !== entry.userId && normalizeEmail(user.email) === entry.email)
+        if (existingEmailOwner) {
+          result = { ok: false, error: 'email-used', existingUserId: existingEmailOwner.userId }
+          return null
+        }
+      }
+      const nextUsers = registry.users.map((user) => (user.userId === targetUserId ? entry : user))
+      nextUsers.sort((a, b) => a.userId.localeCompare(b.userId))
+      result = { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }) }
+      return { ...registry, users: nextUsers }
     })
-    if (!entry) return { ok: false, error: 'invalid-user-or-ledger' }
-    if (entry.email && !entry.email.includes('@')) return { ok: false, error: 'invalid-email' }
-    if (password && !entry.passwordHash) return { ok: false, error: 'weak-password' }
-    const envLedgerOwner = [...envLedgerMap.entries()].find(([envUserId, mappedLedgerId]) =>
-      entry.telegramUserId && envUserId !== entry.telegramUserId && mappedLedgerId === entry.ledgerId)
-    if (envLedgerOwner) return { ok: false, error: 'ledger-used', existingUserId: envLedgerOwner[0] }
-    const existingLedgerOwner = registry.users.find((user) =>
-      user.userId !== entry.userId && user.ledgerId === entry.ledgerId)
-    if (existingLedgerOwner) return { ok: false, error: 'ledger-used', existingUserId: existingLedgerOwner.userId }
-    if (entry.telegramUserId) {
-      const existingTelegramOwner = registry.users.find((user) =>
-        user.userId !== entry.userId && user.telegramUserId === entry.telegramUserId)
-      if (existingTelegramOwner) return { ok: false, error: 'telegram-used', existingUserId: existingTelegramOwner.userId }
-    }
-    if (entry.email) {
-      const existingEmailOwner = registry.users.find((user) =>
-        user.userId !== entry.userId && normalizeEmail(user.email) === entry.email)
-      if (existingEmailOwner) return { ok: false, error: 'email-used', existingUserId: existingEmailOwner.userId }
-    }
-    const nextUsers = registry.users.map((user) => (user.userId === targetUserId ? entry : user))
-    nextUsers.sort((a, b) => a.userId.localeCompare(b.userId))
-    saveTelegramUserRegistry(filePath, { ...registry, users: nextUsers })
-    return { ok: true, entry, rowId: adreemStateRowId({ ledgerId: entry.ledgerId }) }
+    return result
   }
 
   function removeUserAccess(userId, { requestedBy = '' } = {}) {
     const targetUserId = String(userId || '').trim()
-    const registry = loadTelegramUserRegistry(filePath)
-    const target = registry.users.find((user) => user.userId === targetUserId)
-    if (!target) return { ok: false, error: 'not-found' }
-    if (isOwnerUser(target)) return { ok: false, error: 'owner-protected' }
-    const nextUsers = registry.users.filter((user) => user.userId !== targetUserId)
-    saveTelegramUserRegistry(filePath, {
-      ...registry,
-      users: nextUsers,
-      removed: [
-        ...(registry.removed || []),
-        { ...target, removedAt: new Date().toISOString(), removedBy: requestedBy },
-      ],
+    let result
+    updateTelegramUserRegistry(filePath, (registry) => {
+      const target = registry.users.find((user) => user.userId === targetUserId)
+      if (!target) {
+        result = { ok: false, error: 'not-found' }
+        return null
+      }
+      if (isOwnerUser(target)) {
+        result = { ok: false, error: 'owner-protected' }
+        return null
+      }
+      result = { ok: true, removed: target }
+      return {
+        ...registry,
+        users: registry.users.filter((user) => user.userId !== targetUserId),
+        removed: [
+          ...(registry.removed || []),
+          { ...target, removedAt: new Date().toISOString(), removedBy: requestedBy },
+        ],
+      }
     })
-    return { ok: true, removed: target }
+    return result
   }
 
   function loginUser({ email, password }) {
     const normalizedEmail = normalizeEmail(email)
     if (!normalizedEmail || !password) return { ok: false, error: 'invalid-login' }
-    const registry = loadTelegramUserRegistry(filePath)
-    const target = registry.users.find((user) => normalizeEmail(user.email) === normalizedEmail)
-    if (!target?.passwordHash || !verifyPassword(password, target.passwordHash)) {
-      return { ok: false, error: 'invalid-login' }
-    }
-    const sessionToken = createPrivateWebToken()
-    const sessionExpiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
-    const session = {
-      tokenHash: webTokenHash(sessionToken),
-      expiresAt: sessionExpiresAt,
-      createdAt: new Date().toISOString(),
-    }
-    const nextUsers = registry.users.map((user) => user.userId === target.userId
-      ? {
-          ...user,
-          sessions: [
-            ...(user.sessions || []).filter((item) => new Date(item.expiresAt || 0).getTime() > Date.now()),
-            session,
-          ].slice(-MAX_ACTIVE_SESSIONS),
-          lastLoginAt: new Date().toISOString(),
-        }
-      : user)
-    saveTelegramUserRegistry(filePath, { ...registry, users: nextUsers })
-    const entry = normalizeTelegramUserEntry({ ...target, sessions: [...(target.sessions || []), session] })
-    return { ok: true, entry, sessionToken, sessionExpiresAt }
+    let result
+    updateTelegramUserRegistry(filePath, (registry) => {
+      const target = registry.users.find((user) => normalizeEmail(user.email) === normalizedEmail)
+      if (!target?.passwordHash || !verifyPassword(password, target.passwordHash)) {
+        result = { ok: false, error: 'invalid-login' }
+        return null
+      }
+      const sessionToken = createPrivateWebToken()
+      const sessionExpiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
+      const session = {
+        tokenHash: webTokenHash(sessionToken),
+        expiresAt: sessionExpiresAt,
+        createdAt: new Date().toISOString(),
+      }
+      const nextSessions = [
+        ...(target.sessions || []).filter((item) => new Date(item.expiresAt || 0).getTime() > Date.now()),
+        session,
+      ].slice(-MAX_ACTIVE_SESSIONS)
+      const nextUsers = registry.users.map((user) => user.userId === target.userId
+        ? { ...user, sessions: nextSessions, lastLoginAt: new Date().toISOString() }
+        : user)
+      const entry = normalizeTelegramUserEntry({ ...target, sessions: nextSessions })
+      result = { ok: true, entry, sessionToken, sessionExpiresAt }
+      return { ...registry, users: nextUsers }
+    })
+    return result
   }
 
   function userForSessionToken(token = '') {
@@ -375,6 +549,29 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
       return session.tokenHash === hash && Number.isFinite(expiresAt) && expiresAt > now
     }))
     return target || null
+  }
+
+  function revokeSessionToken(token = '') {
+    const cleanToken = String(token || '').trim()
+    if (!cleanToken) return { ok: false, error: 'invalid-token' }
+    const tokenHash = webTokenHash(cleanToken)
+    let result
+    updateTelegramUserRegistry(filePath, (registry) => {
+      const target = registry.users.find((user) =>
+        (user.sessions || []).some((session) => session.tokenHash === tokenHash))
+      if (!target) {
+        result = { ok: false, error: 'not-found' }
+        return null
+      }
+      result = { ok: true, userId: target.userId }
+      return {
+        ...registry,
+        users: registry.users.map((user) => user.userId === target.userId
+          ? { ...user, sessions: (user.sessions || []).filter((session) => session.tokenHash !== tokenHash) }
+          : user),
+      }
+    })
+    return result
   }
 
   function listUsers() {
@@ -405,6 +602,7 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
     removeUserAccess,
     loginUser,
     userForSessionToken,
+    revokeSessionToken,
     listUsers,
   }
 }

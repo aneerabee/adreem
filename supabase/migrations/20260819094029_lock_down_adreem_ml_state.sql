@@ -1,3 +1,10 @@
+create table if not exists public.ml_state (
+  id text primary key,
+  payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create schema if not exists adreem_private;
 revoke all on schema adreem_private from public, anon, authenticated;
 revoke all on all tables in schema adreem_private from public, anon, authenticated;

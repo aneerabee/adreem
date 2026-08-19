@@ -8,6 +8,8 @@ export const ADREEM_API_TOKEN_PERSIST_KEY = 'adreem-ledger-api-login-token-v1'
 export const ADREEM_MIGRATION_MARKER_KEY = 'adreem-ledger-migration-v1'
 
 const ADREEM_API_URL = String(import.meta.env.VITE_ADREEM_API_URL || '').replace(/\/+$/, '')
+const API_TIMEOUT_MS = 15_000
+let cloudUpdatedAt
 const LEGACY_LEDGER_STORAGE_PREFIXES = [
   MOHAMMAD_STORAGE_KEY,
   ADREEM_STORAGE_KEY,
@@ -59,20 +61,38 @@ export function getMohammadPersistenceMode() {
 async function apiJson(path, options = {}) {
   const api = apiConfig()
   if (!api) throw new Error('Missing ADREEM login session.')
-  const response = await fetch(`${api.url}${path}`, {
-    ...options,
-    headers: {
-      authorization: `Bearer ${api.token}`,
-      ...(options.headers || {}),
-    },
-  })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const error = new Error(data.error || `ADREEM cloud request failed: ${response.status}`)
-    error.status = response.status
+  const controller = new AbortController()
+  const timeout = globalThis.setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  try {
+    const response = await fetch(`${api.url}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        authorization: `Bearer ${api.token}`,
+        ...(options.headers || {}),
+      },
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const error = new Error(data.error || `ADREEM cloud request failed: ${response.status}`)
+      error.status = response.status
+      error.retryable = response.status === 429 || response.status >= 500
+      const retryAfterSeconds = Number(response.headers?.get?.('retry-after') || data.retryAfterSeconds || 0)
+      if (retryAfterSeconds > 0) error.retryAfterMs = retryAfterSeconds * 1000
+      throw error
+    }
+    return data
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error('انتهت مهلة الاتصال بالسحابة.')
+      timeoutError.retryable = true
+      throw timeoutError
+    }
+    if (error && error.retryable === undefined) error.retryable = true
     throw error
+  } finally {
+    globalThis.clearTimeout(timeout)
   }
-  return data
 }
 
 export async function loadMohammadPersistedState(fallbackState) {
@@ -89,6 +109,7 @@ export async function loadMohammadPersistedState(fallbackState) {
   }
   try {
     const data = await apiJson('/api/ledger')
+    cloudUpdatedAt = data?.updatedAt ?? null
     return {
       mode,
       state: data?.state ? normalizeLedgerState(data.state, fallback) : fallback,
@@ -117,8 +138,9 @@ export async function saveMohammadPersistedState(state) {
     const data = await apiJson('/api/ledger', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ state: normalizedState }),
+      body: JSON.stringify({ state: normalizedState, baseUpdatedAt: cloudUpdatedAt ?? null }),
     })
+    cloudUpdatedAt = data?.updatedAt ?? cloudUpdatedAt ?? null
     return {
       mode,
       localOk: false,
@@ -128,6 +150,16 @@ export async function saveMohammadPersistedState(state) {
   } catch (error) {
     console.warn('[adreem-persistence] cloud save failed:', error?.message || error)
     return { mode, localOk: false, supabaseOk: false, state: normalizedState, error }
+  }
+}
+
+export async function logoutAdreemCloudSession() {
+  try {
+    if (getMohammadPersistenceMode() === 'api') {
+      await apiJson('/api/auth/logout', { method: 'POST' })
+    }
+  } finally {
+    cloudUpdatedAt = undefined
   }
 }
 

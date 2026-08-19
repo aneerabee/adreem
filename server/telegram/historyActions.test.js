@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
 import { buildHistorySession, canVoidRecentMovement, voidRecentMovementInState } from './historyActions.js'
+import { stableActionToken } from './actionTokens.js'
 
 const now = '2026-06-02T08:00:00.000Z'
 
@@ -31,6 +32,7 @@ describe('telegram history actions', () => {
     expect(session.total).toBe(1)
     expect(session.page).toBe(0)
     expect(session.pageCount).toBe(1)
+    expect(session.choices.movements[stableActionToken('posted-1')]).toBe('posted-1')
     expect(Object.values(session.choices.movements)).toEqual(['posted-1'])
   })
 
@@ -58,13 +60,23 @@ describe('telegram history actions', () => {
   })
 
   it('keeps an empty history on a stable first page', () => {
-    expect(buildHistorySession({ movements: [] })).toEqual({
+    expect(buildHistorySession({ movements: [] })).toMatchObject({
       flow: 'history',
       page: 0,
       pageCount: 1,
       total: 0,
       choices: { movements: {} },
     })
+  })
+
+  it('rotates the action session when history is rendered again', () => {
+    const state = { movements: [movement()] }
+
+    const first = buildHistorySession(state)
+    const second = buildHistorySession(state)
+
+    expect(first.actionSessionId).not.toBe(second.actionSessionId)
+    expect(Object.keys(first.choices.movements)).toEqual(Object.keys(second.choices.movements))
   })
 
   it('voids a recent posted movement without deleting it', () => {

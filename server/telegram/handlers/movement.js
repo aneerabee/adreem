@@ -312,6 +312,7 @@ export async function handleMovementCallback(ctx, data) {
 
   if (data === 'mv:cancel') {
     const cancelText = session.mode === 'review' ? 'تم إلغاء إصلاح الحركة.' : 'تم إلغاء الإدخال.'
+    await removeRejectedUploadedAttachment(ctx, session)
     ctx.sessions.clear(ctx.chatId, ctx.userId)
     try {
       return await ctx.telegram.editMessageText({
@@ -412,6 +413,7 @@ export async function handleMovementCallback(ctx, data) {
   }
 
   if (data === 'mv:attachment:skip') {
+    await removeRejectedUploadedAttachment(ctx, session)
     session.draft.attachmentLabel = ''
     session.draft.attachmentUrl = ''
     session.draft.attachmentStoragePath = ''
@@ -610,6 +612,7 @@ export async function handleMovementText(ctx, text) {
 
   if (session.step === STEPS.ATTACHMENT) {
     const attachment = parseAttachmentText(text)
+    await removeRejectedUploadedAttachment(ctx, session)
     session.draft = {
       ...session.draft,
       attachmentLabel: attachment.label,
@@ -648,6 +651,7 @@ export async function handleMovementMedia(ctx, message = {}) {
   try {
     const file = await ctx.telegram.getFile({ file_id: media.fileId })
     const buffer = await ctx.telegram.downloadFile(file.file_path, { maxBytes: ATTACHMENT_MAX_SIZE_BYTES })
+    await removeRejectedUploadedAttachment(ctx, session)
     session.draft = {
       ...session.draft,
       attachmentLabel: media.fileName,
@@ -694,11 +698,20 @@ async function removeRejectedUploadedAttachment(ctx, session) {
   const storagePath = session.draft.attachmentStoragePath
   if (!storagePath || typeof ctx.repository.deleteAttachmentFile !== 'function') return
   try {
+    const current = await ctx.repository.load()
+    if (attachmentPathIsReferenced(current?.state, storagePath)) return
     await ctx.repository.deleteAttachmentFile(storagePath)
     session.draft.attachmentStoragePath = ''
   } catch (error) {
     console.error('[adreem-telegram-bot] rejected attachment cleanup failed', error?.message || error)
   }
+}
+
+export function attachmentPathIsReferenced(state = {}, storagePath = '') {
+  const cleanPath = String(storagePath || '').trim()
+  if (!cleanPath) return false
+  return (Array.isArray(state.attachments) ? state.attachments : [])
+    .some((attachment) => String(attachment?.storagePath || '').trim() === cleanPath)
 }
 
 function previousStep(session) {

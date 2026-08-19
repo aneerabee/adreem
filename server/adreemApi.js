@@ -4,12 +4,17 @@ import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
-import { createLedgerRepository } from './mohammadLedger/ledgerRepository.js'
+import { ConcurrentLedgerUpdateError, createLedgerRepository, LedgerIntegrityError } from './mohammadLedger/ledgerRepository.js'
 import { validateLedgerStateTransition } from './mohammadLedger/stateValidation.js'
 import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './mohammadLedger/attachmentValidation.js'
 import { mergeLedgerStates } from '../src/mohammadLedger/ledgerState.js'
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/mohammadLedger/ledgerOperations.js'
-import { createTelegramUserAccess, defaultRegistryPath, registrySessionTokenMap } from './telegram/userRegistry.js'
+import {
+  createTelegramUserAccess,
+  defaultRegistryPath,
+  registrySessionTokenMap,
+  validateTelegramLedgerAssignments,
+} from './telegram/userRegistry.js'
 
 const DEFAULT_PORT = 8787
 const DEFAULT_JSON_BODY_LIMIT = 5_000_000
@@ -174,9 +179,14 @@ function rejectRateLimited(res, origin, result) {
   res.end(body)
 }
 
-function userIdFromAdminPath(pathname = '') {
+export function userIdFromAdminPath(pathname = '') {
   const match = String(pathname || '').match(/^\/api\/admin\/users\/([^/]+)$/)
-  return match ? decodeURIComponent(match[1]) : ''
+  if (!match) return ''
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return ''
+  }
 }
 
 function readJsonBody(req, { maxBytes = DEFAULT_JSON_BODY_LIMIT } = {}) {
@@ -284,11 +294,16 @@ async function uploadAttachment(env, { ledgerId, fileName, mimeType, base64 }) {
 
 export function createAdreemApiHandler(env = process.env) {
   const userAccess = createTelegramUserAccess(env)
+  const ledgerMapProblem = validateTelegramLedgerAssignments(userAccess)
+  if (ledgerMapProblem) {
+    throw new Error(`Invalid Telegram ledger assignments: ${ledgerMapProblem}`)
+  }
   const repositories = new Map()
   const allowedOrigin = env.ADREEM_WEB_ALLOWED_ORIGIN || '*'
   const rateLimiter = createMemoryRateLimiter()
   let testRepository = null
   let testRepositoryFactory = null
+  let readinessRepository = null
 
   function ledgerIdForToken(token) {
     const hash = tokenHash(token)
@@ -337,21 +352,42 @@ export function createAdreemApiHandler(env = process.env) {
     if (url.pathname === '/health') {
       return sendJson(res, 200, { ok: true, service: 'adreem-api' }, allowedOrigin)
     }
+    if (url.pathname === '/ready') {
+      try {
+        readinessRepository ||= testRepository || createLedgerRepository(env, {
+          ledgerId: env.ADREEM_HEALTH_LEDGER_ID || env.ADREEM_LEDGER_ID || 'main',
+        })
+        const result = await readinessRepository.load()
+        return sendJson(res, 200, {
+          ok: true,
+          service: 'adreem-api',
+          storage: 'reachable',
+          updatedAt: result.updatedAt || null,
+        }, allowedOrigin)
+      } catch (error) {
+        console.error('[adreem-api-ready]', error?.message || error)
+        return sendJson(res, 503, { ok: false, service: 'adreem-api', storage: 'unreachable' }, allowedOrigin)
+      }
+    }
     if (url.pathname === '/api/auth/login') {
       try {
         if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
         const body = await readJsonBody(req)
         const normalizedEmail = String(body.email || '').trim().toLowerCase()
-        const limit = rateLimiter.check(rateKey(req, 'login', normalizedEmail), RATE_LIMITS.login)
+        const password = String(body.password || '')
+        if (normalizedEmail.length > 254 || password.length > 256) {
+          return sendJson(res, 400, { error: 'Invalid login input.' }, allowedOrigin)
+        }
+        const limit = rateLimiter.check(rateKey(req, 'login'), RATE_LIMITS.login)
         if (!limit.ok) {
-          audit(env, { action: 'auth.rate_limited', ip: clientIp(req), email: normalizedEmail })
+          audit(env, { action: 'auth.rate_limited', ip: clientIp(req) })
           return rejectRateLimited(res, allowedOrigin, limit)
         }
-        const result = userAccess.loginUser({ email: body.email, password: body.password })
+        const result = userAccess.loginUser({ email: normalizedEmail, password })
         audit(env, {
           action: result.ok ? 'auth.login.success' : 'auth.login.failed',
           ip: clientIp(req),
-          email: normalizedEmail,
+          emailHash: normalizedEmail ? tokenHash(normalizedEmail).slice(0, 16) : '',
           userId: result.entry?.userId || '',
           ledgerId: result.entry?.ledgerId || '',
         })
@@ -367,6 +403,19 @@ export function createAdreemApiHandler(env = process.env) {
           return sendJson(res, error.statusCode, { error: error.message }, allowedOrigin)
         }
         return sendJson(res, 500, { error: 'ADREEM auth failed.' }, allowedOrigin)
+      }
+    }
+    if (url.pathname === '/api/auth/logout') {
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
+      const token = tokenFromAuthHeader(req.headers.authorization)
+      if (!token) return sendJson(res, 204, {}, allowedOrigin)
+      try {
+        userAccess.revokeSessionToken?.(token)
+        audit(env, { action: 'auth.logout', ip: clientIp(req) })
+        return sendJson(res, 204, {}, allowedOrigin)
+      } catch (error) {
+        console.error('[adreem-api-auth]', error?.message || error)
+        return sendJson(res, 500, { error: 'ADREEM logout failed.' }, allowedOrigin)
       }
     }
     if (url.pathname === '/api/admin/users' || userIdFromAdminPath(url.pathname)) {
@@ -511,6 +560,7 @@ export function createAdreemApiHandler(env = process.env) {
         return sendJson(res, 200, {
           state: result.state,
           source: result.source || 'api',
+          updatedAt: result.updatedAt || null,
           access: { canManageUsers: Boolean(ownerForToken(token)) },
         }, allowedOrigin)
       }
@@ -521,6 +571,10 @@ export function createAdreemApiHandler(env = process.env) {
           return rejectRateLimited(res, allowedOrigin, limit)
         }
         const body = await readJsonBody(req)
+        if (!Object.prototype.hasOwnProperty.call(body, 'baseUpdatedAt')) {
+          throw new ApiRequestError('Reload the ledger before saving.', 428)
+        }
+        const updateOptions = { expectedUpdatedAt: body.baseUpdatedAt || null }
         const result = await repository.update((currentState) => {
           const state = body.state && typeof body.state === 'object'
             ? mergeLedgerStates(body.state, currentState, currentState)
@@ -532,16 +586,26 @@ export function createAdreemApiHandler(env = process.env) {
             throw new ApiRequestError(`Ledger integrity check failed: ${validation.errors[0]?.message || 'invalid state'}`, 422)
           }
           return { state }
-        })
+        }, updateOptions)
         audit(env, { action: 'ledger.saved', ledgerId, source: 'web-api' })
-        return sendJson(res, 200, { state: result.state, source: 'api-save' }, allowedOrigin)
+        return sendJson(res, 200, { state: result.state, source: 'api-save', updatedAt: result.updatedAt || null }, allowedOrigin)
       }
       return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
     } catch (error) {
-      if (!(error instanceof ApiRequestError) || error.statusCode >= 500) {
+      if (error instanceof ConcurrentLedgerUpdateError) {
+        // Conflicts are expected client errors and are recorded below without a server stack.
+      } else if (!(error instanceof ApiRequestError) || error.statusCode >= 500) {
         console.error('[adreem-api]', error?.message || error)
       } else {
         audit(env, { action: 'ledger.save.rejected', ledgerId, error: error.message })
+      }
+      if (error instanceof ConcurrentLedgerUpdateError) {
+        audit(env, { action: 'ledger.save.conflict', ledgerId })
+        return sendJson(res, 409, { error: 'تم تعديل الدفتر من جهاز آخر. أعد تحميل الصفحة قبل الحفظ.' }, allowedOrigin)
+      }
+      if (error instanceof LedgerIntegrityError) {
+        audit(env, { action: 'ledger.save.rejected', ledgerId, error: error.message })
+        return sendJson(res, 422, { error: `Ledger integrity check failed: ${error.message}` }, allowedOrigin)
       }
       if (error instanceof ApiRequestError) {
         return sendJson(res, error.statusCode, { error: error.message }, allowedOrigin)
@@ -552,6 +616,7 @@ export function createAdreemApiHandler(env = process.env) {
 
   adreemApiHandler.__setRepositoryForTest = (repository) => {
     testRepository = repository
+    readinessRepository = null
   }
   adreemApiHandler.__setRepositoryFactoryForTest = (factory) => {
     testRepositoryFactory = factory

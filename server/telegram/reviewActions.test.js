@@ -7,6 +7,7 @@ import {
   cancelReviewMovementInState,
   hideZeroReviewAccountInState,
 } from './reviewActions.js'
+import { actionCallbackData, parseActionCallback, stableActionToken } from './actionTokens.js'
 
 function stateWithReviewItems() {
   return {
@@ -78,9 +79,9 @@ describe('telegram review actions', () => {
     const session = buildReviewSession(stateWithReviewItems())
 
     expect(session.flow).toBe('review')
-    expect(session.choices.accounts['0']).toBe('review-zero')
-    expect(session.choices.accounts['1']).toBe('review-funded')
-    expect(session.choices.movements['2']).toBe('bad-transfer')
+    expect(session.choices.accounts[stableActionToken('review-zero')]).toBe('review-zero')
+    expect(session.choices.accounts[stableActionToken('review-funded')]).toBe('review-funded')
+    expect(session.choices.movements[stableActionToken('bad-transfer')]).toBe('bad-transfer')
   })
 
   it('paginates accounts and movements as one review queue', () => {
@@ -108,8 +109,22 @@ describe('telegram review actions', () => {
     expect(first.pageCount).toBe(2)
     expect(first.items).toHaveLength(8)
     expect(second.items).toHaveLength(2)
-    expect(second.choices.accounts['0']).toBe('review-extra-6')
-    expect(second.choices.movements['1']).toBe('bad-transfer')
+    expect(second.choices.accounts[stableActionToken('review-extra-6')]).toBe('review-extra-6')
+    expect(second.choices.movements[stableActionToken('bad-transfer')]).toBe('bad-transfer')
+    expect(second.items.map((item) => item.number)).toEqual([9, 10])
+  })
+
+  it('rejects a repeated review press instead of targeting the next item', () => {
+    const state = stateWithReviewItems()
+    const first = buildReviewSession(state)
+    const token = stableActionToken('bad-transfer')
+    const oldCallback = actionCallbackData('review', first.actionSessionId, 'movement', 'cancel', token)
+    const result = cancelReviewMovementInState(state, 'bad-transfer')
+    const second = buildReviewSession(result.state)
+
+    expect(first.actionSessionId).not.toBe(second.actionSessionId)
+    expect(second.choices.movements[token]).toBeUndefined()
+    expect(parseActionCallback(oldCallback, 'review', second)).toBe(null)
   })
 
   it('voids a needs-review movement without changing posted balances', () => {

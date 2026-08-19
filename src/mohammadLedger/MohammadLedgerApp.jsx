@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import './adreemDesk.css'
@@ -47,6 +48,7 @@ import {
   ADREEM_API_TOKEN_SESSION_KEY,
   getMohammadPersistenceMode,
   loadMohammadPersistedState,
+  logoutAdreemCloudSession,
   resolveAdreemAttachmentUrl,
   saveMohammadPersistedState,
   uploadAdreemAttachmentFile,
@@ -282,30 +284,46 @@ function canCancelMovement(movement) {
   return movement?.status === MOVEMENT_STATUSES.POSTED && !movement.id?.startsWith('opening-') && isRecentMovement(movement)
 }
 
-function storageTextForStatus(saveStatus, storageMode) {
+export function storageTextForStatus(saveStatus, storageMode) {
   return {
     loading: 'تحميل',
     saving: 'حفظ',
     retrying: 'إعادة الحفظ',
+    failed: 'فشل الحفظ',
     saved: storageMode === 'supabase' || storageMode === 'api' ? 'سحابي' : 'تطوير',
     local: storageMode === 'api-missing-token' ? 'دخول ناقص' : 'تطوير',
     'local-only': storageMode === 'api-missing-token' ? 'دخول ناقص' : 'سحابة متوقفة',
   }[saveStatus] || 'تطوير'
 }
 
-function logoutFromCloudSession() {
+export function saveFailureMessage(error, retryDelay) {
+  if (retryDelay === null) {
+    return error?.status === 409
+      ? 'تغيّرت بيانات الدفتر في جلسة أخرى. أعد تحميل الصفحة قبل المتابعة.'
+      : 'تعذر تأكيد الحفظ. أعد تحميل الصفحة ثم حاول مرة أخرى.'
+  }
+  return `لم يتم تأكيد الحفظ. سيحاول النظام تلقائيًا خلال ${Math.max(1, Math.round(retryDelay / 1000))} ث.`
+}
+
+async function logoutFromCloudSession() {
   if (typeof window === 'undefined') return
   try {
-    window.sessionStorage?.removeItem(ADREEM_API_TOKEN_SESSION_KEY)
-  } catch {
-    // If session storage is blocked, continue clearing the persistent device login below.
+    await logoutAdreemCloudSession()
+  } catch (error) {
+    console.warn('[adreem-ledger] cloud logout failed:', error?.message || error)
+  } finally {
+    try {
+      window.sessionStorage?.removeItem(ADREEM_API_TOKEN_SESSION_KEY)
+    } catch {
+      // If session storage is blocked, continue clearing the persistent device login below.
+    }
+    try {
+      window.localStorage?.removeItem(ADREEM_API_TOKEN_PERSIST_KEY)
+    } catch {
+      // If browser storage is blocked, reloading is still enough to reset the current view.
+    }
+    window.location.assign(`${window.location.pathname}${window.location.search}`)
   }
-  try {
-    window.localStorage?.removeItem(ADREEM_API_TOKEN_PERSIST_KEY)
-  } catch {
-    // If browser storage is blocked, reloading is still enough to reset the current view.
-  }
-  window.location.assign(`${window.location.pathname}${window.location.search}`)
 }
 
 function openAdminUsersPage() {
@@ -346,6 +364,35 @@ function nonZero(bucket) {
 
 function externalAccountKey(account = {}) {
   return String(account.id || `${account.ownerName || ''}:${account.subAccountName || ''}`).trim()
+}
+
+export function movementHistoryForPreview(movements = [], editingMovementId = '') {
+  if (!editingMovementId) return movements
+  return movements.filter((movement) => movement.id !== editingMovementId)
+}
+
+export function accountReviewSelection(classificationValue, currencyKind = ACCOUNT_CURRENCY_KINDS.DINAR) {
+  const classification = parseClassification(classificationValue)
+  return {
+    type: classification.type,
+    valueKind: classification.valueKind,
+    currencyKind: accountNeedsCurrency(classification)
+      ? (currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? ACCOUNT_CURRENCY_KINDS.USD : ACCOUNT_CURRENCY_KINDS.DINAR)
+      : ACCOUNT_CURRENCY_KINDS.DINAR,
+  }
+}
+
+export function accountClassificationMovementErrors(accountId, candidateAccounts = [], movements = []) {
+  return movements
+    .filter((movement) =>
+      movement.status === MOVEMENT_STATUSES.POSTED &&
+      [movement.sourceAccountId, movement.destinationAccountId, movement.expenseCategoryId].includes(accountId),
+    )
+    .flatMap((movement) => validateMovement(
+      movement,
+      candidateAccounts,
+      movements.filter((item) => item.id !== movement.id),
+    ).errors)
 }
 
 function MetricChip({ label, value, tone = 'neutral', currency = CURRENCIES.DINAR }) {
@@ -415,17 +462,14 @@ function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
   const balanceTone = dinar > 0 ? 'is-positive' : dinar < 0 ? 'is-negative' : 'is-zero'
   const kindText = accountKindText(account)
   const detailText = accountDetailName(account)
-  const isPersonBalance = account.valueKind === VALUE_KINDS.RECEIVABLE
-  const showKind = kindText && kindText !== detailText && !isPersonBalance
   return (
     <article className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
         <strong>{account.ownerName}</strong>
-        <span>
-          {detailText}
-          {isPersonBalance ? <small> · {account.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'دولار' : account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI ? 'دينار ودولار' : 'دينار'}</small> : null}
-          {showKind ? <small> · {kindText}</small> : null}
-          {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b> · تأكيد</b> : null}
+        <span className="ml3-account-meta">
+          {kindText ? <small className="ml3-account-kind">{kindText}</small> : null}
+          {detailText && detailText !== kindText ? <small className="ml3-account-detail">{detailText}</small> : null}
+          {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b>تأكيد</b> : null}
         </span>
       </button>
       <div className={`ml3-account-values ${balanceTone}`}>
@@ -831,7 +875,7 @@ function movementAccountImpact(movement, accountId) {
   return buildPostingEntries(movement).filter((entry) => entry.accountId === accountId)
 }
 
-function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment }) {
+function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment }) {
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
@@ -902,7 +946,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
         </form>
         ) : null}
 
-        <form className="ml3-profile-reconcile ml3-profile-reconcile--attachment" onSubmit={(event) => onAddAttachment(event, account.id)}>
+        <form className="ml3-profile-reconcile ml3-profile-reconcile--attachment" aria-busy={isAddingAttachment} onSubmit={(event) => onAddAttachment(event, account.id)}>
           <h3>مرفقات</h3>
           <div className="ml3-profile-editor-grid">
             <label>
@@ -918,7 +962,9 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
               <input name="attachmentFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
             </label>
           </div>
-          <button type="submit">ربط مرفق</button>
+          <button type="submit" disabled={isAddingAttachment}>
+            {isAddingAttachment ? 'جاري رفع المرفق' : 'ربط مرفق'}
+          </button>
           {accountAttachments.length ? (
             <div className="ml3-attachment-list">
               {accountAttachments.slice(0, 5).map((attachment) => (
@@ -988,9 +1034,26 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
   )
 }
 
-function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisable }) {
+function AccountReviewCurrencyField({ classification, currencyKind, onChange }) {
+  const selection = accountReviewSelection(classification, currencyKind)
+  if (!accountNeedsCurrency(selection)) return null
+
+  return (
+    <label>
+      العملة
+      <select name="currencyKind" value={selection.currencyKind} onChange={(event) => onChange(event.target.value)}>
+        <option value={ACCOUNT_CURRENCY_KINDS.DINAR}>دينار</option>
+        <option value={ACCOUNT_CURRENCY_KINDS.USD}>دولار</option>
+      </select>
+    </label>
+  )
+}
+
+export function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisable }) {
   const { account, dinar, usd } = bucket
   const mergeTargets = activeAccounts.filter((target) => target.id !== account.id)
+  const [classification, setClassification] = useState(classificationValue(account))
+  const [currencyKind, setCurrencyKind] = useState(() => accountReviewSelection(classificationValue(account), account.currencyKind).currencyKind)
 
   return (
     <article className="ml3-review-card">
@@ -1013,12 +1076,13 @@ function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisab
         </label>
         <label>
           التصنيف
-          <select name="classification" defaultValue={classificationValue(account)}>
+          <select name="classification" value={classification} onChange={(event) => setClassification(event.target.value)}>
             {accountClassificationOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
         </label>
+        <AccountReviewCurrencyField classification={classification} currencyKind={currencyKind} onChange={setCurrencyKind} />
         <label className="ml3-decision-wide">
           ملاحظة القرار
           <input name="notes" defaultValue={account.notes || ''} placeholder="سبب التصنيف أو أي توضيح" />
@@ -1043,7 +1107,11 @@ function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisab
   )
 }
 
-function ExternalAccountCard({ account, onCreate, onIgnore }) {
+export function ExternalAccountCard({ account, onCreate, onIgnore }) {
+  const initialClassification = `${ACCOUNT_TYPES.PERSON}|${VALUE_KINDS.RECEIVABLE}`
+  const [classification, setClassification] = useState(initialClassification)
+  const [currencyKind, setCurrencyKind] = useState(() => accountReviewSelection(initialClassification, account.currencyKind).currencyKind)
+
   return (
     <article className="ml3-review-card">
       <div className="ml3-review-card-head">
@@ -1060,12 +1128,13 @@ function ExternalAccountCard({ account, onCreate, onIgnore }) {
         </label>
         <label>
           التصنيف
-          <select name="classification" defaultValue={`${ACCOUNT_TYPES.PERSON}|${VALUE_KINDS.RECEIVABLE}`}>
+          <select name="classification" value={classification} onChange={(event) => setClassification(event.target.value)}>
             {accountClassificationOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
         </label>
+        <AccountReviewCurrencyField classification={classification} currencyKind={currencyKind} onChange={setCurrencyKind} />
         <div className="ml3-decision-actions">
           <button type="submit" className="ml3-mini-action is-confirm">إنشاء بهذا التصنيف</button>
           <button type="button" className="ml3-mini-action is-muted" onClick={() => onIgnore(account)}>تجاهل الاسم</button>
@@ -1324,6 +1393,8 @@ export default function MohammadLedgerApp() {
   const [pendingUndo, setPendingUndo] = useState(null)
   const [activeReviewKey, setActiveReviewKey] = useState('')
   const [editingMovementId, setEditingMovementId] = useState('')
+  const [isSavingMovement, setIsSavingMovement] = useState(false)
+  const [isAddingAccountAttachment, setIsAddingAccountAttachment] = useState(false)
   const [historyQuery, setHistoryQuery] = useState('')
   const [historyType, setHistoryType] = useState('')
   const [historyStatus, setHistoryStatus] = useState('')
@@ -1333,6 +1404,9 @@ export default function MohammadLedgerApp() {
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const todayPanelRef = useRef(null)
   const saveCoordinatorRef = useRef(null)
+  const hasHydratedSnapshotRef = useRef(false)
+  const movementSaveLockRef = useRef(false)
+  const accountAttachmentLockRef = useRef(false)
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -1498,7 +1572,7 @@ export default function MohammadLedgerApp() {
       ? movementDraft.expenseCategoryId || ''
       : '',
   }
-  const preview = previewMovement(normalizedDraft, accounts, movements)
+  const preview = previewMovement(normalizedDraft, accounts, movementHistoryForPreview(movements, editingMovementId))
   const hasMovementAmount = Number.isFinite(normalizedDraft.amount) && normalizedDraft.amount > 0
   const hasMovementRate = !movementConfig.needsRate || (Number.isFinite(normalizedDraft.rate) && normalizedDraft.rate > 0)
   const canChooseMovementAccounts = hasMovementAmount && hasMovementRate
@@ -1599,12 +1673,16 @@ export default function MohammadLedgerApp() {
           console.warn('[adreem-ledger] cloud save failed:', error?.message || error)
           setStorageMode(error?.persistenceResult?.mode || getMohammadPersistenceMode())
           setSyncProblem(true)
-          setFeedback(`لم يتم تأكيد الحفظ. سيحاول النظام تلقائيًا خلال ${Math.max(1, Math.round(retryDelay / 1000))} ث.`)
+          setFeedback(saveFailureMessage(error, retryDelay))
         },
       })
       saveCoordinatorRef.current = coordinator
     }
 
+    if (!hasHydratedSnapshotRef.current) {
+      hasHydratedSnapshotRef.current = true
+      return
+    }
     saveCoordinatorRef.current.submit({ ...ledgerExtras, accounts, movements })
   }, [accounts, movements, ledgerExtras, isHydrated, canPersist])
 
@@ -1852,78 +1930,86 @@ export default function MohammadLedgerApp() {
 
   async function saveMovement(event) {
     event.preventDefault()
-    const originalMovement = editingMovementId ? movements.find((movement) => movement.id === editingMovementId) : null
-    const validationMovements = originalMovement
-      ? movements.filter((movementItem) => movementItem.id !== originalMovement.id)
-      : movements
-    const movement = postMovement(
-      {
-        ...originalMovement,
-        ...normalizedDraft,
-        id: originalMovement?.id,
-        createdAt: originalMovement?.createdAt,
-        note: movementDraft.note.trim(),
-        dimensionId: movementSupportsDimension(movementDraft.type) ? movementDraft.dimensionId || '' : '',
-        expenseCategoryId: movementDraft.type === MOVEMENT_TYPES.EXPENSE || movementDraft.type === MOVEMENT_TYPES.TRUCK_EXPENSE
-          ? movementDraft.expenseCategoryId || ''
-          : '',
-      },
-      accounts,
-      validationMovements,
-    )
-    if (!canCommitMovementEdit(originalMovement, movement)) {
-      setFeedback(`لم يتم حفظ التعديل. أصلح الحركة أولًا حتى لا يتغير الرصيد: ${movement.validation.errors.map((error) => error.message).join(' ')}`)
-      return
-    }
-    let uploadedAttachment = null
-    let attachmentError = ''
-    if (movementAttachmentFile) {
-      try {
-        uploadedAttachment = await uploadAdreemAttachmentFile(movementAttachmentFile)
-      } catch (error) {
-        attachmentError = error?.message || 'تعذر رفع المرفق.'
+    if (movementSaveLockRef.current) return
+    movementSaveLockRef.current = true
+    setIsSavingMovement(true)
+    try {
+      const originalMovement = editingMovementId ? movements.find((movement) => movement.id === editingMovementId) : null
+      const validationMovements = originalMovement
+        ? movements.filter((movementItem) => movementItem.id !== originalMovement.id)
+        : movements
+      const movement = postMovement(
+        {
+          ...originalMovement,
+          ...normalizedDraft,
+          id: originalMovement?.id,
+          createdAt: originalMovement?.createdAt,
+          note: movementDraft.note.trim(),
+          dimensionId: movementSupportsDimension(movementDraft.type) ? movementDraft.dimensionId || '' : '',
+          expenseCategoryId: movementDraft.type === MOVEMENT_TYPES.EXPENSE || movementDraft.type === MOVEMENT_TYPES.TRUCK_EXPENSE
+            ? movementDraft.expenseCategoryId || ''
+            : '',
+        },
+        accounts,
+        validationMovements,
+      )
+      if (!canCommitMovementEdit(originalMovement, movement)) {
+        setFeedback(`لم يتم حفظ التعديل. أصلح الحركة أولًا حتى لا يتغير الرصيد: ${movement.validation.errors.map((error) => error.message).join(' ')}`)
+        return
       }
-    }
-    setMovements((current) =>
-      originalMovement
-        ? current.map((item) => (item.id === originalMovement.id ? movement : item))
-        : [...current, movement],
-    )
-    const baseFeedback = movement.status === MOVEMENT_STATUSES.POSTED ? (originalMovement ? 'تم تعديل الحركة وتحديث الأرصدة.' : 'تم الحفظ وتحديث الأرصدة.') : 'الحركة ناقصة وتحتاج مراجعة.'
-    setFeedback(attachmentError ? `${baseFeedback} لم يتم رفع المرفق: ${attachmentError}` : baseFeedback)
-    const attachment = createAttachment({
-      movementId: movement.id,
-      label: movementDraft.attachmentLabel || uploadedAttachment?.label,
-      url: uploadedAttachment?.storagePath ? '' : uploadedAttachment?.url || movementDraft.attachmentUrl,
-      mimeType: uploadedAttachment?.mimeType || '',
-      sizeBytes: uploadedAttachment?.sizeBytes || 0,
-      storagePath: uploadedAttachment?.storagePath || '',
-      source: uploadedAttachment ? 'web-upload' : 'web',
-    })
-    const recurringRule = movementDraft.recurringEnabled && movement.status === MOVEMENT_STATUSES.POSTED
-      ? createRecurringRuleFromMovement(movement, { frequency: movementDraft.recurringFrequency })
-      : null
-    setLedgerExtras((current) => ({
-      ...current,
-      attachments: attachment ? [...(current.attachments || []), attachment] : current.attachments,
-      recurringRules: recurringRule ? [...(current.recurringRules || []), recurringRule] : current.recurringRules,
-      auditEvents: [
-        ...(current.auditEvents || []),
-        createAuditEvent(originalMovement ? 'movement.updated' : 'movement.created', {
-          movementId: movement.id,
-          status: movement.status,
-        }),
-      ],
-    }))
-    setPendingUndo({
-      movementId: movement.id,
-      label: `${movementLabels[movement.type] || 'حركة'} · ${money(movement.amount, movement.currency)}`,
-    })
-    if (movement.status === MOVEMENT_STATUSES.POSTED || originalMovement) {
-      setEditingMovementId('')
-      setMovementDraft(emptyMovementDraft(movementDraft.type))
-      setMovementAttachmentFile(null)
-      setMovementStep(MOVEMENT_ENTRY_STEPS.TYPE)
+      let uploadedAttachment = null
+      let attachmentError = ''
+      if (movementAttachmentFile) {
+        try {
+          uploadedAttachment = await uploadAdreemAttachmentFile(movementAttachmentFile)
+        } catch (error) {
+          attachmentError = error?.message || 'تعذر رفع المرفق.'
+        }
+      }
+      setMovements((current) =>
+        originalMovement
+          ? current.map((item) => (item.id === originalMovement.id ? movement : item))
+          : [...current, movement],
+      )
+      const baseFeedback = movement.status === MOVEMENT_STATUSES.POSTED ? (originalMovement ? 'تم تعديل الحركة وتحديث الأرصدة.' : 'تم الحفظ وتحديث الأرصدة.') : 'الحركة ناقصة وتحتاج مراجعة.'
+      setFeedback(attachmentError ? `${baseFeedback} لم يتم رفع المرفق: ${attachmentError}` : baseFeedback)
+      const attachment = createAttachment({
+        movementId: movement.id,
+        label: movementDraft.attachmentLabel || uploadedAttachment?.label,
+        url: uploadedAttachment?.storagePath ? '' : uploadedAttachment?.url || movementDraft.attachmentUrl,
+        mimeType: uploadedAttachment?.mimeType || '',
+        sizeBytes: uploadedAttachment?.sizeBytes || 0,
+        storagePath: uploadedAttachment?.storagePath || '',
+        source: uploadedAttachment ? 'web-upload' : 'web',
+      })
+      const recurringRule = movementDraft.recurringEnabled && movement.status === MOVEMENT_STATUSES.POSTED
+        ? createRecurringRuleFromMovement(movement, { frequency: movementDraft.recurringFrequency })
+        : null
+      setLedgerExtras((current) => ({
+        ...current,
+        attachments: attachment ? [...(current.attachments || []), attachment] : current.attachments,
+        recurringRules: recurringRule ? [...(current.recurringRules || []), recurringRule] : current.recurringRules,
+        auditEvents: [
+          ...(current.auditEvents || []),
+          createAuditEvent(originalMovement ? 'movement.updated' : 'movement.created', {
+            movementId: movement.id,
+            status: movement.status,
+          }),
+        ],
+      }))
+      setPendingUndo({
+        movementId: movement.id,
+        label: `${movementLabels[movement.type] || 'حركة'} · ${money(movement.amount, movement.currency)}`,
+      })
+      if (movement.status === MOVEMENT_STATUSES.POSTED || originalMovement) {
+        setEditingMovementId('')
+        setMovementDraft(emptyMovementDraft(movementDraft.type))
+        setMovementAttachmentFile(null)
+        setMovementStep(MOVEMENT_ENTRY_STEPS.TYPE)
+      }
+    } finally {
+      movementSaveLockRef.current = false
+      setIsSavingMovement(false)
     }
   }
 
@@ -1989,13 +2075,12 @@ export default function MohammadLedgerApp() {
   function resolveReviewAccount(event, accountId) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    const classification = parseClassification(formData.get('classification'))
+    const selection = accountReviewSelection(formData.get('classification'), formData.get('currencyKind'))
     const reviewedAt = new Date().toISOString()
     const nextAccount = {
       ownerName: String(formData.get('ownerName') || '').trim(),
       subAccountName: String(formData.get('subAccountName') || '').trim(),
-      type: classification.type,
-      valueKind: classification.valueKind,
+      ...selection,
       notes: String(formData.get('notes') || '').trim(),
     }
 
@@ -2014,6 +2099,11 @@ export default function MohammadLedgerApp() {
     const validation = validateAccount(candidate, accounts.filter((account) => account.id !== accountId))
     if (!validation.ok) {
       setFeedback(validation.errors.map((error) => error.message).join(' '))
+      return
+    }
+    const movementErrors = accountClassificationMovementErrors(accountId, candidateAccounts, movements)
+    if (movementErrors.length) {
+      setFeedback(`هذا التصنيف لا يناسب الحركات السابقة: ${movementErrors.map((error) => error.message).join(' ')}`)
       return
     }
     setAccounts(candidateAccounts)
@@ -2043,6 +2133,11 @@ export default function MohammadLedgerApp() {
     const validation = validateAccount(candidate, accounts.filter((account) => account.id !== accountId))
     if (!validation.ok) {
       setFeedback(validation.errors.map((error) => error.message).join(' '))
+      return
+    }
+    const movementErrors = accountClassificationMovementErrors(accountId, candidateAccounts, movements)
+    if (movementErrors.length) {
+      setFeedback(`هذا التصنيف لا يناسب الحركات السابقة: ${movementErrors.map((error) => error.message).join(' ')}`)
       return
     }
     setAccounts(candidateAccounts)
@@ -2094,40 +2189,49 @@ export default function MohammadLedgerApp() {
 
   async function addAccountAttachment(event, accountId) {
     event.preventDefault()
-    const formData = new FormData(event.currentTarget)
-    let uploadedAttachment = null
-    const file = formData.get('attachmentFile')
-    if (file && typeof file === 'object' && file.size > 0) {
-      try {
-        uploadedAttachment = await uploadAdreemAttachmentFile(file)
-      } catch (error) {
-        setFeedback(`لم يتم رفع المرفق: ${error?.message || 'خطأ غير معروف.'}`)
+    if (accountAttachmentLockRef.current) return
+    accountAttachmentLockRef.current = true
+    setIsAddingAccountAttachment(true)
+    const form = event.currentTarget
+    try {
+      const formData = new FormData(form)
+      let uploadedAttachment = null
+      const file = formData.get('attachmentFile')
+      if (file && typeof file === 'object' && file.size > 0) {
+        try {
+          uploadedAttachment = await uploadAdreemAttachmentFile(file)
+        } catch (error) {
+          setFeedback(`لم يتم رفع المرفق: ${error?.message || 'خطأ غير معروف.'}`)
+          return
+        }
+      }
+      const attachment = createAttachment({
+        accountId,
+        label: formData.get('attachmentLabel') || uploadedAttachment?.label,
+        url: uploadedAttachment?.storagePath ? '' : uploadedAttachment?.url || formData.get('attachmentUrl'),
+        mimeType: uploadedAttachment?.mimeType || '',
+        sizeBytes: uploadedAttachment?.sizeBytes || 0,
+        storagePath: uploadedAttachment?.storagePath || '',
+        source: uploadedAttachment ? 'web-upload' : 'web',
+      })
+      if (!attachment) {
+        setFeedback('اكتب اسم المرفق أو رابطه.')
         return
       }
+      setLedgerExtras((current) => ({
+        ...current,
+        attachments: [...(current.attachments || []), attachment],
+        auditEvents: [
+          ...(current.auditEvents || []),
+          createAuditEvent('attachment.created', { accountId, attachmentId: attachment.id }),
+        ],
+      }))
+      form.reset()
+      setFeedback('تم ربط المرفق بالحساب.')
+    } finally {
+      accountAttachmentLockRef.current = false
+      setIsAddingAccountAttachment(false)
     }
-    const attachment = createAttachment({
-      accountId,
-      label: formData.get('attachmentLabel') || uploadedAttachment?.label,
-      url: uploadedAttachment?.storagePath ? '' : uploadedAttachment?.url || formData.get('attachmentUrl'),
-      mimeType: uploadedAttachment?.mimeType || '',
-      sizeBytes: uploadedAttachment?.sizeBytes || 0,
-      storagePath: uploadedAttachment?.storagePath || '',
-      source: uploadedAttachment ? 'web-upload' : 'web',
-    })
-    if (!attachment) {
-      setFeedback('اكتب اسم المرفق أو رابطه.')
-      return
-    }
-    setLedgerExtras((current) => ({
-      ...current,
-      attachments: [...(current.attachments || []), attachment],
-      auditEvents: [
-        ...(current.auditEvents || []),
-        createAuditEvent('attachment.created', { accountId, attachmentId: attachment.id }),
-      ],
-    }))
-    event.currentTarget.reset()
-    setFeedback('تم ربط المرفق بالحساب.')
   }
 
   function deleteAttachment(attachmentId) {
@@ -2239,12 +2343,11 @@ export default function MohammadLedgerApp() {
   function addExternalAccount(event, externalAccount) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    const classification = parseClassification(formData.get('classification'))
+    const selection = accountReviewSelection(formData.get('classification'), formData.get('currencyKind'))
     const account = createAccount({
       ownerName: externalAccount.ownerName,
       subAccountName: String(formData.get('subAccountName') || externalAccount.subAccountName).trim(),
-      type: classification.type,
-      valueKind: classification.valueKind,
+      ...selection,
       notes: externalAccount.notes,
     })
     const validation = validateAccount(account, accounts)
@@ -2763,7 +2866,7 @@ export default function MohammadLedgerApp() {
               </button>
             </div>
             {activeEntryMode === 'movement' ? (
-            <form className={`ml3-entry-card ml3-entry-card--movement ml3-entry-card--${movementTone(movementDraft.type)}`} onSubmit={saveMovement}>
+            <form className={`ml3-entry-card ml3-entry-card--movement ml3-entry-card--${movementTone(movementDraft.type)}`} aria-busy={isSavingMovement} onSubmit={saveMovement}>
               <div className="ml3-entry-head">
                 <div>
                   <span>إدخال حركة · {movementProgressText}</span>
@@ -3147,8 +3250,8 @@ export default function MohammadLedgerApp() {
                   <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
                     رجوع
                   </button>
-                  <button className="ml3-save" type="submit">
-                    {preview.validation.ok ? 'تأكيد وحفظ الحركة' : 'حفظ كحركة ناقصة'}
+                  <button className="ml3-save" type="submit" disabled={isSavingMovement}>
+                    {isSavingMovement ? 'جاري الحفظ' : preview.validation.ok ? 'تأكيد وحفظ الحركة' : 'حفظ كحركة ناقصة'}
                   </button>
                 </div>
               </section>
@@ -3373,6 +3476,7 @@ export default function MohammadLedgerApp() {
           accounts={accounts}
           attachments={ledgerExtras.attachments || []}
           reconciliations={ledgerExtras.reconciliations || []}
+          isAddingAttachment={isAddingAccountAttachment}
           onClose={() => setSelectedAccountId('')}
           onEditMovement={editReviewMovement}
           onUpdateAccount={updateAccountClassification}

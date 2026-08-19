@@ -366,7 +366,8 @@ export async function handleAccountText(ctx, text) {
 
   if (session.step === STEPS.DETAIL) {
     const subAccountName = String(text || '').trim()
-    if (!subAccountName) {
+    const detailOptions = accountDetailOptionsFor(session.draft.type, session.draft.valueKind)
+    if (!subAccountName || !detailOptions.includes(subAccountName)) {
       await sendStep(ctx, session)
       return true
     }

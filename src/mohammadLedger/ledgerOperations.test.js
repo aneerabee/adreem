@@ -150,6 +150,26 @@ describe('adreem operational features', () => {
     })
   })
 
+  it('preserves reconciliation precision for actual, expected, and difference values', () => {
+    const reconciliation = createReconciliation({
+      accountId: 'me-cash',
+      expectedDinar: 100.125,
+      actualDinar: 100.375,
+      expectedUsd: 2.5,
+      actualUsd: 2.25,
+      note: 'مطابقة دقيقة',
+    })
+
+    expect(reconciliation).toMatchObject({
+      expectedDinar: 100.125,
+      actualDinar: 100.375,
+      diffDinar: 0.25,
+      expectedUsd: 2.5,
+      actualUsd: 2.25,
+      diffUsd: -0.25,
+    })
+  })
+
   it('builds correction drafts from reconciliation diffs only', () => {
     const reconciliation = createReconciliation({
       accountId: 'me-cash',
@@ -237,6 +257,51 @@ describe('adreem operational features', () => {
     expect(first.state.recurringRules[0].lastRunKey).toBe('2026-05')
     expect(second.ok).toBe(false)
     expect(second.state.movements).toHaveLength(first.state.movements.length)
+  })
+
+  it('allows rerunning a recurring rule when its previous monthly movement was voided', () => {
+    const rule = createRecurringRuleFromMovement({
+      id: 'rent-1',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      currency: CURRENCIES.DINAR,
+      amount: 100,
+      sourceAccountId: 'me-cash',
+      note: 'إيجار',
+    }, { dayOfMonth: 1 })
+    const state = {
+      accounts,
+      movements: createOpeningMovements([{ ...accounts[0], openingDinar: 500 }]),
+      recurringRules: [rule],
+      auditEvents: [],
+    }
+    const date = new Date('2026-05-25T12:00:00.000Z')
+    const first = executeRecurringRuleInState(state, rule.id, date)
+    const firstMovement = first.state.movements.find((item) => item.recurringRuleId === rule.id)
+    const voidedState = {
+      ...first.state,
+      movements: first.state.movements.map((item) => item.id === firstMovement.id
+        ? {
+            ...item,
+            status: MOVEMENT_STATUSES.VOIDED,
+            voidReason: 'إلغاء التنفيذ السابق',
+            voidedAt: '2026-05-25T12:30:00.000Z',
+            updatedAt: '2026-05-25T12:30:00.000Z',
+          }
+        : item),
+    }
+
+    const rerun = executeRecurringRuleInState(voidedState, rule.id, date)
+    const monthlyMovements = rerun.state.movements.filter((item) => item.recurringRuleId === rule.id)
+
+    expect(rerun.ok).toBe(true)
+    expect(rerun.duplicate).toBe(false)
+    expect(monthlyMovements).toHaveLength(2)
+    expect(monthlyMovements.map((item) => item.status)).toEqual([
+      MOVEMENT_STATUSES.VOIDED,
+      MOVEMENT_STATUSES.POSTED,
+    ])
+    expect(new Set(monthlyMovements.map((item) => item.id)).size).toBe(2)
   })
 
   it('marks a repaired recurring movement as completed for its month', () => {

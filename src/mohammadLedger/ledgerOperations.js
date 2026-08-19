@@ -1,5 +1,5 @@
 import { VALUE_KINDS } from './accountCatalog.js'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, postMovement } from './ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, postMovement, roundMoney } from './ledgerCore.js'
 import { movementLabels } from './movementConfig.js'
 
 export const DIMENSION_TYPES = {
@@ -199,10 +199,10 @@ export function hideAttachment(attachment, hiddenAt = nowIso()) {
 
 export function createReconciliation({ accountId, actualDinar, actualUsd, expectedDinar, expectedUsd, note = '' }) {
   const createdAt = nowIso()
-  const roundedActualDinar = Math.round(Number(actualDinar || 0))
-  const roundedActualUsd = Math.round(Number(actualUsd || 0))
-  const roundedExpectedDinar = Math.round(Number(expectedDinar || 0))
-  const roundedExpectedUsd = Math.round(Number(expectedUsd || 0))
+  const roundedActualDinar = roundMoney(Number(actualDinar || 0))
+  const roundedActualUsd = roundMoney(Number(actualUsd || 0))
+  const roundedExpectedDinar = roundMoney(Number(expectedDinar || 0))
+  const roundedExpectedUsd = roundMoney(Number(expectedUsd || 0))
   return {
     id: stableId('reconcile', `${accountId}-${createdAt}`),
     accountId,
@@ -210,8 +210,8 @@ export function createReconciliation({ accountId, actualDinar, actualUsd, expect
     actualUsd: roundedActualUsd,
     expectedDinar: roundedExpectedDinar,
     expectedUsd: roundedExpectedUsd,
-    diffDinar: roundedActualDinar - roundedExpectedDinar,
-    diffUsd: roundedActualUsd - roundedExpectedUsd,
+    diffDinar: roundMoney(roundedActualDinar - roundedExpectedDinar),
+    diffUsd: roundMoney(roundedActualUsd - roundedExpectedUsd),
     note: String(note || '').trim(),
     createdAt,
   }
@@ -335,10 +335,21 @@ export function runRecurringRule(rule, accounts = [], movementsOrDate = [], date
   const movements = Array.isArray(movementsOrDate) ? movementsOrDate : []
   const runDate = Array.isArray(movementsOrDate) ? date : movementsOrDate
   const runKey = monthKey(runDate)
+  const baseMovementId = `recurring-${rule.id}-${runKey}`
+  const currentRun = movements.filter((movement) =>
+    sameId(movement.recurringRuleId, rule.id) && movement.recurringRunKey === runKey,
+  )
+  const currentActiveAttempt = currentRun.find((movement) => movement.status !== MOVEMENT_STATUSES.VOIDED)
+  let movementId = currentActiveAttempt?.id || baseMovementId
+  let retry = 1
+  while (!currentActiveAttempt && movements.some((movement) => sameId(movement.id, movementId))) {
+    movementId = `${baseMovementId}-retry-${retry}`
+    retry += 1
+  }
   const movement = postMovement(
     {
       ...(rule?.template || {}),
-      id: `recurring-${rule.id}-${runKey}`,
+      id: movementId,
       note: [rule?.template?.note, `تكرار ${runKey}`].filter(Boolean).join(' · '),
       recurringRuleId: rule.id,
       recurringRunKey: runKey,
@@ -390,12 +401,20 @@ export function executeRecurringRuleInState(state = {}, ruleId, date = new Date(
   if (!rule || rule.status !== 'active') {
     return { ok: false, state, message: 'الحركة الشهرية غير موجودة أو متوقفة.' }
   }
-  if (!dueRecurringRules([rule], date).length) {
-    return { ok: false, state, message: 'هذه الحركة ليست مستحقة الآن.' }
-  }
 
   const accounts = Array.isArray(state.accounts) ? state.accounts : []
   const movements = Array.isArray(state.movements) ? state.movements : []
+  const runKey = monthKey(date)
+  const currentRun = movements.filter((movement) =>
+    sameId(movement.recurringRuleId, rule.id) && movement.recurringRunKey === runKey,
+  )
+  const dueRule = currentRun.length > 0 && currentRun.every((movement) => movement.status === MOVEMENT_STATUSES.VOIDED)
+    ? { ...rule, lastRunKey: '' }
+    : rule
+  if (!dueRecurringRules([dueRule], date).length) {
+    return { ok: false, state, message: 'هذه الحركة ليست مستحقة الآن.' }
+  }
+
   const result = runRecurringRule(rule, accounts, movements, date)
   const existing = movements.find((movement) => sameId(movement.id, result.movement.id))
   const movement = existing || result.movement

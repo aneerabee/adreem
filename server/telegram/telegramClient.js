@@ -1,4 +1,43 @@
 const TELEGRAM_API_BASE = 'https://api.telegram.org/bot'
+const PERMANENT_TELEGRAM_STATUSES = new Set([400, 403])
+
+export class TelegramClientError extends Error {
+  constructor(message, { method, status = null, cause } = {}) {
+    super(message)
+    this.name = 'TelegramClientError'
+    this.method = method
+    this.status = Number.isInteger(Number(status)) && Number(status) > 0 ? Number(status) : null
+    this.retryable = this.status === null || !PERMANENT_TELEGRAM_STATUSES.has(this.status)
+    if (cause) this.cause = cause
+  }
+}
+
+export function isPermanentTelegramError(error) {
+  return error instanceof TelegramClientError && error.retryable === false
+}
+
+function retryAfterMs(payload = {}) {
+  const seconds = Number(payload?.parameters?.retry_after)
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1_000 : 0
+}
+
+function waitForRetry(delayMs, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      const error = new Error('aborted')
+      error.name = 'AbortError'
+      reject(error)
+      return
+    }
+    const timeout = setTimeout(resolve, delayMs)
+    signal.addEventListener('abort', () => {
+      clearTimeout(timeout)
+      const error = new Error('aborted')
+      error.name = 'AbortError'
+      reject(error)
+    }, { once: true })
+  })
+}
 
 export function telegramRequestTimeoutMs(method, payload = {}) {
   if (method !== 'getUpdates') return 15_000
@@ -14,31 +53,64 @@ export function createTelegramClient(token) {
   async function request(method, payload = {}, { timeoutMs = telegramRequestTimeoutMs(method, payload) } = {}) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
-    let response
+    const startedAt = Date.now()
     try {
-      response = await fetch(`${apiBase}/${method}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      })
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        throw new Error(`Telegram ${method} timed out after ${timeoutMs}ms.`)
+      while (true) {
+        const response = await fetch(`${apiBase}/${method}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        })
+        if (!response.ok) {
+          const body = await response.text()
+          let errorPayload = null
+          try {
+            errorPayload = JSON.parse(body)
+          } catch {
+            // Telegram or its proxy may return plain text errors.
+          }
+          const delayMs = response.status === 429 ? retryAfterMs(errorPayload) : 0
+          const remainingMs = timeoutMs - (Date.now() - startedAt)
+          if (delayMs && delayMs < remainingMs) {
+            await waitForRetry(delayMs, controller.signal)
+            continue
+          }
+          throw new TelegramClientError(
+            `Telegram ${method} failed: ${response.status} ${response.statusText} ${body}`,
+            { method, status: response.status },
+          )
+        }
+        const data = await response.json()
+        if (!data.ok) {
+          const delayMs = Number(data.error_code) === 429 ? retryAfterMs(data) : 0
+          const remainingMs = timeoutMs - (Date.now() - startedAt)
+          if (delayMs && delayMs < remainingMs) {
+            await waitForRetry(delayMs, controller.signal)
+            continue
+          }
+          throw new TelegramClientError(data.description || `Telegram ${method} failed.`, {
+            method,
+            status: data.error_code,
+          })
+        }
+        return data.result
       }
-      throw error
+    } catch (error) {
+      if (error instanceof TelegramClientError) throw error
+      if (error?.name === 'AbortError') {
+        throw new TelegramClientError(`Telegram ${method} timed out after ${timeoutMs}ms.`, {
+          method,
+          cause: error,
+        })
+      }
+      throw new TelegramClientError(`Telegram ${method} request failed: ${error?.message || error}`, {
+        method,
+        cause: error,
+      })
     } finally {
       clearTimeout(timeout)
     }
-    if (!response.ok) {
-      const body = await response.text()
-      throw new Error(`Telegram ${method} failed: ${response.status} ${response.statusText} ${body}`)
-    }
-    const data = await response.json()
-    if (!data.ok) {
-      throw new Error(data.description || `Telegram ${method} failed.`)
-    }
-    return data.result
   }
 
   async function downloadFile(filePath, { timeoutMs = 30_000, maxBytes = 10 * 1024 * 1024 } = {}) {
@@ -48,14 +120,25 @@ export function createTelegramClient(token) {
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
     try {
       const response = await fetch(`${fileApiBase}/${cleanPath}`, { signal: controller.signal })
-      if (!response.ok) throw new Error(`Telegram file download failed: ${response.status} ${response.statusText}`)
+      if (!response.ok) {
+        throw new TelegramClientError(
+          `Telegram file download failed: ${response.status} ${response.statusText}`,
+          { method: 'downloadFile', status: response.status },
+        )
+      }
       const declaredSize = Number(response.headers?.get?.('content-length') || 0)
       if (declaredSize > maxBytes) throw new Error('Telegram file is larger than the allowed limit.')
       const buffer = Buffer.from(await response.arrayBuffer())
       if (buffer.length > maxBytes) throw new Error('Telegram file is larger than the allowed limit.')
       return buffer
     } catch (error) {
-      if (error?.name === 'AbortError') throw new Error(`Telegram file download timed out after ${timeoutMs}ms.`)
+      if (error instanceof TelegramClientError) throw error
+      if (error?.name === 'AbortError') {
+        throw new TelegramClientError(`Telegram file download timed out after ${timeoutMs}ms.`, {
+          method: 'downloadFile',
+          cause: error,
+        })
+      }
       throw error
     } finally {
       clearTimeout(timeout)

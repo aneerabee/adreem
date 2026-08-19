@@ -98,6 +98,22 @@ describe('telegram account flow', () => {
     expect(session.step).toBe('group')
   })
 
+  it('rejects unapproved free text for a person account detail', async () => {
+    const ctx = createCtx()
+
+    await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:group:people')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'سعيد')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 57 }, 'تفصيل حر')
+
+    const rejectedSession = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(rejectedSession.step).toBe('detail')
+    expect(rejectedSession.draft.subAccountName).toBe('كاش بيننا')
+
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 58 }, 'شيك بيننا')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('currency')
+  })
+
   it('keeps back navigation inside the account flow without touching movement sessions', async () => {
     const ctx = createCtx()
 

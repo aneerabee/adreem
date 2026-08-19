@@ -44,26 +44,28 @@ describe('telegram browsing keyboards', () => {
 
   it('adds bounded history pagination without changing movement choices', () => {
     const keyboard = historyKeyboard({
+      actionSessionId: 'history-card',
       page: 1,
       pageCount: 3,
-      choices: { movements: { 0: 'movement-9', 1: 'movement-8' } },
+      choices: { movements: { first: 'movement-9', second: 'movement-8' } },
     })
     const callbacks = keyboard.inline_keyboard.flat().map((button) => button.callback_data)
 
-    expect(callbacks).toContain('history:cancel:0')
-    expect(callbacks).toContain('history:cancel:1')
+    expect(callbacks).toContain('history:history-card:cancel:first')
+    expect(callbacks).toContain('history:history-card:cancel:second')
     expect(callbacks).toContain('history:page:0')
     expect(callbacks).toContain('history:page:2')
   })
 
   it('keeps review action numbers aligned across pages', () => {
     const keyboard = reviewKeyboard({
+      actionSessionId: 'review-card',
       page: 1,
       pageCount: 3,
       pageSize: 8,
       items: [
-        { kind: 'account', token: '0' },
-        { kind: 'movement', token: '1' },
+        { kind: 'account', token: 'account-token', number: 9 },
+        { kind: 'movement', token: 'movement-token', number: 10 },
       ],
     })
     const buttons = keyboard.inline_keyboard.flat()
@@ -76,14 +78,15 @@ describe('telegram browsing keyboards', () => {
 
   it('shows execution only for due recurring rules and always allows stopping', () => {
     const keyboard = recurringRulesKeyboard({
-      choices: { rules: { 0: 'due-rule', 1: 'later-rule' } },
+      actionSessionId: 'repeat-card',
+      choices: { rules: { due: 'due-rule', later: 'later-rule' } },
       dueRuleIds: ['due-rule'],
     })
     const callbacks = keyboard.inline_keyboard.flat().map((button) => button.callback_data)
 
-    expect(callbacks).toContain('repeat:run:0')
-    expect(callbacks).not.toContain('repeat:run:1')
-    expect(callbacks).toContain('repeat:disable:0')
-    expect(callbacks).toContain('repeat:disable:1')
+    expect(callbacks).toContain('repeat:repeat-card:run:due')
+    expect(callbacks).not.toContain('repeat:repeat-card:run:later')
+    expect(callbacks).toContain('repeat:repeat-card:disable:due')
+    expect(callbacks).toContain('repeat:repeat-card:disable:later')
   })
 })

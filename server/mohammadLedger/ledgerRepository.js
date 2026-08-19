@@ -15,6 +15,7 @@ import {
 } from '../../src/mohammadLedger/ledgerState.js'
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../../src/mohammadLedger/ledgerOperations.js'
 import { attachmentContentMatchesMime } from './attachmentValidation.js'
+import { validateLedgerStateTransition } from './stateValidation.js'
 
 const MAX_SAVE_ATTEMPTS = 4
 const DEFAULT_BACKUP_LIMIT = 60
@@ -25,6 +26,36 @@ export class ConcurrentLedgerUpdateError extends Error {
     super(message)
     this.name = 'ConcurrentLedgerUpdateError'
   }
+}
+
+export class LedgerIntegrityError extends Error {
+  constructor(validation) {
+    super(validation?.errors?.[0]?.message || 'Ledger integrity check failed.')
+    this.name = 'LedgerIntegrityError'
+    this.validation = validation
+  }
+}
+
+export function ledgerVersionMatches(currentUpdatedAt, expectedUpdatedAt) {
+  return String(currentUpdatedAt || '') === String(expectedUpdatedAt || '')
+}
+
+export function nextLedgerVersionTimestamp(expectedUpdatedAt = null, now = Date.now()) {
+  const expectedTime = Date.parse(String(expectedUpdatedAt || ''))
+  const minimumTime = Number.isFinite(expectedTime) ? expectedTime + 1 : now
+  return new Date(Math.max(now, minimumTime)).toISOString()
+}
+
+export function assertLedgerStateTransition(nextState, currentState, ledgerConfig = {}) {
+  const validation = validateLedgerStateTransition(nextState, currentState, {
+    ledgerId: ledgerConfig.identity?.ledgerId,
+  })
+  if (!validation.ok) throw new LedgerIntegrityError(validation)
+  return validation
+}
+
+export function hasPersistedLedgerRow(loadResult, ledgerConfig) {
+  return Boolean(loadResult?.rowId && loadResult.rowId === ledgerConfig?.rowId)
 }
 
 export function createLedgerRepository(env = process.env, options = {}) {
@@ -42,7 +73,7 @@ export function createLedgerRepository(env = process.env, options = {}) {
   return {
     ledgerConfig,
     load: () => loadLedgerState(client, ledgerConfig),
-    update: (updater) => updateLedgerState(client, updater, ledgerConfig, env),
+    update: (updater, updateOptions = {}) => updateLedgerState(client, updater, ledgerConfig, env, updateOptions),
     uploadAttachmentFile: (file) => uploadLedgerAttachmentFile(client, ledgerConfig, env, file),
     deleteAttachmentFile: (storagePath) => deleteLedgerAttachmentFile(client, ledgerConfig, env, storagePath),
   }
@@ -162,7 +193,7 @@ async function insertLedgerState(client, state, ledgerConfig) {
 }
 
 async function replaceLedgerState(client, state, expectedUpdatedAt, ledgerConfig) {
-  const updatedAt = new Date().toISOString()
+  const updatedAt = nextLedgerVersionTimestamp(expectedUpdatedAt)
   let query = client
     .from(MOHAMMAD_STATE_TABLE)
     .update({
@@ -171,7 +202,9 @@ async function replaceLedgerState(client, state, expectedUpdatedAt, ledgerConfig
     })
     .eq('id', ledgerConfig.rowId)
 
-  if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt)
+  query = expectedUpdatedAt == null
+    ? query.is('updated_at', null)
+    : query.eq('updated_at', expectedUpdatedAt)
 
   const { data, error } = await query.select('updated_at').maybeSingle()
   if (error) throw error
@@ -240,19 +273,38 @@ export function writeLedgerBackup(env, ledgerConfig, phase, state) {
   }
 }
 
-async function updateLedgerState(client, updater, ledgerConfig, env = process.env) {
+async function updateLedgerState(client, updater, ledgerConfig, env = process.env, { expectedUpdatedAt } = {}) {
   let lastConflict = null
+  const checksClientVersion = expectedUpdatedAt !== undefined
 
   for (let attempt = 1; attempt <= MAX_SAVE_ATTEMPTS; attempt += 1) {
     const current = await loadLedgerState(client, ledgerConfig)
+    if (checksClientVersion && !ledgerVersionMatches(current.updatedAt, expectedUpdatedAt)) {
+      throw new ConcurrentLedgerUpdateError('Ledger was updated by another session. Reload before saving.')
+    }
     const result = await updater(current.state)
     if (!result?.state) return { ...result, state: current.state, updatedAt: current.updatedAt }
 
     const nextState = prepareLedgerStateForSave(result.state, current.state, new Date().toISOString(), ledgerConfig.identity)
+    try {
+      assertLedgerStateTransition(nextState, current.state, ledgerConfig)
+    } catch (error) {
+      if (!(error instanceof LedgerIntegrityError)) throw error
+      return {
+        ...result,
+        state: current.state,
+        ok: false,
+        rejected: true,
+        validation: error.validation,
+        message: error.message,
+        updatedAt: current.updatedAt,
+      }
+    }
 
     try {
-      if (current.updatedAt) writeLedgerBackup(env, ledgerConfig, 'before', current.state)
-      const updatedAt = current.updatedAt
+      const hasPrimaryRow = hasPersistedLedgerRow(current, ledgerConfig)
+      if (hasPrimaryRow) writeLedgerBackup(env, ledgerConfig, 'before', current.state)
+      const updatedAt = hasPrimaryRow
         ? await replaceLedgerState(client, nextState, current.updatedAt, ledgerConfig)
         : await insertLedgerState(client, nextState, ledgerConfig)
       writeLedgerBackup(env, ledgerConfig, 'after', nextState)

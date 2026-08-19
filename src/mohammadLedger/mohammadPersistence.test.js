@@ -104,6 +104,7 @@ describe('ADREEM cloud-only persistence', () => {
     expect(result.supabaseOk).toBe(true)
     expect(result.localOk).toBe(false)
     expect(fetchMock).toHaveBeenCalledWith('https://example.com/adreem-api/api/ledger', expect.objectContaining({ method: 'PUT' }))
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ baseUpdatedAt: null })
   })
 
   it('does not fall back to browser data when the login token is missing', async () => {
@@ -128,9 +129,50 @@ describe('ADREEM cloud-only persistence', () => {
     await module.loadMohammadPersistedState({ accounts: [], movements: [] })
 
     expect(module.getMohammadPersistenceMode()).toBe('api')
-    expect(fetchMock).toHaveBeenCalledWith('https://example.com/adreem-api/api/ledger', {
-      headers: { authorization: 'Bearer remembered-token' },
-    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/adreem-api/api/ledger',
+      expect.objectContaining({ headers: { authorization: 'Bearer remembered-token' } }),
+    )
+  })
+
+  it('sends the cloud version received at load and advances it after save', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ state: { accounts: [], movements: [] }, updatedAt: 'version-1' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ state: { accounts: [], movements: [] }, updatedAt: 'version-2' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ state: { accounts: [], movements: [] }, updatedAt: 'version-3' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+    await module.saveMohammadPersistedState({ accounts: [], movements: [] })
+    await module.saveMohammadPersistedState({ accounts: [], movements: [] })
+
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).baseUpdatedAt).toBe('version-1')
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).baseUpdatedAt).toBe('version-2')
+  })
+
+  it('marks state conflicts as permanent until the user reloads or retries deliberately', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 409,
+      headers: { get: () => null },
+      json: async () => ({ error: 'conflict' }),
+    })))
+
+    const result = await module.saveMohammadPersistedState({ accounts: [], movements: [] })
+
+    expect(result.supabaseOk).toBe(false)
+    expect(result.error.retryable).toBe(false)
   })
 
   it('resolves private attachments through the authenticated API', async () => {

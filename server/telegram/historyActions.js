@@ -1,4 +1,5 @@
 import { MOVEMENT_STATUSES, voidMovement } from '../../src/mohammadLedger/ledgerCore.js'
+import { createActionSessionId, stableActionToken } from './actionTokens.js'
 
 export const HISTORY_ACTION_LIMIT = 8
 export const CANCEL_WINDOW_HOURS = 24
@@ -11,11 +12,12 @@ export function buildHistorySession(state, limit = HISTORY_ACTION_LIMIT, request
   const movements = allMovements.slice(page * limit, (page + 1) * limit)
   return {
     flow: 'history',
+    actionSessionId: createActionSessionId(),
     page,
     pageCount,
     total: allMovements.length,
     choices: {
-      movements: Object.fromEntries(movements.map((movement, index) => [String(index), movement.id])),
+      movements: Object.fromEntries(movements.map((movement) => [stableActionToken(movement.id), movement.id])),
     },
   }
 }

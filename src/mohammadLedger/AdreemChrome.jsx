@@ -20,7 +20,7 @@ const sections = [
 ]
 
 function SaveState({ status, text, onRetry }) {
-  const needsAttention = status === 'retrying' || status === 'local-only'
+  const needsAttention = status === 'retrying' || status === 'failed' || status === 'local-only'
   const Icon = needsAttention ? CloudAlert : Cloud
 
   return (

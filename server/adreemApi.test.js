@@ -11,8 +11,10 @@ import {
   parseLedgerTokenMap,
   tokenFromAuthHeader,
   tokenHash,
+  userIdFromAdminPath,
 } from './adreemApi.js'
 import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './mohammadLedger/attachmentValidation.js'
+import { ConcurrentLedgerUpdateError } from './mohammadLedger/ledgerRepository.js'
 import { createPasswordHash } from './telegram/userRegistry.js'
 
 let tempDir = null
@@ -118,6 +120,11 @@ describe('ADREEM web API auth helpers', () => {
     expect(tokenFromAuthHeader('abc123')).toBe('')
   })
 
+  it('rejects malformed encoded admin user paths without crashing', () => {
+    expect(userIdFromAdminPath('/api/admin/users/saeed-book')).toBe('saeed-book')
+    expect(userIdFromAdminPath('/api/admin/users/%E0%A4%A')).toBe('')
+  })
+
   it('keeps attachment paths inside the authenticated ledger folder', () => {
     expect(isLedgerStoragePath('main/2026-08-19/receipt.pdf', 'main')).toBe(true)
     expect(isLedgerStoragePath('other/2026-08-19/receipt.pdf', 'main')).toBe(false)
@@ -132,13 +139,24 @@ describe('ADREEM web API auth helpers', () => {
 
   it('rejects malformed attachment data and verifies file signatures', () => {
     expect(() => decodeCanonicalBase64('not-base64')).toThrow(/invalid/i)
-    expect(decodeCanonicalBase64(Buffer.from('%PDF-test').toString('base64')).toString()).toBe('%PDF-test')
+    const pdf = Buffer.from('%PDF-1.7\n1 0 obj\n%%EOF')
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(15), Buffer.from([0xff, 0xd9])])
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from([0, 0, 0, 13]),
+      Buffer.from('IHDR'),
+      Buffer.alloc(17),
+    ])
+    const webp = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), Buffer.alloc(4)])
+    expect(decodeCanonicalBase64(pdf.toString('base64'))).toEqual(pdf)
 
-    expect(attachmentContentMatchesMime(Buffer.from('%PDF-test'), 'application/pdf')).toBe(true)
-    expect(attachmentContentMatchesMime(Buffer.from('%PDF-test'), 'image/jpeg')).toBe(false)
-    expect(attachmentContentMatchesMime(Buffer.from([0xff, 0xd8, 0xff, 0x00]), 'image/jpeg')).toBe(true)
-    expect(attachmentContentMatchesMime(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), 'image/png')).toBe(true)
-    expect(attachmentContentMatchesMime(Buffer.from('RIFF0000WEBP'), 'image/webp')).toBe(true)
+    expect(attachmentContentMatchesMime(pdf, 'application/pdf')).toBe(true)
+    expect(attachmentContentMatchesMime(pdf, 'image/jpeg')).toBe(false)
+    expect(attachmentContentMatchesMime(jpeg, 'image/jpeg')).toBe(true)
+    expect(attachmentContentMatchesMime(png, 'image/png')).toBe(true)
+    expect(attachmentContentMatchesMime(webp, 'image/webp')).toBe(true)
+    expect(attachmentContentMatchesMime(Buffer.from([0xff, 0xd8, 0xff, 0x00]), 'image/jpeg')).toBe(false)
+    expect(attachmentContentMatchesMime(Buffer.from('%PDF-'), 'application/pdf')).toBe(false)
   })
 
   it('allows browser preflight for admin edit and delete requests', async () => {
@@ -191,6 +209,59 @@ describe('ADREEM web API auth helpers', () => {
     expect(response.headers['cache-control']).toBe('no-store, private')
     expect(response.headers.pragma).toBe('no-cache')
     expect(response.headers['x-content-type-options']).toBe('nosniff')
+  })
+
+  it('reports readiness only after the cloud repository is reachable', async () => {
+    const api = createAdreemApiHandler({
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    api.__setRepositoryForTest?.({
+      async load() {
+        return { state: { accounts: [], movements: [] }, updatedAt: 'cloud-version' }
+      },
+    })
+    const response = createMockResponse()
+
+    await api({ method: 'GET', url: '/ready', headers: {} }, response)
+
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toMatchObject({ ok: true, storage: 'reachable', updatedAt: 'cloud-version' })
+  })
+
+  it('revokes the current cloud session on logout', async () => {
+    const api = createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: tempRegistry([
+        registryPasswordUser({
+          userId: 'main',
+          displayName: 'Main',
+          email: 'main@example.com',
+          password: 'main-pass-123',
+          ledgerId: 'main',
+        }),
+      ]),
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
+    const logoutResponse = createMockResponse()
+
+    await api({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: { authorization: `Bearer ${token}` },
+      socket: {},
+    }, logoutResponse)
+
+    expect(logoutResponse.statusCode).toBe(204)
+
+    const ledgerResponse = createMockResponse()
+    await api({
+      method: 'GET',
+      url: '/api/ledger',
+      headers: { authorization: `Bearer ${token}` },
+    }, ledgerResponse)
+    expect(ledgerResponse.statusCode).toBe(401)
   })
 
   it('bounds and expires in-memory rate-limit buckets', () => {
@@ -378,6 +449,7 @@ describe('ADREEM web API auth helpers', () => {
     })
     const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
     let updateCallback = null
+    let updateOptions = null
     const currentState = {
       accounts: [{
         id: 'from-bot',
@@ -403,14 +475,16 @@ describe('ADREEM web API auth helpers', () => {
       version: 2,
     }
     api.__setRepositoryForTest?.({
-      async update(callback) {
+      async update(callback, options) {
         updateCallback = callback
+        updateOptions = options
         const result = await callback(currentState)
-        return { ...result, state: result.state }
+        return { ...result, state: result.state, updatedAt: 'cloud-version-2' }
       },
     })
 
     const request = createJsonRequest({
+      baseUpdatedAt: 'cloud-version-1',
       state: {
         accounts: [{
           id: 'from-web',
@@ -445,9 +519,46 @@ describe('ADREEM web API auth helpers', () => {
 
     const payload = JSON.parse(response.body)
     expect(updateCallback).toBeTruthy()
+    expect(updateOptions).toEqual({ expectedUpdatedAt: 'cloud-version-1' })
     expect(response.statusCode).toBe(200)
+    expect(payload.updatedAt).toBe('cloud-version-2')
     expect(payload.state.accounts.map((account) => account.id).sort()).toEqual(['from-bot', 'from-web'])
     expect(payload.state.movements.map((movement) => movement.id).sort()).toEqual(['bot-movement', 'web-movement'])
+  })
+
+  it('returns a conflict instead of silently overwriting a newer cloud version', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'main',
+        displayName: 'Main',
+        email: 'main@example.com',
+        password: 'main-pass-123',
+        ledgerId: 'main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
+    api.__setRepositoryForTest?.({
+      async update() {
+        throw new ConcurrentLedgerUpdateError()
+      },
+    })
+    const request = createJsonRequest({
+      baseUpdatedAt: 'stale-version',
+      state: { accounts: [], movements: [], version: 2 },
+    }, { token })
+    const response = createMockResponse()
+
+    const promise = api(request, response)
+    request.emitBody()
+    await promise
+
+    expect(response.statusCode).toBe(409)
+    expect(JSON.parse(response.body).error).toContain('جهاز آخر')
   })
 
   it('rejects posted web movements that violate ledger integrity', async () => {
@@ -489,6 +600,7 @@ describe('ADREEM web API auth helpers', () => {
       },
     })
     const request = createJsonRequest({
+      baseUpdatedAt: null,
       state: {
         ...currentState,
         movements: [{
@@ -513,6 +625,32 @@ describe('ADREEM web API auth helpers', () => {
     expect(JSON.parse(response.body).error).toContain('Ledger integrity check failed')
   })
 
+  it('requires the web client ledger version before accepting a save', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'main',
+        displayName: 'Main',
+        email: 'main@example.com',
+        password: 'main-pass-123',
+        ledgerId: 'main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
+    const request = createJsonRequest({ state: { accounts: [], movements: [], version: 2 } }, { token })
+    const response = createMockResponse()
+
+    const promise = api(request, response)
+    request.emitBody()
+    await promise
+
+    expect(response.statusCode).toBe(428)
+  })
+
   it('rejects admin users endpoint without a valid owner session', async () => {
     const api = createAdreemApiHandler({
       SUPABASE_URL: 'https://example.supabase.co',
@@ -527,6 +665,100 @@ describe('ADREEM web API auth helpers', () => {
     }, response)
 
     expect(response.statusCode).toBe(401)
+  })
+
+  it('fails during API creation when the registry conflicts with the configured Telegram ledger map', () => {
+    const file = tempRegistry([
+      {
+        userId: 'registry-100',
+        telegramUserId: '100',
+        ledgerId: 'registry-ledger',
+      },
+    ])
+
+    expect(() => createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_TELEGRAM_LEDGER_IDS: '100=config-ledger',
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })).toThrow('Invalid Telegram ledger assignments')
+  })
+
+  it('returns 409 when creating a user with a Telegram id configured for another ledger', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'owner-main',
+        displayName: 'Owner',
+        email: 'owner@example.com',
+        password: 'owner-pass-123',
+        ledgerId: 'owner-main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_OWNER_EMAILS: 'owner@example.com',
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_TELEGRAM_LEDGER_IDS: '100=config-ledger',
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const ownerToken = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
+    const request = createJsonRequest({
+      userId: 'registry-100',
+      telegramUserId: '100',
+      ledgerId: 'registry-ledger',
+    }, {
+      method: 'POST',
+      url: '/api/admin/users',
+      token: ownerToken,
+    })
+    const response = createMockResponse()
+
+    const promise = api(request, response)
+    request.emitBody()
+    await promise
+
+    expect(response.statusCode).toBe(409)
+    expect(JSON.parse(response.body)).toMatchObject({ error: 'telegram-used', existingUserId: '100' })
+  })
+
+  it('returns 409 when updating a user to a Telegram id configured for another ledger', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'owner-main',
+        displayName: 'Owner',
+        email: 'owner@example.com',
+        password: 'owner-pass-123',
+        ledgerId: 'owner-main',
+      }),
+      registryPasswordUser({
+        userId: 'registry-user',
+        displayName: 'Registry user',
+        email: 'registry@example.com',
+        password: 'registry-pass-123',
+        ledgerId: 'registry-ledger',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_OWNER_EMAILS: 'owner@example.com',
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_TELEGRAM_LEDGER_IDS: '100=config-ledger',
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const ownerToken = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
+    const request = createJsonRequest({ telegramUserId: '100' }, {
+      method: 'PATCH',
+      url: '/api/admin/users/registry-user',
+      token: ownerToken,
+    })
+    const response = createMockResponse()
+
+    const promise = api(request, response)
+    request.emitBody()
+    await promise
+
+    expect(response.statusCode).toBe(409)
+    expect(JSON.parse(response.body)).toMatchObject({ error: 'telegram-used', existingUserId: '100' })
   })
 
   it('allows the configured owner session to manage users without an admin token', async () => {

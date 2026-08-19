@@ -6,6 +6,7 @@ import {
   accountChoiceButtonStyle,
   accountChoiceButtonText,
 } from './messages.js'
+import { actionCallbackData } from './actionTokens.js'
 
 export function mainMenuKeyboard() {
   return {
@@ -232,12 +233,12 @@ export function accountProfileKeyboard(page = 0) {
 export function recurringRulesKeyboard(session = {}) {
   const rules = Object.entries(session.choices?.rules || {})
   const dueRuleIds = new Set(session.dueRuleIds || [])
-  const rows = rules.map(([token, ruleId]) => {
+  const rows = rules.map(([token, ruleId], index) => {
     const row = []
     if (dueRuleIds.has(ruleId)) {
-      row.push({ text: `تنفيذ #${Number(token) + 1}`, callback_data: `repeat:run:${token}`, style: 'success' })
+      row.push({ text: `تنفيذ #${index + 1}`, callback_data: actionCallbackData('repeat', session.actionSessionId, 'run', token), style: 'success' })
     }
-    row.push({ text: `إيقاف #${Number(token) + 1}`, callback_data: `repeat:disable:${token}`, style: 'danger' })
+    row.push({ text: `إيقاف #${index + 1}`, callback_data: actionCallbackData('repeat', session.actionSessionId, 'disable', token), style: 'danger' })
     return row
   })
   rows.push([{ text: '↩️ المزيد', callback_data: 'main:more', style: 'primary' }])
@@ -328,20 +329,19 @@ export function confirmKeyboard() {
 
 export function reviewKeyboard(reviewSession) {
   const rows = []
-  const pageOffset = Number(reviewSession?.page || 0) * Number(reviewSession?.pageSize || 8)
 
   ;(reviewSession?.items || []).forEach((item) => {
-    const number = pageOffset + Number(item.token) + 1
+    const number = item.number
     if (item.kind === 'movement') {
       rows.push([
-        { text: `إصلاح حركة #${number}`, callback_data: `review:movement:fix:${item.token}`, style: 'success' },
-        { text: `إلغاء #${number}`, callback_data: `review:movement:cancel:${item.token}`, style: 'danger' },
+        { text: `إصلاح حركة #${number}`, callback_data: actionCallbackData('review', reviewSession.actionSessionId, 'movement', 'fix', item.token), style: 'success' },
+        { text: `إلغاء #${number}`, callback_data: actionCallbackData('review', reviewSession.actionSessionId, 'movement', 'cancel', item.token), style: 'danger' },
       ])
       return
     }
     rows.push([
-      { text: `إصلاح حساب #${number}`, callback_data: `review:account:fix:${item.token}`, style: 'success' },
-      { text: `إخفاء إذا صفر #${number}`, callback_data: `review:account:hide:${item.token}`, style: 'primary' },
+      { text: `إصلاح حساب #${number}`, callback_data: actionCallbackData('review', reviewSession.actionSessionId, 'account', 'fix', item.token), style: 'success' },
+      { text: `إخفاء إذا صفر #${number}`, callback_data: actionCallbackData('review', reviewSession.actionSessionId, 'account', 'hide', item.token), style: 'primary' },
     ])
   })
   rows.push(...paginationRows('review', reviewSession?.page, reviewSession?.pageCount))
@@ -352,18 +352,18 @@ export function reviewKeyboard(reviewSession) {
 export function historyKeyboard(historySession) {
   const rows = []
   const movementTokens = Object.keys(historySession?.choices?.movements || {})
-  movementTokens.forEach((token) => {
-    rows.push([{ text: `إلغاء حركة #${Number(token) + 1}`, callback_data: `history:cancel:${token}`, style: 'danger' }])
+  movementTokens.forEach((token, index) => {
+    rows.push([{ text: `إلغاء حركة #${index + 1}`, callback_data: actionCallbackData('history', historySession.actionSessionId, 'cancel', token), style: 'danger' }])
   })
   rows.push(...paginationRows('history', historySession?.page, historySession?.pageCount))
   rows.push([{ text: '↩️ القائمة', callback_data: 'main:home', style: 'primary' }])
   return { inline_keyboard: rows }
 }
 
-export function historyCancelConfirmKeyboard(token) {
+export function historyCancelConfirmKeyboard(actionSessionId, token) {
   return {
     inline_keyboard: [
-      [{ text: 'تأكيد الإلغاء', callback_data: `history:confirm:${token}`, style: 'danger' }],
+      [{ text: 'تأكيد الإلغاء', callback_data: actionCallbackData('history', actionSessionId, 'confirm', token), style: 'danger' }],
       [{ text: '↩️ رجوع للسجل', callback_data: 'main:history', style: 'primary' }],
     ],
   }

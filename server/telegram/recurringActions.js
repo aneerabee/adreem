@@ -3,6 +3,7 @@ import {
   disableRecurringRule,
   dueRecurringRules,
 } from '../../src/mohammadLedger/ledgerOperations.js'
+import { createActionSessionId, stableActionToken } from './actionTokens.js'
 
 export const RECURRING_ACTION_LIMIT = 8
 
@@ -13,8 +14,9 @@ export function buildRecurringSession(state = {}, date = new Date(), limit = REC
   const dueRuleIds = dueRecurringRules(activeRules, date).map((rule) => rule.id)
   return {
     flow: 'recurring',
+    actionSessionId: createActionSessionId(),
     choices: {
-      rules: Object.fromEntries(activeRules.map((rule, index) => [String(index), rule.id])),
+      rules: Object.fromEntries(activeRules.map((rule) => [stableActionToken(rule.id), rule.id])),
     },
     dueRuleIds,
   }

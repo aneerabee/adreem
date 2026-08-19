@@ -1,6 +1,7 @@
 import { ACCOUNT_STATUSES } from '../../src/mohammadLedger/accountCatalog.js'
 import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
 import { buildLedgerSnapshot } from '../mohammadLedger/ledgerService.js'
+import { createActionSessionId, stableActionToken } from './actionTokens.js'
 
 export const REVIEW_ACTION_LIMIT = 8
 
@@ -17,10 +18,11 @@ export function buildReviewSession(state, limit = REVIEW_ACTION_LIMIT, requested
   const page = Math.min(Math.max(0, Number(requestedPage) || 0), pageCount - 1)
   const items = allItems
     .slice(page * limit, page * limit + limit)
-    .map((item, index) => ({ ...item, token: String(index) }))
+    .map((item, index) => ({ ...item, number: page * limit + index + 1, token: stableActionToken(item.id) }))
 
   return {
     flow: 'review',
+    actionSessionId: createActionSessionId(),
     page,
     pageCount,
     pageSize: limit,

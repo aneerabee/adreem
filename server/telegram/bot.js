@@ -8,7 +8,6 @@ import {
   executeRecurringRuleInState,
 } from '../../src/mohammadLedger/ledgerOperations.js'
 import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
-import { createLedgerIdentity } from '../../src/mohammadLedger/ledgerState.js'
 import { accountLabel, buildLedgerSnapshot, formatMoney } from '../mohammadLedger/ledgerService.js'
 import {
   accountChoiceToken,
@@ -30,8 +29,10 @@ import { createTelegramClient } from './telegramClient.js'
 import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './handlers/account.js'
 import { handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './handlers/movement.js'
 import { handleReconciliationCallback, handleReconciliationText, startReconciliation } from './handlers/reconciliation.js'
-import { createTelegramUserAccess } from './userRegistry.js'
+import { createTelegramUserAccess, validateTelegramLedgerAssignments } from './userRegistry.js'
 import { buildRecurringSession, disableRecurringRuleInState } from './recurringActions.js'
+import { parseActionCallback } from './actionTokens.js'
+import { isPrivateTelegramUpdate, processTelegramUpdates, shouldSkipOldUpdates } from './updateSafety.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
 if (!token) {
@@ -39,9 +40,9 @@ if (!token) {
   process.exit(1)
 }
 const userAccess = createTelegramUserAccess(process.env)
-const ledgerMapProblem = validateTelegramLedgerMap(userAccess)
+const ledgerMapProblem = validateTelegramLedgerAssignments(userAccess)
 if (ledgerMapProblem) {
-  console.error('[adreem-telegram-bot] invalid ADREEM_TELEGRAM_LEDGER_IDS:', ledgerMapProblem)
+  console.error('[adreem-telegram-bot] invalid Telegram ledger assignments:', ledgerMapProblem)
   process.exit(1)
 }
 
@@ -60,27 +61,16 @@ console.log('[adreem-telegram-bot] starting', {
 })
 
 function repositoryForUser(userId) {
-  const ledgerId = userAccess.ledgerIdForUser(userId) || createLedgerIdentity({
-    ledgerId: process.env.ADREEM_LEDGER_ID || process.env.VITE_ADREEM_LEDGER_ID,
-  }).ledgerId
+  const ledgerId = userAccess.ledgerIdForUser(userId)
+  if (!ledgerId) return null
   if (!repositoriesByLedgerId.has(ledgerId)) {
     repositoriesByLedgerId.set(ledgerId, createLedgerRepository(process.env, { ledgerId }))
   }
   return repositoriesByLedgerId.get(ledgerId)
 }
 
-function validateTelegramLedgerMap(access) {
-  const seen = new Map()
-  for (const [userId, ledgerId] of access.envLedgerMap.entries()) {
-    const existingUserId = seen.get(ledgerId)
-    if (existingUserId) return `ledger "${ledgerId}" is assigned to both ${existingUserId} and ${userId}`
-    seen.set(ledgerId, userId)
-  }
-  return ''
-}
-
 async function skipOldUpdates() {
-  if (process.env.TELEGRAM_SKIP_OLD_UPDATES === 'false') return
+  if (!shouldSkipOldUpdates(process.env)) return
   const updates = await telegram.getUpdates({ offset: -1, timeout: 0, allowed_updates: ['message', 'callback_query'] })
   if (updates.length) {
     offset = updates[updates.length - 1].update_id + 1
@@ -336,8 +326,9 @@ async function showRecurring(ctx, notice = '') {
 
 async function handleRecurringCallback(ctx, data) {
   const session = sessions.get(ctx.chatId, ctx.userId)
-  if (session?.flow !== 'recurring') return showRecurring(ctx, 'هذه أزرار قديمة. فتحت لك القائمة الأحدث.')
-  const [, action, token] = data.split(':')
+  if (session?.flow !== 'recurring') return sendScreen(ctx, '<b>هذه أزرار تكرار قديمة.</b>\n<blockquote>افتح الحركات الشهرية من القائمة لعرض الأحدث.</blockquote>')
+  const [action, token] = parseActionCallback(data, 'repeat', session) || []
+  if (!action || !token) return sendScreen(ctx, '<b>انتهت صلاحية هذه البطاقة.</b>\n<blockquote>بطاقة الحركات الشهرية الحالية لم تتغير.</blockquote>')
   const ruleId = session.choices?.rules?.[token]
   if (!ruleId) return showRecurring(ctx, 'هذه الحركة لم تعد في القائمة.')
   const result = action === 'run'
@@ -358,11 +349,10 @@ async function showReview(ctx, notice = '', requestedPage = 0) {
   if (notice) lines.push('', `<blockquote>${escapeHtml(notice)}</blockquote>`)
   if (!reviewSession.total) lines.push('', '<blockquote>لا شيء معلق.</blockquote>')
   reviewSession.items.forEach((item) => {
-    const number = reviewSession.page * reviewSession.pageSize + Number(item.token) + 1
     const description = item.kind === 'account'
       ? `حساب · ${accountLabel(item.value)}`
       : `حركة · ${movementLabels[item.value.type] || item.value.type} · ${formatMoney(item.value.amount, item.value.currency)}`
-    lines.push(`<blockquote>${escapeHtml(`#${number} · ${description}`)}</blockquote>`)
+    lines.push(`<blockquote>${escapeHtml(`#${item.number} · ${description}`)}</blockquote>`)
   })
   return sendScreen(ctx, lines.join('\n'), reviewKeyboard(reviewSession))
 }
@@ -373,10 +363,13 @@ async function handleReviewCallback(ctx, data) {
   }
   const session = sessions.get(ctx.chatId, ctx.userId)
   if (session?.flow !== 'review') {
-    return showReview(ctx, 'هذه أزرار مراجعة قديمة. فتحت لك القائمة الأحدث.')
+    return sendScreen(ctx, '<b>هذه أزرار مراجعة قديمة.</b>\n<blockquote>افتح المراجعة من القائمة لعرض الأحدث.</blockquote>')
   }
 
-  const [, kind, action, token] = data.split(':')
+  const [kind, action, token] = parseActionCallback(data, 'review', session) || []
+  if (!kind || !action || !token) {
+    return sendScreen(ctx, '<b>انتهت صلاحية هذه البطاقة.</b>\n<blockquote>بطاقة المراجعة الحالية لم تتغير.</blockquote>')
+  }
   if (kind === 'movement' && action === 'cancel') {
     const movementId = session.choices?.movements?.[token]
     if (!movementId) return showReview(ctx, 'هذا العنصر لم يعد موجودًا في القائمة.')
@@ -406,10 +399,11 @@ async function handleHistoryCallback(ctx, data) {
   if (data.startsWith('history:page:')) return showHistory(ctx, '', Number(data.slice('history:page:'.length)))
   const session = sessions.get(ctx.chatId, ctx.userId)
   if (session?.flow !== 'history') {
-    return showHistory(ctx)
+    return sendScreen(ctx, '<b>هذه أزرار حركات قديمة.</b>\n<blockquote>افتح الحركات من القائمة لعرض الأحدث.</blockquote>')
   }
 
-  const [, action, token] = data.split(':')
+  const [action, token] = parseActionCallback(data, 'history', session) || []
+  if (!action || !token) return sendScreen(ctx, '<b>انتهت صلاحية هذه البطاقة.</b>\n<blockquote>بطاقة الحركات الحالية لم تتغير.</blockquote>')
   const movementId = session.choices?.movements?.[token]
   if (!movementId) return showHistory(ctx)
 
@@ -423,7 +417,7 @@ async function handleHistoryCallback(ctx, data) {
       '',
       movementBlockquote(movement, snapshot.accountById, { includeDate: true }),
     ].join('\n')
-    return sendScreen(ctx, text, historyCancelConfirmKeyboard(token))
+    return sendScreen(ctx, text, historyCancelConfirmKeyboard(session.actionSessionId, token))
   }
 
   if (action === 'confirm') {
@@ -600,6 +594,19 @@ async function handleMessage(ctx, update) {
 
 async function handleUpdate(update) {
   const ctx = contextFor(update)
+  if (!isPrivateTelegramUpdate(update)) {
+    if (update.callback_query?.id) {
+      await telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
+    }
+    if (ctx.chatId) {
+      await telegram.sendMessage({
+        chat_id: ctx.chatId,
+        text: '<b>استخدم ADREEM في محادثة خاصة فقط.</b>',
+        parse_mode: 'HTML',
+      })
+    }
+    return
+  }
   if (!isAllowed(ctx.user)) {
     if (ctx.chatId) {
       await telegram.sendMessage({
@@ -611,6 +618,19 @@ async function handleUpdate(update) {
     return
   }
   ctx.repository = repositoryForUser(ctx.userId)
+  if (!ctx.repository) {
+    const text = String(update.message?.text || '').trim()
+    if (text && await handleAdminCommand(ctx, text)) return
+    if (update.callback_query?.id) {
+      await telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
+    }
+    await telegram.sendMessage({
+      chat_id: ctx.chatId,
+      text: '<b>لا يوجد دفتر معيّن لهذا المستخدم.</b>\n<blockquote>عيّن دفترًا صريحًا قبل استخدام البوت.</blockquote>',
+      parse_mode: 'HTML',
+    })
+    return
+  }
   if (update.callback_query) return handleCallback(ctx, update)
   if (update.message) return handleMessage(ctx, update)
 }
@@ -620,10 +640,18 @@ async function poll() {
   while (true) {
     try {
       const updates = await telegram.getUpdates({ offset, timeout: 30, allowed_updates: ['message', 'callback_query'] })
-      for (const update of updates) {
-        offset = update.update_id + 1
-        await handleUpdate(update)
-      }
+      await processTelegramUpdates(updates, handleUpdate, (nextOffset) => {
+        offset = nextOffset
+      }, {
+        onPermanentError(error, update) {
+          console.error('[adreem-telegram-bot] skipped permanently failed Telegram update', {
+            updateId: update.update_id,
+            method: error.method,
+            status: error.status,
+            message: error.message,
+          })
+        },
+      })
     } catch (error) {
       console.error('[adreem-telegram-bot]', error?.message || error)
       await new Promise((resolve) => setTimeout(resolve, 2500))

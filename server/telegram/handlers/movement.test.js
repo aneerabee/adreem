@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
-import { handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './movement.js'
+import { attachmentPathIsReferenced, handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './movement.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
   let state = initialState
@@ -49,6 +49,31 @@ function createCtx() {
 }
 
 describe('telegram movement flow safety', () => {
+  it('recognizes an uploaded attachment already linked to the ledger', () => {
+    const storagePath = 'main/2026-08-19/receipt.pdf'
+    expect(attachmentPathIsReferenced({ attachments: [{ storagePath }] }, storagePath)).toBe(true)
+    expect(attachmentPathIsReferenced({ attachments: [] }, storagePath)).toBe(false)
+  })
+
+  it('deletes an unlinked uploaded attachment when the movement is cancelled', async () => {
+    const ctx = createCtx()
+    const deleted = []
+    ctx.repository.deleteAttachmentFile = async (storagePath) => {
+      deleted.push(storagePath)
+      return { ok: true }
+    }
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      step: 'review',
+      uiMessageId: ctx.messageId,
+      draft: { attachmentStoragePath: 'main/2026-08-19/orphan.pdf' },
+    })
+
+    await handleMovementCallback(ctx, 'mv:cancel')
+
+    expect(deleted).toEqual(['main/2026-08-19/orphan.pdf'])
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+  })
   it('does not start a new movement flow from an expired movement button', async () => {
     const ctx = createCtx()
 

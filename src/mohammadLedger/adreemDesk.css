@@ -148,6 +148,7 @@
   white-space: nowrap;
 }
 .adreem-cloud-state { color: var(--green); }
+.adreem-cloud-state--failed,
 .adreem-cloud-state--retrying,
 .adreem-cloud-state--local-only { border-color: #f0b5ae; color: var(--red); }
 .adreem-cloud-state button {
@@ -695,9 +696,13 @@
   background: #fff;
 }
 .ml3-effect span { font-size: 0.74rem; font-weight: 850; }
+.ml3-effect > * { min-width: 0; }
 .ml3-effect b { color: var(--muted); font-size: 0.72rem; text-align: end; }
 .ml3-effect i { color: var(--green); font-size: 0.72rem; font-style: normal; font-weight: 950; text-align: center; }
 .ml3-effect strong { font-size: 0.78rem; text-align: end; }
+.ml3-effect b,
+.ml3-effect i,
+.ml3-effect strong { direction: ltr; overflow-wrap: anywhere; unicode-bidi: isolate; }
 
 .ml3-account-picker { min-width: 0; display: grid; gap: 7px; }
 .ml3-picked-account {
@@ -959,9 +964,11 @@
 .ml3-account-row--cash,
 .ml3-account-row--bank { border-inline-start-color: var(--ink); }
 .ml3-account-main { min-width: 0; display: grid; gap: 1px; border: 0; padding: 0; background: transparent; color: var(--ink); text-align: start; cursor: pointer; }
-.ml3-account-main strong { overflow: hidden; font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-account-main span { overflow: hidden; color: var(--muted); font-size: 0.66rem; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-account-main small { font-size: inherit; }
+.ml3-account-main > strong { overflow: hidden; font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-account-meta { min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden; color: var(--muted); font-size: 0.66rem; white-space: nowrap; }
+.ml3-account-meta small { font-size: inherit; }
+.ml3-account-kind { flex: 0 0 auto; color: var(--green); font-weight: 900; }
+.ml3-account-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ml3-account-main b { color: var(--red); }
 .ml3-account-values { min-width: 0; text-align: end; }
 .ml3-account-values strong { display: block; font-size: 0.72rem; }
@@ -1141,13 +1148,15 @@
 .ml3-profile-editor-grid label:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .ml3-profile-reconcile > button,
 .ml3-profile-editor > button { min-height: 36px; margin-top: 7px; border: 1px solid var(--green); border-radius: 6px; padding: 0 11px; background: var(--green); color: #fff; font-size: 0.72rem; font-weight: 900; cursor: pointer; }
+.ml3-profile-reconcile > button:disabled,
+.ml3-profile-editor > button:disabled { opacity: 0.45; cursor: not-allowed; }
 .ml3-profile-movement { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 50px; padding: 6px 0; border-top: 1px solid #e7ece9; }
 .ml3-profile-movement > div:first-child { min-width: 0; display: grid; gap: 1px; }
 .ml3-profile-movement strong { font-size: 0.74rem; }
 .ml3-profile-movement span,
 .ml3-profile-movement small { overflow: hidden; color: var(--muted); font-size: 0.64rem; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-profile-impact { display: grid; justify-items: end; gap: 3px; }
-.ml3-profile-impact b { color: var(--green); font-size: 0.7rem; }
+.ml3-profile-impact b { min-width: 0; direction: ltr; color: var(--green); font-size: 0.7rem; overflow-wrap: anywhere; unicode-bidi: isolate; }
 .ml3-profile-impact button { min-height: 27px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--green); font-size: 0.65rem; font-weight: 900; cursor: pointer; }
 
 ::view-transition-old(root),
@@ -1293,6 +1302,25 @@
   .ml3-profile { width: 100%; }
   .ml3-profile-editor-grid { grid-template-columns: 1fr; }
   .ml3-profile-editor-grid label:last-child:nth-child(odd) { grid-column: 1; }
+}
+
+@media (max-width: 420px) {
+  .ml3-step.is-done { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 0; }
+  .ml3-step.is-done .ml3-step-head { width: 100%; }
+  .ml3-step.is-done .ml3-step-summary {
+    width: 100%;
+    display: block;
+    padding: 0 36px 5px 8px;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+    text-align: start;
+  }
+  .ml3-profile-movement { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .ml3-profile-movement span,
+  .ml3-profile-movement small { overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
+  .ml3-profile-impact { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
+  .ml3-profile-impact b { margin-inline-end: auto; }
+  .ml3-effect { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 380px) {

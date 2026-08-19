@@ -7,7 +7,11 @@ import {
   createMohammadFallbackState,
 } from '../../src/mohammadLedger/ledgerState.js'
 import {
+  assertLedgerStateTransition,
   createLedgerRepository,
+  hasPersistedLedgerRow,
+  ledgerVersionMatches,
+  nextLedgerVersionTimestamp,
   parseTelegramLedgerMap,
   prepareLedgerStateForSave,
   resolveLedgerConfig,
@@ -99,6 +103,55 @@ describe('ledger repository state preparation', () => {
         },
       ),
     ).toThrow(/SERVICE_ROLE/)
+  })
+
+  it('detects a stale cloud version before replacing ledger state', () => {
+    expect(ledgerVersionMatches('2026-08-19T10:00:00.000Z', '2026-08-19T10:00:00.000Z')).toBe(true)
+    expect(ledgerVersionMatches('2026-08-19T10:01:00.000Z', '2026-08-19T10:00:00.000Z')).toBe(false)
+    expect(ledgerVersionMatches(null, null)).toBe(true)
+  })
+
+  it('always advances the ledger version beyond the expected timestamp', () => {
+    expect(nextLedgerVersionTimestamp('2026-08-19T10:00:00.000Z', Date.parse('2026-08-19T10:00:00.000Z')))
+      .toBe('2026-08-19T10:00:00.001Z')
+    expect(nextLedgerVersionTimestamp(null, Date.parse('2026-08-19T10:00:00.000Z')))
+      .toBe('2026-08-19T10:00:00.000Z')
+  })
+
+  it('enforces ledger integrity for every repository caller', () => {
+    const current = createMohammadFallbackState('2026-05-20T10:00:00.000Z', { ledgerId: 'main' })
+    const cashAccount = {
+      id: 'cash-main',
+      ownerName: 'أنا',
+      subAccountName: 'كاش',
+      type: 'cash',
+      valueKind: 'cash',
+      currencyKind: 'LYD',
+      status: 'active',
+      createdAt: '2026-05-20T10:00:00.000Z',
+      updatedAt: '2026-05-20T10:00:00.000Z',
+    }
+    const invalidExpense = {
+      id: 'expense-1',
+      type: 'expense',
+      status: 'posted',
+      amount: 1,
+      currency: 'LYD',
+      sourceAccountId: cashAccount.id,
+      createdAt: '2026-05-20T10:01:00.000Z',
+      updatedAt: '2026-05-20T10:01:00.000Z',
+    }
+    const next = { ...current, accounts: [cashAccount], movements: [invalidExpense] }
+
+    expect(() => assertLedgerStateTransition(next, current, { identity: { ledgerId: 'main' } }))
+      .toThrow(/بالسالب/)
+  })
+
+  it('treats an existing primary row without updated_at as replaceable, not missing', () => {
+    const config = resolveLedgerConfig({ ADREEM_LEDGER_ID: 'main' })
+
+    expect(hasPersistedLedgerRow({ rowId: config.rowId, updatedAt: null }, config)).toBe(true)
+    expect(hasPersistedLedgerRow({ rowId: null, updatedAt: null }, config)).toBe(false)
   })
 
   it('creates a scoped repository only when the service role key is present', () => {
