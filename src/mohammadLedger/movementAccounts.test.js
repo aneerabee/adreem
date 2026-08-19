@@ -35,6 +35,15 @@ describe('shared movement account choices', () => {
     ])
   })
 
+  it('finds multi-word Arabic names despite extra spaces and common alef forms', () => {
+    const accounts = [
+      account('company', VALUE_KINDS.RECEIVABLE, { ownerName: 'شركة الأمان الجديدة', subAccountName: 'كاش بيننا' }),
+      account('other', VALUE_KINDS.RECEIVABLE, { ownerName: 'سعيد' }),
+    ]
+
+    expect(rankMovementAccounts(accounts, new Map(), 'شركة   الامان').map((item) => item.id)).toEqual(['company'])
+  })
+
   it('never offers assets, projects, or expense categories as money endpoints', () => {
     const accounts = [
       account('cash', VALUE_KINDS.CASH),

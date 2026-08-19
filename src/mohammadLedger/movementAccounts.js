@@ -8,8 +8,20 @@ import { MOVEMENT_TYPES } from './ledgerCore.js'
 
 export { sameLogicalAccount }
 
+export function normalizeAccountSearchText(value = '') {
+  return String(value || '')
+    .normalize('NFKC')
+    .replace(/\u0640/gu, '')
+    .replace(/\p{M}/gu, '')
+    .replace(/[أإآ]/gu, 'ا')
+    .replace(/ى/gu, 'ي')
+    .trim()
+    .replace(/\s+/gu, ' ')
+    .toLocaleLowerCase('ar')
+}
+
 function searchableText(account) {
-  return `${account?.ownerName || ''} ${account?.subAccountName || ''} ${account?.legacyName || ''}`.toLowerCase()
+  return normalizeAccountSearchText(`${account?.ownerName || ''} ${account?.subAccountName || ''} ${account?.legacyName || ''}`)
 }
 
 function isPostingAccount(account) {
@@ -65,7 +77,7 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
 }
 
 export function rankMovementAccounts(accounts = [], balancesByAccountId = new Map(), query = '') {
-  const normalizedQuery = String(query || '').trim().toLowerCase()
+  const normalizedQuery = normalizeAccountSearchText(query)
   const magnitude = (account) => {
     const bucket = balancesByAccountId.get(account.id)
     return Math.max(Math.abs(Math.round(bucket?.dinar || 0)), Math.abs(Math.round(bucket?.usd || 0)))

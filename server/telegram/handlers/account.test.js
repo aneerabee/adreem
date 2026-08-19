@@ -71,14 +71,14 @@ describe('telegram account flow', () => {
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('<code>2/5</code>')
     expect(ctx.telegram.calls.at(-1).payload.text).not.toContain('النوع: شخص أو جهة')
 
-    await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'سعيد')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'شركة النور')
     await handleAccountCallback(ctx, 'acct:detail:0')
     await handleAccountCallback(ctx, 'acct:currency:USD')
     await handleAccountCallback(ctx, 'acct:confirm')
 
     expect(ctx.repository.state.accounts).toHaveLength(1)
     expect(ctx.repository.state.accounts[0]).toMatchObject({
-      ownerName: 'سعيد',
+      ownerName: 'شركة النور',
       subAccountName: 'كاش بيننا',
       type: ACCOUNT_TYPES.PERSON,
       valueKind: VALUE_KINDS.RECEIVABLE,

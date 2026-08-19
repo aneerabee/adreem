@@ -1,5 +1,6 @@
 import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { normalizeAccountSearchText } from '../../src/mohammadLedger/movementAccounts.js'
 import {
   buildDimensionReports,
   buildExpenseCategoryReports,
@@ -438,10 +439,10 @@ async function handleSearchText(ctx, text) {
   if (session?.flow !== 'search') return false
   const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
-  const query = String(text || '').trim().toLowerCase()
+  const query = normalizeAccountSearchText(text)
   const results = snapshot.balances
     .filter((bucket) => bucket.account.status === ACCOUNT_STATUSES.ACTIVE)
-    .filter((bucket) => `${bucket.account.ownerName} ${bucket.account.subAccountName} ${bucket.account.legacyName || ''}`.toLowerCase().includes(query))
+    .filter((bucket) => normalizeAccountSearchText(`${bucket.account.ownerName} ${bucket.account.subAccountName} ${bucket.account.legacyName || ''}`).includes(query))
     .sort((a, b) => Math.abs(b.dinar) - Math.abs(a.dinar) || Math.abs(b.usd) - Math.abs(a.usd))
     .slice(0, ACCOUNT_PAGE_SIZE)
   const targetMessageId = session.uiMessageId

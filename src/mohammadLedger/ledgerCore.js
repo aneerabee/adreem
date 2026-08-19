@@ -3,6 +3,7 @@ import {
   accountSupportsTransferCurrency,
   areTransferAccountsCompatible,
   canonicalAccountDetail,
+  normalizeAccountText,
   sameLogicalAccount,
   transferCompatibilityMessage,
 } from './accountCompatibility.js'
@@ -405,7 +406,7 @@ export function createAccount({
   notes = '',
   status = ACCOUNT_STATUSES.ACTIVE,
 }) {
-  const normalizedOwner = String(ownerName || '').trim()
+  const normalizedOwner = normalizeAccountText(ownerName)
   const normalizedSub = canonicalAccountDetail(subAccountName)
   const normalizedType = type || ACCOUNT_TYPES.PERSON
   const normalizedValueKind = valueKind || 'receivable'
@@ -440,7 +441,7 @@ export function createAccount({
 
 export function validateAccount(account, existingAccounts = []) {
   const errors = []
-  const ownerName = String(account?.ownerName || '').trim()
+  const ownerName = normalizeAccountText(account?.ownerName)
   const subAccountName = canonicalAccountDetail(account?.subAccountName)
   if (!account?.ownerName?.trim()) errors.push({ field: 'ownerName', message: 'الاسم الرئيسي مطلوب.' })
   if (!account?.subAccountName?.trim()) {
@@ -455,7 +456,7 @@ export function validateAccount(account, existingAccounts = []) {
   const hasDuplicateLogicalAccount = existingAccounts.some((item) => {
     if (!item || item.status === ACCOUNT_STATUSES.INACTIVE) return false
     return (
-      String(item.ownerName || '').trim() === ownerName &&
+      normalizeAccountText(item.ownerName) === ownerName &&
       canonicalAccountDetail(item.subAccountName) === subAccountName &&
       normalizeAccountCurrencyKind(item.currencyKind, inferAccountCurrencyKind(item)) === normalizeAccountCurrencyKind(account.currencyKind, inferAccountCurrencyKind(account))
     )

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { accountPresetFor, emptyAccountDraft } from '../../src/mohammadLedger/accountConfig.js'
+import { normalizeAccountText } from '../../src/mohammadLedger/accountCompatibility.js'
 import { ACCOUNT_STATUSES } from '../../src/mohammadLedger/accountCatalog.js'
 import { createAccount, validateAccount } from '../../src/mohammadLedger/ledgerCore.js'
 
@@ -7,8 +8,8 @@ export function normalizeAccountDraft(draft = {}) {
   const preset = accountPresetFor(draft.type, draft.valueKind)
   const fallback = emptyAccountDraft()
   return {
-    ownerName: String(draft.ownerName || fallback.ownerName).trim(),
-    subAccountName: String(draft.subAccountName || preset.subAccountName || fallback.subAccountName).trim(),
+    ownerName: normalizeAccountText(draft.ownerName || fallback.ownerName),
+    subAccountName: normalizeAccountText(draft.subAccountName || preset.subAccountName || fallback.subAccountName),
     type: preset.type,
     valueKind: preset.valueKind,
     currencyKind: draft.currencyKind || fallback.currencyKind,

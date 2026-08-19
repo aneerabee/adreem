@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
+import { normalizeAccountText } from './accountCompatibility.js'
 import {
   accountDetailName,
   accountNameValue,
@@ -29,8 +30,9 @@ describe('account display wording', () => {
       }
 
       expect(accountNameValue(draft)).toBe('')
-      expect(accountNameValue(applyAccountName(draft, '  الجمهورية  '))).toBe('الجمهورية')
-      expect(accountNameValue(applyAccountName(draft, '   '))).toBe('')
+      expect(accountNameValue(applyAccountName(draft, 'الجمهورية '))).toBe('الجمهورية ')
+      expect(accountNameValue(applyAccountName(draft, 'الجمهورية الوطني'))).toBe('الجمهورية الوطني')
+      expect(normalizeAccountText(accountNameValue(applyAccountName(draft, '  الجمهورية   الوطني  ')))).toBe('الجمهورية الوطني')
     }
   })
 })

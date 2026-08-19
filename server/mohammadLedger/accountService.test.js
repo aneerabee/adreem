@@ -56,6 +56,19 @@ describe('telegram account service', () => {
     })
   })
 
+  it('preserves multi-word names and normalizes only redundant spacing at save time', async () => {
+    const repository = memoryRepository()
+    const result = await appendTelegramAccount(repository, {
+      ownerName: '  شركة   النور  ',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+    }, { idempotencyKey: 'account-multi-word' })
+
+    expect(result.rejected).toBeFalsy()
+    expect(repository.state.accounts[0].ownerName).toBe('شركة النور')
+  })
+
   it('prevents duplicate logical accounts but keeps repeated confirm idempotent', async () => {
     const repository = memoryRepository()
     const draft = {

@@ -5,16 +5,20 @@ const USD = 'USD'
 const MULTI = 'multi'
 
 export function canonicalAccountDetail(value = '') {
-  const text = String(value || '').trim()
+  const text = normalizeAccountText(value)
   if (text === 'مصرفي بيننا') return 'شيك بيننا'
   return text
 }
 
+export function normalizeAccountText(value = '') {
+  return String(value || '').trim().replace(/\s+/gu, ' ')
+}
+
 export function sameLogicalAccount(left, right) {
   if (!left || !right) return false
-  const leftOwner = String(left.ownerName || '').trim()
+  const leftOwner = normalizeAccountText(left.ownerName)
   const leftDetail = canonicalAccountDetail(left.subAccountName)
-  const rightOwner = String(right.ownerName || '').trim()
+  const rightOwner = normalizeAccountText(right.ownerName)
   const rightDetail = canonicalAccountDetail(right.subAccountName)
   const leftCurrency = accountCurrencyKind(left)
   const rightCurrency = accountCurrencyKind(right)

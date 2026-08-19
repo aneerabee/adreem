@@ -1,5 +1,5 @@
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, normalizeAccountCurrencyKind } from './accountCatalog.js'
-import { accountCurrencyLabel } from './accountCompatibility.js'
+import { accountCurrencyLabel, normalizeAccountText } from './accountCompatibility.js'
 
 export const accountPresets = [
   {
@@ -151,13 +151,13 @@ export function accountDetailOptionsFor(type, valueKind) {
 }
 
 export function displaySubAccountName(value = '') {
-  const text = String(value || '').trim()
+  const text = normalizeAccountText(value)
   if (text === 'مصرفي بيننا') return 'شيك بيننا'
   return text
 }
 
 export function accountDetailName(account = {}) {
-  const text = String(account.subAccountName || '').trim()
+  const text = normalizeAccountText(account.subAccountName)
   const isPersonBalance = account.valueKind === VALUE_KINDS.RECEIVABLE || account.type === ACCOUNT_TYPES.PERSON
   if (!isPersonBalance) return displaySubAccountName(text)
   if (/^(كاش|نقد|نقدي)$/i.test(text)) return 'كاش بيننا'
@@ -181,25 +181,25 @@ export function accountNameValue(draft = {}) {
 
 export function applyAccountName(draft = {}, value = '') {
   const preset = accountPresetFor(draft.type, draft.valueKind)
-  const cleanValue = String(value || '').trim()
+  const inputValue = String(value || '')
   if (preset.nameTarget === 'subAccountName') {
     return {
       ...draft,
       ownerName: preset.ownerName || draft.ownerName || '',
-      subAccountName: cleanValue,
+      subAccountName: inputValue,
       currencyKind: accountCurrencyKindFor(draft),
     }
   }
   return {
     ...draft,
-    ownerName: cleanValue,
+    ownerName: inputValue,
     subAccountName: draft.subAccountName || preset.subAccountName,
     currencyKind: accountCurrencyKindFor(draft),
   }
 }
 
 export function accountDisplayName(account = {}) {
-  const ownerName = String(account.ownerName || '').trim()
+  const ownerName = normalizeAccountText(account.ownerName)
   const subAccountName = accountDetailName(account)
   const isMine = /^أنا$|^انا$/i.test(ownerName)
   const currencySuffix = accountNeedsCurrency(account) ? ` · ${accountCurrencyLabel(account)}` : ''

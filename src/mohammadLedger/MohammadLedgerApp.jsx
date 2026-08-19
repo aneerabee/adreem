@@ -11,7 +11,7 @@ import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammad
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
 import { MOVEMENT_ENTRY_STEPS, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
-import { getMovementAccounts, rankMovementAccounts, sameLogicalAccount } from './movementAccounts'
+import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccounts, sameLogicalAccount } from './movementAccounts'
 import { RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, buildReconciliationCorrectionDrafts, createAttachment, createAuditEvent, createReconciliation, createRecurringRuleFromMovement, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, hideAttachment, lastReconciliationForAccount, syncRecurringRulesFromMovement, updateRecurringRule } from './ledgerOperations'
 
 const CANCEL_WINDOW_HOURS = 24
@@ -558,7 +558,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   const [isChanging, setIsChanging] = useState(false)
   const [quickFilter, setQuickFilter] = useState('')
   const [showAllResults, setShowAllResults] = useState(false)
-  const normalizedQuery = query.trim().toLowerCase()
+  const normalizedQuery = normalizeAccountSearchText(query)
   const selectedAccount = accounts.find((account) => account.id === value)
   const selectedBalance = selectedAccount ? accountBalanceChip(selectedAccount, balanceByAccountId.get(selectedAccount.id)) : null
   const showChooser = !selectedAccount || isChanging
@@ -588,19 +588,19 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   }
   const rankAccount = (account) => {
     const ownerName = String(account.ownerName || '').trim()
-    const labelText = accountLabel(account).toLowerCase()
+    const labelText = normalizeAccountSearchText(accountLabel(account))
     const magnitude = accountMagnitude(account)
     if (preferredIndexById.has(account.id)) return -1000 + preferredIndexById.get(account.id)
     if (account.id === value) return -900
     if (ownerName === normalizedPreferredOwner) return -820
     if (magnitude > 0) return -700 - Math.min(magnitude / 1000, 250)
     if (normalizedQuery && labelText.startsWith(normalizedQuery)) return -500
-    if (normalizedQuery && ownerName.toLowerCase().startsWith(normalizedQuery)) return -480
+    if (normalizedQuery && normalizeAccountSearchText(ownerName).startsWith(normalizedQuery)) return -480
     return 0
   }
   const filteredAccounts = accounts
     .filter((account) => {
-      const haystack = `${account.ownerName} ${account.subAccountName} ${accountDetailName(account)} ${account.legacyName || ''}`.toLowerCase()
+      const haystack = normalizeAccountSearchText(`${account.ownerName} ${account.subAccountName} ${accountDetailName(account)} ${account.legacyName || ''}`)
       if (normalizedQuery) return haystack.includes(normalizedQuery)
       return matchesQuickFilter(account)
     })
@@ -641,7 +641,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
       {showChooser ? (
         <>
           <label className="ml3-search-box">
-            <span>بحث</span>
+            <span className="ml3-search-icon"><Search aria-hidden="true" size={17} /></span>
             <input
               value={query}
               onChange={(event) => {
@@ -697,8 +697,10 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
               return (
                 <button type="button" key={account.id} className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`} onClick={() => chooseAccount(account.id)}>
                   <span className={`ml3-picker-dot ml3-picker-dot--${visualKind(account)}`} aria-hidden="true" />
-                  <strong>{account.ownerName}</strong>
-                  <span>{accountDetailName(account)}</span>
+                  <span className="ml3-picker-option-copy">
+                    <strong>{account.ownerName}</strong>
+                    <small>{accountDetailName(account)}</small>
+                  </span>
                   <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
                   {account.id === value ? <em>مختار</em> : null}
                 </button>
@@ -1622,7 +1624,7 @@ export default function MohammadLedgerApp() {
     .slice()
     .reverse()
   const filteredHistoryMovements = useMemo(() => {
-    const normalizedQuery = historyQuery.trim().toLowerCase()
+    const normalizedQuery = normalizeAccountSearchText(historyQuery)
     return postedUserMovements.filter((movement) => {
       if (historyType && movement.type !== historyType) return false
       if (historyStatus && movement.status !== historyStatus) return false
@@ -1630,7 +1632,7 @@ export default function MohammadLedgerApp() {
       if (!normalizedQuery) return true
       const source = accountById.get(movement.sourceAccountId)
       const destination = accountById.get(movement.destinationAccountId)
-      const haystack = [movementLabels[movement.type], movementStatusLabel(movement.status), movement.note, source ? accountLabel(source) : '', destination ? accountLabel(destination) : ''].join(' ').toLowerCase()
+      const haystack = normalizeAccountSearchText([movementLabels[movement.type], movementStatusLabel(movement.status), movement.note, source ? accountLabel(source) : '', destination ? accountLabel(destination) : ''].join(' '))
       return haystack.includes(normalizedQuery)
     })
   }, [accountById, historyAccountId, historyQuery, historyStatus, historyType, postedUserMovements])
@@ -2573,10 +2575,10 @@ export default function MohammadLedgerApp() {
     const activeGroup = accountGroupTabs.find((group) => group.key === activeAccountGroup) || accountGroupTabs[0]
     const moneyRows = balancesByKind.money || []
     const peopleRows = balancesByKind.people || []
-    const normalizedAccountQuery = accountQuery.trim().toLowerCase()
+    const normalizedAccountQuery = normalizeAccountSearchText(accountQuery)
     const accountMatchesQuery = (bucket) => {
       if (!normalizedAccountQuery) return true
-      const haystack = `${bucket.account.ownerName} ${bucket.account.subAccountName} ${accountDetailName(bucket.account)} ${bucket.account.legacyName || ''}`.toLowerCase()
+      const haystack = normalizeAccountSearchText(`${bucket.account.ownerName} ${bucket.account.subAccountName} ${accountDetailName(bucket.account)} ${bucket.account.legacyName || ''}`)
       return haystack.includes(normalizedAccountQuery)
     }
     const filterRows = (rows) => rows.filter(accountMatchesQuery)
