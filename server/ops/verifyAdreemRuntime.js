@@ -11,8 +11,7 @@ const required = [
 
 export function runtimeCredentialStatus(env = process.env) {
   const hasLogin = Boolean(env.ADREEM_RUNTIME_TEST_EMAIL && env.ADREEM_RUNTIME_TEST_PASSWORD)
-  const hasToken = Boolean(env.ADREEM_RUNTIME_TEST_TOKEN)
-  return { hasLogin, hasToken, ok: hasLogin || hasToken }
+  return { hasLogin, ok: hasLogin }
 }
 
 export function envStatus(env = process.env) {
@@ -84,7 +83,7 @@ async function main() {
   }
   checks.login = await login(apiBase)
   const credentials = runtimeCredentialStatus()
-  const token = checks.login.body?.token || process.env.ADREEM_RUNTIME_TEST_TOKEN || ''
+  const token = checks.login.body?.token || ''
   if (checks.login.ok && token) {
     checks.ledgerRead = await requestJson(`${apiBase}/api/ledger`, {
       headers: {

@@ -9,22 +9,18 @@ const requiredEnv = {
 }
 
 describe('ADREEM runtime verification credentials', () => {
-  it('accepts a dedicated runtime token without login credentials', () => {
-    const env = { ...requiredEnv, ADREEM_RUNTIME_TEST_TOKEN: 'runtime-token' }
-
-    expect(runtimeCredentialStatus(env)).toEqual({ hasLogin: false, hasToken: true, ok: true })
-    expect(envStatus(env).every((item) => item.ok)).toBe(true)
-  })
-
-  it('accepts a complete login and rejects a partial login', () => {
-    expect(runtimeCredentialStatus({
+  it('accepts a complete monitor login and rejects missing or partial credentials', () => {
+    const complete = {
       ...requiredEnv,
-      ADREEM_RUNTIME_TEST_EMAIL: 'owner@example.com',
+      ADREEM_RUNTIME_TEST_EMAIL: 'runtime-health@adreem.local',
       ADREEM_RUNTIME_TEST_PASSWORD: 'strong-password',
-    }).ok).toBe(true)
+    }
+    expect(runtimeCredentialStatus(complete)).toEqual({ hasLogin: true, ok: true })
+    expect(envStatus(complete).every((item) => item.ok)).toBe(true)
 
-    const partial = { ...requiredEnv, ADREEM_RUNTIME_TEST_EMAIL: 'owner@example.com' }
+    const partial = { ...requiredEnv, ADREEM_RUNTIME_TEST_EMAIL: 'runtime-health@adreem.local' }
     expect(runtimeCredentialStatus(partial).ok).toBe(false)
     expect(envStatus(partial).find((item) => item.key === 'ADREEM_RUNTIME_CREDENTIALS')?.ok).toBe(false)
+    expect(runtimeCredentialStatus({ ...requiredEnv }).ok).toBe(false)
   })
 })
