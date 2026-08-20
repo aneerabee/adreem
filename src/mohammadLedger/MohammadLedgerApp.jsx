@@ -114,13 +114,16 @@ function MovementChoiceButton({ option, active, onChoose }) {
 }
 
 function FlowProgress({ current, total, items = [], onEdit }) {
+  const isEnglish = getActiveUiLanguage() === 'en'
+  const currentText = formatCount(current)
+  const totalText = formatCount(total)
+  const progressText = isEnglish ? `${currentText} of ${totalText}` : `${currentText} من ${totalText}`
+  const progressLabel = isEnglish ? `Step ${progressText}` : `الخطوة ${progressText}`
   return (
-    <div className="adreem-flow-progress" aria-label={`الخطوة ${formatCount(current)} من ${formatCount(total)}`}>
+    <div className="adreem-flow-progress" aria-label={progressLabel}>
       <progress className="adreem-flow-progress-line" max={Math.max(1, total)} value={Math.max(0, Math.min(total, current))} aria-hidden="true" />
       <div className="adreem-flow-progress-meta">
-        <span>
-          {formatCount(current)} من {formatCount(total)}
-        </span>
+        <span>{progressText}</span>
         {items.length ? (
           <div className="adreem-flow-trail" aria-label="الاختيارات السابقة">
             {items.map((item) => (
@@ -2241,9 +2244,14 @@ export default function MohammadLedgerApp() {
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
     const previousOverflow = document.body.style.overflow
-    if (selectedAccountId) document.body.style.overflow = 'hidden'
+    const root = document.documentElement
+    if (selectedAccountId) {
+      document.body.style.overflow = 'hidden'
+      root.classList.add('adreem-overlay-open')
+    }
     return () => {
       document.body.style.overflow = previousOverflow
+      root.classList.remove('adreem-overlay-open')
     }
   }, [selectedAccountId])
 

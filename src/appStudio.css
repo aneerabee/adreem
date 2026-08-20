@@ -5,9 +5,9 @@
   --ad-green-soft: #e6f5ef;
   --ad-blue: #2d66ad;
   --ad-blue-soft: #eaf1fb;
-  --ad-red: #cf4e46;
+  --ad-red: #b8443d;
   --ad-red-soft: #fff0ee;
-  --ad-amber: #b97812;
+  --ad-amber: #9b650d;
   --ad-canvas: #f2f6f4;
   --ad-paper: #ffffff;
   --ad-line: #d6e0dc;
@@ -28,10 +28,12 @@
 
 .adreem-login-app {
   position: relative;
+  height: 100dvh;
   display: grid;
   place-items: center;
   padding: 18px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .adreem-login-app::before {
   content: "";
@@ -286,13 +288,17 @@
   .adreem-login-app::before { width: 5px; }
   .adreem-login-card { padding: 16px; }
   .adreem-login-brand { margin: -16px -16px 3px; padding: 16px; }
-  .adreem-admin-shell { width: min(100% - 14px, 1120px); }
+  .adreem-admin-shell { width: min(1120px, calc(100% - 14px)); }
   .adreem-admin-head { min-height: 58px; align-items: flex-start; padding-inline: 7px; }
   .adreem-admin-head-actions { flex-wrap: wrap; justify-content: flex-end; }
   .adreem-admin-grid { grid-template-columns: 1fr; }
   .adreem-admin-user { grid-template-columns: minmax(0, 1fr) auto; }
   .adreem-admin-user-actions { grid-column: 1 / -1; }
   .adreem-admin-user-actions button { flex: 1; }
+}
+
+@media (max-height: 620px) {
+  .adreem-login-app { place-items: start center; }
 }
 
 @media (prefers-reduced-motion: reduce) {

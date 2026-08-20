@@ -1,6 +1,6 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   BookOpenCheck,
   CheckCircle2,
@@ -64,6 +64,9 @@ export default function AdreemChrome({
   children,
 }) {
   const [profileOpen, setProfileOpen] = useState(false)
+  const profileButtonRef = useRef(null)
+  const profileDialogRef = useRef(null)
+  const profileCloseButtonRef = useRef(null)
   const normalizedLanguage = normalizeUiLanguage(language)
   const direction = uiLanguageDirection(normalizedLanguage)
   setActiveUiLanguage(normalizedLanguage)
@@ -71,11 +74,39 @@ export default function AdreemChrome({
 
   useEffect(() => {
     if (!profileOpen) return undefined
-    function closeOnEscape(event) {
-      if (event.key === 'Escape') setProfileOpen(false)
+    const root = document.documentElement
+    const focusBeforeOpen = document.activeElement
+    const profileTrigger = profileButtonRef.current
+    const focusTimer = window.requestAnimationFrame(() => {
+      profileCloseButtonRef.current?.focus({ preventScroll: true })
+    })
+    root.classList.add('adreem-overlay-open')
+    function handleProfileKeys(event) {
+      if (event.key === 'Escape') {
+        setProfileOpen(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+      const controls = Array.from(profileDialogRef.current?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])') || [])
+      if (!controls.length) return
+      const first = controls[0]
+      const last = controls[controls.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-    document.addEventListener('keydown', closeOnEscape)
-    return () => document.removeEventListener('keydown', closeOnEscape)
+    document.addEventListener('keydown', handleProfileKeys)
+    return () => {
+      window.cancelAnimationFrame(focusTimer)
+      document.removeEventListener('keydown', handleProfileKeys)
+      root.classList.remove('adreem-overlay-open')
+      const focusTarget = profileTrigger || focusBeforeOpen
+      focusTarget?.focus?.({ preventScroll: true })
+    }
   }, [profileOpen])
 
   return (
@@ -99,7 +130,7 @@ export default function AdreemChrome({
           </div>
 
           <div className="adreem-header-actions">
-            <button type="button" onClick={() => setProfileOpen(true)} aria-label="ملفي" title="ملفي">
+            <button ref={profileButtonRef} type="button" onClick={() => setProfileOpen(true)} aria-label="ملفي" title="ملفي">
               <UserRound aria-hidden="true" size={18} />
             </button>
             {canOpenAdmin ? (
@@ -145,13 +176,13 @@ export default function AdreemChrome({
         <div className="adreem-profile-layer" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) setProfileOpen(false)
         }}>
-          <section className="adreem-profile-dialog" role="dialog" aria-modal="true" aria-labelledby="adreem-profile-title">
+          <section ref={profileDialogRef} className="adreem-profile-dialog" role="dialog" aria-modal="true" aria-labelledby="adreem-profile-title">
             <header>
               <div>
                 <span>ADREEM</span>
                 <h2 id="adreem-profile-title">ملفي</h2>
               </div>
-              <button type="button" onClick={() => setProfileOpen(false)} aria-label="إغلاق" title="إغلاق">
+              <button ref={profileCloseButtonRef} type="button" onClick={() => setProfileOpen(false)} aria-label="إغلاق" title="إغلاق">
                 <X aria-hidden="true" size={18} />
               </button>
             </header>
