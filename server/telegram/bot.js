@@ -29,6 +29,7 @@ import {
 } from './keyboards.js'
 import {
   accountBlockquote,
+  accountChoiceLegendText,
   accountEditHistoryText,
   alertsText,
   escapeHtml,
@@ -217,8 +218,9 @@ async function showAccounts(ctx, requestedPage = 0) {
   const moneyDinar = myMoney.reduce((sum, bucket) => sum + Number(bucket.dinar || 0), 0)
   const collectDinar = people.reduce((sum, bucket) => sum + Math.max(0, Number(bucket.dinar || 0)), 0)
   const payDinar = people.reduce((sum, bucket) => sum + Math.max(0, -Number(bucket.dinar || 0)), 0)
+  const accountLegend = accountChoiceLegendText(visibleBuckets.map((bucket) => bucket.account))
   const text = allBuckets.length
-    ? `<b>ADREEM · الأرصدة</b>\n<code>${allBuckets.length} حساب · صفحة ${page + 1}/${pageCount}</code>\n\n<blockquote>${escapeHtml(`فلوسي: ${formatMoney(moneyDinar)}\nأقبض: ${formatMoney(collectDinar)}\nأدفع: ${formatMoney(payDinar)}`)}</blockquote>\n\n<b>افتح حسابًا</b>`
+    ? `<b>ADREEM · الأرصدة</b>\n<code>${allBuckets.length} حساب · صفحة ${page + 1}/${pageCount}</code>\n\n<blockquote>${escapeHtml(`فلوسي: ${formatMoney(moneyDinar)}\nأقبض: ${formatMoney(collectDinar)}\nأدفع: ${formatMoney(payDinar)}`)}</blockquote>\n\n<b>افتح حسابًا</b>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}`
     : '<b>ADREEM · الأرصدة</b>\n<blockquote>لا توجد حسابات.\nأنشئ حسابًا من «المزيد».</blockquote>'
   return sendScreen(ctx, text, accountsBrowserKeyboard(visibleBuckets, session))
 }
@@ -605,8 +607,9 @@ async function handleSearchText(ctx, text) {
   }
   sessions.set(ctx.chatId, ctx.userId, resultSession)
   await deleteUserInput(ctx)
+  const accountLegend = accountChoiceLegendText(results.map((bucket) => bucket.account))
   const textResult = results.length
-    ? `<b>ADREEM · نتائج البحث</b>\n<code>${results.length} نتيجة</code>\n\n<b>اختر الحساب</b>`
+    ? `<b>ADREEM · نتائج البحث</b>\n<code>${results.length} نتيجة</code>\n\n<b>اختر الحساب</b>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}`
     : '<b>ADREEM · بحث</b>\n<blockquote>لا توجد نتيجة.</blockquote>'
   const replyMarkup = results.length ? accountsBrowserKeyboard(results, resultSession) : mainMenuKeyboard()
   if (targetMessageId) {

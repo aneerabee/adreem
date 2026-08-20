@@ -348,6 +348,7 @@ const ENGLISH_TEXT = Object.freeze({
   'سعر بيع الدولار': 'USD sale rate',
   'سعر شراء الدولار': 'USD purchase rate',
   'شخص أو جهة': 'Person or business',
+  'أنواع الحسابات المتاحة': 'Available account types',
   'شراء الدولار يبدأ بمبلغ دينار.': 'A US dollar purchase starts with a dinar amount.',
   'شراء الدولار يحتاج حساب دولار للوجهة.': 'A US dollar purchase needs a US dollar destination account.',
   'شراء الدولار يحتاج حساب دينار كمصدر.': 'A US dollar purchase needs a dinar source account.',

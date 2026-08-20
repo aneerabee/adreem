@@ -267,6 +267,24 @@ export function accountContextLabel(account = {}) {
   return accountKindLabel(account)
 }
 
+export function accountChoiceKind(account = {}) {
+  const kind = accountPresentationValueKind(account)
+  if (kind !== VALUE_KINDS.RECEIVABLE) return kind
+  return /مصرف|بنك|شيك|حساب|bank/i.test(account.subAccountName || '') ? 'person-bank' : 'person-cash'
+}
+
+export function accountChoiceKindLabel(account = {}) {
+  const kind = accountChoiceKind(account)
+  if (kind === VALUE_KINDS.CASH) return 'كاش'
+  if (kind === VALUE_KINDS.BANK) return 'مصرف'
+  if (kind === 'person-bank') return 'شيك بيننا'
+  if (kind === 'person-cash') return 'كاش بيننا'
+  if (kind === VALUE_KINDS.PROJECT) return 'مشروع'
+  if (kind === VALUE_KINDS.ASSET) return 'أصل'
+  if (kind === VALUE_KINDS.EXPENSE) return 'نوع مصروف'
+  return 'حساب'
+}
+
 export function accountDisplayName(account = {}) {
   const primaryName = accountPrimaryName(account)
   const context = accountContextLabel(account)

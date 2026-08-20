@@ -18,7 +18,7 @@ import {
   numericKeypadKeyboard,
   reconciliationTextStepKeyboard,
 } from '../keyboards.js'
-import { escapeHtml, reconciliationReviewText, reconciliationStepText } from '../messages.js'
+import { accountChoiceLegendText, escapeHtml, reconciliationReviewText, reconciliationStepText } from '../messages.js'
 import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
 import { applyNumericKey, normalizeNumericBuffer, numericBufferDisplay, numericBufferValue } from '../numericKeypad.js'
 
@@ -135,6 +135,8 @@ async function sendAccountChoices(ctx, session, state, query = '', feedback = ''
   const lines = [reconciliationStepText(session, snapshot.accountById, snapshot.balanceByAccountId)]
   if (feedback) lines.push('', `<blockquote>${escapeHtml(feedback)}</blockquote>`)
   if (query) lines.push('', `<code>بحث: ${escapeHtml(preserveUiData(query))}</code>`)
+  const legend = accountChoiceLegendText(ranked)
+  if (legend) lines.push('', `<code>${escapeHtml(legend)}</code>`)
   if (!ranked.length) lines.push('', '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
   return upsertFlowMessage(ctx, session, {
     text: lines.join('\n'),

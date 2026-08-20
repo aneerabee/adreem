@@ -1273,6 +1273,139 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   to { opacity: 0; transform: scale(0.992); }
 }
 
+/* Account choices use one shared legend and one scroll surface per step. */
+.ml3-account-picker { min-height: 0; }
+.ml3-picker-context {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 2px 1px 5px;
+  border-bottom: 1px solid var(--line);
+}
+.ml3-picker-context > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+.ml3-picker-context > div {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 8px;
+}
+.ml3-picker-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 0.63rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ml3-picker-kind svg,
+.ml3-picker-type-icon { color: var(--section-accent); }
+.ml3-picker-kind--person-bank svg,
+.ml3-picker-type-icon--person-bank { color: var(--history); }
+.ml3-picker-kind--expense svg,
+.ml3-picker-type-icon--expense { color: var(--review); }
+.ml3-picker-type-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--section-soft);
+}
+.ml3-picker-favorites {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+.ml3-picker-favorites button {
+  min-width: 0;
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 6px;
+}
+.ml3-picker-favorites button > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ml3-picker-favorites .ml3-balance-chip { max-width: 105px; }
+.ml3-picker-results {
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
+  padding-bottom: 3px;
+}
+.ml3-picker-results > button:not(.ml3-picker-more) {
+  min-height: 42px;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  gap: 7px;
+  padding: 5px 7px;
+}
+.ml3-picker-option-copy { display: block; }
+.ml3-picker-option-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ml3-step--source.is-open,
+.ml3-step--destination.is-open { overflow: hidden; }
+.ml3-step--source .ml3-route-picker,
+.ml3-step--destination .ml3-route-picker {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+.ml3-step--source .ml3-step-controls,
+.ml3-step--destination .ml3-step-controls {
+  position: static;
+  margin-top: 0;
+}
+
+@media (min-width: 760px) {
+  .ml3-picker-favorites { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 430px) {
+  .adreem-flow-head { min-height: 58px; padding-block: 6px; }
+  .adreem-flow-progress { padding-top: 5px; }
+  .adreem-flow-progress-meta { min-height: 31px; }
+  .adreem-flow-progress-meta > span { display: none; }
+  .adreem-flow-trail {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+    padding-block: 2px;
+  }
+  .adreem-flow-trail button { height: 26px; padding-inline: 4px; }
+  .ml3-picker-context { align-items: flex-start; }
+  .ml3-picker-context > div { gap: 3px 7px; }
+  .ml3-picker-favorites .ml3-balance-chip,
+  .ml3-picker-results .ml3-balance-chip {
+    max-width: 112px;
+    font-size: 0.61rem;
+  }
+  .ml3-picker-results > button:not(.ml3-picker-more) { grid-template-columns: 28px minmax(0, 1fr) auto; }
+  .ml3-picker-results > button em { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(adreem-entry-surface),
   ::view-transition-new(adreem-entry-surface) { animation: none !important; }

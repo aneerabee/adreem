@@ -1,5 +1,7 @@
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
 import {
+  accountChoiceKind,
+  accountChoiceKindLabel,
   accountContextLabel,
   accountDetailName,
   accountDetailOptionsFor,
@@ -396,11 +398,27 @@ export function compactAccountChoiceText(account, bucket) {
 
 export function accountChoiceButtonText(account, bucket, currency = '') {
   const presentation = accountBalancePresentation(account, bucket, currency)
-  return `${presentation.icon} ${protectedAccountLabel(account)} | ${presentation.text}`
+  return `${accountChoiceKindIcon(account)} ${protectedAccountPrimaryName(account)} · ${presentation.text}`
+}
+
+export function accountChoiceLegendText(accounts = []) {
+  const uniqueAccounts = [...new Map(accounts.map((account) => [accountChoiceKind(account), account])).values()]
+  return uniqueAccounts.map((account) => `${accountChoiceKindIcon(account)} ${accountChoiceKindLabel(account)}`).join(' · ')
 }
 
 export function accountChoiceButtonStyle(account, bucket, currency = '') {
   return accountBalancePresentation(account, bucket, currency).buttonStyle
+}
+
+function accountChoiceKindIcon(account) {
+  const kind = accountChoiceKind(account)
+  if (kind === VALUE_KINDS.CASH) return '💵'
+  if (kind === VALUE_KINDS.BANK) return '🏦'
+  if (kind === 'person-bank') return '🧾'
+  if (kind === VALUE_KINDS.ASSET) return '📦'
+  if (kind === VALUE_KINDS.PROJECT) return '📊'
+  if (kind === VALUE_KINDS.EXPENSE) return '🧾'
+  return '👤'
 }
 
 export function accountBlockquote(account, bucket) {

@@ -4,6 +4,7 @@ import { ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCata
 import { localizeTelegramPayload, stripUiDataProtection } from '../../src/mohammadLedger/uiTranslation.js'
 import {
   accountBlockquote,
+  accountChoiceLegendText,
   accountChoiceButtonStyle,
   accountChoiceButtonText,
   accountEditHistoryText,
@@ -43,7 +44,7 @@ describe('telegram account balance presentation', () => {
     const bucket = { dinar: 12500, usd: 0 }
 
     expect(formatAccountBalance(receivable, bucket)).toBe('أقبض منه 12,500 د.ل')
-    expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('🟢 سعيد · كاش بيننا · دينار | أقبض منه 12,500 د.ل')
+    expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('👤 سعيد · أقبض منه 12,500 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('success')
     expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🟢 سعيد\nكاش بيننا · دينار')
   })
@@ -52,7 +53,7 @@ describe('telegram account balance presentation', () => {
     const bucket = { dinar: -3200, usd: 0 }
 
     expect(formatAccountBalance(receivable, bucket)).toBe('أدفع له 3,200 د.ل')
-    expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('🔴 سعيد · كاش بيننا · دينار | أدفع له 3,200 د.ل')
+    expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('👤 سعيد · أدفع له 3,200 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('danger')
     expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🔴 سعيد\nكاش بيننا · دينار')
   })
@@ -68,8 +69,16 @@ describe('telegram account balance presentation', () => {
     expect(stripUiDataProtection(accountChoiceButtonText(cash, bucket, CURRENCIES.USD))).toContain('موجود 500 $')
     expect(stripUiDataProtection(accountChoiceButtonText(cash, bucket, CURRENCIES.USD))).not.toContain('50,000')
     expect(stripUiDataProtection(accountChoiceButtonText(cash, bucket, CURRENCIES.DINAR))).toContain('موجود 50,000 د.ل')
-    expect(stripUiDataProtection(accountChoiceButtonText(cash, { dinar: 50_000, usd: 0 }, CURRENCIES.USD))).toContain('⚪')
+    expect(stripUiDataProtection(accountChoiceButtonText(cash, { dinar: 50_000, usd: 0 }, CURRENCIES.USD))).toContain('💵')
     expect(stripUiDataProtection(accountChoiceButtonText(cash, { dinar: 50_000, usd: 0 }, CURRENCIES.USD))).toContain('0 $')
+  })
+
+  it('shows account types once as a legend instead of repeating them in every choice', () => {
+    const bank = { ownerName: 'أنا', subAccountName: 'الجمهورية', valueKind: VALUE_KINDS.BANK }
+    const cheque = { ownerName: 'سعيد', subAccountName: 'شيك بيننا', valueKind: VALUE_KINDS.RECEIVABLE }
+
+    expect(accountChoiceLegendText([cash, receivable, bank, cheque, cash])).toBe('💵 كاش · 👤 كاش بيننا · 🏦 مصرف · 🧾 شيك بيننا')
+    expect(stripUiDataProtection(accountChoiceButtonText(receivable, { dinar: 100, usd: 0 }))).not.toContain('كاش بيننا')
   })
 
   it('protects colliding account names while translating account type and currency labels', () => {

@@ -8,7 +8,8 @@ import './adreemDesk.css'
 import './adreemStudio.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
-import { accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
+import { accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
+import { accountCurrencyLabel } from './accountCompatibility'
 import { accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, voidMovement } from './ledgerCore'
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammadPersistenceMode, loadMohammadPersistedState, logoutAdreemCloudSession, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
@@ -90,6 +91,18 @@ function AccountPresetIcon({ presetKey }) {
   if (presetKey === 'project') return <BriefcaseBusiness {...props} />
   if (presetKey === 'expense') return <ReceiptText {...props} />
   return <WalletCards {...props} />
+}
+
+function AccountChoiceIcon({ account, size = 16 }) {
+  const props = { 'aria-hidden': true, size, strokeWidth: 2.1 }
+  const kind = accountChoiceKind(account)
+  if (kind === VALUE_KINDS.CASH) return <Banknote {...props} />
+  if (kind === VALUE_KINDS.BANK) return <Landmark {...props} />
+  if (kind === 'person-bank') return <WalletCards {...props} />
+  if (kind === VALUE_KINDS.ASSET) return <Boxes {...props} />
+  if (kind === VALUE_KINDS.PROJECT) return <BriefcaseBusiness {...props} />
+  if (kind === VALUE_KINDS.EXPENSE) return <ReceiptText {...props} />
+  return <UserRound {...props} />
 }
 
 function AccountGroupIcon({ groupKey }) {
@@ -321,6 +334,17 @@ function protectedAccountContext(account) {
   const knownDetails = accountDetailOptionsFor(account.type, account.valueKind)
   if (knownDetails.some((knownDetail) => context.startsWith(knownDetail))) return context
   return detail && context.includes(detail) ? protectUiValues(context, [detail]) : context
+}
+
+function conciseAccountChoiceContext(account) {
+  if (!account) return ''
+  const kind = accountChoiceKind(account)
+  const kindLabel = accountChoiceKindLabel(account)
+  if (![VALUE_KINDS.CASH, VALUE_KINDS.BANK, 'person-bank', 'person-cash'].includes(kind)) return kindLabel
+  const primary = normalizeAccountSearchText(accountPrimaryName(account))
+  const normalizedKind = normalizeAccountSearchText(kindLabel)
+  const currency = accountCurrencyLabel(account)
+  return primary.includes(normalizedKind) ? currency : `${kindLabel} · ${currency}`
 }
 
 function protectedAccountDraftSummary(accountDraft) {
@@ -968,8 +992,12 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
     .sort((a, b) => rankAccount(a) - rankAccount(b) || accountLabel(a).localeCompare(accountLabel(b), 'ar'))
   const visibleAccounts = selectedAccount && !filteredAccounts.some((account) => account.id === selectedAccount.id) ? [selectedAccount, ...filteredAccounts] : filteredAccounts
   const resultAccounts = visibleAccounts
+  const showPreferredAccounts = !normalizedQuery && !quickFilter && preferredAccounts.length > 0
+  const preferredAccountIdSet = new Set(preferredAccounts.map((account) => account.id))
+  const listResultAccounts = showPreferredAccounts ? resultAccounts.filter((account) => !preferredAccountIdSet.has(account.id)) : resultAccounts
   const shouldLimitResults = !normalizedQuery && !quickFilter && !showAllResults
-  const shownResultAccounts = shouldLimitResults ? resultAccounts.slice(0, 8) : resultAccounts
+  const shownResultAccounts = shouldLimitResults ? listResultAccounts.slice(0, 8) : listResultAccounts
+  const kindLegendAccounts = [...new Map(resultAccounts.map((account) => [accountChoiceKind(account), account])).values()]
 
   function chooseAccount(accountId) {
     onChange(accountId)
@@ -984,7 +1012,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
       <div className={`ml3-picked-account ${selectedAccount ? `is-selected ml3-picked-account--${visualKind(selectedAccount)}` : ''}`}>
         <div>
           <strong>{selectedAccount ? protectedAccountPrimaryName(selectedAccount) : 'اختر الحساب'}</strong>
-          {selectedAccount ? <small>{protectedAccountContext(selectedAccount)}</small> : null}
+          {selectedAccount ? <small>{conciseAccountChoiceContext(selectedAccount)}</small> : null}
         </div>
         {selectedAccount ? (
           <div className="ml3-picked-actions">
@@ -1014,62 +1042,74 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
               placeholder="اكتب الاسم أو كاش أو مصرف"
             />
           </label>
-          {!normalizedQuery && !quickFilter && preferredAccounts.length ? (
+          <div className="ml3-picker-context" aria-label="أنواع الحسابات المتاحة">
+            <span>{formatCount(resultAccounts.length)} حساب</span>
+            <div>
+              {kindLegendAccounts.map((account) => (
+                <span className={`ml3-picker-kind ml3-picker-kind--${visualKind(account)}`} key={accountChoiceKind(account)}>
+                  <AccountChoiceIcon account={account} size={14} />
+                  {accountChoiceKindLabel(account)}
+                </span>
+              ))}
+            </div>
+          </div>
+          {showPreferredAccounts ? (
             <div className="ml3-picker-lane">
               <div className="ml3-picker-lane-head">
                 <strong>الأقرب</strong>
               </div>
               <div className="ml3-picker-favorites" aria-label="اختيارات سريعة">
-                {preferredAccounts.map((account) => (
-                  <button type="button" key={account.id} className={`ml3-picker-favorite--${visualKind(account)} ${account.id === value ? 'is-selected' : ''}`} onClick={() => chooseAccount(account.id)}>
-                    <strong>{protectedAccountPrimaryName(account)}</strong>
-                    <span>{protectedAccountContext(account)}</span>
+                {preferredAccounts.map((account) => {
+                  const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id), balanceCurrency)
+                  return (
+                    <button type="button" key={account.id} className={`ml3-picker-favorite--${visualKind(account)} ${account.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => chooseAccount(account.id)}>
+                      <span className={`ml3-picker-type-icon ml3-picker-type-icon--${visualKind(account)}`}><AccountChoiceIcon account={account} size={15} /></span>
+                      <strong>{protectedAccountPrimaryName(account)}</strong>
+                      <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
+          {accounts.length > 8 ? (
+            <div className="ml3-picker-lane is-filter">
+              <div className="ml3-picker-chips" aria-label="تصفية سريعة">
+                {quickFilters.map((filter) => (
+                  <button
+                    type="button"
+                    key={filter.key || 'all'}
+                    className={quickFilter === filter.key && !normalizedQuery ? 'is-active' : ''}
+                    onClick={() => {
+                      setQuickFilter(filter.key)
+                      setQuery('')
+                      setShowAllResults(false)
+                    }}
+                  >
+                    {filter.label}
                   </button>
                 ))}
               </div>
             </div>
           ) : null}
-          <div className="ml3-picker-lane is-filter">
-            <div className="ml3-picker-lane-head">
-              <strong>فلترة</strong>
-              <span>{formatCount(resultAccounts.length)}</span>
-            </div>
-            <div className="ml3-picker-chips" aria-label="تصفية سريعة">
-              {quickFilters.map((filter) => (
-                <button
-                  type="button"
-                  key={filter.key || 'all'}
-                  className={quickFilter === filter.key && !normalizedQuery ? 'is-active' : ''}
-                  onClick={() => {
-                    setQuickFilter(filter.key)
-                    setQuery('')
-                    setShowAllResults(false)
-                  }}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-          </div>
           <div className="ml3-picker-results">
             {shownResultAccounts.map((account) => {
               const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id), balanceCurrency)
               const hasBalance = hasVisibleBalance(account)
               return (
-                <button type="button" key={account.id} className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`} onClick={() => chooseAccount(account.id)}>
-                  <span className={`ml3-picker-dot ml3-picker-dot--${visualKind(account)}`} aria-hidden="true" />
+                <button type="button" key={account.id} className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => chooseAccount(account.id)}>
+                  <span className={`ml3-picker-type-icon ml3-picker-type-icon--${visualKind(account)}`}><AccountChoiceIcon account={account} size={16} /></span>
                   <span className="ml3-picker-option-copy">
                     <strong>{protectedAccountPrimaryName(account)}</strong>
-                    <small>{protectedAccountContext(account)}</small>
                   </span>
                   <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
                   {account.id === value ? <em>مختار</em> : null}
                 </button>
               )
             })}
-            {shouldLimitResults && resultAccounts.length > shownResultAccounts.length ? (
+            {shouldLimitResults && listResultAccounts.length > shownResultAccounts.length ? (
               <button type="button" className="ml3-picker-more" onClick={() => setShowAllResults(true)}>
-                عرض الكل · {formatCount(resultAccounts.length)}
+                عرض الكل · {formatCount(listResultAccounts.length)}
               </button>
             ) : null}
             {normalizedQuery && resultAccounts.length === 0 ? <p>لا توجد نتيجة</p> : null}

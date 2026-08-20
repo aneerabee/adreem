@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import { normalizeAccountText } from './accountCompatibility.js'
 import {
+  accountChoiceKind,
+  accountChoiceKindLabel,
   accountDetailName,
   accountContextLabel,
   accountDisplayName,
@@ -57,6 +59,14 @@ describe('account display wording', () => {
   it('keeps legacy own-money accounts understandable without rewriting them', () => {
     expect(accountDisplayName({ ownerName: 'أنا', subAccountName: 'كاش' })).toBe('كاش عندي · كاش · دينار')
     expect(accountDisplayName({ ownerName: 'أنا', subAccountName: 'مصرف الجمهورية' })).toBe('مصرف الجمهورية · حساب مصرفي · دينار')
+  })
+
+  it('provides one compact chooser kind without repeating it in every label', () => {
+    expect(accountChoiceKind({ valueKind: VALUE_KINDS.CASH })).toBe(VALUE_KINDS.CASH)
+    expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.CASH })).toBe('كاش')
+    expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.BANK })).toBe('مصرف')
+    expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.RECEIVABLE, subAccountName: 'كاش بيننا' })).toBe('كاش بيننا')
+    expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.RECEIVABLE, subAccountName: 'شيك بيننا' })).toBe('شيك بيننا')
   })
 
   it('moves the visible name safely when the account family changes', () => {

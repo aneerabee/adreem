@@ -42,7 +42,7 @@ import {
   numericKeypadKeyboard,
   recurringKeyboard,
 } from '../keyboards.js'
-import { escapeHtml, movementStepText, reviewMovementText } from '../messages.js'
+import { accountChoiceLegendText, escapeHtml, movementStepText, reviewMovementText } from '../messages.js'
 import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
 import { applyNumericKey, normalizeNumericBuffer, numericBufferDisplay, numericBufferValue } from '../numericKeypad.js'
 
@@ -303,6 +303,8 @@ async function sendAccountChoices(ctx, session, state, role, query = '', request
   const lines = [movementStepText(session, snapshot.accountById, dimensionById, expenseCategoryById)]
   if (feedback) lines.push('', `<blockquote>${escapeHtml(feedback)}</blockquote>`)
   if (query) lines.push('', `<code>بحث: ${escapeHtml(preserveUiData(query))}</code>`)
+  const legend = accountChoiceLegendText(rankedAll)
+  if (legend) lines.push('', `<code>${escapeHtml(legend)}</code>`)
   if (pageCount > 1) lines.push('', `<code>${rankedAll.length} حساب · ${page + 1}/${pageCount}</code>`)
   if (!ranked.length) lines.push('', '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
   return upsertFlowMessage(ctx, session, {
