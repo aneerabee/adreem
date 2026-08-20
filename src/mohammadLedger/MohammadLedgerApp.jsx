@@ -3,8 +3,9 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Check, ChevronLeft, ChevronRight, CircleDollarSign, Landmark, ReceiptText, Search, SlidersHorizontal, UserRound, WalletCards, Wrench } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Check, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, Landmark, ReceiptText, Search, SlidersHorizontal, UserRound, WalletCards, Wrench } from 'lucide-react'
 import './adreemDesk.css'
+import './adreemStudio.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
@@ -95,6 +96,8 @@ function AccountGroupIcon({ groupKey }) {
   const props = { 'aria-hidden': true, size: 19 }
   if (groupKey === 'people') return <UserRound {...props} />
   if (groupKey === 'money') return <WalletCards {...props} />
+  if (groupKey === 'expenses') return <ReceiptText {...props} />
+  if (groupKey === 'review') return <CircleAlert {...props} />
   return <Boxes {...props} />
 }
 
@@ -1193,9 +1196,10 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
   return (
     <article className={`ml3-today-row ml3-today-row--${movementTone(movement.type)} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
       <div className="ml3-today-main">
-        <strong>{movementLabels[movement.type] || movement.type}</strong>
-        <span>
-          {movementTime(movement.createdAt)} · {money(movement.amount, movement.currency)} · {movementStatusLabel(movement.status)}
+        <i className="ml3-movement-icon"><MovementTypeIcon type={movement.type} /></i>
+        <span className="ml3-movement-copy">
+          <strong>{movementLabels[movement.type] || movement.type}</strong>
+          <small>{movementTime(movement.createdAt)} · {money(movement.amount, movement.currency)} · {movementStatusLabel(movement.status)}</small>
         </span>
       </div>
       <div className="ml3-today-route">
@@ -1247,9 +1251,10 @@ function HistoryMovementRow({ movement, accountById, attachments = [], dimension
   return (
     <article className={`ml3-history-row ml3-history-row--${movementTone(movement.type)} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
       <div className="ml3-history-main">
-        <strong>{movementLabels[movement.type] || movement.type}</strong>
-        <span>
-          {movementDateTime(movement.createdAt || movement.updatedAt)} · {money(movement.amount, movement.currency)} · {statusTone}
+        <i className="ml3-movement-icon"><MovementTypeIcon type={movement.type} /></i>
+        <span className="ml3-movement-copy">
+          <strong>{movementLabels[movement.type] || movement.type}</strong>
+          <small>{movementDateTime(movement.createdAt || movement.updatedAt)} · {money(movement.amount, movement.currency)} · {statusTone}</small>
         </span>
       </div>
       <div className="ml3-history-route">
@@ -3075,22 +3080,22 @@ export default function MohammadLedgerApp() {
 
         <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة">
           <button type="button" className="is-money" onClick={() => setActiveAccountGroup('money')}>
-            <span>فلوسي</span>
-            <strong>{money(totals.cash + totals.bank)}</strong>
+            <i><WalletCards aria-hidden="true" size={18} /></i>
+            <span><small>فلوسي</small><strong>{money(totals.cash + totals.bank)}</strong></span>
           </button>
           <button type="button" className="is-positive" onClick={() => {
             setActiveAccountGroup('people')
             setPeopleAccountView('balances')
           }}>
-            <span>أقبض</span>
-            <strong>{money(totals.peopleOweMe)}</strong>
+            <i><ArrowDownToLine aria-hidden="true" size={18} /></i>
+            <span><small>أقبض</small><strong>{money(totals.peopleOweMe)}</strong></span>
           </button>
           <button type="button" className="is-negative" onClick={() => {
             setActiveAccountGroup('people')
             setPeopleAccountView('balances')
           }}>
-            <span>أدفع</span>
-            <strong>{money(totals.iOwePeople)}</strong>
+            <i><ArrowUpFromLine aria-hidden="true" size={18} /></i>
+            <span><small>أدفع</small><strong>{money(totals.iOwePeople)}</strong></span>
           </button>
         </div>
 
@@ -3115,6 +3120,7 @@ export default function MohammadLedgerApp() {
         <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
           {accountGroupTabs.map((group) => (
             <button type="button" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-current={activeAccountGroup === group.key ? 'true' : undefined} onClick={() => setActiveAccountGroup(group.key)}>
+              <AccountGroupIcon groupKey={group.key} />
               <strong>{group.label}</strong>
               <span>{formatCount(accountRowsByGroup[group.key]?.length || 0)}</span>
             </button>

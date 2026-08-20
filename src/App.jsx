@@ -1,4 +1,4 @@
-import './appShell.css'
+import './appStudio.css'
 import AdminUsersPage from './mohammadLedger/AdminUsersPage'
 import ConfigurationErrorPage from './mohammadLedger/ConfigurationErrorPage'
 import LoginPage from './mohammadLedger/LoginPage'

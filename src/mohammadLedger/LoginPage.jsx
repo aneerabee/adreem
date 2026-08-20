@@ -1,6 +1,7 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
 import { useState } from 'react'
+import { BookOpenCheck, LogIn, UsersRound } from 'lucide-react'
 import {
   ADREEM_API_TOKEN_PERSIST_KEY,
   ADREEM_API_TOKEN_SESSION_KEY,
@@ -71,9 +72,10 @@ export default function LoginPage() {
     <main className="adreem-login-app" dir={direction} lang={normalizedLanguage}>
       <form className="adreem-login-card" onSubmit={submit}>
         <div className="adreem-login-brand">
+          <i aria-hidden="true"><BookOpenCheck size={24} /></i>
           <span>ADREEM</span>
           <h1>الدخول للدفتر</h1>
-          <p>هذا الجهاز يتذكر دخولك إلى أن تسجل خروجك أو تحذف بيانات الموقع.</p>
+          <p>جهازك سيتذكر الدخول.</p>
         </div>
         <label>
           <span>الإيميل</span>
@@ -99,9 +101,11 @@ export default function LoginPage() {
           />
         </label>
         <button type="submit" disabled={status === 'loading'}>
+          <LogIn aria-hidden="true" size={17} />
           {status === 'loading' ? 'جاري الدخول' : 'دخول'}
         </button>
         <button type="button" className="adreem-login-secondary" onClick={openAdmin}>
+          <UsersRound aria-hidden="true" size={17} />
           إدارة المستخدمين
         </button>
         {message ? <p>{message}</p> : null}

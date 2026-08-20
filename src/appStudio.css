@@ -1,0 +1,305 @@
+:root {
+  --ad-ink: #172b25;
+  --ad-ink-soft: #355048;
+  --ad-green: #08785f;
+  --ad-green-soft: #e6f5ef;
+  --ad-blue: #2d66ad;
+  --ad-blue-soft: #eaf1fb;
+  --ad-red: #cf4e46;
+  --ad-red-soft: #fff0ee;
+  --ad-amber: #b97812;
+  --ad-canvas: #f2f6f4;
+  --ad-paper: #ffffff;
+  --ad-line: #d6e0dc;
+  --ad-muted: #657871;
+}
+
+.adreem-login-app,
+.adreem-admin-app {
+  min-height: 100dvh;
+  background: var(--ad-canvas);
+  color: var(--ad-ink);
+  font-family: var(--adreem-font-ar);
+}
+.adreem-login-app[lang="en"],
+.adreem-admin-app[lang="en"] { font-family: var(--adreem-font-en); }
+.adreem-login-app *,
+.adreem-admin-app * { box-sizing: border-box; letter-spacing: 0; }
+
+.adreem-login-app {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  overflow: hidden;
+}
+.adreem-login-app::before {
+  content: "";
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 9px;
+  background: var(--ad-green);
+}
+.adreem-login-card {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 13px;
+  padding: 20px;
+  border: 1px solid #bdd1c9;
+  border-radius: 8px;
+  background: var(--ad-paper);
+  box-shadow: 0 22px 60px rgba(23, 43, 37, 0.14);
+  animation: adreem-shell-rise 220ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+.adreem-login-brand {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 2px 10px;
+  margin: -20px -20px 5px;
+  padding: 18px 20px;
+  border-radius: 7px 7px 0 0;
+  background: var(--ad-ink);
+  color: #f7fbf9;
+}
+.adreem-login-brand > i {
+  grid-row: 1 / 4;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  border-radius: 7px;
+  background: var(--ad-green);
+  color: #fff;
+  font-style: normal;
+}
+.adreem-login-brand > span,
+.adreem-admin-head > div > span {
+  color: #7ad1b6;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+.adreem-login-brand h1,
+.adreem-admin-head h1,
+.adreem-admin-card h2 { margin: 0; line-height: 1.25; }
+.adreem-login-brand h1 { font-size: 1.35rem; }
+.adreem-login-brand p {
+  margin: 0;
+  color: #bfd0ca;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+.adreem-login-card label,
+.adreem-admin-card label {
+  display: grid;
+  gap: 5px;
+  color: var(--ad-ink-soft);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+.adreem-login-card input,
+.adreem-admin-card input {
+  width: 100%;
+  min-height: 43px;
+  border: 1px solid var(--ad-line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  outline: 0;
+  background: #fff;
+  color: var(--ad-ink);
+}
+.adreem-login-card input:focus,
+.adreem-admin-card input:focus {
+  border-color: var(--ad-green);
+  box-shadow: 0 0 0 3px rgba(8, 120, 95, 0.12);
+}
+.adreem-login-card > button,
+.adreem-admin-card > button,
+.adreem-admin-token button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--ad-green);
+  border-radius: 6px;
+  padding: 0 14px;
+  background: var(--ad-green);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(8, 120, 95, 0.17);
+}
+.adreem-login-card > button:hover,
+.adreem-admin-card > button:hover { filter: brightness(0.95); }
+.adreem-login-card > button:disabled { opacity: 0.5; cursor: wait; }
+.adreem-login-card > .adreem-login-secondary {
+  border-color: var(--ad-line);
+  background: #f5f8f6;
+  color: var(--ad-ink-soft);
+  box-shadow: none;
+}
+.adreem-login-card > p {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #e9b2ad;
+  border-radius: 6px;
+  background: var(--ad-red-soft);
+  color: #96362f;
+  font-size: 0.77rem;
+}
+
+.adreem-admin-shell {
+  width: min(1120px, calc(100% - 24px));
+  margin: 0 auto;
+  padding-bottom: 36px;
+}
+.adreem-admin-head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #afc9bd;
+  background: rgba(242, 246, 244, 0.97);
+  box-shadow: 0 5px 18px rgba(23, 43, 37, 0.055);
+  backdrop-filter: blur(14px);
+}
+.adreem-admin-head h1 { font-size: 1.2rem; }
+.adreem-admin-head-actions { display: flex; align-items: center; gap: 6px; }
+.adreem-admin-head-actions button,
+.adreem-admin-card-head button,
+.adreem-admin-user-actions button {
+  min-height: 34px;
+  border: 1px solid var(--ad-line);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--ad-ink-soft);
+  font-size: 0.73rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.adreem-admin-head-actions button:hover,
+.adreem-admin-card-head button:hover,
+.adreem-admin-user-actions button:hover { border-color: #9dc7b8; background: var(--ad-green-soft); color: var(--ad-green); }
+.adreem-admin-head-actions b {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--ad-ink);
+  color: #fff;
+  font-size: 0.68rem;
+}
+.adreem-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 355px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.adreem-admin-card {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(23, 43, 37, 0.06);
+  animation: adreem-shell-rise 200ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+.adreem-admin-card:first-child { border-top: 4px solid var(--ad-green); }
+.adreem-admin-card:last-child { border-top: 4px solid var(--ad-blue); }
+.adreem-admin-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+}
+.adreem-admin-card-head h2 { font-size: 1rem; }
+.adreem-admin-card-head span { direction: ltr; color: var(--ad-blue); font-size: 0.7rem; font-weight: 750; }
+.adreem-admin-card label + label { margin-top: 8px; }
+.adreem-admin-card > button { width: 100%; margin-top: 10px; }
+.adreem-admin-users { display: grid; gap: 6px; }
+.adreem-admin-user {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, auto) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 58px;
+  padding: 8px 9px;
+  border: 1px solid var(--ad-line);
+  border-radius: 7px;
+  background: #fff;
+}
+.adreem-admin-user:hover { border-color: #acc7e8; background: var(--ad-blue-soft); }
+.adreem-admin-user > div { min-width: 0; display: grid; gap: 2px; }
+.adreem-admin-user strong,
+.adreem-admin-user span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-admin-user span { color: var(--ad-muted); font-size: 0.71rem; }
+.adreem-admin-user b { color: var(--ad-green); font-size: 0.7rem; }
+.adreem-admin-user-actions { display: flex; gap: 5px; }
+.adreem-admin-user-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.adreem-admin-user-actions button:last-child:not(:disabled) { color: var(--ad-red); }
+.adreem-admin-message {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  width: fit-content;
+  max-width: 100%;
+  margin: 12px auto 0;
+  padding: 9px 12px;
+  border: 1px solid #33564a;
+  border-radius: 6px;
+  background: var(--ad-ink);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.adreem-login-card button,
+.adreem-admin-app button {
+  transition: color 140ms ease-out, background-color 140ms ease-out, border-color 140ms ease-out, transform 150ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 170ms ease-out;
+}
+.adreem-login-card button:not(:disabled):active,
+.adreem-admin-app button:not(:disabled):active { transform: scale(0.985); }
+.adreem-login-card button:focus-visible,
+.adreem-login-card input:focus-visible,
+.adreem-admin-app button:focus-visible,
+.adreem-admin-app input:focus-visible { outline: 2px solid #62b79d; outline-offset: 2px; }
+
+@keyframes adreem-shell-rise {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 760px) {
+  .adreem-login-app { padding: 10px; }
+  .adreem-login-app::before { width: 5px; }
+  .adreem-login-card { padding: 16px; }
+  .adreem-login-brand { margin: -16px -16px 3px; padding: 16px; }
+  .adreem-admin-shell { width: min(100% - 14px, 1120px); }
+  .adreem-admin-head { min-height: 58px; align-items: flex-start; padding-inline: 7px; }
+  .adreem-admin-head-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .adreem-admin-grid { grid-template-columns: 1fr; }
+  .adreem-admin-user { grid-template-columns: minmax(0, 1fr) auto; }
+  .adreem-admin-user-actions { grid-column: 1 / -1; }
+  .adreem-admin-user-actions button { flex: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adreem-login-app *,
+  .adreem-admin-app * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

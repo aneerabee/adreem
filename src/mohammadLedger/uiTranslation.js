@@ -847,7 +847,7 @@ const ENGLISH_TEXT = Object.freeze({
   'جاري حفظ اللغة': 'Saving language',
   'تعذر حفظ اللغة. حاول مرة أخرى.': 'Could not save the language. Try again.',
   'الدخول للدفتر': 'Sign in to your ledger',
-  'هذا الجهاز يتذكر دخولك إلى أن تسجل خروجك أو تحذف بيانات الموقع.': 'This device remembers your sign-in until you log out or clear site data.',
+  'جهازك سيتذكر الدخول.': 'This device will remember you.',
   'لم تُفتح نسخة محلية حمايةً لبياناتك. أعد المحاولة بعد عودة الاتصال السحابي.': 'No local copy was opened, to protect your data. Try again when cloud access returns.',
   'هذا الحساب هو': 'This account is',
   'اسم الحساب': 'Account name',
