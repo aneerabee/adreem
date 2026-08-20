@@ -46,6 +46,7 @@ const sectionTitles = {
   history: 'الحركات',
   review: 'المراجعة',
 }
+const sectionOrder = Object.keys(sectionTitles)
 
 const movementOptionGroups = [
   {
@@ -2276,7 +2277,7 @@ export default function MohammadLedgerApp() {
     root.classList.remove(...motionClasses)
     root.classList.add(directionClass)
 
-    if (typeof document.startViewTransition !== 'function') {
+    if (scope === 'section' || typeof document.startViewTransition !== 'function') {
       root.classList.add('adreem-motion-fallback')
       flushSync(update)
       motionTimerRef.current = window.setTimeout(clearMotion, 240)
@@ -2396,11 +2397,14 @@ export default function MohammadLedgerApp() {
       resetSectionScroll(reducedMotion ? 'auto' : 'smooth')
       return
     }
+    const currentIndex = sectionOrder.indexOf(activeSection)
+    const targetIndex = sectionOrder.indexOf(section)
     commitFlowChange(
       () => {
         setActiveSection(section)
+        resetSectionScroll('auto')
       },
-      section === 'entry' ? 'back' : 'forward',
+      targetIndex >= currentIndex ? 'forward' : 'back',
       'section',
     )
   }

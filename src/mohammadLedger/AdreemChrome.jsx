@@ -88,7 +88,7 @@ export default function AdreemChrome({
             </span>
             <div>
               <span>ADREEM</span>
-              <h1>{activeSectionTitle}</h1>
+              <h1 key={activeSection}>{activeSectionTitle}</h1>
             </div>
           </div>
 
@@ -124,6 +124,7 @@ export default function AdreemChrome({
                 <button
                   type="button"
                   className={activeSection === section.key ? 'is-active' : ''}
+                  data-section={section.key}
                   key={section.key}
                   onClick={() => onSectionChange(section.key)}
                   aria-current={activeSection === section.key ? 'page' : undefined}

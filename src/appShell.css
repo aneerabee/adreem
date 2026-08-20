@@ -1,11 +1,13 @@
 :root {
-  --ad-ink: #172622;
-  --ad-green: #0b7a5a;
-  --ad-red: #d9564a;
-  --ad-canvas: #f3f6f4;
+  --ad-ink: #17332d;
+  --ad-green: #087f68;
+  --ad-blue: #2f72b7;
+  --ad-red: #df574c;
+  --ad-amber: #d18a18;
+  --ad-canvas: #f3f7f5;
   --ad-paper: #ffffff;
-  --ad-line: #d9e1dd;
-  --ad-muted: #65736e;
+  --ad-line: #d5dfda;
+  --ad-muted: #61736b;
 }
 
 .adreem-login-app,
@@ -33,7 +35,9 @@
   border: 1px solid var(--ad-line);
   border-radius: 8px;
   background: var(--ad-paper);
-  box-shadow: 0 18px 50px rgba(23, 38, 34, 0.1);
+  border-top: 4px solid var(--ad-green);
+  box-shadow: 0 18px 50px rgba(23, 51, 45, 0.1);
+  animation: adreem-shell-rise 240ms cubic-bezier(0.25, 1, 0.5, 1) both;
 }
 
 .adreem-login-brand {
@@ -104,7 +108,16 @@
   color: #fff;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 6px 14px rgba(8, 127, 104, 0.18);
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, box-shadow 180ms ease-out, transform 150ms ease-out;
 }
+
+.adreem-login-card > button:not(:disabled):hover,
+.adreem-admin-card > button:not(:disabled):hover,
+.adreem-admin-token button:not(:disabled):hover { background: #066b59; }
+.adreem-login-card > button:not(:disabled):active,
+.adreem-admin-card > button:not(:disabled):active,
+.adreem-admin-token button:not(:disabled):active { transform: scale(0.985); }
 
 .adreem-login-card > button:disabled { opacity: 0.55; cursor: wait; }
 
@@ -140,8 +153,9 @@
   gap: 12px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--ad-line);
-  background: rgba(243, 246, 244, 0.96);
+  background: rgba(243, 247, 245, 0.96);
   backdrop-filter: blur(12px);
+  box-shadow: 0 5px 18px rgba(23, 51, 45, 0.045);
 }
 
 .adreem-admin-head h1 { font-size: 1.25rem; }
@@ -190,6 +204,8 @@
   border: 1px solid var(--ad-line);
   border-radius: 8px;
   background: var(--ad-paper);
+  box-shadow: 0 8px 22px rgba(23, 51, 45, 0.055);
+  animation: adreem-shell-rise 220ms cubic-bezier(0.25, 1, 0.5, 1) both;
 }
 
 .adreem-admin-card-head {
@@ -225,6 +241,14 @@
   border: 1px solid var(--ad-line);
   border-radius: 6px;
   background: #fff;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, transform 150ms ease-out;
+}
+
+.adreem-admin-user:hover { border-color: #b8d1ec; background: #f4f8fd; }
+
+@keyframes adreem-shell-rise {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .adreem-admin-user > div { min-width: 0; display: grid; gap: 2px; }
@@ -275,5 +299,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
