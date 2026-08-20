@@ -11,6 +11,7 @@ import {
   accountPrimaryName,
 } from '../../src/mohammadLedger/accountConfig.js'
 import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { accountEditChanges } from '../../src/mohammadLedger/accountEditing.js'
 import {
   movementConfigFor,
   movementLabels,
@@ -210,12 +211,12 @@ export function accountStepText(session) {
     summary.push(htmlLine('العملة', draft.currencyKind === CURRENCIES.USD ? 'دولار' : 'دينار'))
   }
 
-  const title = session?.mode === 'review' ? 'ADREEM · إصلاح حساب' : 'ADREEM · حساب جديد'
+  const title = session?.mode === 'review' ? 'ADREEM · إصلاح حساب' : session?.mode === 'edit' ? 'ADREEM · تعديل حساب' : 'ADREEM · حساب جديد'
   const lines = [
     `<b>${title}</b>`,
     `<code>${progress}</code>`,
     '',
-    ...(session?.mode === 'review' && session.reviewOriginalLabel
+    ...(session?.mode !== 'create' && session.reviewOriginalLabel
       ? [`<blockquote>${escapeHtml(`الحساب الحالي:\n${session.reviewOriginalLabel}`)}</blockquote>`, '']
       : []),
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
@@ -228,7 +229,7 @@ export function accountStepText(session) {
 export function accountReviewText(session, result = null) {
   const draft = session?.draft || {}
   const lines = [
-    '<b>تأكيد الحساب</b>',
+    `<b>${session?.mode === 'edit' ? 'تأكيد تعديل الحساب' : session?.mode === 'review' ? 'تأكيد إصلاح الحساب' : 'تأكيد الحساب'}</b>`,
     '<code>راجع قبل الحفظ</code>',
     '',
     '<blockquote>',
@@ -247,8 +248,10 @@ export function accountReviewText(session, result = null) {
   return lines.join('\n')
 }
 
-export function accountCreatedText(account, { duplicate = false, reviewed = false } = {}) {
-  const title = reviewed ? 'تم إصلاح الحساب واعتماده.' : (duplicate ? 'كان محفوظًا سابقًا ولم يتكرر.' : 'تم إنشاء الحساب.')
+export function accountCreatedText(account, { duplicate = false, reviewed = false, edited = false, unchanged = false } = {}) {
+  const title = unchanged
+    ? 'لا يوجد تغيير في الحساب.'
+    : reviewed ? 'تم إصلاح الحساب واعتماده.' : edited ? 'تم تعديل الحساب وحفظ السجل.' : (duplicate ? 'كان محفوظًا سابقًا ولم يتكرر.' : 'تم إنشاء الحساب.')
   return [
     `<b>${escapeHtml(title)}</b>`,
     '<blockquote>',
@@ -421,6 +424,28 @@ export function accountBlockquote(account, bucket) {
     escapeHtml(presentation.text),
     '</blockquote>',
   ].join('')
+}
+
+export function accountEditHistoryText(accountId, auditEvents = [], limit = 3) {
+  const edits = auditEvents
+    .filter((event) => event.action === 'account.updated' && event.details?.accountId === accountId)
+    .map((event) => ({ ...event, changes: accountEditChanges(event.details?.before, event.details?.after) }))
+    .filter((event) => event.changes.length)
+    .sort((left, right) => String(right.createdAt || '').localeCompare(String(left.createdAt || '')))
+  if (!edits.length) return ''
+
+  const visible = edits.slice(0, Math.max(1, Number(limit) || 1))
+  const blocks = visible.map((event) => {
+    const time = movementDateLabel({ createdAt: event.createdAt }, { includeDate: true })
+    const lines = time ? [time] : []
+    event.changes.forEach((change) => {
+      const before = change.protectsUserData ? preserveUiData(change.before) : change.before
+      const after = change.protectsUserData ? preserveUiData(change.after) : change.after
+      lines.push(change.label, `قبل: ${before}`, `بعد: ${after}`)
+    })
+    return `<blockquote>${escapeHtml(lines.join('\n'))}</blockquote>`
+  })
+  return [`<b>سجل التعديلات · ${edits.length}</b>`, ...blocks].join('\n')
 }
 
 export function formatAccountBalance(account, bucket) {

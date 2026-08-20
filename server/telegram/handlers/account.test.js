@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
 import { createSessionStore } from '../sessionStore.js'
-import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './account.js'
+import { handleAccountCallback, handleAccountText, startAccount, startEditAccount, startReviewAccount } from './account.js'
 
 function emptyState() {
   return {
@@ -291,5 +291,63 @@ describe('telegram account flow', () => {
       valueKind: VALUE_KINDS.ASSET,
       currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
     })
+  })
+
+  it('edits an active account from its current name and records the change', async () => {
+    const ctx = createCtx()
+    ctx.repository = memoryRepository({
+      ...emptyState(),
+      accounts: [{
+        id: 'active-person',
+        ownerName: 'سعيد',
+        subAccountName: 'كاش بيننا',
+        type: ACCOUNT_TYPES.PERSON,
+        valueKind: VALUE_KINDS.RECEIVABLE,
+        currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+        status: ACCOUNT_STATUSES.ACTIVE,
+      }],
+      auditEvents: [],
+    })
+
+    await startEditAccount(ctx, 'active-person')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({ mode: 'edit', step: 'owner', editAccountId: 'active-person' })
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('ADREEM · تعديل حساب')
+
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 58 }, 'شركة سعيد')
+    await handleAccountCallback(ctx, 'acct:detail:1')
+    await handleAccountCallback(ctx, 'acct:currency:USD')
+    await handleAccountCallback(ctx, 'acct:confirm')
+
+    expect(ctx.repository.state.accounts[0]).toMatchObject({
+      ownerName: 'شركة سعيد',
+      subAccountName: 'شيك بيننا',
+      currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+    })
+    expect(ctx.repository.state.auditEvents).toHaveLength(1)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم تعديل الحساب وحفظ السجل')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+  })
+
+  it('cancels account editing without changing the account', async () => {
+    const ctx = createCtx()
+    ctx.repository = memoryRepository({
+      ...emptyState(),
+      accounts: [{
+        id: 'active-cash',
+        ownerName: 'أنا',
+        subAccountName: 'الخزنة',
+        type: ACCOUNT_TYPES.CASH,
+        valueKind: VALUE_KINDS.CASH,
+        currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+        status: ACCOUNT_STATUSES.ACTIVE,
+      }],
+    })
+
+    await startEditAccount(ctx, 'active-cash')
+    await handleAccountCallback(ctx, 'acct:cancel')
+
+    expect(ctx.repository.state.accounts[0].subAccountName).toBe('الخزنة')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم إلغاء تعديل الحساب')
   })
 })

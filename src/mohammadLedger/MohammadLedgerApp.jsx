@@ -8,6 +8,7 @@ import './adreemDesk.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
+import { accountEditChanges, accountEditSnapshot, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, voidMovement } from './ledgerCore'
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammadPersistenceMode, loadMohammadPersistedState, logoutAdreemCloudSession, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
@@ -512,56 +513,21 @@ export function accountReviewSelection(classificationValue, currencyKind = ACCOU
   }
 }
 
-export function accountClassificationMovementErrors(accountId, candidateAccounts = [], movements = []) {
-  return movements
-    .filter((movement) => movement.status === MOVEMENT_STATUSES.POSTED && [movement.sourceAccountId, movement.destinationAccountId, movement.expenseCategoryId].includes(accountId))
-    .flatMap(
-      (movement) =>
-        validateMovement(
-          movement,
-          candidateAccounts,
-          movements.filter((item) => item.id !== movement.id),
-        ).errors,
-    )
-}
+export const accountClassificationMovementErrors = accountUpdateMovementErrors
 
 function accountClassificationCurrency(account, classification, requestedCurrencyKind) {
-  if (!accountNeedsCurrency(classification)) return account.currencyKind
-  if (requestedCurrencyKind === ACCOUNT_CURRENCY_KINDS.DINAR || requestedCurrencyKind === ACCOUNT_CURRENCY_KINDS.USD) return requestedCurrencyKind
-  if (requestedCurrencyKind === ACCOUNT_CURRENCY_KINDS.MULTI && account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI) return requestedCurrencyKind
-  return account.currencyKind === ACCOUNT_CURRENCY_KINDS.USD || account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI
-    ? account.currencyKind
-    : ACCOUNT_CURRENCY_KINDS.DINAR
+  return accountUpdateCurrency(account, classification, requestedCurrencyKind)
 }
 
 export function prepareAccountClassificationUpdate({ accounts = [], movements = [], accountId, ownerName, subAccountName, classificationValue, currencyKind, updatedAt = new Date().toISOString() } = {}) {
-  const currentAccount = accounts.find((account) => account.id === accountId)
-  if (!currentAccount) return { ok: false, reason: 'missing-account', errors: [{ message: 'الحساب غير موجود.' }] }
-
   const classification = parseClassification(classificationValue)
-  const nextAccount = {
-    ownerName: String(ownerName || '').trim(),
-    subAccountName: String(subAccountName || '').trim(),
-    type: classification.type,
-    valueKind: classification.valueKind,
-    currencyKind: accountClassificationCurrency(currentAccount, classification, currencyKind),
-  }
-  const candidateAccounts = accounts.map((account) =>
-    account.id === accountId
-      ? {
-          ...account,
-          ...nextAccount,
-          updatedAt,
-        }
-      : account,
-  )
-  const candidate = candidateAccounts.find((account) => account.id === accountId)
-  const validation = validateAccount(candidate, accounts.filter((account) => account.id !== accountId))
-  if (!validation.ok) return { ok: false, reason: 'account-validation', errors: validation.errors }
-
-  const movementErrors = accountClassificationMovementErrors(accountId, candidateAccounts, movements)
-  if (movementErrors.length) return { ok: false, reason: 'movement-history', errors: movementErrors }
-  return { ok: true, accounts: candidateAccounts, account: candidate }
+  return prepareAccountUpdate({
+    accounts,
+    movements,
+    accountId,
+    draft: { ownerName, subAccountName, ...classification, currencyKind },
+    updatedAt,
+  })
 }
 
 export function cancelMovementConfirmation(target) {
@@ -783,9 +749,40 @@ function compareBalanceBuckets(a, b) {
   return Number(bActive) - Number(aActive) || Math.abs(b.dinar) - Math.abs(a.dinar) || Math.abs(b.usd) - Math.abs(a.usd)
 }
 
+function accountPrimaryBalance(bucket = {}) {
+  const dinar = Number(bucket.dinar || 0)
+  const usd = Number(bucket.usd || 0)
+  const prefersUsd = bucket.account?.currencyKind === ACCOUNT_CURRENCY_KINDS.USD
+  const preferred = prefersUsd
+    ? { amount: usd, currency: CURRENCIES.USD, secondaryAmount: dinar, secondaryCurrency: CURRENCIES.DINAR }
+    : { amount: dinar, currency: CURRENCIES.DINAR, secondaryAmount: usd, secondaryCurrency: CURRENCIES.USD }
+  if (hasMoneyValue(preferred.amount) || !hasMoneyValue(preferred.secondaryAmount)) return preferred
+  return {
+    amount: preferred.secondaryAmount,
+    currency: preferred.secondaryCurrency,
+    secondaryAmount: preferred.amount,
+    secondaryCurrency: preferred.currency,
+  }
+}
+
+export function buildPeopleAccountViews(rows = []) {
+  const sorted = [...rows].sort(compareBalanceBuckets)
+  const positive = sorted.filter((bucket) => accountPrimaryBalance(bucket).amount > 0)
+  const negative = sorted.filter((bucket) => accountPrimaryBalance(bucket).amount < 0)
+  const zero = sorted.filter((bucket) => !nonZero(bucket))
+  return {
+    positive,
+    negative,
+    zero,
+    withBalance: [...positive, ...negative],
+    all: [...positive, ...negative, ...zero],
+  }
+}
+
 export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
-  const { account, dinar, usd } = bucket
-  const balanceTone = dinar > 0 ? 'is-positive' : dinar < 0 ? 'is-negative' : 'is-zero'
+  const { account } = bucket
+  const primaryBalance = accountPrimaryBalance(bucket)
+  const balanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
   return (
     <article className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
@@ -796,8 +793,8 @@ export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen
         </span>
       </button>
       <div className={`ml3-account-values ${balanceTone}`}>
-        {hasMoneyValue(dinar) ? <strong>{formatDisplayMeaning(account, dinar)}</strong> : <span>صفر</span>}
-        {hasMoneyValue(usd) ? <strong>{money(usd, CURRENCIES.USD)}</strong> : null}
+        {hasMoneyValue(primaryBalance.amount) ? <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong> : <span>صفر</span>}
+        {hasMoneyValue(primaryBalance.secondaryAmount) ? <strong>{money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency)}</strong> : null}
       </div>
       {(onConfirm || onDisable) && (
         <div className="ml3-row-actions">
@@ -817,15 +814,56 @@ export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen
   )
 }
 
-function formatDisplayMeaning(account, amount) {
+function formatDisplayMeaning(account, amount, currency = CURRENCIES.DINAR) {
   const rounded = Math.round(Number(amount || 0))
   if (!rounded) return 'صفر'
-  if (account?.valueKind === VALUE_KINDS.EXPENSE) return `مصروف ${money(Math.abs(rounded))}`
-  if (account?.valueKind === VALUE_KINDS.ASSET) return `قيمة ${money(Math.abs(rounded))}`
+  const formattedAmount = money(Math.abs(rounded), currency)
+  if (account?.valueKind === VALUE_KINDS.EXPENSE) return `مصروف ${formattedAmount}`
+  if (account?.valueKind === VALUE_KINDS.ASSET) return `قيمة ${formattedAmount}`
   if (account?.valueKind === VALUE_KINDS.CASH || account?.valueKind === VALUE_KINDS.BANK) {
-    return rounded > 0 ? `موجود ${money(rounded)}` : `ناقص ${money(Math.abs(rounded))}`
+    return rounded > 0 ? `موجود ${formattedAmount}` : `ناقص ${formattedAmount}`
   }
-  return rounded > 0 ? `أقبض منه ${money(rounded)}` : `أدفع له ${money(Math.abs(rounded))}`
+  return rounded > 0 ? `أقبض منه ${formattedAmount}` : `أدفع له ${formattedAmount}`
+}
+
+export { accountEditChanges }
+
+function AccountEditHistory({ accountId, auditEvents = [] }) {
+  const edits = auditEvents
+    .filter((event) => event.action === 'account.updated' && event.details?.accountId === accountId)
+    .map((event) => ({ ...event, changes: accountEditChanges(event.details?.before, event.details?.after) }))
+    .filter((event) => event.changes.length)
+    .sort((left, right) => String(right.createdAt || '').localeCompare(String(left.createdAt || '')))
+
+  return (
+    <section className="ml3-account-edit-history">
+      <div className="ml3-profile-section-head">
+        <h3>سجل التعديلات</h3>
+        <span>{formatCount(edits.length)}</span>
+      </div>
+      {edits.length === 0 ? <p className="ml3-empty">لم يُعدّل هذا الحساب بعد.</p> : null}
+      {edits.map((edit) => (
+        <article key={edit.id}>
+          <time>{movementDateTime(edit.createdAt)}</time>
+          {edit.changes.map((change) => (
+            <div key={`${edit.id}-${change.key}`}>
+              <strong>{change.label}</strong>
+              <span className="ml3-account-edit-values">
+                <span>
+                  <small>كان</small>
+                  <b>{change.protectsUserData ? preserveUiData(change.before) : change.before}</b>
+                </span>
+                <span>
+                  <small>أصبح</small>
+                  <em>{change.protectsUserData ? preserveUiData(change.after) : change.after}</em>
+                </span>
+              </span>
+            </div>
+          ))}
+        </article>
+      ))}
+    </section>
+  )
 }
 
 function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfirm, onDisable, onOpen, embedded = false }) {
@@ -1306,7 +1344,7 @@ function AccountClassificationEditor({ account, className = '' }) {
   )
 }
 
-function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment }) {
+function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], auditEvents = [], isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment }) {
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
@@ -1320,6 +1358,8 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
     .reverse()
   const accountMap = new Map(accounts.map((item) => [item.id, item]))
   const canReconcileBalance = account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK
+  const primaryBalance = accountPrimaryBalance(bucket)
+  const profileBalanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
 
   return (
     <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
@@ -1335,9 +1375,9 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
           </div>
         </div>
 
-        <div className={`ml3-profile-balance ${dinar > 0 ? 'is-positive' : dinar < 0 ? 'is-negative' : 'is-zero'}`}>
-          <strong>{formatDisplayMeaning(account, dinar)}</strong>
-          <span>{hasMoneyValue(usd) ? money(usd, CURRENCIES.USD) : 'لا يوجد دولار'}</span>
+        <div className={`ml3-profile-balance ${profileBalanceTone}`}>
+          <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong>
+          <span>{hasMoneyValue(primaryBalance.secondaryAmount) ? money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : primaryBalance.secondaryCurrency === CURRENCIES.USD ? 'لا يوجد دولار' : 'لا يوجد دينار'}</span>
         </div>
 
         <div className="ml3-profile-facts">
@@ -1412,6 +1452,8 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
           <button type="submit">حفظ التعديل</button>
         </form>
 
+        <AccountEditHistory accountId={account.id} auditEvents={auditEvents} />
+
         <div className="ml3-profile-movements">
           <h3>الحركات</h3>
           {relatedMovements.length === 0 ? <p className="ml3-empty">لا توجد حركات لهذا الحساب.</p> : null}
@@ -1458,8 +1500,9 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
 }
 
 export function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisable }) {
-  const { account, dinar, usd } = bucket
+  const { account } = bucket
   const mergeTargets = activeAccounts.filter((target) => areMergeAccountsCompatible(account, target))
+  const primaryBalance = accountPrimaryBalance(bucket)
 
   return (
     <article className="ml3-review-card">
@@ -1468,9 +1511,9 @@ export function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, 
           <strong>{protectedAccountPrimaryName(account)}</strong>
           <span>{account.notes ? preserveUiData(account.notes) : 'يحتاج تحديد طريقة التعامل معه.'}</span>
         </div>
-        <b>{formatDisplayMeaning(account, dinar)}</b>
+        <b>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</b>
       </div>
-      {hasMoneyValue(usd) ? <p className="ml3-review-usd">{money(usd, CURRENCIES.USD)}</p> : null}
+      {hasMoneyValue(primaryBalance.secondaryAmount) ? <p className="ml3-review-usd">{money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency)}</p> : null}
       <form className="ml3-decision-grid" onSubmit={(event) => onResolve(event, account.id)}>
         <AccountClassificationEditorFields account={account} className="ml3-decision-wide" />
         <label className="ml3-decision-wide">
@@ -1787,7 +1830,7 @@ export default function MohammadLedgerApp() {
   const [historyDimensionId, setHistoryDimensionId] = useState('')
   const [historyExpenseCategoryId, setHistoryExpenseCategoryId] = useState('')
   const [accountQuery, setAccountQuery] = useState('')
-  const [showZeroAccounts, setShowZeroAccounts] = useState(false)
+  const [peopleAccountView, setPeopleAccountView] = useState('balances')
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
   const [activeAccountDetail, setActiveAccountDetail] = useState('')
@@ -2592,6 +2635,7 @@ export default function MohammadLedgerApp() {
   function updateAccountClassification(event, accountId) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
+    const currentAccount = accounts.find((account) => account.id === accountId)
     const result = prepareAccountClassificationUpdate({
       accounts,
       movements,
@@ -2606,7 +2650,25 @@ export default function MohammadLedgerApp() {
       setFeedback(result.reason === 'movement-history' ? `نوع الحساب لا يناسب الحركات السابقة: ${message}` : message)
       return
     }
+    const changes = accountEditChanges(currentAccount, result.account)
+    if (!changes.length) {
+      setFeedback('لا يوجد تغيير.')
+      return
+    }
     setAccounts(result.accounts)
+    setLedgerExtras((current) => ({
+      ...current,
+      auditEvents: [
+        ...(current.auditEvents || []),
+        createAuditEvent('account.updated', {
+          accountId,
+          before: accountEditSnapshot(currentAccount),
+          after: accountEditSnapshot(result.account),
+          source: 'web',
+        }),
+      ],
+    }))
+    setAccountQuery('')
     setFeedback('تم تعديل الحساب.')
   }
 
@@ -2952,31 +3014,26 @@ export default function MohammadLedgerApp() {
       return haystack.includes(normalizedAccountQuery)
     }
     const filterRows = (rows) => rows.filter(accountMatchesQuery)
-    const peoplePositive = filterRows(peopleRows)
-      .filter((bucket) => Math.round(bucket.dinar) > 0)
-      .sort(compareBalanceBuckets)
-    const peopleNegative = filterRows(peopleRows)
-      .filter((bucket) => Math.round(bucket.dinar) < 0)
-      .sort(compareBalanceBuckets)
-    const peopleZero = filterRows(peopleRows)
-      .filter((bucket) => !nonZero(bucket))
-      .sort(compareBalanceBuckets)
+    const peopleViews = buildPeopleAccountViews(filterRows(peopleRows))
+    const peoplePositive = peopleViews.positive
+    const peopleNegative = peopleViews.negative
+    const peopleDirectory = peopleViews.all
     const accountRowsByGroup = {
-      people: [...peoplePositive, ...peopleNegative, ...(showZeroAccounts ? peopleZero : [])],
+      people: peopleViews.withBalance,
       money: filterRows(moneyRows),
       assets: filterRows(balancesByKind.assets || []),
       expenses: filterRows(balancesByKind.expenses || []),
       review: filterRows(balancesByKind.review || []),
     }
     const rows = accountRowsByGroup[activeGroup.key] || []
-    const activeGroupCount = accountRowsByGroup[activeGroup.key]?.length || 0
+    const activeGroupCount = activeGroup.key === 'people' && peopleAccountView === 'all' ? peopleDirectory.length : accountRowsByGroup[activeGroup.key]?.length || 0
     return (
       <section className="ml3-panel ml3-balances-surface" key={`accounts-${activeAccountGroup}`}>
         <div className="ml3-panel-head">
           <div>
             <h2>الأرصدة</h2>
             <p>
-              {activeGroup.title} · {formatCount(activeGroupCount)} عنصر
+              {activeGroup.key === 'people' && peopleAccountView === 'all' ? 'كل الأشخاص' : activeGroup.title} · {formatCount(activeGroupCount)} عنصر
             </p>
           </div>
           <span>{money(totals.cash + totals.bank)}</span>
@@ -2987,11 +3044,17 @@ export default function MohammadLedgerApp() {
             <span>فلوسي</span>
             <strong>{money(totals.cash + totals.bank)}</strong>
           </button>
-          <button type="button" className="is-positive" onClick={() => setActiveAccountGroup('people')}>
+          <button type="button" className="is-positive" onClick={() => {
+            setActiveAccountGroup('people')
+            setPeopleAccountView('balances')
+          }}>
             <span>أقبض</span>
             <strong>{money(totals.peopleOweMe)}</strong>
           </button>
-          <button type="button" className="is-negative" onClick={() => setActiveAccountGroup('people')}>
+          <button type="button" className="is-negative" onClick={() => {
+            setActiveAccountGroup('people')
+            setPeopleAccountView('balances')
+          }}>
             <span>أدفع</span>
             <strong>{money(totals.iOwePeople)}</strong>
           </button>
@@ -3002,11 +3065,17 @@ export default function MohammadLedgerApp() {
             <span>
               <Search aria-hidden="true" size={14} /> بحث
             </span>
-            <input aria-label="بحث في الأرصدة" value={accountQuery} onChange={(event) => setAccountQuery(event.target.value)} placeholder="اسم، كاش، شيك..." />
+            <input
+              aria-label="بحث في الأرصدة"
+              value={accountQuery}
+              onChange={(event) => {
+                const value = event.target.value
+                setAccountQuery(value)
+                if (activeGroup.key === 'people' && value.trim()) setPeopleAccountView('all')
+              }}
+              placeholder="اسم، كاش، شيك..."
+            />
           </label>
-          <button type="button" className={showZeroAccounts ? 'is-active' : ''} onClick={() => setShowZeroAccounts((current) => !current)}>
-            صفر · {formatCount(peopleZero.length)}
-          </button>
         </div>
 
         <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
@@ -3018,11 +3087,26 @@ export default function MohammadLedgerApp() {
           ))}
         </div>
         {activeGroup.key === 'people' ? (
-          <div className="ml3-account-sections">
-            <AccountList title="أقبض منهم" rows={peoplePositive} onOpen={setSelectedAccountId} embedded />
-            <AccountList title="أدفع لهم" rows={peopleNegative} onOpen={setSelectedAccountId} embedded />
-            {showZeroAccounts ? <AccountList title="صفر" rows={peopleZero} onOpen={setSelectedAccountId} embedded /> : null}
-          </div>
+          <>
+            <div className="ml3-people-view-switch" aria-label="عرض حسابات الناس">
+              <button type="button" className={peopleAccountView === 'balances' ? 'is-active' : ''} aria-current={peopleAccountView === 'balances' ? 'true' : undefined} onClick={() => setPeopleAccountView('balances')}>
+                <strong>بيننا رصيد</strong>
+                <span>{formatCount(peopleViews.withBalance.length)}</span>
+              </button>
+              <button type="button" className={peopleAccountView === 'all' ? 'is-active' : ''} aria-current={peopleAccountView === 'all' ? 'true' : undefined} onClick={() => setPeopleAccountView('all')}>
+                <strong>كل الأشخاص</strong>
+                <span>{formatCount(peopleViews.all.length)}</span>
+              </button>
+            </div>
+            {peopleAccountView === 'balances' ? (
+              <div className="ml3-account-sections">
+                <AccountList title="أقبض منهم" rows={peoplePositive} onOpen={setSelectedAccountId} embedded />
+                <AccountList title="أدفع لهم" rows={peopleNegative} onOpen={setSelectedAccountId} embedded />
+              </div>
+            ) : (
+              <AccountList title="دليل الأشخاص" subtitle="كل الحسابات المحفوظة" rows={peopleDirectory} onOpen={setSelectedAccountId} embedded />
+            )}
+          </>
         ) : activeGroup.key === 'money' ? (
           <AccountList title="فلوسي عندي" rows={rows} onOpen={setSelectedAccountId} embedded />
         ) : (
@@ -3170,6 +3254,7 @@ export default function MohammadLedgerApp() {
             onClick={() => {
               switchSection('accounts')
               setActiveAccountGroup('people')
+              setPeopleAccountView('balances')
             }}
           >
             <span>أقبض من الناس</span>
@@ -3181,6 +3266,7 @@ export default function MohammadLedgerApp() {
             onClick={() => {
               switchSection('accounts')
               setActiveAccountGroup('people')
+              setPeopleAccountView('balances')
             }}
           >
             <span>أدفع لهم</span>
@@ -3774,7 +3860,7 @@ export default function MohammadLedgerApp() {
           </section>
         ) : null}
       </section>
-      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} />
+      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} auditEvents={ledgerExtras.auditEvents || []} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} />
     </AdreemChrome>
   )
 }

@@ -8,10 +8,12 @@ import {
   applyAccountName,
   emptyAccountDraft,
 } from '../../../src/mohammadLedger/accountConfig.js'
+import { ACCOUNT_STATUSES } from '../../../src/mohammadLedger/accountCatalog.js'
 import {
   accountIdempotencyKey,
   appendTelegramAccount,
   resolveTelegramReviewAccount,
+  updateTelegramAccount,
   validateAccountDraft,
 } from '../../mohammadLedger/accountService.js'
 import { accountLabel } from '../../mohammadLedger/ledgerService.js'
@@ -47,8 +49,9 @@ function createAccountSession(options = {}) {
       ? accountPresetGroupFor(accountPresetFor(options.draft?.type, options.draft?.valueKind)).key
       : ''),
     reviewAccountId: options.reviewAccountId || '',
+    editAccountId: options.editAccountId || '',
     reviewOriginalLabel: options.reviewOriginalLabel || '',
-    selectedDetail: '',
+    selectedDetail: hasExistingDraft ? options.draft?.subAccountName || '' : '',
     uiMessageId: null,
   }
 }
@@ -138,7 +141,7 @@ async function sendStep(ctx, session, result = null) {
   if (session.step === STEPS.REVIEW) {
     return upsertAccountMessage(ctx, session, {
       text: accountReviewText(session, result),
-      reply_markup: accountConfirmKeyboard(session.mode === 'review'),
+      reply_markup: accountConfirmKeyboard(session.mode),
     })
   }
   return null
@@ -147,7 +150,7 @@ async function sendStep(ctx, session, result = null) {
 async function sendAccountConnectionError(ctx, session) {
   return upsertAccountMessage(ctx, session, {
     text: '<b>تعذر الاتصال بالدفتر الآن.</b>\n<blockquote>حاول مرة أخرى بعد لحظات.</blockquote>',
-    reply_markup: accountConfirmKeyboard(session.mode === 'review'),
+    reply_markup: accountConfirmKeyboard(session.mode),
   })
 }
 
@@ -186,13 +189,45 @@ export async function startReviewAccount(ctx, accountId) {
   return sendStep(ctx, session)
 }
 
+export async function startEditAccount(ctx, accountId) {
+  const { state } = await ctx.repository.load()
+  const account = state.accounts.find((item) => item.id === accountId && item.status === ACCOUNT_STATUSES.ACTIVE)
+  if (!account) {
+    return ctx.telegram.sendMessage({
+      chat_id: ctx.chatId,
+      text: '<b>لم أجد حسابًا نشطًا للتعديل.</b>',
+      parse_mode: 'HTML',
+      reply_markup: mainMenuKeyboard(),
+    })
+  }
+  const session = createAccountSession({
+    mode: 'edit',
+    editAccountId: account.id,
+    reviewOriginalLabel: accountLabel(account),
+    draft: {
+      ...emptyAccountDraft(),
+      ownerName: account.ownerName || '',
+      subAccountName: account.subAccountName || '',
+      type: account.type,
+      valueKind: account.valueKind,
+      currencyKind: account.currencyKind,
+      notes: account.notes || '',
+    },
+  })
+  session.step = STEPS.OWNER
+  ctx.sessions.set(ctx.chatId, ctx.userId, session)
+  return sendStep(ctx, session)
+}
+
 export async function handleAccountCallback(ctx, data) {
   const session = ctx.sessions.get(ctx.chatId, ctx.userId)
   if (!session || session.flow !== 'account') return sendExpiredAccountMessage(ctx)
   if (isStaleAccountCallback(ctx, session)) return sendExpiredAccountMessage(ctx)
 
   if (data === 'acct:cancel') {
-    const cancelTitle = session.mode === 'review' ? 'تم إلغاء إصلاح الحساب.' : 'تم إلغاء إنشاء الحساب.'
+    const cancelTitle = session.mode === 'review'
+      ? 'تم إلغاء إصلاح الحساب.'
+      : session.mode === 'edit' ? 'تم إلغاء تعديل الحساب.' : 'تم إلغاء إنشاء الحساب.'
     ctx.sessions.clear(ctx.chatId, ctx.userId)
     try {
       return await ctx.telegram.editMessageText({
@@ -280,6 +315,11 @@ export async function handleAccountCallback(ctx, data) {
           telegramUserId: ctx.userId,
           telegramChatId: ctx.chatId,
         })
+      } else if (session.mode === 'edit') {
+        result = await updateTelegramAccount(ctx.repository, session.editAccountId, session.draft, {
+          telegramUserId: ctx.userId,
+          telegramChatId: ctx.chatId,
+        })
       } else {
         result = await appendTelegramAccount(ctx.repository, session.draft, {
           idempotencyKey: accountIdempotencyKey([ctx.userId, session.sessionId]),
@@ -298,14 +338,14 @@ export async function handleAccountCallback(ctx, data) {
       return await ctx.telegram.editMessageText({
         chat_id: ctx.chatId,
         message_id: session.uiMessageId || ctx.messageId,
-        text: accountCreatedText(result.account, { duplicate: result.duplicate, reviewed: session.mode === 'review' }),
+        text: accountCreatedText(result.account, { duplicate: result.duplicate, reviewed: session.mode === 'review', edited: session.mode === 'edit', unchanged: result.unchanged }),
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })
     } catch {
       return ctx.telegram.sendMessage({
         chat_id: ctx.chatId,
-        text: accountCreatedText(result.account, { duplicate: result.duplicate, reviewed: session.mode === 'review' }),
+        text: accountCreatedText(result.account, { duplicate: result.duplicate, reviewed: session.mode === 'review', edited: session.mode === 'edit', unchanged: result.unchanged }),
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })

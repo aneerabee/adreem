@@ -127,10 +127,12 @@ export function accountCurrencyKeyboard(selectedCurrency = CURRENCIES.DINAR) {
   }
 }
 
-export function accountConfirmKeyboard(isReview = false) {
+export function accountConfirmKeyboard(mode = 'create') {
+  const isReview = mode === true || mode === 'review'
+  const isEdit = mode === 'edit'
   return {
     inline_keyboard: [
-      [{ text: isReview ? 'تأكيد إصلاح الحساب' : 'تأكيد إنشاء الحساب', callback_data: 'acct:confirm', style: 'success' }],
+      [{ text: isReview ? 'تأكيد إصلاح الحساب' : isEdit ? 'حفظ تعديل الحساب' : 'تأكيد إنشاء الحساب', callback_data: 'acct:confirm', style: 'success' }],
       [{ text: '↩️ تعديل الحساب', callback_data: 'acct:back', style: 'primary' }, { text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
     ],
   }
@@ -227,9 +229,10 @@ export function accountsBrowserKeyboard(buckets = [], session = {}) {
   return { inline_keyboard: rows }
 }
 
-export function accountProfileKeyboard(page = 0) {
+export function accountProfileKeyboard(page = 0, accountToken = '') {
   return {
     inline_keyboard: [
+      ...(accountToken ? [[{ text: 'تعديل الحساب', callback_data: `accounts:edit:${accountToken}`, style: 'success' }]] : []),
       [{ text: '↩️ الأرصدة', callback_data: `accounts:page:${Math.max(0, Number(page) || 0)}`, style: 'primary' }],
       [{ text: 'الرئيسية', callback_data: 'main:home' }],
     ],

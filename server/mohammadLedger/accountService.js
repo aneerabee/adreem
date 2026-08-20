@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
 import { accountPresetFor, emptyAccountDraft } from '../../src/mohammadLedger/accountConfig.js'
+import { accountEditSnapshot, prepareAccountUpdate } from '../../src/mohammadLedger/accountEditing.js'
 import { normalizeAccountText } from '../../src/mohammadLedger/accountCompatibility.js'
 import { ACCOUNT_STATUSES } from '../../src/mohammadLedger/accountCatalog.js'
 import { createAccount, validateAccount } from '../../src/mohammadLedger/ledgerCore.js'
+import { createAuditEvent } from '../../src/mohammadLedger/ledgerOperations.js'
 
 export function normalizeAccountDraft(draft = {}) {
   const preset = accountPresetFor(draft.type, draft.valueKind)
@@ -113,10 +115,82 @@ export async function resolveTelegramReviewAccount(repository, accountId, draft,
       state: {
         ...state,
         accounts: state.accounts.map((item) => (item.id === id ? account : item)),
+        auditEvents: [
+          ...(state.auditEvents || []),
+          createAuditEvent('account.updated', {
+            accountId: id,
+            before: accountEditSnapshot(target),
+            after: accountEditSnapshot(account),
+            source: 'telegram',
+            telegramUserId: metadata.telegramUserId,
+          }),
+        ],
       },
       account,
       validation,
       duplicate: false,
+    }
+  })
+}
+
+export async function updateTelegramAccount(repository, accountId, draft, metadata = {}) {
+  const id = String(accountId || '').trim()
+  if (!id) throw new Error('Missing account id.')
+
+  return repository.update((state) => {
+    const target = state.accounts.find((account) => account.id === id)
+    if (!target || target.status !== ACCOUNT_STATUSES.ACTIVE) {
+      return {
+        account: target || null,
+        validation: { ok: false, errors: [{ field: 'accountId', message: 'الحساب غير متاح للتعديل.' }] },
+        rejected: true,
+      }
+    }
+
+    const normalized = normalizeAccountDraft(draft)
+    const result = prepareAccountUpdate({
+      accounts: state.accounts,
+      movements: state.movements || [],
+      accountId: id,
+      draft: normalized,
+    })
+    if (!result.ok) {
+      return {
+        account: result.account || target,
+        validation: { ok: false, errors: result.errors || [] },
+        reason: result.reason,
+        rejected: true,
+      }
+    }
+    if (!result.changes.length) {
+      return {
+        state,
+        account: target,
+        validation: { ok: true, errors: [] },
+        changes: [],
+        unchanged: true,
+      }
+    }
+
+    return {
+      state: {
+        ...state,
+        accounts: result.accounts,
+        auditEvents: [
+          ...(state.auditEvents || []),
+          createAuditEvent('account.updated', {
+            accountId: id,
+            before: accountEditSnapshot(target),
+            after: accountEditSnapshot(result.account),
+            source: 'telegram',
+            telegramUserId: metadata.telegramUserId,
+          }),
+        ],
+      },
+      account: result.account,
+      validation: { ok: true, errors: [] },
+      changes: result.changes,
+      unchanged: false,
     }
   })
 }

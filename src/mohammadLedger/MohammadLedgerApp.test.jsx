@@ -10,7 +10,9 @@ import {
   ReviewAccountCard,
   areMergeAccountsCompatible,
   accountClassificationMovementErrors,
+  accountEditChanges,
   accountReviewSelection,
+  buildPeopleAccountViews,
   cancelMovementConfirmation,
   claimSubmission,
   filterMovementHistory,
@@ -267,6 +269,76 @@ describe('MohammadLedgerApp account review', () => {
     expect(movement.status).toBe(MOVEMENT_STATUSES.POSTED)
     expect(result).toMatchObject({ ok: false, reason: 'movement-history' })
     expect(result.errors).not.toHaveLength(0)
+  })
+})
+
+describe('MohammadLedgerApp people account views', () => {
+  it('keeps zero-balance people out of current balances but available in the full directory', () => {
+    const person = (id, currencyKind) => ({
+      id,
+      ownerName: id,
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    })
+    const views = buildPeopleAccountViews([
+      { account: person('dinar-positive', ACCOUNT_CURRENCY_KINDS.DINAR), dinar: 500, usd: 0 },
+      { account: person('usd-negative', ACCOUNT_CURRENCY_KINDS.USD), dinar: 0, usd: -250 },
+      { account: person('zero-person', ACCOUNT_CURRENCY_KINDS.DINAR), dinar: 0, usd: 0 },
+    ])
+
+    expect(views.positive.map((bucket) => bucket.account.id)).toEqual(['dinar-positive'])
+    expect(views.negative.map((bucket) => bucket.account.id)).toEqual(['usd-negative'])
+    expect(views.withBalance.map((bucket) => bucket.account.id)).not.toContain('zero-person')
+    expect(views.all.map((bucket) => bucket.account.id)).toContain('zero-person')
+  })
+
+  it('shows the direction of a USD person balance instead of a false zero', () => {
+    const markup = renderToStaticMarkup(
+      <AccountRow
+        bucket={{
+          account: {
+            id: 'usd-person',
+            ownerName: 'سعيد',
+            subAccountName: 'كاش بيننا',
+            type: ACCOUNT_TYPES.PERSON,
+            valueKind: VALUE_KINDS.RECEIVABLE,
+            currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+            status: ACCOUNT_STATUSES.ACTIVE,
+          },
+          dinar: 0,
+          usd: -250,
+        }}
+      />,
+    )
+
+    expect(markup).toContain('is-negative')
+    expect(markup).toContain('أدفع له')
+    expect(markup).not.toContain('>صفر<')
+  })
+
+  it('describes account edits using clear before and after values', () => {
+    const before = {
+      ownerName: 'سعيد',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+    }
+    const after = {
+      ...before,
+      ownerName: 'شركة سعيد',
+      subAccountName: 'شيك بيننا',
+      currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+    }
+
+    expect(accountEditChanges(before, after)).toEqual([
+      expect.objectContaining({ key: 'name', before: 'سعيد', after: 'شركة سعيد' }),
+      expect.objectContaining({ key: 'type', before: 'شخص أو جهة · كاش بيننا', after: 'شخص أو جهة · شيك بيننا' }),
+      expect.objectContaining({ key: 'currency', before: 'دينار', after: 'دولار' }),
+    ])
   })
 })
 

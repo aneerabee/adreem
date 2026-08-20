@@ -6,6 +6,7 @@ import {
   accountBlockquote,
   accountChoiceButtonStyle,
   accountChoiceButtonText,
+  accountEditHistoryText,
   accountStepText,
   alertsText,
   formatAccountBalance,
@@ -14,7 +15,7 @@ import {
   movementStepText,
   reviewMovementText,
 } from './messages.js'
-import { mainMenuKeyboard, moreMenuKeyboard, movementTypeKeyboard } from './keyboards.js'
+import { accountConfirmKeyboard, mainMenuKeyboard, moreMenuKeyboard, movementTypeKeyboard } from './keyboards.js'
 
 const receivable = {
   ownerName: 'سعيد',
@@ -77,6 +78,54 @@ describe('telegram account balance presentation', () => {
     expect(localized.text).toContain('🟢 دخل\nCash between us · Dinar')
     expect(localized.text).toContain('🟢 مالك\nCash · Dinar')
     expect(localized.text).not.toContain('🟢 Income')
+  })
+
+  it('shows account name history as clear before and after values', () => {
+    const text = stripUiDataProtection(accountEditHistoryText('person-1', [{
+      id: 'audit-1',
+      action: 'account.updated',
+      createdAt: '2026-08-20T10:00:00.000Z',
+      details: {
+        accountId: 'person-1',
+        before: { ...receivable, ownerName: 'سعيد', type: ACCOUNT_TYPES.PERSON, currencyKind: CURRENCIES.DINAR },
+        after: { ...receivable, ownerName: 'شركة سعيد', type: ACCOUNT_TYPES.PERSON, currencyKind: CURRENCIES.DINAR },
+      },
+    }]))
+
+    expect(text).toContain('سجل التعديلات · 1')
+    expect(text).toContain('الاسم')
+    expect(text).toContain('قبل: سعيد')
+    expect(text).toContain('بعد: شركة سعيد')
+  })
+
+  it('localizes the complete account editing card without translating entered names', () => {
+    const history = accountEditHistoryText('person-1', [{
+      id: 'audit-1',
+      action: 'account.updated',
+      createdAt: '2026-08-20T10:00:00.000Z',
+      details: {
+        accountId: 'person-1',
+        before: { ...receivable, ownerName: 'سعيد', type: ACCOUNT_TYPES.PERSON, currencyKind: CURRENCIES.DINAR },
+        after: { ...receivable, ownerName: 'شركة سعيد', type: ACCOUNT_TYPES.PERSON, currencyKind: CURRENCIES.DINAR },
+      },
+    }])
+    const localized = localizeTelegramPayload({
+      text: `${accountStepText({
+        mode: 'edit',
+        step: 'owner',
+        presetGroup: 'people',
+        reviewOriginalLabel: 'سعيد · كاش بيننا · دينار',
+        draft: { ...receivable, type: ACCOUNT_TYPES.PERSON, currencyKind: CURRENCIES.DINAR },
+      })}\n${history}`,
+      reply_markup: accountConfirmKeyboard('edit'),
+    }, 'en')
+    const visible = stripUiDataProtection(localized.text)
+
+    expect(visible).toContain('ADREEM · Edit account')
+    expect(visible).toContain('Edit history · 1')
+    expect(visible).toContain('Before: سعيد')
+    expect(visible).toContain('After: شركة سعيد')
+    expect(localized.reply_markup.inline_keyboard.flat().map((button) => button.text)).toContain('Save account changes')
   })
 })
 

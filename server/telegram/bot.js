@@ -29,6 +29,7 @@ import {
 } from './keyboards.js'
 import {
   accountBlockquote,
+  accountEditHistoryText,
   alertsText,
   escapeHtml,
   mainMenuText,
@@ -51,7 +52,7 @@ import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
 import { createLocalizedTelegramClient } from './localizedTelegram.js'
 import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
-import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './handlers/account.js'
+import { handleAccountCallback, handleAccountText, startAccount, startEditAccount, startReviewAccount } from './handlers/account.js'
 import { handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './handlers/movement.js'
 import { handleReconciliationCallback, handleReconciliationText, startReconciliation } from './handlers/reconciliation.js'
 import { createTelegramUserAccess, validateTelegramLedgerAssignments } from './userRegistry.js'
@@ -223,6 +224,12 @@ async function handleAccountsCallback(ctx, data) {
   if (data.startsWith('accounts:page:')) return showAccounts(ctx, Number(data.slice('accounts:page:'.length)))
   const session = sessions.get(ctx.chatId, ctx.userId)
   if (session?.flow !== 'accounts') return showAccounts(ctx)
+  if (data.startsWith('accounts:edit:')) {
+    const editToken = data.slice('accounts:edit:'.length)
+    const editAccountId = session.choices?.accounts?.[editToken]
+    if (!editAccountId) return showAccounts(ctx, session.page)
+    return startEditAccount(ctx, editAccountId)
+  }
   const token = data.slice('accounts:open:'.length)
   const accountId = session.choices?.accounts?.[token]
   if (!accountId) return showAccounts(ctx, session.page)
@@ -244,8 +251,9 @@ async function handleAccountsCallback(ctx, data) {
     '',
     `<b>آخر الحركات · ${movements.length}</b>`,
     movements.length ? movements.join('\n') : '<blockquote>لا توجد حركات لهذا الحساب.</blockquote>',
-  ].join('\n')
-  return sendScreen(ctx, text, accountProfileKeyboard(session.page))
+    accountEditHistoryText(account.id, state.auditEvents || []),
+  ].filter(Boolean).join('\n')
+  return sendScreen(ctx, text, accountProfileKeyboard(session.page, token))
 }
 
 async function showToday(ctx) {
