@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const schemaSql = readFileSync(new URL('../../supabase/migrations/20260820162352_create_adreem_v3_schema.sql', import.meta.url), 'utf8')
-const ledgerSql = readFileSync(new URL('../../supabase/migrations/20260820163014_create_adreem_v3_ledger_functions.sql', import.meta.url), 'utf8')
-const botCasSql = readFileSync(new URL('../../supabase/migrations/20260820215239_add_adreem_bot_state_claim_cas.sql', import.meta.url), 'utf8')
-const botEffectCasSql = readFileSync(new URL('../../supabase/migrations/20260820223000_add_adreem_bot_effect_cas.sql', import.meta.url), 'utf8')
+const schemaSql = readFileSync(new URL('../../supabase/migrations/20260820213626_create_adreem_v3_schema.sql', import.meta.url), 'utf8')
+const ledgerSql = readFileSync(new URL('../../supabase/migrations/20260820213628_create_adreem_v3_ledger_functions.sql', import.meta.url), 'utf8')
+const botCasSql = readFileSync(new URL('../../supabase/migrations/20260820213629_add_adreem_bot_state_claim_cas.sql', import.meta.url), 'utf8')
+const botEffectCasSql = readFileSync(new URL('../../supabase/migrations/20260820213631_add_adreem_bot_effect_cas.sql', import.meta.url), 'utf8')
+const legacyCleanupSql = readFileSync(new URL('../../supabase/migrations/20260820213833_remove_empty_legacy_state_from_v3.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -80,5 +81,17 @@ describe('ADREEM v3 database migration invariants', () => {
       expect(botEffectCasSql).toContain(`grant execute on function public.${functionName}`)
     }
     expect(botEffectCasSql).toContain('to service_role;')
+  })
+
+  it('removes the legacy blob tables only from an empty v3 target', () => {
+    expect(legacyCleanupSql).toContain("to_regclass('public.adreem_ledgers')")
+    expect(legacyCleanupSql).toContain("raise exception 'ADREEM_LEGACY_STATE_NOT_EMPTY'")
+    expect(legacyCleanupSql).toContain("raise exception 'ADREEM_LEGACY_BACKUP_NOT_EMPTY'")
+    expect(legacyCleanupSql).toContain("execute 'lock table public.ml_state in access exclusive mode'")
+    expect(legacyCleanupSql).toContain("execute 'lock table adreem_private.ml_state_backup_20260819 in access exclusive mode'")
+    expect(legacyCleanupSql.indexOf("raise exception 'ADREEM_LEGACY_STATE_NOT_EMPTY'"))
+      .toBeLessThan(legacyCleanupSql.indexOf("execute 'drop table public.ml_state'"))
+    expect(legacyCleanupSql.indexOf("raise exception 'ADREEM_LEGACY_BACKUP_NOT_EMPTY'"))
+      .toBeLessThan(legacyCleanupSql.indexOf("execute 'drop table adreem_private.ml_state_backup_20260819'"))
   })
 })

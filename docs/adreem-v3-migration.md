@@ -5,6 +5,7 @@ This runbook moves each legacy ledger into the dedicated relational ADREEM datab
 ## Safety rules
 
 - Use a dedicated ADREEM Supabase project as the target.
+- Never link or push this migration history to the legacy shared source project; it is read-only input for this procedure.
 - Stop every legacy writer (API, bot, jobs, and operator writes) before capturing the source freeze values. Keep them stopped until cutover or rollback.
 - Record and require the exact source `updated_at` for every mapped row. If the legacy payload has a monotonic revision, require that revision too.
 - Keep the environment, user mapping, and checkpoint files outside Git with mode `600`.
@@ -52,11 +53,17 @@ The migration re-reads and fingerprints the source before and after attachment h
 
 ## Execution
 
-1. Apply all four ADREEM v3 migrations to the empty dedicated project, in filename order:
-   - `20260820162352_create_adreem_v3_schema.sql`
-   - `20260820163014_create_adreem_v3_ledger_functions.sql`
-   - `20260820215239_add_adreem_bot_state_claim_cas.sql`
-   - `20260820223000_add_adreem_bot_effect_cas.sql`
+1. Apply the complete dedicated-project migration history in filename order:
+   - `20260820213621_lock_down_adreem_ml_state.sql`
+   - `20260820213622_create_private_adreem_attachments_bucket.sql`
+   - `20260820213624_enforce_ml_state_timestamps.sql`
+   - `20260820213626_create_adreem_v3_schema.sql`
+   - `20260820213628_create_adreem_v3_ledger_functions.sql`
+   - `20260820213629_add_adreem_bot_state_claim_cas.sql`
+   - `20260820213631_add_adreem_bot_effect_cas.sql`
+   - `20260820213833_remove_empty_legacy_state_from_v3.sql`
+
+   The final migration refuses to run if either legacy table contains a row. It removes only the empty compatibility tables from the dedicated v3 target.
 2. Configure the target database URL with certificate verification and its explicit expected host. The operator needs `psql` locally.
 3. Create the private user mapping and checkpoint paths.
 4. Load the private environment file in the shell.

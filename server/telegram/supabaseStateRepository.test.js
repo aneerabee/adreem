@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { createSupabaseStateRepository } from './supabaseStateRepository.js'
 
 const CLAIM_CAS_MIGRATION = readFileSync(
-  new URL('../../supabase/migrations/20260820215239_add_adreem_bot_state_claim_cas.sql', import.meta.url),
+  new URL('../../supabase/migrations/20260820213629_add_adreem_bot_state_claim_cas.sql', import.meta.url),
   'utf8',
 )
 const EFFECT_CAS_MIGRATION = readFileSync(
-  new URL('../../supabase/migrations/20260820223000_add_adreem_bot_effect_cas.sql', import.meta.url),
+  new URL('../../supabase/migrations/20260820213631_add_adreem_bot_effect_cas.sql', import.meta.url),
   'utf8',
 )
 

@@ -67,7 +67,7 @@ describe('ADREEM deployment configuration', () => {
   })
 
   it('can bootstrap the ledger table from the migration chain alone', () => {
-    const migration = readRepositoryFile('supabase/migrations/20260819094029_lock_down_adreem_ml_state.sql')
+    const migration = readRepositoryFile('supabase/migrations/20260820213621_lock_down_adreem_ml_state.sql')
     const createTableAt = migration.indexOf('create table if not exists public.ml_state')
     const backupAt = migration.indexOf('create table if not exists adreem_private.ml_state_backup_20260819')
 

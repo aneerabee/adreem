@@ -35,14 +35,20 @@ supabase db push --linked
 supabase migration list --linked
 ```
 
-لا تفتح النسخة الثالثة قبل أن تعرض القائمة البعيدة الترحيلات التالية كمطبّقة:
+لا تفتح النسخة الثالثة قبل أن تعرض القائمة البعيدة الترحيلات التالية كمطبّقة بالترتيب نفسه:
 
 ```text
-20260820162352_create_adreem_v3_schema.sql
-20260820163014_create_adreem_v3_ledger_functions.sql
-20260820215239_add_adreem_bot_state_claim_cas.sql
-20260820223000_add_adreem_bot_effect_cas.sql
+20260820213621_lock_down_adreem_ml_state.sql
+20260820213622_create_private_adreem_attachments_bucket.sql
+20260820213624_enforce_ml_state_timestamps.sql
+20260820213626_create_adreem_v3_schema.sql
+20260820213628_create_adreem_v3_ledger_functions.sql
+20260820213629_add_adreem_bot_state_claim_cas.sql
+20260820213631_add_adreem_bot_effect_cas.sql
+20260820213833_remove_empty_legacy_state_from_v3.sql
 ```
+
+الترحيل الأخير يحذف جداول التوافق القديمة من المشروع المستقل فقط بعد إثبات أنها فارغة، ويرفض التنفيذ إذا وجد أي صف.
 
 لا تشغّل ملفات الترحيل منفردة خارج سجل Supabase، ولا تستخدم `supabase/schema.sql` لتجهيز النسخة الثالثة. بعد تطبيقها نفّذ ترحيل البيانات وفق `docs/adreem-v3-migration.md` وافحص النتيجة قبل التحويل.
 
