@@ -144,6 +144,18 @@ describe('account editing', () => {
     expect(accountStructureUsage(accountId, { movements: [{ status: MOVEMENT_STATUSES.NEEDS_REVIEW, sourceAccountId: accountId }] }).locked).toBe(false)
   })
 
+  it('honors a database structure lock even when old movements are not loaded', () => {
+    expect(accountStructureUsage({ id: 'database-locked', structureLocked: true, postedCount: 0 }, {
+      movements: [],
+      reconciliations: [],
+      recurringRules: [],
+      dimensions: [],
+    })).toMatchObject({ locked: true })
+    expect(accountStructureUsage({ id: 'database-counted', structureLocked: false, postedCount: 4 }, {
+      movements: [],
+    })).toMatchObject({ locked: true })
+  })
+
   it('locks a project after a posted movement uses its generated tracking dimension', () => {
     const project = createAccount({
       id: 'truck-project',

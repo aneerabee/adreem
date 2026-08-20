@@ -12,6 +12,7 @@ import {
 } from '../../src/mohammadLedger/ledgerCore.js'
 import {
   buildReconciliationCorrectionDrafts,
+  createAuditEvent,
   createAttachment,
   createReconciliation,
   createRecurringRuleFromMovement,
@@ -25,6 +26,58 @@ import {
 
 const MONEY_FORMAT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
 const RATE_FORMAT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 })
+
+export function telegramUpdateIdempotencyKey(updateId, operation) {
+  if (!Number.isSafeInteger(updateId) || updateId < 0) throw new Error('Missing Telegram update ID.')
+  const normalizedOperation = String(operation || '').trim().replace(/[^a-zA-Z0-9_-]/g, '-')
+  if (!normalizedOperation) throw new Error('Missing Telegram update operation.')
+  return `telegram-update-${updateId}-${normalizedOperation}`
+}
+
+export function findTelegramUpdateAuditEvent(state = {}, idempotencyKey) {
+  const key = String(idempotencyKey || '').trim()
+  if (!key) return null
+  return (state.auditEvents || []).find((event) => event?.details?.telegramIdempotencyKey === key) || null
+}
+
+function telegramAuditDetails(metadata = {}) {
+  const telegramIdempotencyKey = String(metadata.idempotencyKey || '').trim()
+  return telegramIdempotencyKey ? { telegramIdempotencyKey } : {}
+}
+
+export function runTelegramIdempotentStateAction(state, idempotencyKey, operation, action) {
+  const existingAudit = findTelegramUpdateAuditEvent(state, idempotencyKey)
+  if (existingAudit) {
+    return {
+      state,
+      ok: existingAudit.details?.ok !== false,
+      message: String(existingAudit.details?.message || ''),
+      duplicate: true,
+    }
+  }
+
+  const result = action(state)
+  if (!result?.state || result.state === state) return result
+  const previousAuditCount = Array.isArray(state.auditEvents) ? state.auditEvents.length : 0
+  const nextAuditEvents = Array.isArray(result.state.auditEvents) ? result.state.auditEvents : []
+  const marker = createAuditEvent('telegram.update.applied', {
+    telegramIdempotencyKey: idempotencyKey,
+    operation,
+    ok: result.ok !== false,
+    message: String(result.message || ''),
+  })
+  return {
+    ...result,
+    state: {
+      ...result.state,
+      auditEvents: [
+        ...nextAuditEvents.slice(0, previousAuditCount),
+        marker,
+        ...nextAuditEvents.slice(previousAuditCount),
+      ],
+    },
+  }
+}
 
 export function formatInteger(value) {
   return MONEY_FORMAT.format(Math.round(Number(value || 0)))
@@ -110,6 +163,20 @@ export function previewDraft(state, draft) {
   return previewMovement(draft, state.accounts, state.movements)
 }
 
+export function appendMovementAuditEvent(state, action, movement, metadata = {}) {
+  return {
+    ...state,
+    auditEvents: [
+      ...(state.auditEvents || []),
+      createAuditEvent(action, {
+        movementId: movement.id,
+        status: movement.status,
+        ...telegramAuditDetails(metadata),
+      }),
+    ],
+  }
+}
+
 export async function appendTelegramMovement(repository, draft, metadata) {
   const idempotencyKey = String(metadata?.idempotencyKey || '').trim()
   if (!idempotencyKey) throw new Error('Missing Telegram movement idempotency key.')
@@ -145,12 +212,12 @@ export async function appendTelegramMovement(repository, draft, metadata) {
       movement,
     )
     return {
-      state: {
+      state: appendMovementAuditEvent({
         ...state,
         movements: [...state.movements, movement],
         attachments,
         recurringRules,
-      },
+      }, 'movement.created', movement, metadata),
       movement,
       preview,
       duplicate: false,
@@ -164,6 +231,17 @@ export async function resolveTelegramReviewMovement(repository, movementId, draf
   if (!id) throw new Error('Missing review movement id.')
 
   return repository.update((state) => {
+    const existingAudit = findTelegramUpdateAuditEvent(state, metadata.idempotencyKey)
+    if (existingAudit) {
+      const existing = state.movements.find((movement) => movement.id === existingAudit.details?.movementId) || null
+      return {
+        state,
+        movement: existing,
+        duplicate: true,
+        needsReview: existing?.status !== MOVEMENT_STATUSES.POSTED,
+        preview: existing ? previewDraft(state, existing) : null,
+      }
+    }
     const target = state.movements.find((movement) => movement.id === id)
     if (!target || target.status !== MOVEMENT_STATUSES.NEEDS_REVIEW) {
       return {
@@ -200,18 +278,18 @@ export async function resolveTelegramReviewMovement(repository, movementId, draf
       movement,
     )
     return {
-      state: {
+      state: appendMovementAuditEvent({
         ...state,
         movements: state.movements.map((item) => (item.id === id ? movement : item)),
         attachments,
         recurringRules,
-      },
+      }, 'movement.updated', movement, metadata),
       movement,
       preview,
       duplicate: false,
       needsReview: movement.status !== MOVEMENT_STATUSES.POSTED,
     }
-  })
+  }, { movementIds: [id] })
 }
 
 export async function appendTelegramReconciliation(repository, draft, metadata = {}) {
@@ -282,6 +360,14 @@ export async function appendTelegramReconciliation(repository, draft, metadata =
         ...state,
         reconciliations: [...(state.reconciliations || []), reconciliation],
         movements: [...state.movements, ...correctionMovements],
+        auditEvents: [
+          ...(state.auditEvents || []),
+          createAuditEvent('reconciliation.created', {
+            reconciliationId: reconciliation.id,
+            correctionMovementIds: correctionMovements.map((movement) => movement.id),
+            ...telegramAuditDetails(metadata),
+          }),
+        ],
       },
       reconciliation,
       correctionMovements,
@@ -292,7 +378,7 @@ export async function appendTelegramReconciliation(repository, draft, metadata =
 }
 
 function appendTelegramAttachment(attachments = [], movement, draft = {}) {
-  const attachment = createAttachment({
+  const created = createAttachment({
     movementId: movement.id,
     label: draft.attachmentLabel,
     url: draft.attachmentUrl,
@@ -301,13 +387,20 @@ function appendTelegramAttachment(attachments = [], movement, draft = {}) {
     sizeBytes: draft.attachmentSizeBytes,
     source: 'telegram',
   })
-  if (!attachment) return attachments
+  if (!created) return attachments
+  const attachment = {
+    ...created,
+    idempotencyKey: String(draft.attachmentIdempotencyKey || movement.idempotencyKey || '').trim() || undefined,
+  }
   const hasSameAttachment = (Array.isArray(attachments) ? attachments : []).some((item) =>
-    item?.movementId === attachment.movementId &&
-    item?.label === attachment.label &&
-    item?.url === attachment.url &&
-    item?.storagePath === attachment.storagePath &&
-    item?.source === attachment.source,
+    (attachment.idempotencyKey && item?.idempotencyKey === attachment.idempotencyKey) ||
+    (
+      item?.movementId === attachment.movementId &&
+      item?.label === attachment.label &&
+      item?.url === attachment.url &&
+      item?.storagePath === attachment.storagePath &&
+      item?.source === attachment.source
+    ),
   )
   return hasSameAttachment ? attachments : [...(Array.isArray(attachments) ? attachments : []), attachment]
 }

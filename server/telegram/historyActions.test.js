@@ -95,8 +95,9 @@ describe('telegram history actions', () => {
 
   it('voids a recent posted movement without deleting it', () => {
     const state = { movements: [movement()] }
+    const metadata = { idempotencyKey: 'telegram-update-8200-movement-cancel' }
 
-    const result = voidRecentMovementInState(state, 'movement-1', now)
+    const result = voidRecentMovementInState(state, 'movement-1', now, metadata)
 
     expect(result.ok).toBe(true)
     expect(result.state.movements).toHaveLength(1)
@@ -105,6 +106,20 @@ describe('telegram history actions', () => {
       voidReason: 'إلغاء من سجل Telegram',
       voidedAt: now,
     })
+    expect(result.state.auditEvents).toHaveLength(1)
+    expect(result.state.auditEvents[0]).toMatchObject({
+      action: 'movement.updated',
+      details: {
+        movementId: 'movement-1',
+        status: MOVEMENT_STATUSES.VOIDED,
+        telegramIdempotencyKey: metadata.idempotencyKey,
+      },
+    })
+
+    const duplicate = voidRecentMovementInState(result.state, 'movement-1', now, metadata)
+    expect(duplicate.ok).toBe(true)
+    expect(duplicate.duplicate).toBe(true)
+    expect(duplicate.state.auditEvents).toHaveLength(1)
   })
 
   it('blocks old or opening movement cancellation', () => {
@@ -120,6 +135,33 @@ describe('telegram history actions', () => {
     expect(result.ok).toBe(false)
     expect(result.state.movements[0].status).toBe(MOVEMENT_STATUSES.POSTED)
     expect(result.message).toContain('آخر 24 ساعة')
+  })
+
+  it('keeps a recent income posted when canceling it would overdraw owned cash', () => {
+    const income = movement({
+      id: 'income-100',
+      type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+      sourceAccountId: null,
+      destinationAccountId: 'me-cash',
+    })
+    const state = {
+      accounts: [{
+        id: 'me-cash',
+        valueKind: 'cash',
+        status: 'active',
+        balanceSource: 'database',
+        balanceDinar: 0,
+        balanceUsd: 0,
+        postedCount: 2,
+      }],
+      movements: [income],
+    }
+
+    const result = voidRecentMovementInState(state, income.id, now)
+
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('بالسالب')
+    expect(result.state.movements[0].status).toBe(MOVEMENT_STATUSES.POSTED)
   })
 
   it('uses one local-day set for approved, canceled, and incomplete counters', () => {
@@ -139,6 +181,18 @@ describe('telegram history actions', () => {
       'voided-today',
       'posted-today',
     ])
+  })
+
+  it('uses the Tripoli day at midnight regardless of the server time zone', () => {
+    const state = {
+      movements: [
+        movement({ id: 'tripoli-today', createdAt: '2026-06-01T22:30:00.000Z' }),
+        movement({ id: 'tripoli-yesterday', createdAt: '2026-06-01T21:59:59.000Z' }),
+      ],
+    }
+
+    expect(movementsForDate(state, new Date('2026-06-02T10:00:00.000Z')).map((item) => item.id))
+      .toEqual(['tripoli-today'])
   })
 
   it('labels every history status clearly', () => {

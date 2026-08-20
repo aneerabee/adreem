@@ -7,7 +7,8 @@ import {
   postMovement,
 } from '../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../src/mohammadLedger/ledgerState.js'
-import { appendTelegramMovement } from './ledgerService.js'
+import { voidRecentMovementInState } from '../telegram/historyActions.js'
+import { appendTelegramMovement, resolveTelegramReviewMovement, telegramUpdateIdempotencyKey } from './ledgerService.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
   let state = initialState
@@ -265,5 +266,110 @@ describe('telegram and web movement parity', () => {
     expect(result.movement.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
     expect(buildPostingEntries(result.movement)).toEqual([])
     expect(repository.state.movements).toHaveLength(state.movements.length + 1)
+  })
+
+  it('records the same movement creation audit event as the web path', async () => {
+    const state = createMohammadFallbackState()
+    const repository = memoryRepository(state)
+    const idempotencyKey = telegramUpdateIdempotencyKey(8300, 'movement-create')
+    const result = await appendTelegramMovement(repository, {
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 90,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: '',
+      note: 'وقود',
+    }, {
+      idempotencyKey,
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    expect(repository.state.auditEvents.at(-1)).toMatchObject({
+      action: 'movement.created',
+      details: {
+        movementId: result.movement.id,
+        status: result.movement.status,
+        telegramIdempotencyKey: idempotencyKey,
+      },
+    })
+
+    await appendTelegramMovement(repository, {}, {
+      idempotencyKey,
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+    expect(repository.state.auditEvents).toHaveLength(state.auditEvents.length + 1)
+  })
+
+  it('records the same movement update audit event as the web path', async () => {
+    const state = createMohammadFallbackState()
+    const repository = memoryRepository(state)
+    const created = await appendTelegramMovement(repository, {
+      type: MOVEMENT_TYPES.TRANSFER,
+      amount: 250,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: '',
+      note: '',
+    }, {
+      idempotencyKey: 'audit-review',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    const idempotencyKey = telegramUpdateIdempotencyKey(8301, 'movement-review')
+    const result = await resolveTelegramReviewMovement(repository, created.movement.id, {
+      destinationAccountId: 'saeed-cash',
+    }, {
+      idempotencyKey,
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    expect(result.movement.status).toBe(MOVEMENT_STATUSES.POSTED)
+    expect(repository.state.auditEvents.at(-1)).toMatchObject({
+      action: 'movement.updated',
+      details: {
+        movementId: created.movement.id,
+        status: MOVEMENT_STATUSES.POSTED,
+        telegramIdempotencyKey: idempotencyKey,
+      },
+    })
+  })
+
+  it('records movement cancellation with the same audit shape as a web update', async () => {
+    const state = createMohammadFallbackState()
+    const repository = memoryRepository(state)
+    const created = await appendTelegramMovement(repository, {
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 90,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: '',
+      note: 'وقود',
+    }, {
+      idempotencyKey: 'audit-cancel',
+      telegramUserId: 1,
+      telegramChatId: 1,
+    })
+
+    const idempotencyKey = telegramUpdateIdempotencyKey(8302, 'movement-cancel')
+    const result = voidRecentMovementInState(
+      repository.state,
+      created.movement.id,
+      new Date().toISOString(),
+      { idempotencyKey },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.state.auditEvents.at(-1)).toMatchObject({
+      action: 'movement.updated',
+      details: {
+        movementId: created.movement.id,
+        status: MOVEMENT_STATUSES.VOIDED,
+        telegramIdempotencyKey: idempotencyKey,
+      },
+    })
   })
 })

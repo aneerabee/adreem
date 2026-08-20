@@ -4,11 +4,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement, previewMovement } from './ledgerCore.js'
 import {
+  AccountProfile,
   AccountRow,
   AccountClassificationEditorFields,
   ExternalAccountCard,
   ReviewAccountCard,
   accountBalanceChip,
+  accountProfileMovements,
   areMergeAccountsCompatible,
   accountClassificationMovementErrors,
   accountEditChanges,
@@ -20,11 +22,16 @@ import {
   mergeAccountsConfirmation,
   mergeAccountReferenceErrors,
   mergeLedgerAccountState,
+  mergeMovementHistoryPages,
+  mergeMovementPageAttachments,
+  mergeReviewMovementPage,
   money,
+  movementStatusLabel,
   movementHistoryForPreview,
   normalizeLocalizedNumericInput,
   parseMoneyAmount,
   parseWholeAmount,
+  pendingUploadedOrphanPaths,
   prepareAccountClassificationUpdate,
   releaseSubmission,
   saveFailureMessage,
@@ -461,6 +468,19 @@ describe('MohammadLedgerApp cloud state', () => {
     expect(saveFailureMessage({ status: 409 }, null)).not.toContain('سيحاول النظام تلقائيًا')
     expect(saveFailureMessage({}, 3_000)).toContain('3 ث')
   })
+
+  it('selects only newly uploaded paths that belong to the permanently failed snapshot', () => {
+    expect(pendingUploadedOrphanPaths({
+      attachments: [
+        { storagePath: 'owner/ledger/failed.pdf' },
+        { storagePath: 'owner/ledger/existing.pdf' },
+      ],
+    }, [
+      'owner/ledger/failed.pdf',
+      'owner/ledger/newer.pdf',
+      'owner/ledger/failed.pdf',
+    ])).toEqual(['owner/ledger/failed.pdf'])
+  })
 })
 
 describe('MohammadLedgerApp localized money', () => {
@@ -493,6 +513,122 @@ describe('MohammadLedgerApp history filtering', () => {
     expect(filterMovementHistory({ movements, dimensionId: 'truck' }).map((movement) => movement.id)).toEqual(['fuel-truck', 'repair-truck'])
     expect(filterMovementHistory({ movements, expenseCategoryId: 'fuel' }).map((movement) => movement.id)).toEqual(['fuel-truck', 'fuel-office'])
     expect(filterMovementHistory({ movements, dimensionId: 'truck', expenseCategoryId: 'fuel' }).map((movement) => movement.id)).toEqual(['fuel-truck'])
+  })
+
+  it('merges paginated history by id and keeps the newest database sequence first', () => {
+    expect(mergeMovementHistoryPages(
+      [{ id: 'newest', databaseSequence: 10 }, { id: 'same', databaseSequence: 9, note: 'old' }],
+      [{ id: 'same', databaseSequence: 9, note: 'fresh' }, { id: 'older', databaseSequence: 8 }],
+    )).toEqual([
+      { id: 'newest', databaseSequence: 10 },
+      { id: 'same', databaseSequence: 9, note: 'fresh' },
+      { id: 'older', databaseSequence: 8 },
+    ])
+  })
+
+  it('merges page attachments into the web extras without loss or duplication', () => {
+    const currentAttachment = { id: 'current', movementId: 'new', updatedAt: '2026-08-20T12:00:00.000Z' }
+    const extras = { dimensions: [], attachments: [currentAttachment] }
+
+    const merged = mergeMovementPageAttachments(extras, [
+      { ...currentAttachment, updatedAt: '2026-08-20T11:00:00.000Z' },
+      { id: 'older-page', movementId: 'old', updatedAt: '2026-08-19T12:00:00.000Z' },
+    ])
+
+    expect(merged.attachments).toEqual([
+      currentAttachment,
+      { id: 'older-page', movementId: 'old', updatedAt: '2026-08-19T12:00:00.000Z' },
+    ])
+    expect(mergeMovementPageAttachments(merged, [merged.attachments[1]])).toBe(merged)
+  })
+
+  it('merges review pages into movement state without duplicates and preserves the server total', () => {
+    const first = mergeReviewMovementPage({
+      movements: [
+        { id: 'existing', databaseSequence: 12, note: 'old' },
+        { id: 'unrelated', databaseSequence: 13 },
+        { id: 'bootstrap-review', databaseSequence: 11, status: MOVEMENT_STATUSES.NEEDS_REVIEW },
+      ],
+    }, {
+      revision: 7,
+      movements: [
+        { id: 'existing', databaseSequence: 12, note: 'fresh' },
+        { id: 'review-older', databaseSequence: 10, status: MOVEMENT_STATUSES.NEEDS_REVIEW },
+      ],
+      page: { total: 3, hasMore: true, nextCursor: 10, limit: 2 },
+    }, 7, true)
+
+    expect(first.page).toMatchObject({ revision: 7, total: 3, loaded: 2, hasMore: true, nextCursor: 10 })
+    expect(first.movements.filter((movement) => movement.id === 'existing')).toEqual([
+      { id: 'existing', databaseSequence: 12, note: 'fresh' },
+    ])
+    expect(first.movements.find((movement) => movement.id === 'review-older')).toMatchObject({ status: MOVEMENT_STATUSES.NEEDS_REVIEW })
+    expect(first.movements.find((movement) => movement.id === 'bootstrap-review')).toBeUndefined()
+
+    const next = mergeReviewMovementPage(first, {
+      revision: 7,
+      movements: [
+        { id: 'review-older', databaseSequence: 10, status: MOVEMENT_STATUSES.NEEDS_REVIEW },
+        { id: 'review-oldest', databaseSequence: 8, status: MOVEMENT_STATUSES.NEEDS_REVIEW },
+      ],
+      page: { total: null, hasMore: false, nextCursor: 8, limit: 2 },
+    }, 7)
+
+    expect(next.page).toMatchObject({ total: 3, loaded: 3, hasMore: false })
+    expect(new Set(next.movements.map((movement) => movement.id)).size).toBe(next.movements.length)
+  })
+
+  it('rejects stale review pages and pages from another ledger revision', () => {
+    expect(mergeReviewMovementPage({}, { stale: true, revision: 4 }, 4, true)).toBeNull()
+    expect(mergeReviewMovementPage({}, { revision: 5, movements: [{ id: 'late' }] }, 4, true)).toBeNull()
+  })
+
+  it('shows every related movement status consistently in the account profile', () => {
+    const account = {
+      id: 'cash',
+      ownerName: 'أنا',
+      subAccountName: 'كاش',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      currencyKind: CURRENCIES.DINAR,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    }
+    const destination = {
+      id: 'person',
+      ownerName: 'محمد',
+      subAccountName: 'كاش',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: CURRENCIES.DINAR,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    }
+    const movements = [
+      { id: 'posted', type: MOVEMENT_TYPES.TRANSFER, amount: 10, currency: CURRENCIES.DINAR, sourceAccountId: 'cash', destinationAccountId: 'person', status: MOVEMENT_STATUSES.POSTED, createdAt: '2026-08-20T10:00:00.000Z' },
+      { id: 'review', type: MOVEMENT_TYPES.EXPENSE, amount: 20, currency: CURRENCIES.DINAR, sourceAccountId: 'cash', status: MOVEMENT_STATUSES.NEEDS_REVIEW, createdAt: '2026-08-20T11:00:00.000Z' },
+      { id: 'voided', type: MOVEMENT_TYPES.TRANSFER, amount: 30, currency: CURRENCIES.DINAR, sourceAccountId: 'cash', destinationAccountId: 'person', status: MOVEMENT_STATUSES.VOIDED, createdAt: '2026-08-20T12:00:00.000Z' },
+    ]
+
+    expect(accountProfileMovements(movements, account.id).map((movement) => movement.id)).toEqual(['voided', 'review', 'posted'])
+    expect(movements.map((movement) => movementStatusLabel(movement.status))).toEqual(['تم', 'ناقص', 'ملغي'])
+
+    const markup = renderToStaticMarkup(
+      <AccountProfile
+        bucket={{ account, dinar: 100, usd: 0, postedCount: 1 }}
+        movements={movements}
+        accounts={[account, destination]}
+        onClose={() => {}}
+        onEditMovement={() => {}}
+        onUpdateAccount={() => {}}
+        onReconcile={() => {}}
+        onAddAttachment={() => {}}
+        onDeleteAttachment={() => {}}
+        onLoadMoreMovements={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('· تم')
+    expect(markup).toContain('· ناقص')
+    expect(markup).toContain('· ملغي')
   })
 })
 

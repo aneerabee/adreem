@@ -11,14 +11,13 @@ import {
 import { accountStructureUsage } from '../../../src/mohammadLedger/accountEditing.js'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES } from '../../../src/mohammadLedger/accountCatalog.js'
 import {
-  accountIdempotencyKey,
   appendTelegramAccount,
   resolveTelegramReviewAccount,
   updateTelegramAccount,
   validateAccountDraft,
   validateExistingAccountDraft,
 } from '../../mohammadLedger/accountService.js'
-import { accountLabel } from '../../mohammadLedger/ledgerService.js'
+import { accountLabel, telegramUpdateIdempotencyKey } from '../../mohammadLedger/ledgerService.js'
 import {
   accountGroupKeyboard,
   accountConfirmKeyboard,
@@ -339,21 +338,29 @@ export async function handleAccountCallback(ctx, data) {
 
   if (data === 'acct:confirm') {
     if (session.step !== STEPS.REVIEW) return sendStep(ctx, session)
+    const operation = session.mode === 'review'
+      ? 'account-review'
+      : session.mode === 'edit'
+        ? 'account-edit'
+        : 'account-create'
+    const idempotencyKey = telegramUpdateIdempotencyKey(ctx.updateId, operation)
     let result
     try {
       if (session.mode === 'review') {
         result = await resolveTelegramReviewAccount(ctx.repository, session.reviewAccountId, session.draft, {
+          idempotencyKey,
           telegramUserId: ctx.userId,
           telegramChatId: ctx.chatId,
         })
       } else if (session.mode === 'edit') {
         result = await updateTelegramAccount(ctx.repository, session.editAccountId, session.draft, {
+          idempotencyKey,
           telegramUserId: ctx.userId,
           telegramChatId: ctx.chatId,
         })
       } else {
         result = await appendTelegramAccount(ctx.repository, session.draft, {
-          idempotencyKey: accountIdempotencyKey([ctx.userId, session.sessionId]),
+          idempotencyKey,
           telegramUserId: ctx.userId,
           telegramChatId: ctx.chatId,
         })

@@ -17,6 +17,8 @@ import {
   registrySessionTokenMap,
   validateTelegramLedgerAssignments,
 } from './telegram/userRegistry.js'
+import { createAdreemV3ApiHandler } from './adreemV3Api.js'
+import { supabaseAuthEnabled } from './mohammadLedger/supabaseAuth.js'
 
 const DEFAULT_PORT = 8787
 const DEFAULT_JSON_BODY_LIMIT = 5_000_000
@@ -344,6 +346,7 @@ async function uploadAttachment(env, { ledgerId, fileName, mimeType, base64 }) {
 }
 
 export function createAdreemApiHandler(env = process.env) {
+  if (supabaseAuthEnabled(env)) return createAdreemV3ApiHandler(env)
   const userAccess = createTelegramUserAccess(env)
   const ledgerMapProblem = validateTelegramLedgerAssignments(userAccess)
   if (ledgerMapProblem) {
@@ -724,9 +727,10 @@ export function startAdreemApi(env = process.env) {
     throw new Error('Production ADREEM web API requires ADREEM_WEB_ALLOWED_ORIGIN.')
   }
   const port = Number(env.ADREEM_API_PORT || env.PORT || DEFAULT_PORT)
+  const host = String(env.ADREEM_API_HOST || '127.0.0.1').trim()
   const server = createServer(createAdreemApiHandler(env))
-  server.listen(port, () => {
-    console.log('[adreem-api] listening', { port })
+  server.listen(port, host, () => {
+    console.log('[adreem-api] listening', { host, port })
   })
   return server
 }

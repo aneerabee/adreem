@@ -1,13 +1,15 @@
 # ADREEM
 
-دفتر مالي مستقل لإدارة الأشخاص، الحسابات، الأصول، المصروفات، والحركات من الويب وTelegram Bot بنفس منطق الدفتر.
+دفتر مالي مستقل متعدد المستخدمين للويب وTelegram. الحسابات والحركات والمرفقات معزولة لكل مالك، ويستخدم الويب والبوت منطق الدفتر نفسه.
 
-## الروابط
+## الحالة
 
-- التطبيق: https://aneerabee.github.io/adreem/
-- GitHub: https://github.com/aneerabee/adreem
+- النسخة الحية الحالية القديمة: https://aneerabee.github.io/adreem/
+- المستودع: https://github.com/aneerabee/adreem
+- أساس النسخة الثالثة موجود في هذا المستودع، لكنه لا يصبح إنتاجيًا قبل إنشاء مشروع Supabase مستقل، نقل البيانات والتحقق منها، وتجربة النسخ والاسترجاع.
+- النسخة الثالثة يجب أن تقدم الويب وواجهة API من أصل HTTPS واحد. لا تُنشر على GitHub Pages مع API في نطاق آخر.
 
-ملاحظة: اسم المنتج داخل النظام هو ADREEM. مسار GitHub Pages الحالي يبقى `/adreem/` لأنه تابع لاسم مستودع GitHub الحالي.
+تابع الحالة الفعلية في [docs/adreem-implementation-progress.md](docs/adreem-implementation-progress.md).
 
 ## التشغيل المحلي
 
@@ -19,11 +21,42 @@ pnpm dev
 ## الفحص
 
 ```bash
-pnpm typecheck
+pnpm exec tsc --noEmit
+pnpm exec vitest run
 pnpm lint
-pnpm test
+pnpm audit --prod
+```
+
+لبناء النسخة الثالثة يلزم تحديد أصل واحد صريح:
+
+```bash
+VITE_ADREEM_API_URL=https://adreem.example.com \
+ADREEM_WEB_DEPLOY_TARGET=same-origin \
+ADREEM_WEB_RUNTIME_MODE=v3 \
+ADREEM_WEB_PUBLIC_ORIGIN=https://adreem.example.com \
+VITE_BASE_PATH=/ \
 pnpm build
 ```
+
+## قاعدة البيانات
+
+النسخة الثالثة تستخدم مشروع Supabase مخصصًا لـ ADREEM وجداول منفصلة للحسابات والحركات والقيود والمرفقات. كل صف يحمل صاحب الدفتر ومعرفه، وسياسات عزل الصفوف مفروضة داخل قاعدة البيانات.
+
+طبّق سجل `supabase/migrations/` كاملًا حسب ترتيب أسماء الملفات. لا تستخدم `supabase/schema.sql` القديم لتجهيز النسخة الثالثة.
+
+تفاصيل النقل الآمن: [docs/adreem-v3-migration.md](docs/adreem-v3-migration.md).
+
+## الويب
+
+واجهة API للنسخة الثالثة:
+
+```bash
+pnpm api:adreem
+```
+
+الدخول يستخدم Supabase Auth. رموز الجلسة تبقى في ملفات ارتباط محمية على الخادم، ولا تحفظ في JavaScript أو تخزين المتصفح. أي حساب لا يحمل عضوية ADREEM صريحة أو غير مفعّل يُرفض.
+
+قالب الإعداد: [deploy/adreem.env.example](deploy/adreem.env.example).
 
 ## البوت
 
@@ -31,76 +64,27 @@ pnpm build
 pnpm bot:adreem
 ```
 
-يحتاج البوت إلى متغيرات البيئة الخاصة بـTelegram وSupabase. لا تضع المفاتيح السرية داخل Git.
+في النسخة الثالثة يرتبط رقم Telegram بملف المستخدم ودفتره داخل قاعدة ADREEM. حالة الخطوات، مؤشر التحديث، ومطالبات المعالجة تحفظ في قاعدة البيانات مع حجز ذري يمنع تنفيذ التحديث مرتين بعد إعادة التشغيل.
 
-متطلبات البوت على السيرفر:
+إنشاء المستخدمين وإيقافهم يتم من صفحة إدارة الويب، وليس من محادثة البوت.
 
-- `TELEGRAM_BOT_TOKEN`
-- `ADREEM_TELEGRAM_USER_IDS` أو `ADREEM_TELEGRAM_USER_ID`
-- `ADREEM_TELEGRAM_ADMIN_IDS` حتى يستطيع صاحب النظام عرض المستخدمين ومعرفة الأرقام
-- `ADREEM_TELEGRAM_LEDGER_IDS` عند وجود أكثر من مستخدم، مثل `user-id=main,user-id-2=second-book`
-- `ADREEM_TELEGRAM_USERS_FILE` لحفظ المستخدمين الذين تنشئهم صفحة الإدارة، مثل `/home/argaz/apps/adreem/adreem-telegram-users.json`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+## النسخ والاسترجاع
 
-أوامر البوت الإدارية المتبقية:
-
-```text
-/myid
-/users
-```
-
-لا تنشئ المستخدمين من تيليغرام. المستخدمون يضافون من صفحة إدارة ADREEM بالإيميل وكلمة المرور، ويمكن ربط رقم تيليغرام اختياريًا بنفس الدفتر.
-
-## API الويب المعزول
+النسخة الاحتياطية مشفرة قبل خروجها من الخادم وتشمل قاعدة البيانات والمرفقات. الاسترجاع مخصص لهدف فارغ، يعيد المرفقات ويتحقق من الحجم والبصمة، ويتراجع عن الرفع الجزئي عند الفشل.
 
 ```bash
-pnpm api:adreem
+pnpm ops:backup
+pnpm ops:backup:execute
+pnpm ops:restore-drill
 ```
 
-متطلبات السيرفر:
+التجهيز والتشغيل: [docs/adreem-backup-restore.md](docs/adreem-backup-restore.md).
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `ADREEM_OWNER_EMAILS` لتحديد مالك صفحة الإدارة
-- `ADREEM_TELEGRAM_USERS_FILE` لمسجل المستخدمين
-- اختياريًا: `ADREEM_API_PORT` و `ADREEM_WEB_ALLOWED_ORIGIN`
-- اختياريًا للمرفقات: `ADREEM_ATTACHMENTS_BUCKET`
-- اختياريًا للنسخ: `ADREEM_BACKUP_DIR` و `ADREEM_BACKUP_LIMIT`
-- اختياريًا للتدقيق: `ADREEM_AUDIT_LOG_FILE`
+## النشر
 
-إضافة المستخدمين تتم من صفحة الإدارة: `https://aneerabee.github.io/adreem/?admin=users`.
-كل مستخدم يدخل من الرابط العام بالإيميل وكلمة المرور، وكل مستخدم له `ledgerId` مستقل.
+- شغّل API والبوت على Node.js 22.
+- قدّم ملفات `dist` و`/api` من أصل واحد. يوجد مثال في [deploy/Caddyfile.adreem.example](deploy/Caddyfile.adreem.example).
+- احتفظ بجميع الأسرار خارج Git وبصلاحية ملف `600`.
+- لا تحوّل الخدمة الحية قبل نجاح النقل، المقارنة، النسخة الخارجية، وتجربة الاسترجاع.
 
-في الإنتاج يجب ضبط `ADREEM_WEB_ALLOWED_ORIGIN` على رابط GitHub Pages الفعلي، مثل:
-
-```text
-https://aneerabee.github.io
-```
-
-عند ضبط `VITE_ADREEM_API_URL` في الويب، يستخدم التطبيق API بعد تسجيل الدخول فقط. إذا لم توجد جلسة دخول، تظهر صفحة الدخول ولا يرجع الويب إلى Supabase anon.
-
-في الإنتاج:
-
-- شغّل API خلف HTTPS فقط.
-- شغّله بـ `NODE_ENV=production`.
-- لا تضع أسرارًا داخل `VITE_ADREEM_API_URL`; هذا المتغير URL عام فقط.
-- API يحتوي rate limiting داخلي للـ login والحفظ والإدارة، ويمكن إضافة reverse proxy rate limiting كطبقة إضافية.
-- سجلات الإدارة والحفظ تكتب في `ADREEM_AUDIT_LOG_FILE` عند ضبطه.
-- snapshots تلقائية تكتب في `ADREEM_BACKUP_DIR` قبل/بعد الحفظ المهم.
-
-## التخزين
-
-- الصف السحابي الحالي: `adreem:adreem:main`.
-- يقرأ النظام صف `default` القديم فقط للهجرة، ثم يحفظ على صف ADREEM الجديد.
-- الويب العام لا يحصل على `SUPABASE_ANON_KEY` في build GitHub Pages، ولا يتصل مباشرة بقاعدة البيانات.
-- الاتصال السحابي من الويب يمر عبر ADREEM API فقط، والـ API وحده يستخدم `SUPABASE_SERVICE_ROLE_KEY` على السيرفر.
-- RLS في `ml_state` مغلق بدون سياسات anon. هذا مقصود حتى لا يستطيع رابط الويب العام قراءة أو تعديل قاعدة البيانات مباشرة.
-- القراءة من صف `default` القديم تتم فقط من السيرفر عبر service role لهجرة بيانات الدفتر الرئيسي، ولا تفتح أي وصول عام.
-- يمكن تشغيل Supabase المباشر محليًا فقط عند الحاجة المؤقتة بتفعيل `VITE_ENABLE_SUPABASE_DIRECT=true` مع مفاتيح محلية خاصة، ولا يعمل هذا المسار في build الإنتاج حتى لو ضُبط المتغير بالخطأ.
-- عزل Telegram لعدة مستخدمين يتم عبر `ADREEM_TELEGRAM_LEDGER_IDS` مثل `278516861=main,555=saeed-book`، ويتطلب `SUPABASE_SERVICE_ROLE_KEY` على السيرفر. لا تستخدم anon key لتشغيل عدة دفاتر من البوت.
-- لا يوجد حذف فعلي للسجلات أثناء التشغيل اليومي: الإلغاء يصبح `voided`، إخفاء الحساب يصبح `inactive`، وإيقاف التكرار يصبح `inactive`. الحذف الكامل يكون فقط عبر reset دفتر كامل بعد backup.
-
-## التشغيل السحابي
-
-راجع [docs/adreem-operational-runbook.md](docs/adreem-operational-runbook.md).
+دليل التشغيل: [docs/adreem-operational-runbook.md](docs/adreem-operational-runbook.md).

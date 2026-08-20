@@ -5,6 +5,12 @@ import { normalizeAccountText } from '../../src/mohammadLedger/accountCompatibil
 import { ACCOUNT_STATUSES } from '../../src/mohammadLedger/accountCatalog.js'
 import { createAccount, validateAccount } from '../../src/mohammadLedger/ledgerCore.js'
 import { createAuditEvent } from '../../src/mohammadLedger/ledgerOperations.js'
+import { findTelegramUpdateAuditEvent } from './ledgerService.js'
+
+function telegramAuditDetails(metadata = {}) {
+  const telegramIdempotencyKey = String(metadata.idempotencyKey || '').trim()
+  return telegramIdempotencyKey ? { telegramIdempotencyKey } : {}
+}
 
 export function normalizeAccountDraft(draft = {}) {
   const preset = accountPresetFor(draft.type, draft.valueKind)
@@ -123,6 +129,15 @@ export async function appendTelegramAccount(repository, draft, metadata = {}) {
       state: {
         ...state,
         accounts: [...state.accounts, account],
+        auditEvents: [
+          ...(state.auditEvents || []),
+          createAuditEvent('account.created', {
+            accountId: account.id,
+            source: 'telegram',
+            telegramUserId: metadata.telegramUserId,
+            ...telegramAuditDetails(metadata),
+          }),
+        ],
       },
       account,
       validation,
@@ -136,6 +151,16 @@ export async function resolveTelegramReviewAccount(repository, accountId, draft,
   if (!id) throw new Error('Missing review account id.')
 
   return repository.update((state) => {
+    const existingAudit = findTelegramUpdateAuditEvent(state, metadata.idempotencyKey)
+    if (existingAudit) {
+      const account = state.accounts.find((item) => item.id === existingAudit.details?.accountId) || null
+      return {
+        state,
+        account,
+        validation: { ok: Boolean(account), errors: [] },
+        duplicate: true,
+      }
+    }
     const target = state.accounts.find((account) => account.id === id)
     if (!target || target.status !== ACCOUNT_STATUSES.NEEDS_REVIEW) {
       return {
@@ -177,6 +202,7 @@ export async function resolveTelegramReviewAccount(repository, accountId, draft,
             after: accountEditSnapshot(account),
             source: 'telegram',
             telegramUserId: metadata.telegramUserId,
+            ...telegramAuditDetails(metadata),
           }),
         ],
       },
@@ -192,6 +218,17 @@ export async function updateTelegramAccount(repository, accountId, draft, metada
   if (!id) throw new Error('Missing account id.')
 
   return repository.update((state) => {
+    const existingAudit = findTelegramUpdateAuditEvent(state, metadata.idempotencyKey)
+    if (existingAudit) {
+      const account = state.accounts.find((item) => item.id === existingAudit.details?.accountId) || null
+      return {
+        state,
+        account,
+        validation: { ok: Boolean(account), errors: [] },
+        changes: [],
+        duplicate: true,
+      }
+    }
     const target = state.accounts.find((account) => account.id === id)
     if (!target || target.status !== ACCOUNT_STATUSES.ACTIVE) {
       return {
@@ -233,6 +270,7 @@ export async function updateTelegramAccount(repository, accountId, draft, metada
             after: accountEditSnapshot(result.account),
             source: 'telegram',
             telegramUserId: metadata.telegramUserId,
+            ...telegramAuditDetails(metadata),
           }),
         ],
       },

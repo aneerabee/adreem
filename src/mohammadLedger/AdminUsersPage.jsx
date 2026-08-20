@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ADREEM_API_TOKEN_PERSIST_KEY,
   ADREEM_API_TOKEN_SESSION_KEY,
+  adreemApiJson,
 } from './mohammadPersistence'
 import { normalizeUiLanguage, uiLanguageDirection } from './uiLanguage'
 import { preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
@@ -43,29 +44,21 @@ function adminErrorMessage(error, fallback) {
   if (code === 'not-found') return 'المستخدم غير موجود أو تم حذفه.'
   if (code === 'weak-password') return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.'
   if (code === 'invalid-email') return 'الإيميل غير صحيح.'
+  if (code === 'invalid-telegram-user-id') return 'رقم تيليغرام غير صحيح.'
   if (code === 'invalid-user-or-ledger') return 'كود الدفتر أو بيانات المستخدم غير صحيحة.'
   if (code === 'ledger-change-requires-migration') return 'لا يمكن تغيير كود الدفتر من التعديل العادي حتى لا تنفصل البيانات.'
   return fallback
 }
 
-async function adminRequest(path, { token, method = 'GET', body } = {}) {
+async function adminRequest(path, { method = 'GET', body } = {}) {
   if (!ADREEM_API_URL) throw new Error('ADREEM API URL is missing.')
-  const response = await fetch(`${ADREEM_API_URL}${path}`, {
+  return adreemApiJson(path, {
     method,
     headers: {
-      authorization: `Bearer ${token}`,
       ...(body ? { 'content-type': 'application/json' } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const error = new Error(data.error || `ADREEM admin API failed: ${response.status}`)
-    error.status = response.status
-    error.data = data
-    throw error
-  }
-  return data
 }
 
 function UserRow({ user, owner, onEdit, onRemove }) {
@@ -80,11 +73,11 @@ function UserRow({ user, owner, onEdit, onRemove }) {
         <b>{isOwner ? 'مالك' : user.source === 'env' ? 'ثابت' : 'مستقل'}</b>
         {user.telegramUserId ? <span>تيليغرام {user.telegramUserId}</span> : <span>{user.hasPassword ? 'دخول ويب' : 'بدون دخول'}</span>}
       </div>
-      {user.source === 'registry' ? (
+      {user.source === 'registry' || user.source === 'supabase-auth' ? (
         <div className="adreem-admin-user-actions">
           <button type="button" onClick={() => onEdit(user)}>تعديل</button>
           <button type="button" disabled={isOwner} onClick={() => onRemove(user)}>
-            حذف الدخول
+            {user.active === false ? 'إعادة التفعيل' : 'إيقاف الدخول'}
           </button>
         </div>
       ) : null}
@@ -185,6 +178,7 @@ export default function AdminUsersPage() {
           password: draft.password,
           ledgerId,
           telegramUserId: draft.telegramUserId.trim(),
+          active: true,
         },
       })
       setDraft({ displayName: '', email: '', password: '', ledgerId: '', telegramUserId: '' })
@@ -249,24 +243,26 @@ export default function AdminUsersPage() {
     }
   }
 
-  async function removeUser(user) {
+  async function toggleUserAccess(user) {
     if (user.userId === owner?.userId) {
       setMessage('لا يمكن حذف المالك.')
       return
     }
+    const activate = user.active === false
     const protectedName = preserveUiData(user.displayName || user.email || user.userId)
-    const ok = window.confirm(translateUiText(`حذف دخول ${protectedName}؟ بيانات الدفتر لن تُحذف.`, normalizedLanguage))
-    if (!ok) return
+    if (!activate) {
+      const ok = window.confirm(translateUiText(`إيقاف دخول ${protectedName}؟ بيانات الدفتر ستبقى محفوظة.`, normalizedLanguage))
+      if (!ok) return
+    }
     try {
-      await adminRequest(`/api/admin/users/${encodeURIComponent(user.userId)}`, {
-        token,
-        method: 'DELETE',
-      })
+      await adminRequest(`/api/admin/users/${encodeURIComponent(user.userId)}`, activate
+        ? { method: 'PATCH', body: { active: true } }
+        : { method: 'DELETE' })
       if (editingUserId === user.userId) resetUserForm()
       await loadUsers(token)
-      setMessage('تم حذف صلاحية الدخول. بيانات الدفتر بقيت محفوظة.')
+      setMessage(activate ? 'تم تفعيل الدخول.' : 'تم إيقاف الدخول. بيانات الدفتر بقيت محفوظة.')
     } catch (error) {
-      setMessage(adminErrorMessage(error, 'لم يتم حذف المستخدم.'))
+      setMessage(adminErrorMessage(error, activate ? 'لم يتم تفعيل المستخدم.' : 'لم يتم إيقاف المستخدم.'))
     }
   }
 
@@ -372,7 +368,7 @@ export default function AdminUsersPage() {
                     user={user}
                     owner={owner}
                     onEdit={editUser}
-                    onRemove={removeUser}
+                    onRemove={toggleUserAccess}
                   />
                 )) : <p>لا يوجد مستخدمون بعد.</p>}
               </div>

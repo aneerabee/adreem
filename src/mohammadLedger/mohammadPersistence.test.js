@@ -251,7 +251,7 @@ describe('ADREEM cloud-only persistence', () => {
         json: async () => ({
           state: {
             ...baseState,
-            movements: [{ ...baseMovement, note: 'bot edit', updatedAt: '2026-08-19T10:01:00.000Z' }],
+            movements: [{ ...baseMovement, note: 'bot edit' }],
             savedAt: '2026-08-19T10:01:00.000Z',
           },
           updatedAt: 'version-2',
@@ -262,7 +262,7 @@ describe('ADREEM cloud-only persistence', () => {
     await module.loadMohammadPersistedState(baseState)
     const result = await module.saveMohammadPersistedState({
       ...baseState,
-      movements: [{ ...baseMovement, note: 'web edit', updatedAt: '2026-08-19T10:02:00.000Z' }],
+      movements: [{ ...baseMovement, note: 'web edit' }],
       savedAt: '2026-08-19T10:02:00.000Z',
     })
 
@@ -371,5 +371,536 @@ describe('ADREEM cloud-only persistence', () => {
 
     await expect(module.resolveAdreemAttachmentUrl({ storagePath: 'other/receipt.pdf' }))
       .rejects.toThrow('لا يمكنك فتح هذا المرفق.')
+  })
+
+  it('refreshes an expired access session once and remembers the rotated session', async () => {
+    const { browser, module } = await persistenceWithApi({
+      'adreem-ledger-api-login-token-v1': 'expired-token',
+      'adreem-ledger-api-refresh-token-v1': 'refresh-1',
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        headers: { get: () => null },
+        json: async () => ({ error: 'expired' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'fresh-token', refreshToken: 'refresh-2' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ state: { accounts: [], movements: [] } }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+
+    expect(result.loadError).toBeUndefined()
+    expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/adreem-api/api/auth/refresh')
+    expect(fetchMock.mock.calls[2][1].headers.authorization).toBe('Bearer fresh-token')
+    expect(browser.store.get('adreem-ledger-api-login-token-v1')).toBe('fresh-token')
+    expect(browser.store.get('adreem-ledger-api-refresh-token-v1')).toBe('refresh-2')
+  })
+
+  it('remembers v3 with a non-secret marker and removes every browser-visible token', async () => {
+    const { browser, module } = await persistenceWithApi({
+      'adreem-ledger-api-login-token-v1': 'old-access-token',
+      'adreem-ledger-api-refresh-token-v1': 'old-refresh-token',
+    })
+    browser.sessionStore.set('adreem-ledger-api-token-session-v1', 'tab-access-token')
+
+    module.rememberAdreemCloudSession({
+      authMode: 'cookie-v3',
+      token: 'must-not-be-stored',
+      refreshToken: 'must-not-be-stored-either',
+    })
+
+    expect(browser.store.get('adreem-ledger-api-login-token-v1')).toBe('cookie-v3')
+    expect(browser.store.has('adreem-ledger-api-refresh-token-v1')).toBe(false)
+    expect(browser.sessionStore.has('adreem-ledger-api-token-session-v1')).toBe(false)
+    expect([...browser.store.values(), ...browser.sessionStore.values()]).not.toContain('must-not-be-stored')
+    expect([...browser.store.values(), ...browser.sessionStore.values()]).not.toContain('must-not-be-stored-either')
+  })
+
+  it('uses credentialed cookie requests and refreshes without exposing tokens to JavaScript', async () => {
+    const { browser, module } = await persistenceWithApi({
+      'adreem-ledger-api-login-token-v1': 'cookie-v3',
+      'adreem-ledger-api-refresh-token-v1': 'stale-visible-refresh-token',
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        headers: { get: () => null },
+        json: async () => ({ error: 'expired' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ authMode: 'cookie-v3', expiresAt: '2026-08-20T13:00:00.000Z' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ state: { accounts: [], movements: [] } }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+
+    expect(result.loadError).toBeUndefined()
+    expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/adreem-api/api/auth/refresh')
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options.credentials).toBe('include')
+      expect(options.headers.authorization).toBeUndefined()
+      expect(options.headers.Authorization).toBeUndefined()
+    }
+    expect(fetchMock.mock.calls[1][1].body).toBeUndefined()
+    expect(browser.store.get('adreem-ledger-api-login-token-v1')).toBe('cookie-v3')
+    expect(browser.store.has('adreem-ledger-api-refresh-token-v1')).toBe(false)
+  })
+
+  it('retries a rotated cookie from another tab without clearing the remembered login', async () => {
+    const { browser, module } = await persistenceWithApi({
+      'adreem-ledger-api-login-token-v1': 'cookie-v3',
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        headers: { get: () => null },
+        json: async () => ({ error: 'access expired' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        headers: { get: () => null },
+        json: async () => ({ error: 'retry with the rotated cookie', code: 'adreem-session-rotated' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ authMode: 'cookie-v3', expiresAt: '2026-08-20T13:00:00.000Z' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ state: { accounts: [], movements: [] } }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+
+    expect(result.loadError).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/adreem-api/api/auth/refresh')
+    expect(fetchMock.mock.calls[2][0]).toBe('https://example.com/adreem-api/api/auth/refresh')
+    expect(browser.store.get('adreem-ledger-api-login-token-v1')).toBe('cookie-v3')
+  })
+
+  it.each([403, 503])('keeps the cookie-session marker after a temporary refresh failure with status %s', async (status) => {
+    const { browser, module } = await persistenceWithApi({
+      'adreem-ledger-api-login-token-v1': 'cookie-v3',
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        headers: { get: () => null },
+        json: async () => ({ error: 'access expired' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status,
+        headers: { get: () => null },
+        json: async () => ({ error: 'profile temporarily unavailable' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(module.adreemApiJson('/api/profile')).rejects.toMatchObject({ status })
+
+    expect(browser.store.get('adreem-ledger-api-login-token-v1')).toBe('cookie-v3')
+  })
+
+  it('clears the cookie-session marker when refresh itself is rejected with 401', async () => {
+    const { browser, module } = await persistenceWithApi({
+      'adreem-ledger-api-login-token-v1': 'cookie-v3',
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        headers: { get: () => null },
+        json: async () => ({ error: 'access expired' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        headers: { get: () => null },
+        json: async () => ({ error: 'refresh expired' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(module.adreemApiJson('/api/profile')).rejects.toMatchObject({ status: 401 })
+
+    expect(browser.store.has('adreem-ledger-api-login-token-v1')).toBe(false)
+  })
+
+  it('does not let a late refresh restore the marker after logout', async () => {
+    const { browser, module } = await persistenceWithApi({
+      'adreem-ledger-api-login-token-v1': 'cookie-v3',
+    })
+    let resolveRefresh
+    const fetchMock = vi.fn(async (url) => {
+      if (url.endsWith('/api/auth/refresh')) {
+        return new Promise((resolve) => { resolveRefresh = resolve })
+      }
+      if (url.endsWith('/api/auth/logout')) {
+        return { ok: true, status: 204, json: async () => ({}) }
+      }
+      return {
+        ok: false,
+        status: 401,
+        headers: { get: () => null },
+        json: async () => ({ error: 'access expired' }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const requestPending = module.adreemApiJson('/api/profile')
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await module.logoutAdreemCloudSession()
+    resolveRefresh({
+      ok: true,
+      json: async () => ({ authMode: 'cookie-v3', expiresAt: '2026-08-20T13:00:00.000Z' }),
+    })
+
+    await expect(requestPending).rejects.toMatchObject({ code: 'adreem-session-fenced' })
+    expect(browser.store.has('adreem-ledger-api-login-token-v1')).toBe(false)
+  })
+
+  it('logs out v3 with cookies only and removes the non-secret browser marker', async () => {
+    const { browser, module } = await persistenceWithApi({
+      'adreem-ledger-api-login-token-v1': 'cookie-v3',
+    })
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 204,
+      json: async () => { throw new Error('empty response') },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.logoutAdreemCloudSession()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe('https://example.com/adreem-api/api/auth/logout')
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST', credentials: 'include' })
+    expect(fetchMock.mock.calls[0][1].body).toBeUndefined()
+    expect(fetchMock.mock.calls[0][1].headers.authorization).toBeUndefined()
+    expect(browser.store.has('adreem-ledger-api-login-token-v1')).toBe(false)
+  })
+
+  it('sends only changed records with the relational revision', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const baseState = { accounts: [], movements: [] }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          state: baseState,
+          storageMode: 'relational',
+          revision: 7,
+          movementPage: { hasMore: false, nextCursor: null },
+        }),
+      })
+      .mockImplementationOnce(async (_url, options = {}) => ({
+        ok: true,
+        json: async () => ({
+          state: { accounts: [{ id: 'cash', updatedAt: '2026-08-20T18:00:00.000Z' }], movements: [] },
+          storageMode: 'relational',
+          revision: 8,
+          movementPage: { hasMore: false, nextCursor: null },
+          request: JSON.parse(options.body),
+        }),
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.loadMohammadPersistedState(baseState)
+    const result = await module.saveMohammadPersistedState({
+      accounts: [{ id: 'cash', updatedAt: '2026-08-20T18:00:00.000Z' }],
+      movements: [],
+    })
+
+    const request = JSON.parse(fetchMock.mock.calls[1][1].body)
+    expect(request).toEqual({
+      baseRevision: 7,
+      delta: { accounts: [{ id: 'cash', currencyKind: 'LYD', updatedAt: '2026-08-20T18:00:00.000Z' }] },
+    })
+    expect(request.state).toBeUndefined()
+    expect(result.revision).toBe(8)
+  })
+
+  it('loads older relational movements by a stable cursor and merges without duplicates', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const newest = { id: 'm-100', databaseSequence: 100, updatedAt: '2026-08-20T18:00:00.000Z' }
+    const older = { id: 'm-99', databaseSequence: 99, updatedAt: '2026-08-20T17:00:00.000Z' }
+    const newestAttachment = { id: 'a-100', movementId: 'm-100', updatedAt: '2026-08-20T18:00:00.000Z' }
+    const olderAttachment = { id: 'a-99', movementId: 'm-99', updatedAt: '2026-08-20T17:00:00.000Z' }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          state: { accounts: [], movements: [newest], attachments: [newestAttachment] },
+          storageMode: 'relational',
+          revision: 1,
+          movementPage: { hasMore: true, nextCursor: 100, limit: 1 },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          movements: [older],
+          attachments: [olderAttachment, { ...newestAttachment, updatedAt: '2026-08-20T16:00:00.000Z' }],
+          page: { hasMore: false, nextCursor: 99, limit: 1 },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+    const result = await module.loadMoreAdreemMovements({ before: 100, limit: 1 })
+
+    expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/adreem-api/api/movements?limit=1&before=100')
+    expect(result.allMovements.map((movement) => movement.id)).toEqual(['m-99', 'm-100'])
+    expect(result.allAttachments).toEqual([newestAttachment, olderAttachment])
+    expect(result.page).toMatchObject({ hasMore: false, nextCursor: 99, loaded: 2 })
+  })
+
+  it('keeps accumulated page attachments when a save response contains only the first page', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const newest = { id: 'm-2', databaseSequence: 2, updatedAt: '2026-08-20T18:00:00.000Z' }
+    const older = { id: 'm-1', databaseSequence: 1, updatedAt: '2026-08-20T17:00:00.000Z' }
+    const newestAttachment = { id: 'a-2', movementId: 'm-2', updatedAt: '2026-08-20T18:00:00.000Z' }
+    const olderAttachment = { id: 'a-1', movementId: 'm-1', updatedAt: '2026-08-20T17:00:00.000Z' }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          state: { accounts: [], movements: [newest], attachments: [newestAttachment] },
+          storageMode: 'relational',
+          revision: 1,
+          movementPage: { hasMore: true, nextCursor: 2 },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          movements: [older],
+          attachments: [olderAttachment],
+          revision: 1,
+          page: { hasMore: false, nextCursor: 1 },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          state: {
+            accounts: [{ id: 'cash', updatedAt: '2026-08-20T19:00:00.000Z' }],
+            movements: [newest],
+            attachments: [newestAttachment],
+          },
+          storageMode: 'relational',
+          revision: 2,
+          movementPage: { hasMore: true, nextCursor: 2 },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.loadMohammadPersistedState({ accounts: [], movements: [], attachments: [] })
+    const page = await module.loadAdreemMovementPage({ before: 2 })
+    const saved = await module.saveMohammadPersistedState({
+      accounts: [{ id: 'cash', updatedAt: '2026-08-20T19:00:00.000Z' }],
+      movements: page.allMovements,
+      attachments: page.allAttachments,
+    })
+
+    expect(saved.state.attachments.map((attachment) => attachment.id)).toEqual(['a-2', 'a-1'])
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('ignores a movement page that arrives after a newer relational save', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const initialMovement = { id: 'm-1', databaseSequence: 1, updatedAt: '2026-08-20T10:00:00.000Z' }
+    const savedMovement = { id: 'm-2', databaseSequence: 2, updatedAt: '2026-08-20T11:00:00.000Z' }
+    let resolvePage
+    const fetchMock = vi.fn(async (url, options = {}) => {
+      if (url.includes('/api/movements?')) return new Promise((resolve) => { resolvePage = resolve })
+      if (options.method === 'PUT') {
+        return {
+          ok: true,
+          json: async () => ({
+            state: { accounts: [], movements: [initialMovement, savedMovement] },
+            storageMode: 'relational',
+            revision: 2,
+            movementPage: { hasMore: false, nextCursor: null },
+          }),
+        }
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          state: { accounts: [], movements: [initialMovement] },
+          storageMode: 'relational',
+          revision: 1,
+          movementPage: { hasMore: true, nextCursor: 1 },
+        }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+    const pagePending = module.loadAdreemMovementPage({ before: 1 })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const save = await module.saveMohammadPersistedState({ accounts: [], movements: [initialMovement, savedMovement] })
+    resolvePage({
+      ok: true,
+      json: async () => ({
+        movements: [{ id: 'stale', databaseSequence: 0 }],
+        revision: 1,
+        page: { hasMore: false, nextCursor: null },
+      }),
+    })
+    const page = await pagePending
+
+    expect(save.revision).toBe(2)
+    expect(page.stale).toBe(true)
+    expect(page.allMovements.map((movement) => movement.id)).toEqual(['m-1', 'm-2'])
+  })
+
+  it('keeps movement pages with independent request keys active in the same epoch', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const initialMovement = { id: 'initial', databaseSequence: 3, updatedAt: '2026-08-20T10:00:00.000Z' }
+    let resolveAccountPage
+    let resolveHistoryPage
+    const fetchMock = vi.fn((url) => {
+      if (url.includes('/api/movements?') && url.includes('accountId=cash')) {
+        return new Promise((resolve) => { resolveAccountPage = resolve })
+      }
+      if (url.includes('/api/movements?') && url.includes('q=fuel')) {
+        return new Promise((resolve) => { resolveHistoryPage = resolve })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          state: { accounts: [], movements: [initialMovement] },
+          storageMode: 'relational',
+          revision: 7,
+          movementPage: { hasMore: true, nextCursor: 3 },
+        }),
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+    const accountPending = module.loadAdreemMovementPage({ accountId: 'cash', requestKey: 'account-profile' })
+    const historyPending = module.loadAdreemMovementPage({ query: 'fuel', requestKey: 'history' })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+
+    resolveAccountPage({
+      ok: true,
+      json: async () => ({
+        movements: [{ id: 'account', databaseSequence: 2 }],
+        revision: 7,
+        page: { hasMore: false, nextCursor: 2 },
+      }),
+    })
+    const accountPage = await accountPending
+    resolveHistoryPage({
+      ok: true,
+      json: async () => ({
+        movements: [{ id: 'history', databaseSequence: 1 }],
+        revision: 7,
+        page: { hasMore: false, nextCursor: 1 },
+      }),
+    })
+    const historyPage = await historyPending
+
+    expect(accountPage.stale).toBeUndefined()
+    expect(historyPage.stale).toBeUndefined()
+    expect(historyPage.allMovements.map((movement) => movement.id)).toEqual(['history', 'account', 'initial'])
+  })
+
+  it('requests authenticated cleanup for an uploaded orphan', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'cookie-v3' })
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 204, json: async () => ({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.deleteAdreemUploadedAttachment('owner/ledger/file.pdf')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/adreem-api/api/attachments?path=owner%2Fledger%2Ffile.pdf',
+      expect.objectContaining({ method: 'DELETE', credentials: 'include' }),
+    )
+  })
+
+  it('cleans uploaded orphans in a deduplicated batch and reports guarded failures', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'cookie-v3' })
+    const fetchMock = vi.fn(async (url) => url.includes('linked.pdf')
+      ? {
+          ok: false,
+          status: 409,
+          headers: { get: () => null },
+          json: async () => ({ error: 'raw database detail' }),
+        }
+      : { ok: true, status: 204, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await module.cleanupAdreemUploadedAttachments([
+      'owner/ledger/orphan.pdf',
+      'owner/ledger/orphan.pdf',
+      'owner/ledger/linked.pdf',
+      '',
+    ])
+
+    expect(result).toEqual({
+      deletedPaths: ['owner/ledger/orphan.pdf'],
+      failedPaths: ['owner/ledger/linked.pdf'],
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('loads a filtered history page without resubmitting fetched records as new movements', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const newest = { id: 'm-100', databaseSequence: 100, updatedAt: '2026-08-20T18:00:00.000Z' }
+    const filtered = { id: 'm-20', databaseSequence: 20, note: 'fuel', updatedAt: '2026-08-19T18:00:00.000Z' }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          state: { accounts: [], movements: [newest] },
+          storageMode: 'relational',
+          revision: 4,
+          movementPage: { hasMore: true, nextCursor: 100, limit: 1 },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ movements: [filtered], page: { hasMore: false, nextCursor: 20, limit: 25, total: 1 } }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+    const page = await module.loadAdreemMovementPage({
+      query: 'fuel',
+      accountId: 'cash',
+      status: 'posted',
+      type: 'expense',
+      dimensionId: 'truck',
+      expenseCategoryId: 'fuel-category',
+      limit: 25,
+    })
+    const save = await module.saveMohammadPersistedState({ accounts: [], movements: page.allMovements })
+
+    expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/adreem-api/api/movements?limit=25&q=fuel&accountId=cash&status=posted&type=expense&dimensionId=truck&expenseCategoryId=fuel-category')
+    expect(page.movements).toEqual([filtered])
+    expect(save.supabaseOk).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

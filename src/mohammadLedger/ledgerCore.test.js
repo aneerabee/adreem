@@ -4,6 +4,7 @@ import {
   CURRENCIES,
   MOVEMENT_STATUSES,
   MOVEMENT_TYPES,
+  MAX_MONEY_AMOUNT,
   buildPostingEntries,
   canCommitMovementEdit,
   createAccount,
@@ -13,11 +14,31 @@ import {
   postMovement,
   previewMovement,
   summarizeBalances,
+  validateMovementBalanceTransition,
   voidMovement,
   validateAccount,
 } from './ledgerCore'
 
 describe('mohammad ledger core', () => {
+  it('rejects values that cannot fit exactly in the relational database', () => {
+    const account = createAccount({
+      id: 'cash-limit',
+      ownerName: 'أنا',
+      subAccountName: 'كاش',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+    })
+    const result = postMovement({
+      type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+      amount: MAX_MONEY_AMOUNT + 1,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: account.id,
+    }, [account], [])
+
+    expect(result.validation.ok).toBe(false)
+    expect(result.validation.errors).toContainEqual(expect.objectContaining({ field: 'amount' }))
+  })
+
   it('creates opening balances from the Numbers catalog without losing cash or bank separation', () => {
     const openings = createOpeningMovements(mohammadAccountCatalog)
     const balances = summarizeBalances(mohammadAccountCatalog, openings)
@@ -27,6 +48,99 @@ describe('mohammad ledger core', () => {
     expect(getAccountBalance('me-jumhouria', mohammadAccountCatalog, openings).dinar).toBe(30000)
     expect(balances.find((bucket) => bucket.account.id === 'saeed-cash').dinar).toBe(12000)
     expect(balances.find((bucket) => bucket.account.id === 'saeed-bank').dinar).toBe(8000)
+  })
+
+  it('uses database balances without recounting a paginated movement page', () => {
+    const accounts = [{
+      id: 'cash',
+      status: ACCOUNT_STATUSES.ACTIVE,
+      balanceSource: 'database',
+      balanceDinar: 1200,
+      balanceUsd: 50,
+      postedCount: 9,
+    }]
+    const visibleMovements = [{
+      id: 'visible',
+      type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 200,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: 'cash',
+    }]
+
+    expect(summarizeBalances(accounts, visibleMovements)[0]).toMatchObject({
+      dinar: 1200,
+      usd: 50,
+      postedCount: 9,
+    })
+  })
+
+  it('validates an edit against the balance before the original posted movement', () => {
+    const accounts = [{
+      id: 'cash',
+      ownerName: 'أنا',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      currencyKind: CURRENCIES.DINAR,
+      status: ACCOUNT_STATUSES.ACTIVE,
+      balanceSource: 'database',
+      balanceDinar: 10,
+      balanceUsd: 0,
+      postedCount: 1,
+    }]
+    const originalMovement = {
+      id: 'expense-90',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 90,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash',
+      destinationAccountId: null,
+      createdAt: '2026-08-20T10:00:00.000Z',
+    }
+
+    const edited = postMovement(
+      { ...originalMovement, amount: 20 },
+      accounts,
+      [],
+      { originalMovement },
+    )
+
+    expect(edited.status).toBe(MOVEMENT_STATUSES.POSTED)
+    expect(edited.validation.ok).toBe(true)
+  })
+
+  it('rejects voiding income that has already been spent from owned money', () => {
+    const accounts = [{
+      id: 'cash',
+      ownerName: 'أنا',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      currencyKind: CURRENCIES.DINAR,
+      status: ACCOUNT_STATUSES.ACTIVE,
+      balanceSource: 'database',
+      balanceDinar: 0,
+      balanceUsd: 0,
+      postedCount: 2,
+    }]
+    const income = {
+      id: 'income-100',
+      type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: null,
+      destinationAccountId: 'cash',
+      createdAt: '2026-08-20T10:00:00.000Z',
+    }
+    const voided = voidMovement(income, 'إلغاء', '2026-08-20T10:05:00.000Z').movement
+
+    const validation = validateMovementBalanceTransition(income, voided, accounts, [])
+
+    expect(validation.ok).toBe(false)
+    expect(validation.errors).toContainEqual(expect.objectContaining({
+      message: expect.stringContaining('بالسالب'),
+    }))
   })
 
   it('previews transfer effects before posting', () => {

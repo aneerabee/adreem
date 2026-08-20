@@ -2,10 +2,7 @@
 /** @jsxRuntime automatic */
 import { useState } from 'react'
 import { BookOpenCheck, LogIn, UsersRound } from 'lucide-react'
-import {
-  ADREEM_API_TOKEN_PERSIST_KEY,
-  ADREEM_API_TOKEN_SESSION_KEY,
-} from './mohammadPersistence'
+import { rememberAdreemCloudSession } from './mohammadPersistence'
 import { normalizeUiLanguage, uiLanguageDirection } from './uiLanguage'
 import { readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage } from './uiTranslation'
 
@@ -20,19 +17,6 @@ async function loginRequest({ email, password }) {
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(data.error || 'login-failed')
   return data
-}
-
-function rememberLoginToken(token) {
-  try {
-    window.sessionStorage?.setItem(ADREEM_API_TOKEN_SESSION_KEY, token)
-  } catch {
-    // Session storage can be disabled in hardened browsers.
-  }
-  try {
-    window.localStorage?.setItem(ADREEM_API_TOKEN_PERSIST_KEY, token)
-  } catch {
-    // The user will still remain logged in for this tab if sessionStorage worked.
-  }
 }
 
 export default function LoginPage() {
@@ -51,7 +35,7 @@ export default function LoginPage() {
     setMessage('')
     try {
       const data = await loginRequest({ email: email.trim(), password })
-      rememberLoginToken(data.token)
+      rememberAdreemCloudSession(data)
       rememberUiLanguage(data.user?.language)
       window.location.assign(`${window.location.pathname}${window.location.search}`)
     } catch {

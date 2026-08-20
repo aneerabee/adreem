@@ -19,6 +19,17 @@ function memoryRepository(initialState = createMohammadFallbackState()) {
       if (result?.state) state = result.state
       return { ...result, state }
     },
+    async uploadAttachmentFile(file) {
+      return {
+        label: file.fileName,
+        storagePath: `owner/ledger/2026-08-20/${file.fileName}`,
+        mimeType: file.mimeType,
+        sizeBytes: file.buffer.length,
+      }
+    },
+    async deleteAttachmentFile() {
+      return { ok: true }
+    },
   }
 }
 
@@ -49,6 +60,7 @@ function createCtx(language = 'ar') {
     userId: 278516861,
     messageId: 55,
     isCallback: true,
+    updateId: 7001,
   }
 }
 
@@ -345,7 +357,7 @@ describe('telegram movement flow safety', () => {
 
     await handleMovementCallback(ctx, 'mv:confirm')
 
-    const saved = ctx.repository.state.movements.find((movement) => movement.idempotencyKey === `${ctx.userId}-needs-review-session`)
+    const saved = ctx.repository.state.movements.find((movement) => movement.idempotencyKey === `telegram-update-${ctx.updateId}-movement-create`)
     expect(saved.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم حفظها في المراجعة')
@@ -486,6 +498,7 @@ describe('telegram movement flow safety', () => {
 
     expect(ctx.repository.state.attachments || []).toHaveLength(0)
 
+    ctx.updateId += 1
     await startMovement(ctx)
     await handleMovementCallback(ctx, 'mv:type:expense')
     await handleMovementText({ ...ctx, isCallback: false, messageId: 58 }, '130')

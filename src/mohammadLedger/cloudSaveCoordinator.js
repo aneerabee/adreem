@@ -86,6 +86,14 @@ export function createLatestSaveCoordinator({
       }
       void run()
     },
+    discardFailed() {
+      if (stopped || running || !failed) return false
+      failed = null
+      pending = null
+      retryIndex = 0
+      clearRetryTimer()
+      return true
+    },
     hasPending() {
       return !stopped && (running || Boolean(pending) || Boolean(failed) || retryTimer !== null)
     },

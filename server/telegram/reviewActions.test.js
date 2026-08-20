@@ -6,6 +6,8 @@ import {
   buildReviewSession,
   cancelReviewMovementInState,
   hideZeroReviewAccountInState,
+  loadReviewSession,
+  stableReviewRequestedPage,
 } from './reviewActions.js'
 import { actionCallbackData, parseActionCallback, stableActionToken } from './actionTokens.js'
 
@@ -112,6 +114,55 @@ describe('telegram review actions', () => {
     expect(second.choices.accounts[stableActionToken('review-extra-6')]).toBe('review-extra-6')
     expect(second.choices.movements[stableActionToken('bad-transfer')]).toBe('bad-transfer')
     expect(second.items.map((item) => item.number)).toEqual([9, 10])
+  })
+
+  it('loads review movements beyond 1000 while keeping account-aware pages and numbers', async () => {
+    const state = { ...stateWithReviewItems(), movements: [] }
+    const movements = Array.from({ length: 1005 }, (_, index) => ({
+      id: `movement-${index + 1}`,
+      type: MOVEMENT_TYPES.TRANSFER,
+      status: MOVEMENT_STATUSES.NEEDS_REVIEW,
+      amount: index + 1,
+      currency: CURRENCIES.DINAR,
+    }))
+    const calls = []
+    const repository = {
+      loadMovements: async (options) => {
+        calls.push(options)
+        const start = options.movementOffset
+        return {
+          movements: movements.slice(start, start + options.movementLimit),
+          page: { total: start === 0 ? movements.length : null },
+        }
+      },
+    }
+
+    const session = await loadReviewSession(repository, state, 8, 125)
+
+    expect(calls).toEqual([
+      { status: MOVEMENT_STATUSES.NEEDS_REVIEW, movementOffset: 998, movementLimit: 8 },
+      { status: MOVEMENT_STATUSES.NEEDS_REVIEW, movementOffset: 0, movementLimit: 1 },
+    ])
+    expect(session.total).toBe(1007)
+    expect(session.pageCount).toBe(126)
+    expect(session.page).toBe(125)
+    expect(session.items).toHaveLength(7)
+    expect(session.items.map((item) => item.number)).toEqual([1001, 1002, 1003, 1004, 1005, 1006, 1007])
+    expect(session.items[0].id).toBe('movement-999')
+    expect(session.choices.movements[stableActionToken('movement-1005')]).toBe('movement-1005')
+  })
+
+  it('rejects a review page from another ledger revision and resets navigation after a change', async () => {
+    const repository = {
+      loadMovements: async () => ({ movements: [], page: { total: 0 }, revision: 8 }),
+    }
+
+    await expect(loadReviewSession(repository, stateWithReviewItems(), 8, 1, 7))
+      .rejects.toMatchObject({ code: 'ADREEM_REVIEW_REVISION_CHANGED' })
+    expect(stableReviewRequestedPage({ flow: 'review', ledgerRevision: 7 }, 8, 3))
+      .toEqual({ page: 0, changed: true })
+    expect(stableReviewRequestedPage({ flow: 'review', ledgerRevision: 8 }, 8, 3))
+      .toEqual({ page: 3, changed: false })
   })
 
   it('rejects a repeated review press instead of targeting the next item', () => {

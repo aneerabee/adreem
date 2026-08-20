@@ -8,6 +8,7 @@ import {
   formatMoney,
   parseBalanceText,
   rankAccountsForTelegram,
+  telegramUpdateIdempotencyKey,
 } from '../../mohammadLedger/ledgerService.js'
 import {
   accountChoiceToken,
@@ -223,7 +224,7 @@ export async function handleReconciliationCallback(ctx, data) {
     let result
     try {
       result = await appendTelegramReconciliation(ctx.repository, session.draft, {
-        idempotencyKey: `${ctx.userId}-${session.sessionId}`,
+        idempotencyKey: telegramUpdateIdempotencyKey(ctx.updateId, 'reconciliation-create'),
         telegramUserId: ctx.userId,
         telegramChatId: ctx.chatId,
       })

@@ -11,15 +11,21 @@ import {
   parseBalanceText,
   rankAccountsForTelegram,
   resolveTelegramReviewMovement,
+  telegramUpdateIdempotencyKey,
 } from './ledgerService.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
   let state = initialState
+  let updateOptions = null
   return {
     get state() {
       return state
     },
-    async update(updater) {
+    get updateOptions() {
+      return updateOptions
+    },
+    async update(updater, options = {}) {
+      updateOptions = options
       const result = await updater(state)
       if (result?.state) state = result.state
       return { ...result, state }
@@ -363,26 +369,33 @@ describe('telegram ledger service', () => {
       ],
     })
 
-    const result = await resolveTelegramReviewMovement(repository, 'review-transfer', {
+    const draft = {
       type: MOVEMENT_TYPES.TRANSFER,
       amount: 100,
       currency: CURRENCIES.DINAR,
       sourceAccountId: 'me-cash',
       destinationAccountId: 'saeed-cash',
       note: 'تم الإصلاح',
-    }, {
+    }
+    const metadata = {
+      idempotencyKey: telegramUpdateIdempotencyKey(8100, 'movement-review'),
       telegramUserId: 278516861,
       telegramChatId: 278516861,
-    })
+    }
+    const result = await resolveTelegramReviewMovement(repository, 'review-transfer', draft, metadata)
+    const duplicate = await resolveTelegramReviewMovement(repository, 'review-transfer', draft, metadata)
 
     const saved = repository.state.movements.filter((movement) => movement.id === 'review-transfer')
     expect(result.needsReview).toBe(false)
+    expect(duplicate.duplicate).toBe(true)
     expect(saved).toHaveLength(1)
     expect(saved[0]).toMatchObject({
       status: MOVEMENT_STATUSES.POSTED,
       destinationAccountId: 'saeed-cash',
       reviewSource: 'telegram',
     })
+    expect(repository.state.auditEvents.filter((event) => event.action === 'movement.updated')).toHaveLength(1)
+    expect(repository.updateOptions).toEqual({ movementIds: ['review-transfer'] })
   })
 
   it('uses the shared web account-selection rules for telegram movement parties', () => {

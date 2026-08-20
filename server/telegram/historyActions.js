@@ -1,5 +1,7 @@
-import { MOVEMENT_STATUSES, MOVEMENT_TYPES, voidMovement } from '../../src/mohammadLedger/ledgerCore.js'
+import { MOVEMENT_STATUSES, MOVEMENT_TYPES, validateMovementBalanceTransition, voidMovement } from '../../src/mohammadLedger/ledgerCore.js'
+import { appendMovementAuditEvent, findTelegramUpdateAuditEvent } from '../mohammadLedger/ledgerService.js'
 import { createActionSessionId, stableActionToken } from './actionTokens.js'
+import { zonedDayKey } from './dateRange.js'
 
 export const HISTORY_ACTION_LIMIT = 8
 export const CANCEL_WINDOW_HOURS = 24
@@ -38,13 +40,18 @@ export function recentHistoryMovements(state = {}) {
 }
 
 export function movementsForDate(state = {}, targetDate = new Date()) {
-  const year = targetDate.getFullYear()
-  const month = targetDate.getMonth()
-  const day = targetDate.getDate()
+  let expectedDay
+  try {
+    expectedDay = zonedDayKey(targetDate)
+  } catch {
+    return []
+  }
   return recentHistoryMovements(state).filter((movement) => {
-    const date = new Date(movement.createdAt || movement.updatedAt || '')
-    if (Number.isNaN(date.getTime())) return false
-    return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day
+    try {
+      return zonedDayKey(movement.createdAt || movement.updatedAt || '') === expectedDay
+    } catch {
+      return false
+    }
   })
 }
 
@@ -77,8 +84,20 @@ export function canVoidRecentMovement(movement, nowMs = Date.now()) {
   return nowMs - date.getTime() <= CANCEL_WINDOW_MS
 }
 
-export function voidRecentMovementInState(state, movementId, now = new Date().toISOString()) {
+export function voidRecentMovementInState(state, movementId, now = new Date().toISOString(), metadata = {}) {
+  const existingAudit = findTelegramUpdateAuditEvent(state, metadata.idempotencyKey)
+  if (existingAudit) {
+    const movement = (state.movements || []).find((item) => item.id === existingAudit.details?.movementId) || null
+    return {
+      ok: Boolean(movement),
+      duplicate: true,
+      state,
+      movement,
+      message: movement ? 'تم إلغاء الحركة وبقيت في السجل.' : 'لم أجد الحركة في السجل.',
+    }
+  }
   let changed = false
+  let voidedMovement = null
   let message = 'لم أجد الحركة في السجل.'
   const nowMs = new Date(now).getTime()
   const movements = (state.movements || []).map((movement) => {
@@ -92,11 +111,21 @@ export function voidRecentMovementInState(state, movementId, now = new Date().to
       message = result.error || 'لم يتم الإلغاء.'
       return movement
     }
+    const balanceValidation = validateMovementBalanceTransition(movement, result.movement, state.accounts || [], state.movements || [])
+    if (!balanceValidation.ok) {
+      message = balanceValidation.errors[0]?.message || 'لا يمكن الإلغاء لأن الرصيد الناتج سيكون سالبًا.'
+      return movement
+    }
     changed = true
+    voidedMovement = result.movement
     message = 'تم إلغاء الحركة وبقيت في السجل.'
     return result.movement
   })
 
   if (!changed) return { ok: false, state, message }
-  return { ok: true, state: { ...state, movements }, message }
+  return {
+    ok: true,
+    state: appendMovementAuditEvent({ ...state, movements }, 'movement.updated', voidedMovement, metadata),
+    message,
+  }
 }

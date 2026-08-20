@@ -22,6 +22,10 @@ dist-ssr
 /ledger-backups/
 /backups/
 /adreem-telegram-users.json
+/adreem-migration-users*.json
+/adreem-migration-checkpoint*.json
+/adreem-backup-private/
+/supabase/.temp/
 
 # Editor directories and files
 .vscode/*

@@ -549,7 +549,12 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
       movement.status !== MOVEMENT_STATUSES.POSTED ||
       (!changedRecord(movement, previousMovements) && !dependsOnAccounts(movement, reclassifiedAccountIds))
     ) continue
-    const validation = validateMovement(movement, accounts, movements.filter((item) => item.id !== movement.id))
+    const validation = validateMovement(
+      movement,
+      accounts,
+      movements.filter((item) => item.id !== movement.id),
+      { originalMovement: previousMovement },
+    )
     validation.errors.forEach((error) => errors.push({
       code: 'invalid-posted-movement',
       id: movement.id,

@@ -27,6 +27,7 @@ import {
   previewDraft,
   rankMovementAccountsForTelegram,
   resolveTelegramReviewMovement,
+  telegramUpdateIdempotencyKey,
 } from '../../mohammadLedger/ledgerService.js'
 import {
   accountChoicesKeyboard,
@@ -61,6 +62,10 @@ const STEPS = {
   ATTACHMENT: 'attachment',
   RECURRING: 'recurring',
   REVIEW: 'review',
+}
+
+function runExternalEffect(ctx, effectId, handler, metadata = {}) {
+  return typeof ctx.runEffect === 'function' ? ctx.runEffect(effectId, handler, metadata) : handler()
 }
 
 function createMovementSession(options = {}) {
@@ -320,7 +325,7 @@ export async function startMovement(ctx) {
 }
 
 export async function startReviewMovement(ctx, movementId) {
-  const { state } = await ctx.repository.load()
+  const { state } = await ctx.repository.load({ movementIds: [movementId] })
   const movement = state.movements.find((item) => item.id === movementId)
   if (!movement) {
     return ctx.telegram.sendMessage({
@@ -520,10 +525,18 @@ export async function handleMovementCallback(ctx, data) {
   }
 
   if (data === 'mv:confirm') {
+    const operation = session.mode === 'review' ? 'movement-review' : 'movement-create'
+    const idempotencyKey = telegramUpdateIdempotencyKey(ctx.updateId, operation)
     session.draft.currency = session.draft.currency || movementCurrencyFor(session.draft.type, CURRENCIES.DINAR)
+    session.draft.attachmentIdempotencyKey = telegramUpdateIdempotencyKey(ctx.updateId, `${operation}-attachment`)
     if (session.draft.attachmentPending) {
       try {
-        const uploaded = await ctx.repository.uploadAttachmentFile(session.draft.attachmentPending)
+        const uploaded = await runExternalEffect(
+          ctx,
+          'ledger-attachment-upload',
+          () => ctx.repository.uploadAttachmentFile(session.draft.attachmentPending),
+          { kind: 'attachment-upload', operation },
+        )
         session.draft = {
           ...session.draft,
           attachmentLabel: uploaded.label,
@@ -548,12 +561,13 @@ export async function handleMovementCallback(ctx, data) {
     try {
       if (session.mode === 'review') {
         result = await resolveTelegramReviewMovement(ctx.repository, session.reviewMovementId, session.draft, {
+          idempotencyKey,
           telegramUserId: ctx.userId,
           telegramChatId: ctx.chatId,
         })
       } else {
         result = await appendTelegramMovement(ctx.repository, session.draft, {
-          idempotencyKey: `${ctx.userId}-${session.sessionId}`,
+          idempotencyKey,
           telegramUserId: ctx.userId,
           telegramChatId: ctx.chatId,
         })
@@ -785,18 +799,24 @@ export async function handleMovementMedia(ctx, message = {}) {
     const file = await ctx.telegram.getFile({ file_id: media.fileId })
     const buffer = await ctx.telegram.downloadFile(file.file_path, { maxBytes: ATTACHMENT_MAX_SIZE_BYTES })
     await removeRejectedUploadedAttachment(ctx, session)
-    session.draft = {
-      ...session.draft,
-      attachmentLabel: media.fileName,
-      attachmentUrl: '',
-      attachmentStoragePath: '',
-      attachmentMimeType: media.mimeType,
-      attachmentSizeBytes: buffer.length,
-      attachmentPending: {
+    const uploaded = await runExternalEffect(
+      ctx,
+      `ledger-attachment-upload-${media.fileId}`,
+      () => ctx.repository.uploadAttachmentFile({
         fileName: media.fileName,
         mimeType: media.mimeType,
         buffer,
-      },
+      }),
+      { kind: 'attachment-upload', fileId: media.fileId },
+    )
+    session.draft = {
+      ...session.draft,
+      attachmentLabel: uploaded.label,
+      attachmentUrl: '',
+      attachmentStoragePath: uploaded.storagePath,
+      attachmentMimeType: uploaded.mimeType,
+      attachmentSizeBytes: uploaded.sizeBytes,
+      attachmentPending: null,
     }
     session.step = STEPS.RECURRING
     ctx.sessions.set(ctx.chatId, ctx.userId, session)

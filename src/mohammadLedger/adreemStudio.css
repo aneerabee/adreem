@@ -865,6 +865,20 @@
   background: var(--history-soft);
 }
 .ml3-history-list { gap: 10px; }
+.ml3-history-more {
+  width: min(100%, 320px);
+  min-height: 40px;
+  margin: 2px auto 0;
+  border: 1px solid color-mix(in srgb, var(--history) 30%, var(--line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--history) 7%, #fff);
+  color: var(--history);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ml3-history-more:disabled { cursor: wait; opacity: 0.62; }
 .ml3-history-day {
   position: relative;
   overflow: hidden;

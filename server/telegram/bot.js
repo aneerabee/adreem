@@ -10,7 +10,13 @@ import {
   executeRecurringRuleInState,
 } from '../../src/mohammadLedger/ledgerOperations.js'
 import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
-import { buildLedgerSnapshot, formatMoney } from '../mohammadLedger/ledgerService.js'
+import { createSupabaseTelegramLedgerAccess } from './supabaseLedgerAccess.js'
+import {
+  buildLedgerSnapshot,
+  formatMoney,
+  runTelegramIdempotentStateAction,
+  telegramUpdateIdempotencyKey,
+} from '../mohammadLedger/ledgerService.js'
 import {
   accountChoiceToken,
   accountProfileKeyboard,
@@ -39,7 +45,7 @@ import {
   movementStepText,
   protectedAccountLabel,
 } from './messages.js'
-import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountInState } from './reviewActions.js'
+import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountInState, loadReviewSession, stableReviewRequestedPage } from './reviewActions.js'
 import {
   buildHistorySession,
   HISTORY_ACTION_LIMIT,
@@ -58,7 +64,15 @@ import { handleReconciliationCallback, handleReconciliationText, startReconcilia
 import { createTelegramUserAccess, validateTelegramLedgerAssignments } from './userRegistry.js'
 import { buildRecurringSession, disableRecurringRuleInState } from './recurringActions.js'
 import { parseActionCallback, stableActionToken } from './actionTokens.js'
-import { isPrivateTelegramUpdate, processTelegramUpdates, shouldSkipOldUpdates } from './updateSafety.js'
+import {
+  createIdempotentTelegramEffectClient,
+  isPrivateTelegramUpdate,
+  processTelegramUpdates,
+  runCallbackActionWithBestEffortAck,
+  shouldSkipOldUpdates,
+} from './updateSafety.js'
+import { createDurableBotRuntime, hydrateDurableSession } from './durableBotRuntime.js'
+import { zonedDayRange } from './dateRange.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
 if (!token) {
@@ -66,7 +80,8 @@ if (!token) {
   process.exit(1)
 }
 const userAccess = createTelegramUserAccess(process.env)
-const ledgerMapProblem = validateTelegramLedgerAssignments(userAccess)
+const supabaseLedgerAccess = createSupabaseTelegramLedgerAccess(process.env)
+const ledgerMapProblem = supabaseLedgerAccess ? '' : validateTelegramLedgerAssignments(userAccess)
 if (ledgerMapProblem) {
   console.error('[adreem-telegram-bot] invalid Telegram ledger assignments:', ledgerMapProblem)
   process.exit(1)
@@ -74,23 +89,43 @@ if (ledgerMapProblem) {
 
 const telegram = createTelegramClient(token)
 const repositoriesByLedgerId = new Map()
-const sessions = createSessionStore()
+const durableRuntime = createDurableBotRuntime(process.env, token)
+const sessions = durableRuntime.sessions || createSessionStore()
 const ACCOUNT_PAGE_SIZE = 8
 const MOVEMENT_PICKER_PAGE_SIZE = 8
 const REPORT_PAGE_SIZE = 8
 const TODAY_PREVIEW_LIMIT = 10
+const LEDGER_TIME_ZONE = process.env.ADREEM_TIME_ZONE || 'Africa/Tripoli'
 
 let offset = 0
 
 console.log('[adreem-telegram-bot] starting', {
+  accessMode: supabaseLedgerAccess ? 'supabase' : 'legacy',
   admins: userAccess.adminIds.length,
   envUsers: userAccess.envUserIds.length,
   envMappedLedgers: userAccess.envLedgerMap.size,
   registry: userAccess.filePath,
 })
 
-function repositoryForUser(userId) {
+async function identityForUser(userId) {
+  if (supabaseLedgerAccess) return supabaseLedgerAccess.resolve(userId)
+  if (!userAccess.isAllowed(userId)) return null
   const ledgerId = userAccess.ledgerIdForUser(userId)
+  if (!ledgerId) return null
+  return {
+    ownerId: '',
+    ledgerId,
+    legacyLedgerId: ledgerId,
+    language: userAccess.languageForTelegramUser(userId),
+    isOwner: userAccess.isAdmin(userId),
+    source: 'legacy',
+    telegramUserId: String(userId || ''),
+  }
+}
+
+function repositoryForIdentity(identity) {
+  if (supabaseLedgerAccess) return supabaseLedgerAccess.repositoryFor(identity)
+  const ledgerId = identity?.ledgerId
   if (!ledgerId) return null
   if (!repositoriesByLedgerId.has(ledgerId)) {
     repositoriesByLedgerId.set(ledgerId, createLedgerRepository(process.env, { ledgerId }))
@@ -99,12 +134,22 @@ function repositoryForUser(userId) {
 }
 
 async function skipOldUpdates() {
+  if (durableRuntime.durableState && offset > 0) return
   if (!shouldSkipOldUpdates(process.env)) return
   const updates = await telegram.getUpdates({ offset: -1, timeout: 0, allowed_updates: ['message', 'callback_query'] })
   if (updates.length) {
-    offset = updates[updates.length - 1].update_id + 1
+    const nextOffset = updates[updates.length - 1].update_id + 1
+    if (durableRuntime.durableState) await durableRuntime.durableState.setOffset(nextOffset)
+    offset = nextOffset
     console.log('[adreem-telegram-bot] skipped old updates', { nextOffset: offset })
   }
+}
+
+async function restoreDurableOffset() {
+  if (!durableRuntime.durableState) return
+  await durableRuntime.repository.cleanExpired()
+  const savedOffset = await durableRuntime.durableState.getOffset()
+  if (savedOffset !== null) offset = savedOffset
 }
 
 function getUser(update) {
@@ -119,24 +164,23 @@ function getMessageId(update) {
   return update.callback_query?.message?.message_id || update.message?.message_id || null
 }
 
-function isAllowed(user) {
-  if (!user?.id) return false
-  return userAccess.isAllowed(user.id)
-}
-
-function contextFor(update) {
+function contextFor(update, identity = null, execution = null) {
   const user = getUser(update)
-  const language = userAccess.languageForTelegramUser(user?.id)
+  const language = identity?.language || userAccess.languageForTelegramUser(user?.id)
+  const localizedTelegram = createLocalizedTelegramClient(telegram, language)
   return {
-    telegram: createLocalizedTelegramClient(telegram, language),
+    telegram: createIdempotentTelegramEffectClient(localizedTelegram, execution?.runEffect),
     repository: null,
     sessions,
     user,
+    identity,
     userId: user?.id,
     chatId: getChatId(update),
     messageId: getMessageId(update),
     isCallback: Boolean(update.callback_query),
     language,
+    updateId: update.update_id,
+    runEffect: execution?.runEffect || null,
   }
 }
 
@@ -177,10 +221,22 @@ async function deleteUserInput(ctx) {
 
 async function showMainMenu(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
-  const { state } = await ctx.repository.load()
-  const today = movementsForDate(state).length
+  const { state, movementPage } = await ctx.repository.load()
+  let today
+  if (typeof ctx.repository.loadMovements === 'function') {
+    const range = zonedDayRange(new Date(), LEDGER_TIME_ZONE)
+    const result = await ctx.repository.loadMovements({
+      occurredFrom: range.from,
+      occurredBefore: range.before,
+      movementLimit: 1,
+      excludeOpening: true,
+    })
+    today = Number(result.page?.total || 0)
+  } else {
+    today = movementsForDate(state).length
+  }
   const reviewCount = state.accounts.filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW).length +
-    state.movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW).length
+    Number(movementPage?.reviewTotal ?? state.movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW).length)
   return sendScreen(ctx, mainMenuText({ todayCount: today, reviewCount }))
 }
 
@@ -243,11 +299,14 @@ async function handleAccountsCallback(ctx, data) {
   const account = snapshot.accountById.get(accountId)
   const bucket = snapshot.balanceByAccountId.get(accountId)
   if (!account || !bucket) return showAccounts(ctx, session.page)
-  const movements = (state.movements || [])
-    .filter((movement) => movement.sourceAccountId === accountId || movement.destinationAccountId === accountId)
-    .slice()
-    .reverse()
-    .slice(0, 8)
+  const accountMovements = typeof ctx.repository.loadMovements === 'function'
+    ? (await ctx.repository.loadMovements({ accountId, movementLimit: 8, excludeOpening: true })).movements
+    : (state.movements || [])
+      .filter((movement) => movement.sourceAccountId === accountId || movement.destinationAccountId === accountId)
+      .slice()
+      .reverse()
+      .slice(0, 8)
+  const movements = accountMovements
     .map((movement) => movementBlockquote(movement, snapshot.accountById, { includeDate: true }))
   const text = [
     '<b>ADREEM · الحساب</b>',
@@ -265,20 +324,69 @@ async function showToday(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
-  const todayMovements = movementsForDate(state)
-  const visibleMovements = todayMovements.slice(0, TODAY_PREVIEW_LIMIT)
+  let visibleMovements
+  let total
+  if (typeof ctx.repository.loadMovements === 'function') {
+    const range = zonedDayRange(new Date(), LEDGER_TIME_ZONE)
+    const result = await ctx.repository.loadMovements({
+      occurredFrom: range.from,
+      occurredBefore: range.before,
+      movementLimit: TODAY_PREVIEW_LIMIT,
+      excludeOpening: true,
+    })
+    visibleMovements = result.movements || []
+    total = Number(result.page?.total || visibleMovements.length)
+  } else {
+    const todayMovements = movementsForDate(state)
+    visibleMovements = todayMovements.slice(0, TODAY_PREVIEW_LIMIT)
+    total = todayMovements.length
+  }
   const rows = visibleMovements.map((movement, index) => historyMovementCard(movement, snapshot.accountById, index + 1))
-  const previewLabel = todayMovements.length > visibleMovements.length ? ` · أحدث ${visibleMovements.length}` : ''
-  return sendScreen(ctx, rows.length ? `<b>ADREEM · سجل اليوم</b>\n<code>${todayMovements.length} حركة${previewLabel}</code>\n\n${rows.join('\n')}` : '<b>ADREEM · سجل اليوم</b>\n<blockquote>لا توجد حركات اليوم.</blockquote>')
+  const previewLabel = total > visibleMovements.length ? ` · أحدث ${visibleMovements.length}` : ''
+  return sendScreen(ctx, rows.length ? `<b>ADREEM · سجل اليوم</b>\n<code>${total} حركة${previewLabel}</code>\n\n${rows.join('\n')}` : '<b>ADREEM · سجل اليوم</b>\n<blockquote>لا توجد حركات اليوم.</blockquote>')
 }
 
 async function showHistory(ctx, notice = '', requestedPage = 0) {
+  const previousSession = sessions.get(ctx.chatId, ctx.userId)
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
-  const historySession = buildHistorySession(state, HISTORY_ACTION_LIMIT, requestedPage)
+  let historySession
+  let visibleMovements = []
+  if (typeof ctx.repository.loadMovements === 'function') {
+    const page = Math.max(0, Number(requestedPage) || 0)
+    const pageCursors = previousSession?.flow === 'history'
+      ? { ...(previousSession.pageCursors || {}) }
+      : { 0: null }
+    const beforeSequence = page > 0 ? pageCursors[page] : null
+    if (page > 0 && !beforeSequence) return showHistory(ctx, notice, Math.max(0, page - 1))
+    const result = await ctx.repository.loadMovements({
+      movementLimit: HISTORY_ACTION_LIMIT,
+      beforeSequence,
+      excludeOpening: true,
+    })
+    visibleMovements = result.movements || []
+    const temporary = buildHistorySession({ ...state, movements: visibleMovements.slice().reverse() }, HISTORY_ACTION_LIMIT, 0)
+    const total = page === 0 ? Number(result.page?.total || visibleMovements.length) : Number(previousSession?.total || visibleMovements.length)
+    const pageCount = Math.max(1, Math.ceil(total / HISTORY_ACTION_LIMIT))
+    const items = temporary.items.map((item, index) => ({ ...item, number: page * HISTORY_ACTION_LIMIT + index + 1 }))
+    if (result.page?.nextCursor) pageCursors[page + 1] = result.page.nextCursor
+    historySession = {
+      ...temporary,
+      page,
+      pageCount,
+      total,
+      items,
+      pageCursors,
+      choices: {
+        movements: Object.fromEntries(items.filter((item) => item.canCancel).map((item) => [item.token, item.id])),
+      },
+    }
+  } else {
+    historySession = buildHistorySession(state, HISTORY_ACTION_LIMIT, requestedPage)
+  }
   sessions.set(ctx.chatId, ctx.userId, { ...historySession, uiMessageId: ctx.isCallback ? ctx.messageId : null })
-  const movementById = new Map((state.movements || []).map((movement) => [movement.id, movement]))
+  const movementById = new Map([...(state.movements || []), ...visibleMovements].map((movement) => [movement.id, movement]))
   const rows = historySession.items
     .map((item) => {
       const movement = movementById.get(item.id)
@@ -326,8 +434,11 @@ async function showAlerts(ctx) {
 async function showReports(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
-  const projects = buildDimensionReports(state)
-  const expenses = buildExpenseCategoryReports(state)
+  const reports = typeof ctx.repository.loadReports === 'function'
+    ? await ctx.repository.loadReports()
+    : { dimensions: buildDimensionReports(state), expenseCategories: buildExpenseCategoryReports(state) }
+  const projects = reports.dimensions
+  const expenses = reports.expenseCategories
   const text = [
     '<b>ADREEM · التقارير</b>',
     '<blockquote>اختر القائمة التي تريد فتحها.</blockquote>',
@@ -337,7 +448,8 @@ async function showReports(ctx) {
   return sendScreen(ctx, text, reportKeyboard({ projects: projects.length, expenses: expenses.length }))
 }
 
-function reportItemsForKind(state, kind) {
+function reportItemsForKind(state, kind, reports = null) {
+  if (reports) return kind === 'expense' ? reports.expenseCategories : reports.dimensions
   return kind === 'expense' ? buildExpenseCategoryReports(state) : buildDimensionReports(state)
 }
 
@@ -371,7 +483,8 @@ function reportSummary(item, kind) {
 async function showReportList(ctx, kind, requestedPage = 0) {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
-  const allItems = reportItemsForKind(state, kind)
+  const reports = typeof ctx.repository.loadReports === 'function' ? await ctx.repository.loadReports() : null
+  const allItems = reportItemsForKind(state, kind, reports)
   const { page, pageCount } = boundedPage(allItems.length, requestedPage, REPORT_PAGE_SIZE)
   const visibleItems = allItems.slice(page * REPORT_PAGE_SIZE, (page + 1) * REPORT_PAGE_SIZE)
   const items = visibleItems.map((item, index) => {
@@ -406,13 +519,48 @@ async function showReportList(ctx, kind, requestedPage = 0) {
 }
 
 async function showReportDetail(ctx, kind, reportId, listPage = 0, requestedPage = 0) {
-  sessions.clear(ctx.chatId, ctx.userId)
+  const previousSession = sessions.get(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
-  const report = reportItemsForKind(state, kind).find((item) => String(reportItemId(item, kind)) === String(reportId || ''))
+  const reports = typeof ctx.repository.loadReports === 'function' ? await ctx.repository.loadReports() : null
+  const report = reportItemsForKind(state, kind, reports).find((item) => String(reportItemId(item, kind)) === String(reportId || ''))
   if (!report) return showReportList(ctx, kind, listPage)
-  const movements = relatedReportMovements(state, kind, reportId)
-  const { page, pageCount } = boundedPage(movements.length, requestedPage, REPORT_PAGE_SIZE)
-  const visibleMovements = movements.slice(page * REPORT_PAGE_SIZE, (page + 1) * REPORT_PAGE_SIZE)
+  let movements
+  let page
+  let pageCount
+  let total
+  let pageCursors = {}
+  if (typeof ctx.repository.loadMovements === 'function') {
+    page = Math.max(0, Number(requestedPage) || 0)
+    pageCursors = previousSession?.flow === 'reports' && previousSession.view === 'detail'
+      ? { ...(previousSession.pageCursors || {}) }
+      : { 0: null }
+    const beforeSequence = page > 0 ? pageCursors[page] : null
+    if (page > 0 && !beforeSequence) return showReportDetail(ctx, kind, reportId, listPage, Math.max(0, page - 1))
+    const result = await ctx.repository.loadMovements({
+      movementLimit: REPORT_PAGE_SIZE,
+      beforeSequence,
+      status: MOVEMENT_STATUSES.POSTED,
+      ...(kind === 'project'
+        ? { dimensionId: reportId }
+        : {
+            movementTypes: ['expense', 'truck_expense'],
+            ...(reportId ? { expenseCategoryId: reportId } : { expenseCategoryUncategorized: true }),
+          }),
+    })
+    movements = result.movements || []
+    total = page === 0 ? Number(result.page?.total || movements.length) : Number(previousSession?.total || movements.length)
+    pageCount = Math.max(1, Math.ceil(total / REPORT_PAGE_SIZE))
+    if (result.page?.nextCursor) pageCursors[page + 1] = result.page.nextCursor
+  } else {
+    const allMovements = relatedReportMovements(state, kind, reportId)
+    const bounded = boundedPage(allMovements.length, requestedPage, REPORT_PAGE_SIZE)
+    page = bounded.page
+    pageCount = bounded.pageCount
+    total = allMovements.length
+    movements = allMovements.slice(page * REPORT_PAGE_SIZE, (page + 1) * REPORT_PAGE_SIZE)
+  }
+  sessions.clear(ctx.chatId, ctx.userId)
+  const visibleMovements = movements
   const session = {
     flow: 'reports',
     view: 'detail',
@@ -421,7 +569,8 @@ async function showReportDetail(ctx, kind, reportId, listPage = 0, requestedPage
     listPage,
     page,
     pageCount,
-    total: movements.length,
+    total,
+    pageCursors,
     uiMessageId: ctx.isCallback ? ctx.messageId : null,
   }
   sessions.set(ctx.chatId, ctx.userId, session)
@@ -429,7 +578,7 @@ async function showReportDetail(ctx, kind, reportId, listPage = 0, requestedPage
   const lines = [
     `<b>ADREEM · ${escapeHtml(reportItemName(report, kind))}</b>`,
     `<blockquote>${escapeHtml(reportSummary(report, kind))}</blockquote>`,
-    `<code>${movements.length} حركة مرتبطة · صفحة ${page + 1}/${pageCount}</code>`,
+    `<code>${total} حركة مرتبطة · صفحة ${page + 1}/${pageCount}</code>`,
   ]
   if (!visibleMovements.length) lines.push('', '<blockquote>لا توجد حركات مرتبطة.</blockquote>')
   visibleMovements.forEach((movement, index) => {
@@ -482,22 +631,57 @@ async function handleRecurringCallback(ctx, data) {
   if (!action || !token) return sendScreen(ctx, '<b>انتهت صلاحية هذه البطاقة.</b>\n<blockquote>بطاقة الحركات الشهرية الحالية لم تتغير.</blockquote>')
   const ruleId = session.choices?.rules?.[token]
   if (!ruleId) return showRecurring(ctx, 'هذه الحركة لم تعد في القائمة.')
+  const operation = action === 'run' ? 'recurring-run' : 'recurring-disable'
+  const idempotencyKey = telegramUpdateIdempotencyKey(ctx.updateId, operation)
   const result = action === 'run'
-    ? await ctx.repository.update((state) => executeRecurringRuleInState(state, ruleId))
+    ? await ctx.repository.update((state) => runTelegramIdempotentStateAction(
+        state,
+        idempotencyKey,
+        operation,
+        (current) => executeRecurringRuleInState(current, ruleId),
+      ))
     : action === 'disable'
-      ? await ctx.repository.update((state) => disableRecurringRuleInState(state, ruleId))
+      ? await ctx.repository.update((state) => runTelegramIdempotentStateAction(
+          state,
+          idempotencyKey,
+          operation,
+          (current) => disableRecurringRuleInState(current, ruleId),
+        ))
       : { message: 'الأمر غير معروف.' }
   return showRecurring(ctx, result.message, session.page)
 }
 
 async function showReview(ctx, notice = '', requestedPage = 0) {
+  const previousSession = sessions.get(ctx.chatId, ctx.userId)
   sessions.clear(ctx.chatId, ctx.userId)
-  const { state } = await ctx.repository.load()
-  const reviewSession = buildReviewSession(state, undefined, requestedPage)
-  sessions.set(ctx.chatId, ctx.userId, { ...reviewSession, uiMessageId: ctx.isCallback ? ctx.messageId : null })
+  let { state, movementPage, revision } = await ctx.repository.load()
+  let stablePage = stableReviewRequestedPage(previousSession, revision, requestedPage)
+  if (stablePage.changed && !notice) notice = 'تغيرت القائمة. عُدت إلى أول صفحة.'
+  const reviewSession = typeof ctx.repository.loadMovements === 'function'
+    ? await (async () => {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            return await loadReviewSession(ctx.repository, state, undefined, stablePage.page, revision)
+          } catch (error) {
+            if (error?.code !== 'ADREEM_REVIEW_REVISION_CHANGED' || attempt === 2) throw error
+            const refreshed = await ctx.repository.load()
+            state = refreshed.state
+            movementPage = refreshed.movementPage
+            revision = refreshed.revision
+            stablePage = { page: 0, changed: true }
+            if (!notice) notice = 'تغيرت القائمة. عُدت إلى أول صفحة.'
+          }
+        }
+        throw new Error('Unable to load a stable review page.')
+      })()
+    : buildReviewSession(state, undefined, stablePage.page)
+  sessions.set(ctx.chatId, ctx.userId, { ...reviewSession, ledgerRevision: revision, uiMessageId: ctx.isCallback ? ctx.messageId : null })
   const pageLabel = reviewSession.pageCount > 1 ? ` · صفحة ${reviewSession.page + 1}/${reviewSession.pageCount}` : ''
   const lines = ['<b>ADREEM · مراجعة</b>', `<code>${reviewSession.total} عنصر${pageLabel}</code>`]
   if (notice) lines.push('', `<blockquote>${escapeHtml(notice)}</blockquote>`)
+  if (typeof ctx.repository.loadMovements !== 'function' && movementPage?.reviewTruncated) {
+    lines.push('', '<blockquote>عدد الحركات المعلقة كبير جدًا. افتح المراجعة من الويب لعرض الباقي.</blockquote>')
+  }
   if (!reviewSession.total) lines.push('', '<blockquote>لا شيء معلق.</blockquote>')
   reviewSession.items.forEach((item) => {
     const description = item.kind === 'account'
@@ -524,7 +708,15 @@ async function handleReviewCallback(ctx, data) {
   if (kind === 'movement' && action === 'cancel') {
     const movementId = session.choices?.movements?.[token]
     if (!movementId) return showReview(ctx, 'هذا العنصر لم يعد موجودًا في القائمة.')
-    const result = await ctx.repository.update((state) => cancelReviewMovementInState(state, movementId))
+    const result = await ctx.repository.update(
+      (state) => runTelegramIdempotentStateAction(
+        state,
+        telegramUpdateIdempotencyKey(ctx.updateId, 'review-movement-cancel'),
+        'review-movement-cancel',
+        (current) => cancelReviewMovementInState(current, movementId),
+      ),
+      { movementIds: [movementId] },
+    )
     return showReview(ctx, result.message, session.page)
   }
   if (kind === 'movement' && action === 'fix') {
@@ -535,7 +727,12 @@ async function handleReviewCallback(ctx, data) {
   if (kind === 'account' && action === 'hide') {
     const accountId = session.choices?.accounts?.[token]
     if (!accountId) return showReview(ctx, 'هذا الحساب لم يعد موجودًا في القائمة.')
-    const result = await ctx.repository.update((state) => hideZeroReviewAccountInState(state, accountId))
+    const result = await ctx.repository.update((state) => runTelegramIdempotentStateAction(
+      state,
+      telegramUpdateIdempotencyKey(ctx.updateId, 'review-account-hide'),
+      'review-account-hide',
+      (current) => hideZeroReviewAccountInState(current, accountId),
+    ))
     return showReview(ctx, result.message, session.page)
   }
   if (kind === 'account' && action === 'fix') {
@@ -572,7 +769,15 @@ async function handleHistoryCallback(ctx, data) {
   }
 
   if (action === 'confirm') {
-    const result = await ctx.repository.update((state) => voidRecentMovementInState(state, movementId))
+    const result = await ctx.repository.update(
+      (state) => voidRecentMovementInState(
+        state,
+        movementId,
+        new Date().toISOString(),
+        { idempotencyKey: telegramUpdateIdempotencyKey(ctx.updateId, 'movement-cancel') },
+      ),
+      { movementIds: [movementId] },
+    )
     return showHistory(ctx, result.message, session.page)
   }
 
@@ -647,6 +852,17 @@ async function handleAdminCommand(ctx, text) {
       parse_mode: 'HTML',
     })
   }
+  if (supabaseLedgerAccess) {
+    if (!ctx.identity?.isOwner) return false
+    if (['/admin', '/helpadmin', '/users', '/adduser'].some((command) => text === command || text.startsWith(`${command} `))) {
+      return ctx.telegram.sendMessage({
+        chat_id: ctx.chatId,
+        text: '<b>إدارة المستخدمين من الويب</b>\n<blockquote>افتح ADREEM ثم اختر إدارة المستخدمين.</blockquote>',
+        parse_mode: 'HTML',
+      })
+    }
+    return false
+  }
   if (!userAccess.isAdmin(ctx.userId)) return false
   if (text === '/admin' || text === '/helpadmin') {
     return ctx.telegram.sendMessage({ chat_id: ctx.chatId, text: helpAdminText(), parse_mode: 'HTML' })
@@ -717,14 +933,7 @@ async function showMovementPickerPage(ctx, kind, requestedPage) {
   return sendScreen(ctx, text, keyboard)
 }
 
-async function handleCallback(ctx, update) {
-  const data = update.callback_query?.data || ''
-  console.log('[adreem-telegram-bot] callback', {
-    userId: ctx.userId,
-    data,
-  })
-  await ctx.telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
-
+async function dispatchCallback(ctx, data) {
   if (data === 'main:movement') return startMovement(ctx)
   if (data === 'main:home') return showMainMenu(ctx)
   if (data === 'main:more') return showMoreMenu(ctx)
@@ -749,6 +958,24 @@ async function handleCallback(ctx, update) {
   if (data.startsWith('mv:')) return handleMovementCallback(ctx, data)
   if (data.startsWith('rec:')) return handleReconciliationCallback(ctx, data)
   return sendScreen(ctx, 'أمر غير معروف.')
+}
+
+async function handleCallback(ctx, update) {
+  const callbackId = update.callback_query?.id
+  const data = update.callback_query?.data || ''
+  console.log('[adreem-telegram-bot] callback', {
+    userId: ctx.userId,
+    data,
+  })
+  return runCallbackActionWithBestEffortAck(
+    () => dispatchCallback(ctx, data),
+    () => ctx.telegram.answerCallbackQuery({ callback_query_id: callbackId }),
+    {
+      onAckError(error) {
+        console.error('[adreem-telegram-bot] callback acknowledgement failed', error?.message || error)
+      },
+    },
+  )
 }
 
 async function handleMessage(ctx, update) {
@@ -788,8 +1015,8 @@ async function handleMessage(ctx, update) {
   })
 }
 
-async function handleUpdate(update) {
-  const ctx = contextFor(update)
+async function handleUpdate(update, execution = null) {
+  let ctx = contextFor(update, null, execution)
   if (!isPrivateTelegramUpdate(update)) {
     if (update.callback_query?.id) {
       await ctx.telegram.answerCallbackQuery({ callback_query_id: update.callback_query.id })
@@ -803,7 +1030,8 @@ async function handleUpdate(update) {
     }
     return
   }
-  if (!isAllowed(ctx.user)) {
+  const identity = await identityForUser(ctx.userId)
+  if (!identity) {
     if (ctx.chatId) {
       await ctx.telegram.sendMessage({
         chat_id: ctx.chatId,
@@ -813,7 +1041,8 @@ async function handleUpdate(update) {
     }
     return
   }
-  ctx.repository = repositoryForUser(ctx.userId)
+  ctx = contextFor(update, identity, execution)
+  ctx.repository = repositoryForIdentity(identity)
   if (!ctx.repository) {
     const text = String(update.message?.text || '').trim()
     if (text && await handleAdminCommand(ctx, text)) return
@@ -831,20 +1060,49 @@ async function handleUpdate(update) {
   if (update.message) return handleMessage(ctx, update)
 }
 
+async function handleUpdateDurably(update) {
+  if (!durableRuntime.durableState) {
+    try {
+      await handleUpdate(update)
+    } finally {
+      await sessions.flush()
+    }
+    return { status: 'completed', processed: true }
+  }
+  return durableRuntime.durableState.runUpdate(update.update_id, async (execution) => {
+    await hydrateDurableSession(durableRuntime, getChatId(update), getUser(update)?.id ?? null)
+    try {
+      await handleUpdate(update, execution)
+    } finally {
+      await sessions.flush()
+    }
+  })
+}
+
 async function poll() {
+  await restoreDurableOffset()
   await skipOldUpdates()
   while (true) {
     try {
       const updates = await telegram.getUpdates({ offset, timeout: 30, allowed_updates: ['message', 'callback_query'] })
-      await processTelegramUpdates(updates, handleUpdate, (nextOffset) => {
+      await processTelegramUpdates(updates, handleUpdateDurably, async (nextOffset) => {
+        if (durableRuntime.durableState) await durableRuntime.durableState.setOffset(nextOffset)
         offset = nextOffset
       }, {
         onPermanentError(error, update) {
-          console.error('[adreem-telegram-bot] skipped permanently failed Telegram update', {
+          console.error('[adreem-telegram-bot] permanently failed Telegram update; offset retained', {
             updateId: update.update_id,
             method: error.method,
             status: error.status,
             message: error.message,
+          })
+        },
+        onQuarantined(result, update) {
+          console.error('[adreem-telegram-bot] quarantined Telegram update', {
+            updateId: update.update_id,
+            attempts: result.attempts,
+            code: result.failure?.code,
+            message: result.failure?.message,
           })
         },
       })

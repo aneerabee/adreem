@@ -1,4 +1,4 @@
-import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
 import {
   accountChoiceKind,
   accountChoiceKindLabel,
@@ -26,6 +26,7 @@ import {
 } from '../../src/mohammadLedger/movementConfig.js'
 import { formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
 import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
+import { formatZonedDate, formatZonedTime } from './dateRange.js'
 
 export { movementLabels }
 
@@ -87,12 +88,19 @@ function movementIcon(type) {
   return '◼'
 }
 
+function movementStatusLabel(status) {
+  if (status === MOVEMENT_STATUSES.POSTED) return 'معتمدة'
+  if (status === MOVEMENT_STATUSES.VOIDED) return 'ملغاة'
+  if (status === MOVEMENT_STATUSES.NEEDS_REVIEW) return 'ناقصة'
+  return 'مسودة'
+}
+
 function movementDateLabel(movement, { includeDate = false } = {}) {
-  const date = new Date(movement?.createdAt || movement?.updatedAt || '')
-  if (Number.isNaN(date.getTime())) return ''
-  const time = date.toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' })
+  const value = movement?.createdAt || movement?.updatedAt || ''
+  const time = formatZonedTime(value, 'ar-LY', { hour: '2-digit', minute: '2-digit' })
+  if (!time) return ''
   if (!includeDate) return time
-  const day = date.toLocaleDateString('ar-LY', { month: '2-digit', day: '2-digit' })
+  const day = formatZonedDate(value, 'ar-LY', { month: '2-digit', day: '2-digit' })
   return `${day} · ${time}`
 }
 
@@ -466,7 +474,7 @@ export function movementBlockquote(movement, accountsById = new Map(), options =
   const destination = accountsById.get(movement?.destinationAccountId)
   const time = movementDateLabel(movement, options)
   const note = cleanMovementNote(movement?.note)
-  const header = `${movementIcon(movement?.type)} ${movementLabels[movement?.type] || movement?.type || 'حركة'} · ${formatMoney(movement?.amount, movement?.currency)}`
+  const header = `${movementIcon(movement?.type)} ${movementLabels[movement?.type] || movement?.type || 'حركة'} · ${formatMoney(movement?.amount, movement?.currency)} · ${movementStatusLabel(movement?.status)}`
   const lines = [header]
 
   if (time) lines.push(`الوقت: ${time}`)

@@ -20,6 +20,7 @@ const hardeningDirectives = [
   'LockPersonality=true',
   'KeyringMode=private',
 ]
+const productionNode = '/home/argaz/.local/node-v22.23.2/bin/node'
 
 describe('ADREEM deployment configuration', () => {
   it('keeps runtime state out of Git', () => {
@@ -35,6 +36,8 @@ describe('ADREEM deployment configuration', () => {
     const unit = readRepositoryFile(`deploy/systemd/${service}`)
 
     hardeningDirectives.forEach((directive) => expect(unit).toContain(directive))
+    expect(unit).toContain(`ExecStart=${productionNode}`)
+    expect(unit).not.toContain('ExecStart=/usr/bin/node')
     expect(unit).not.toContain('PrivateDevices=true')
     expect(unit).not.toContain('ProtectHome=true')
     expect(unit).not.toContain('MemoryDenyWriteExecute=true')
@@ -49,6 +52,18 @@ describe('ADREEM deployment configuration', () => {
     expect(auditLog).not.toContain('copytruncate')
     expect(config.match(/create 0600 argaz argaz/g)).toHaveLength(2)
     expect(config.match(/su argaz argaz/g)).toHaveLength(2)
+  })
+
+  it('keeps the API private behind the same-origin reverse proxy', () => {
+    const env = readRepositoryFile('deploy/adreem.env.example')
+    const caddy = readRepositoryFile('deploy/Caddyfile.adreem.example')
+    const api = readRepositoryFile('server/adreemApi.js')
+
+    expect(env).toContain('ADREEM_API_HOST=127.0.0.1')
+    expect(env).toContain('ADREEM_TRUST_PROXY=true')
+    expect(caddy).toContain('reverse_proxy 127.0.0.1:8787')
+    expect(api).toContain("env.ADREEM_API_HOST || '127.0.0.1'")
+    expect(api).toContain('server.listen(port, host')
   })
 
   it('can bootstrap the ledger table from the migration chain alone', () => {

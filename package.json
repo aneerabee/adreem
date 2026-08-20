@@ -15,7 +15,11 @@
     "api:adreem": "node server/adreemApi.js",
     "verify:runtime": "node server/ops/verifyAdreemRuntime.js",
     "verify:web-env": "node server/ops/verifyProductionWebEnv.js",
-    "ops:create-ledger-access": "node server/ops/createLedgerAccess.js"
+    "ops:create-ledger-access": "node server/ops/createLedgerAccess.js",
+    "ops:migrate-v3": "node server/ops/migrateAdreemV3.js",
+    "ops:backup": "node server/ops/backupAdreem.js",
+    "ops:backup:execute": "node server/ops/backupAdreem.js --execute",
+    "ops:restore-drill": "node server/ops/restoreAdreem.js"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",

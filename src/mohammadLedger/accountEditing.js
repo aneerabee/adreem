@@ -61,6 +61,7 @@ export function accountUpdateMovementErrors(accountId, candidateAccounts = [], m
           movement,
           candidateAccounts,
           movements.filter((item) => item.id !== movement.id),
+          { originalMovement: movement },
         ).errors,
     )
 }
@@ -85,7 +86,7 @@ export function accountStructureUsage(accountOrId, {
     `dimension-account-${id}`,
     ...linkedDimensions.map((item) => item.id),
   ].filter(Boolean))
-  const movement = movements.some((item) => STRUCTURE_LOCKING_MOVEMENT_STATUSES.has(item.status) && (
+  const movement = Boolean(account?.structureLocked) || Number(account?.postedCount || 0) > 0 || movements.some((item) => STRUCTURE_LOCKING_MOVEMENT_STATUSES.has(item.status) && (
     referencesAccount(item, id) || dimensionIds.has(item.dimensionId)
   ))
   const reconciliation = reconciliations.some((item) => item.accountId === id)

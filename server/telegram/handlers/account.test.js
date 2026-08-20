@@ -57,6 +57,7 @@ function createCtx() {
     userId: 278516861,
     messageId: 55,
     isCallback: true,
+    updateId: 7002,
   }
 }
 

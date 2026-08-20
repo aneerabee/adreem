@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CURRENCIES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { localizeTelegramPayload, stripUiDataProtection } from '../../src/mohammadLedger/uiTranslation.js'
 import {
@@ -279,9 +279,47 @@ describe('telegram movement presentation', () => {
     }, accounts))
 
     expect(card).toContain('<blockquote>')
-    expect(card).toContain('🔁 تحويل · 1,250 د.ل')
+    expect(card).toContain('🔁 تحويل · 1,250 د.ل · مسودة')
     expect(card).toContain('كاش عندي · كاش · دينار ← سعيد · كاش بيننا · دينار')
     expect(card).toContain('ملاحظة: تجربة &lt;مهمة&gt;')
+  })
+
+  it('shows approved, canceled, and incomplete status on every movement card', () => {
+    for (const [status, label] of [
+      [MOVEMENT_STATUSES.POSTED, 'معتمدة'],
+      [MOVEMENT_STATUSES.VOIDED, 'ملغاة'],
+      [MOVEMENT_STATUSES.NEEDS_REVIEW, 'ناقصة'],
+    ]) {
+      expect(movementBlockquote({
+        type: MOVEMENT_TYPES.EXPENSE,
+        status,
+        amount: 10,
+        currency: CURRENCIES.DINAR,
+      })).toContain(`· ${label}`)
+    }
+  })
+
+  it('renders movement dates in the shared Tripoli timezone', () => {
+    const createdAt = '2026-08-20T22:30:00.000Z'
+    const expectedTime = new Date(createdAt).toLocaleTimeString('ar-LY', {
+      timeZone: 'Africa/Tripoli',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    const expectedDay = new Date(createdAt).toLocaleDateString('ar-LY', {
+      timeZone: 'Africa/Tripoli',
+      month: '2-digit',
+      day: '2-digit',
+    })
+
+    const card = movementBlockquote({
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+      createdAt,
+    }, new Map(), { includeDate: true })
+
+    expect(card).toContain(`الوقت: ${expectedDay} · ${expectedTime}`)
   })
 
   it('renders review effects as before, change, after', () => {

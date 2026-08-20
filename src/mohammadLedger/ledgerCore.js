@@ -13,6 +13,9 @@ export const CURRENCIES = {
   USD: 'USD',
 }
 
+export const MAX_MONEY_AMOUNT = 999_999_999_999_999
+export const MAX_EXCHANGE_RATE = 9_999_999
+
 export const MOVEMENT_TYPES = {
   OPENING_BALANCE: 'opening_balance',
   TRANSFER: 'transfer',
@@ -120,14 +123,42 @@ function cannotGoNegative(account) {
     account?.valueKind === VALUE_KINDS.ASSET
 }
 
-function validateNonNegativeOwnBalances(movement, accounts = [], movements = [], accountMap = buildAccountMap(accounts)) {
+function hasCompleteDatabaseBalances(accounts = []) {
+  const activeAccounts = accounts.filter((account) => account.status !== ACCOUNT_STATUSES.INACTIVE)
+  return activeAccounts.length > 0 && activeAccounts.every((account) =>
+    account.balanceSource === 'database' &&
+    Number.isFinite(Number(account.balanceDinar)) &&
+    Number.isFinite(Number(account.balanceUsd)),
+  )
+}
+
+function validateNonNegativeOwnBalances(movement, accounts = [], movements = [], accountMap = buildAccountMap(accounts), options = {}) {
   const errors = []
   const balances = summarizeBalances(accounts, movements)
   const balanceById = new Map(balances.map((bucket) => [bucket.account.id, bucket]))
-  const entries = buildPostingEntries({ ...movement, status: MOVEMENT_STATUSES.POSTED })
+  const adjustments = new Map()
+  const addAdjustment = (entry, direction = 1) => {
+    if (!entry?.accountId || !entry.currency) return
+    const key = `${entry.accountId}:${entry.currency}`
+    adjustments.set(key, {
+      accountId: entry.accountId,
+      currency: entry.currency,
+      delta: roundMoney((adjustments.get(key)?.delta || 0) + (entry.delta * direction)),
+    })
+  }
+  const originalMovement = options.originalMovement
+  const balancesIncludeOriginal = originalMovement?.status === MOVEMENT_STATUSES.POSTED && (
+    hasCompleteDatabaseBalances(accounts) || movements.some((item) => item?.id === originalMovement.id)
+  )
+  if (balancesIncludeOriginal) {
+    buildPostingEntries(originalMovement).forEach((entry) => addAdjustment(entry, -1))
+  }
+  buildPostingEntries({
+    ...movement,
+    status: options.candidateStatus || MOVEMENT_STATUSES.POSTED,
+  }).forEach((entry) => addAdjustment(entry))
 
-  for (const entry of entries) {
-    if (!entry.accountId || entry.delta >= 0) continue
+  for (const entry of adjustments.values()) {
     const account = accountMap.get(entry.accountId)
     if (!cannotGoNegative(account)) continue
     const before = balanceValueForCurrency(balanceById.get(entry.accountId), entry.currency)
@@ -143,7 +174,7 @@ function validateNonNegativeOwnBalances(movement, accounts = [], movements = [],
   return errors
 }
 
-export function validateMovement(movement, accounts = [], movements = []) {
+export function validateMovement(movement, accounts = [], movements = [], options = {}) {
   const accountMap = buildAccountMap(accounts)
   const errors = []
   const warnings = []
@@ -158,6 +189,9 @@ export function validateMovement(movement, accounts = [], movements = []) {
   }
   if (typeof amount !== 'number' || !Number.isFinite(amount) || amount === 0) {
     errors.push({ field: 'amount', message: 'القيمة يجب أن تكون رقمًا غير صفري.' })
+  }
+  if (typeof amount === 'number' && Number.isFinite(amount) && (!Number.isInteger(amount) || Math.abs(amount) > MAX_MONEY_AMOUNT)) {
+    errors.push({ field: 'amount', message: 'القيمة يجب أن تكون عددًا صحيحًا ضمن الحد المسموح.' })
   }
   if (type !== MOVEMENT_TYPES.CORRECTION && typeof amount === 'number' && Number.isFinite(amount) && amount <= 0) {
     errors.push({ field: 'amount', message: 'القيمة يجب أن تكون أكبر من صفر.' })
@@ -233,6 +267,15 @@ export function validateMovement(movement, accounts = [], movements = []) {
   if ((type === MOVEMENT_TYPES.USD_SALE || type === MOVEMENT_TYPES.USD_PURCHASE) && (!Number.isFinite(movement?.rate) || movement.rate <= 0)) {
     errors.push({ field: 'rate', message: 'سعر الصرف مطلوب ويجب أن يكون أكبر من صفر.' })
   }
+  if ((type === MOVEMENT_TYPES.USD_SALE || type === MOVEMENT_TYPES.USD_PURCHASE) && Number(movement?.rate) > MAX_EXCHANGE_RATE) {
+    errors.push({ field: 'rate', message: 'سعر الصرف أكبر من الحد المسموح.' })
+  }
+
+  if (errors.length === 0) {
+    const unsafeEntry = buildPostingEntries({ ...movement, status: MOVEMENT_STATUSES.POSTED })
+      .find((entry) => !Number.isSafeInteger(entry.delta) || Math.abs(entry.delta) > MAX_MONEY_AMOUNT)
+    if (unsafeEntry) errors.push({ field: 'amount', message: 'نتيجة الحركة أكبر من الحد المسموح.' })
+  }
 
   for (const [field, accountId] of [
     ['sourceAccountId', sourceId],
@@ -269,7 +312,7 @@ export function validateMovement(movement, accounts = [], movements = []) {
   }
 
   if (errors.length === 0) {
-    errors.push(...validateNonNegativeOwnBalances(movement, accounts, movements, accountMap))
+    errors.push(...validateNonNegativeOwnBalances(movement, accounts, movements, accountMap, options))
   }
 
   return {
@@ -327,6 +370,16 @@ export function buildPostingEntries(movement) {
 }
 
 export function summarizeBalances(accounts = [], movements = []) {
+  const activeAccounts = accounts.filter((account) => account.status !== ACCOUNT_STATUSES.INACTIVE)
+  if (hasCompleteDatabaseBalances(accounts)) {
+    return activeAccounts.map((account) => ({
+      account,
+      dinar: roundMoney(Number(account.balanceDinar)),
+      usd: roundMoney(Number(account.balanceUsd)),
+      postedCount: Math.max(0, Math.round(Number(account.postedCount || 0))),
+    }))
+  }
+
   const balances = new Map()
 
   for (const account of accounts) {
@@ -381,8 +434,8 @@ export function previewMovement(movement, accounts = [], movements = []) {
   }
 }
 
-export function postMovement(movement, accounts = [], movements = []) {
-  const validation = validateMovement(movement, accounts, movements)
+export function postMovement(movement, accounts = [], movements = [], options = {}) {
+  const validation = validateMovement(movement, accounts, movements, options)
   const now = isoNow()
   return {
     ...movement,
@@ -392,6 +445,20 @@ export function postMovement(movement, accounts = [], movements = []) {
     createdAt: movement.createdAt || now,
     updatedAt: now,
   }
+}
+
+export function validateMovementBalanceTransition(originalMovement, candidateMovement, accounts = [], movements = []) {
+  const errors = validateNonNegativeOwnBalances(
+    candidateMovement,
+    accounts,
+    movements,
+    buildAccountMap(accounts),
+    {
+      originalMovement,
+      candidateStatus: candidateMovement?.status || MOVEMENT_STATUSES.NEEDS_REVIEW,
+    },
+  )
+  return { ok: errors.length === 0, errors }
 }
 
 export function createAccount({

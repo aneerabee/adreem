@@ -11,8 +11,9 @@ import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, g
 import { accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
 import { accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, voidMovement } from './ledgerCore'
-import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammadPersistenceMode, loadMohammadPersistedState, logoutAdreemCloudSession, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
+import { formatZonedDate, formatZonedDateTime, formatZonedTime, isZonedToday, isZonedYesterday, zonedDayKey, zonedDayRange } from './dateRange'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, validateMovementBalanceTransition, voidMovement } from './ledgerCore'
+import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUploadedAttachment, getMohammadPersistenceMode, loadAdreemMovementPage, loadMohammadPersistedState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
@@ -24,6 +25,14 @@ import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, remember
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
 const USD_MAXIMUM_FRACTION_DIGITS = 6
+const REVIEW_MOVEMENT_PAGE_SIZE = 50
+const MOVEMENT_REQUEST_KEYS = Object.freeze({
+  accountProfile: 'account-profile',
+  history: 'history',
+  ledgerFeed: 'ledger-feed',
+  review: 'review',
+  todaySummary: 'today-summary',
+})
 
 const accountGroupTabs = [
   { key: 'people', label: 'الناس', title: 'الناس' },
@@ -181,6 +190,14 @@ function ledgerExtrasFromState(state) {
 
 function sameLedgerExtras(left, right) {
   return JSON.stringify(left) === JSON.stringify(right)
+}
+
+export function mergeMovementPageAttachments(extras = {}, attachments = []) {
+  if (!Array.isArray(attachments) || !attachments.length) return extras
+  const mergedAttachments = mergeAdreemAttachmentPages(extras.attachments, attachments)
+  return sameRecordVersions(extras.attachments || [], mergedAttachments)
+    ? extras
+    : { ...extras, attachments: mergedAttachments }
 }
 
 function localizeDigit(character) {
@@ -361,7 +378,7 @@ function protectedUserProfile(profile) {
   }
 }
 
-function movementStatusLabel(status) {
+export function movementStatusLabel(status) {
   if (status === MOVEMENT_STATUSES.POSTED) return 'تم'
   if (status === MOVEMENT_STATUSES.NEEDS_REVIEW) return 'ناقص'
   if (status === MOVEMENT_STATUSES.VOIDED) return 'ملغي'
@@ -382,18 +399,14 @@ function movementErrorFieldLabel(field) {
 }
 
 function movementTime(value) {
-  const date = new Date(value || Date.now())
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleTimeString(uiLanguageLocale(getActiveUiLanguage()), {
+  return formatZonedTime(value || Date.now(), uiLanguageLocale(getActiveUiLanguage()), {
     hour: '2-digit',
     minute: '2-digit',
   })
 }
 
 function movementDateTime(value) {
-  const date = new Date(value || Date.now())
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleString(uiLanguageLocale(getActiveUiLanguage()), {
+  return formatZonedDateTime(value || Date.now(), uiLanguageLocale(getActiveUiLanguage()), {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -402,19 +415,19 @@ function movementDateTime(value) {
 }
 
 function movementDayKey(value) {
-  const date = new Date(value || Date.now())
-  if (Number.isNaN(date.getTime())) return 'unknown'
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+  try {
+    return zonedDayKey(value || Date.now())
+  } catch {
+    return 'unknown'
+  }
 }
 
 function movementDayLabel(value) {
   const date = new Date(value || Date.now())
   if (Number.isNaN(date.getTime())) return 'تاريخ غير معروف'
   if (isToday(value)) return 'اليوم'
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  if (date.getFullYear() === yesterday.getFullYear() && date.getMonth() === yesterday.getMonth() && date.getDate() === yesterday.getDate()) return 'أمس'
-  return date.toLocaleDateString(uiLanguageLocale(getActiveUiLanguage()), {
+  if (isZonedYesterday(date)) return 'أمس'
+  return formatZonedDate(date, uiLanguageLocale(getActiveUiLanguage()), {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
@@ -422,10 +435,7 @@ function movementDayLabel(value) {
 }
 
 function isToday(value) {
-  const date = new Date(value || '')
-  if (Number.isNaN(date.getTime())) return false
-  const today = new Date()
-  return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate()
+  return isZonedToday(value)
 }
 
 function isRecentMovement(movement, now = Date.now()) {
@@ -606,6 +616,59 @@ export function filterMovementHistory({ movements = [], query = '', type = '', s
     ].join(' '))
     return haystack.includes(normalizedQuery)
   })
+}
+
+export function mergeMovementHistoryPages(...collections) {
+  const byId = new Map()
+  for (const movements of collections) {
+    for (const movement of Array.isArray(movements) ? movements : []) {
+      if (movement?.id) byId.set(movement.id, movement)
+    }
+  }
+  return Array.from(byId.values()).sort((left, right) => {
+    const leftSequence = Number(left?.databaseSequence)
+    const rightSequence = Number(right?.databaseSequence)
+    if (Number.isSafeInteger(leftSequence) && Number.isSafeInteger(rightSequence)) return rightSequence - leftSequence
+    return String(right?.createdAt || right?.updatedAt || '').localeCompare(String(left?.createdAt || left?.updatedAt || ''))
+  })
+}
+
+export function mergeReviewMovementPage({ movements = [], page = null } = {}, result = {}, expectedRevision, replace = false) {
+  const revision = Number(expectedRevision)
+  if (result.stale || !Number.isSafeInteger(revision) || Number(result.revision) !== revision) return null
+
+  const pageMovements = Array.isArray(result.movements) ? result.movements : []
+  const movementIds = new Set(replace || page?.revision !== revision ? [] : page?.movementIds || [])
+  for (const movement of pageMovements) {
+    if (movement?.id) movementIds.add(movement.id)
+  }
+  const retainedMovements = replace
+    ? movements.filter((movement) => movement?.status !== MOVEMENT_STATUSES.NEEDS_REVIEW)
+    : movements
+  const mergedMovements = mergeMovementHistoryPages(retainedMovements, pageMovements).reverse()
+  return {
+    movements: sameRecordVersions(movements, mergedMovements) ? movements : mergedMovements,
+    page: {
+      ...(result.page || {}),
+      revision,
+      total: replace ? result.page?.total ?? pageMovements.length : page?.total ?? result.page?.total ?? movementIds.size,
+      hasMore: Boolean(result.page?.hasMore),
+      nextCursor: result.page?.nextCursor || null,
+      loaded: movementIds.size,
+      movementIds: Array.from(movementIds),
+    },
+  }
+}
+
+export function pendingUploadedOrphanPaths(snapshot = {}, pendingStoragePaths = []) {
+  const snapshotPaths = new Set(
+    (Array.isArray(snapshot.attachments) ? snapshot.attachments : [])
+      .map((attachment) => String(attachment?.storagePath || '').trim())
+      .filter(Boolean),
+  )
+  return Array.from(new Set(pendingStoragePaths))
+    .map((storagePath) => String(storagePath || '').trim())
+    .filter((storagePath) => storagePath && snapshotPaths.has(storagePath))
 }
 
 export function mergeLedgerAccountState({ accounts = [], movements = [], attachments = [], dimensions = [], recurringRules = [], reconciliations = [] } = {}, sourceAccountId, targetAccountId, updatedAt = new Date().toISOString()) {
@@ -1348,6 +1411,18 @@ function movementAccountImpact(movement, accountId) {
   return buildPostingEntries(movement).filter((entry) => entry.accountId === accountId)
 }
 
+export function accountProfileMovements(movements = [], accountId = '') {
+  return movements
+    .filter((movement) => (
+      movement?.sourceAccountId === accountId
+      || movement?.destinationAccountId === accountId
+      || movement?.expenseCategoryId === accountId
+      || (movement?.status === MOVEMENT_STATUSES.POSTED && movementAccountImpact(movement, accountId).length > 0)
+    ))
+    .slice()
+    .reverse()
+}
+
 function accountEditorDraft(account) {
   return {
     ...account,
@@ -1425,7 +1500,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
   )
 }
 
-function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment }) {
+export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements }) {
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
@@ -1434,10 +1509,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
     accountId: account.id,
   })
   const lastReconciliation = lastReconciliationForAccount(reconciliations, account.id)
-  const relatedMovements = movements
-    .filter((movement) => movement.status === MOVEMENT_STATUSES.POSTED && movementAccountImpact(movement, account.id).length)
-    .slice()
-    .reverse()
+  const relatedMovements = accountProfileMovements(movements, account.id)
   const accountMap = new Map(accounts.map((item) => [item.id, item]))
   const canReconcileBalance = account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK
   const primaryBalance = accountPrimaryBalance(bucket)
@@ -1540,7 +1612,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
           <h3>الحركات</h3>
           {relatedMovements.length === 0 ? <p className="ml3-empty">لا توجد حركات لهذا الحساب.</p> : null}
           {relatedMovements.map((movement) => {
-            const impacts = movementAccountImpact(movement, account.id)
+            const impacts = movement.status === MOVEMENT_STATUSES.POSTED ? movementAccountImpact(movement, account.id) : []
             const source = accountMap.get(movement.sourceAccountId)
             const destination = accountMap.get(movement.destinationAccountId)
             const movementAttachments = attachmentsForRecord(attachments, {
@@ -1553,6 +1625,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
                   <span>
                     {source ? protectedAccountLabel(source) : 'بدون مصدر'} ← {destination ? protectedAccountLabel(destination) : 'بدون وجهة'}
                   </span>
+                  <small>{movementDateTime(movement.createdAt || movement.updatedAt)} · {movementStatusLabel(movement.status)}</small>
                   {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
                   {movementAttachments.length ? (
                     <div className="ml3-attachment-list">
@@ -1575,6 +1648,11 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
               </article>
             )
           })}
+          {movementPage?.hasMore ? (
+            <button type="button" className="ml3-history-more" disabled={isLoadingMovements} onClick={onLoadMoreMovements}>
+              {isLoadingMovements ? 'جاري التحميل' : 'حركات أقدم'}
+            </button>
+          ) : null}
         </div>
       </aside>
     </div>
@@ -1896,6 +1974,7 @@ export default function MohammadLedgerApp() {
   const [canPersist, setCanPersist] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [storageMode, setStorageMode] = useState(getMohammadPersistenceMode)
+  const [ledgerStorageMode, setLedgerStorageMode] = useState('legacy')
   const [canManageUsers, setCanManageUsers] = useState(false)
   const [userProfile, setUserProfile] = useState(null)
   const [uiLanguage, setUiLanguage] = useState(readRememberedUiLanguage)
@@ -1914,6 +1993,18 @@ export default function MohammadLedgerApp() {
   const [historyAccountId, setHistoryAccountId] = useState('')
   const [historyDimensionId, setHistoryDimensionId] = useState('')
   const [historyExpenseCategoryId, setHistoryExpenseCategoryId] = useState('')
+  const [movementPage, setMovementPage] = useState({ hasMore: false, nextCursor: null, loaded: initialState.movements.length })
+  const [ledgerRevision, setLedgerRevision] = useState(null)
+  const [historyRemoteMovements, setHistoryRemoteMovements] = useState(null)
+  const [historyPage, setHistoryPage] = useState(null)
+  const [reviewPage, setReviewPage] = useState(null)
+  const [serverReports, setServerReports] = useState(null)
+  const [isLoadingOlderMovements, setIsLoadingOlderMovements] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [isLoadingReview, setIsLoadingReview] = useState(false)
+  const [todayRemoteSummary, setTodayRemoteSummary] = useState(null)
+  const [accountProfilePage, setAccountProfilePage] = useState(null)
+  const [isLoadingAccountProfile, setIsLoadingAccountProfile] = useState(false)
   const [accountQuery, setAccountQuery] = useState('')
   const [peopleAccountView, setPeopleAccountView] = useState('balances')
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
@@ -1921,6 +2012,8 @@ export default function MohammadLedgerApp() {
   const [activeAccountDetail, setActiveAccountDetail] = useState('')
   const saveCoordinatorRef = useRef(null)
   const hasHydratedSnapshotRef = useRef(false)
+  const pendingUploadedAttachmentPathsRef = useRef(new Set())
+  const orphanCleanupInProgressRef = useRef(false)
   const movementSaveLockRef = useRef(false)
   const accountAttachmentLockRef = useRef(false)
   const accountCreationLockRef = useRef('')
@@ -1929,6 +2022,10 @@ export default function MohammadLedgerApp() {
   const motionTimerRef = useRef(null)
   const viewTransitionRef = useRef(null)
   const motionSequenceRef = useRef(0)
+  const historyRequestSequenceRef = useRef(0)
+  const accountProfileRequestSequenceRef = useRef(0)
+  const reviewRequestSequenceRef = useRef(0)
+  const reviewLoadInProgressRef = useRef(false)
   const normalizedUiLanguage = normalizeUiLanguage(uiLanguage)
   const uiDirection = uiLanguageDirection(normalizedUiLanguage)
   setActiveUiLanguage(normalizedUiLanguage)
@@ -2047,6 +2144,7 @@ export default function MohammadLedgerApp() {
   }, [balances])
 
   const reviewMovements = movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
+  const activeReviewPage = reviewPage?.revision === ledgerRevision ? reviewPage : null
   const unresolvedExternalAccounts = knownExternalAccounts.filter((externalAccount) => {
     const ignored = ledgerExtras.ignoredExternalAccounts || []
     if (ignored.includes(externalAccountKey(externalAccount))) return false
@@ -2080,11 +2178,13 @@ export default function MohammadLedgerApp() {
     return [...accountItems, ...movementItems, ...externalItems]
   }, [balancesByKind.review, reviewMovements, unresolvedExternalAccounts])
   const activeReviewItem = reviewItems.find((item) => item.key === activeReviewKey) || reviewItems[0] || null
+  const reviewMovementTotal = ledgerStorageMode === 'relational' ? activeReviewPage?.total ?? reviewMovements.length : reviewMovements.length
+  const reviewItemTotal = (balancesByKind.review || []).length + unresolvedExternalAccounts.length + reviewMovementTotal
   const postedUserMovements = movements
     .filter((movement) => !movement.id?.startsWith('opening-'))
     .slice()
     .reverse()
-  const filteredHistoryMovements = useMemo(() => filterMovementHistory({
+  const locallyFilteredHistoryMovements = useMemo(() => filterMovementHistory({
     movements: postedUserMovements,
     query: historyQuery,
     type: historyType,
@@ -2095,6 +2195,10 @@ export default function MohammadLedgerApp() {
     accountById,
     dimensionById,
   }), [accountById, dimensionById, historyAccountId, historyDimensionId, historyExpenseCategoryId, historyQuery, historyStatus, historyType, postedUserMovements])
+  const filteredHistoryMovements = ledgerStorageMode === 'relational' && Array.isArray(historyRemoteMovements)
+    ? historyRemoteMovements
+    : locallyFilteredHistoryMovements
+  const activeHistoryPage = ledgerStorageMode === 'relational' ? historyPage : movementPage
   const historyGroups = useMemo(() => {
     const groupsByKey = new Map()
     for (const movement of filteredHistoryMovements) {
@@ -2112,7 +2216,10 @@ export default function MohammadLedgerApp() {
     return Array.from(groupsByKey.values())
   }, [filteredHistoryMovements])
   const todayMovements = postedUserMovements.filter((movement) => isToday(movement.createdAt || movement.updatedAt))
-  const todayPreviewMovements = todayMovements.slice(0, 3)
+  const currentTodayRemoteSummary = todayRemoteSummary?.revision === ledgerRevision ? todayRemoteSummary : null
+  const todayMovementCount = currentTodayRemoteSummary?.total ?? todayMovements.length
+  const todayPreviewMovements = currentTodayRemoteSummary?.movements || todayMovements.slice(0, 3)
+  const activeAccountProfilePage = accountProfilePage?.accountId === selectedAccountId ? accountProfilePage : null
   const totals = useMemo(() => {
     return balances.reduce(
       (acc, bucket) => {
@@ -2158,8 +2265,10 @@ export default function MohammadLedgerApp() {
   const canChooseMovementAccounts = hasMovementAmount && hasMovementRate
   const selectedSourceAccount = accountById.get(movementDraft.sourceAccountId)
   const selectedDestinationAccount = accountById.get(movementDraft.destinationAccountId)
-  const dimensionReports = useMemo(() => buildDimensionReports({ ...ledgerExtras, accounts, movements }), [accounts, movements, ledgerExtras])
-  const expenseCategoryReports = useMemo(() => buildExpenseCategoryReports({ ...ledgerExtras, accounts, movements }), [accounts, movements, ledgerExtras])
+  const localDimensionReports = useMemo(() => buildDimensionReports({ ...ledgerExtras, accounts, movements }), [accounts, movements, ledgerExtras])
+  const localExpenseCategoryReports = useMemo(() => buildExpenseCategoryReports({ ...ledgerExtras, accounts, movements }), [accounts, movements, ledgerExtras])
+  const dimensionReports = serverReports?.dimensions || localDimensionReports
+  const expenseCategoryReports = serverReports?.expenseCategories || localExpenseCategoryReports
   const dueRules = useMemo(() => dueRecurringRules(ledgerExtras.recurringRules), [ledgerExtras.recurringRules])
   const reconciliationDiffCount = useMemo(() => findUnresolvedReconciliationDifferences(ledgerExtras.reconciliations, movements).length, [ledgerExtras.reconciliations, movements])
   const hasMovementAccounts = (!movementSourceRequired || Boolean(movementDraft.sourceAccountId)) && (!movementConfig.needsDestination || Boolean(movementDraft.destinationAccountId)) && (!movementConfig.needsDestination || !selectedSourceAccount || !sameLogicalAccount(selectedSourceAccount, selectedDestinationAccount))
@@ -2176,6 +2285,8 @@ export default function MohammadLedgerApp() {
       if (cancelled) return
       const normalizedState = normalizeLedgerState(result.state, initialState)
       setStorageMode(result.mode)
+      setLedgerStorageMode(result.storageMode || 'legacy')
+      setLedgerRevision(Number.isSafeInteger(Number(result.revision)) ? Number(result.revision) : null)
       setCanManageUsers(Boolean(result.access?.canManageUsers))
       setUserProfile(result.profile || null)
       if (result.profile?.language) {
@@ -2185,6 +2296,13 @@ export default function MohammadLedgerApp() {
       setLedgerExtras(ledgerExtrasFromState(normalizedState))
       setAccounts(normalizeMohammadAccounts(normalizedState.accounts))
       setMovements(normalizedState.movements)
+      setMovementPage({
+        ...(result.movementPage || {}),
+        hasMore: Boolean(result.movementPage?.hasMore),
+        nextCursor: result.movementPage?.nextCursor || null,
+        loaded: normalizedState.movements.length,
+      })
+      setServerReports(result.reports || null)
       setSaveStatus(result.loadError ? 'local-only' : 'saved')
       setLoadFailed(Boolean(result.loadError))
       setSyncProblem(Boolean(result.loadError))
@@ -2201,6 +2319,149 @@ export default function MohammadLedgerApp() {
     }
   }, [initialState])
 
+  useEffect(() => {
+    if (!isHydrated || ledgerStorageMode !== 'relational' || !Number.isSafeInteger(ledgerRevision)) return undefined
+    let cancelled = false
+    const dayRange = zonedDayRange()
+    void loadAdreemMovementPage({
+      limit: 3,
+      occurredFrom: dayRange.from,
+      occurredBefore: dayRange.before,
+      requestKey: MOVEMENT_REQUEST_KEYS.todaySummary,
+    }).then((result) => {
+      if (cancelled || result.stale || result.revision !== ledgerRevision) return
+      setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+      setTodayRemoteSummary({
+        revision: result.revision,
+        total: result.page?.total ?? result.movements.length,
+        movements: result.movements,
+      })
+    }).catch((error) => {
+      if (!cancelled) console.warn('[adreem-ledger] today summary load failed:', error?.message || error)
+    })
+    return () => { cancelled = true }
+  }, [isHydrated, ledgerRevision, ledgerStorageMode])
+
+  useEffect(() => {
+    const requestSequence = reviewRequestSequenceRef.current + 1
+    reviewRequestSequenceRef.current = requestSequence
+    reviewLoadInProgressRef.current = false
+    if (!isHydrated || activeSection !== 'review' || ledgerStorageMode !== 'relational' || !Number.isSafeInteger(ledgerRevision)) return undefined
+
+    let cancelled = false
+    reviewLoadInProgressRef.current = true
+    queueMicrotask(() => {
+      if (cancelled || reviewRequestSequenceRef.current !== requestSequence) return
+      setIsLoadingReview(true)
+      setReviewPage(null)
+    })
+    void loadAdreemMovementPage({
+      limit: REVIEW_MOVEMENT_PAGE_SIZE,
+      status: MOVEMENT_STATUSES.NEEDS_REVIEW,
+      requestKey: MOVEMENT_REQUEST_KEYS.review,
+    }).then((result) => {
+      if (cancelled || reviewRequestSequenceRef.current !== requestSequence) return
+      const merged = mergeReviewMovementPage({}, result, ledgerRevision, true)
+      if (!merged) return
+      setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+      setMovements((current) => mergeReviewMovementPage({ movements: current }, result, ledgerRevision, true)?.movements || current)
+      setReviewPage(merged.page)
+    }).catch((error) => {
+      if (!cancelled && reviewRequestSequenceRef.current === requestSequence) {
+        console.warn('[adreem-ledger] review movements load failed:', error?.message || error)
+        setFeedback('تعذر تحميل الحركات الناقصة. حاول مرة أخرى.')
+      }
+    }).finally(() => {
+      if (!cancelled && reviewRequestSequenceRef.current === requestSequence) {
+        reviewLoadInProgressRef.current = false
+        setIsLoadingReview(false)
+      }
+    })
+    return () => {
+      cancelled = true
+      reviewLoadInProgressRef.current = false
+    }
+  }, [activeSection, isHydrated, ledgerRevision, ledgerStorageMode])
+
+  useEffect(() => {
+    const requestSequence = accountProfileRequestSequenceRef.current + 1
+    accountProfileRequestSequenceRef.current = requestSequence
+    if (!selectedAccountId || ledgerStorageMode !== 'relational') return undefined
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      if (cancelled || accountProfileRequestSequenceRef.current !== requestSequence) return
+      setIsLoadingAccountProfile(true)
+      try {
+        const result = await loadAdreemMovementPage({
+          accountId: selectedAccountId,
+          limit: 100,
+          requestKey: MOVEMENT_REQUEST_KEYS.accountProfile,
+        })
+        if (cancelled || result.stale || accountProfileRequestSequenceRef.current !== requestSequence) return
+        setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+        setAccountProfilePage({ accountId: selectedAccountId, ...(result.page || {}), loaded: result.movements.length })
+        setMovements((current) => {
+          const merged = mergeMovementHistoryPages(current, result.movements).reverse()
+          return sameRecordVersions(current, merged) ? current : merged
+        })
+      } catch (error) {
+        if (!cancelled && accountProfileRequestSequenceRef.current === requestSequence) {
+          console.warn('[adreem-ledger] account movements load failed:', error?.message || error)
+          setFeedback('تعذر جلب كل حركات الحساب. حاول مرة أخرى.')
+        }
+      } finally {
+        if (!cancelled && accountProfileRequestSequenceRef.current === requestSequence) setIsLoadingAccountProfile(false)
+      }
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [ledgerStorageMode, selectedAccountId])
+
+  useEffect(() => {
+    const requestSequence = historyRequestSequenceRef.current + 1
+    historyRequestSequenceRef.current = requestSequence
+    if (!isHydrated || activeSection !== 'history' || ledgerStorageMode !== 'relational') return undefined
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      if (cancelled || historyRequestSequenceRef.current !== requestSequence) return
+      setIsLoadingHistory(true)
+      setIsLoadingOlderMovements(false)
+      try {
+        const result = await loadAdreemMovementPage({
+          limit: 100,
+          query: historyQuery,
+          type: historyType,
+          status: historyStatus,
+          accountId: historyAccountId,
+          dimensionId: historyDimensionId,
+          expenseCategoryId: historyExpenseCategoryId,
+          requestKey: MOVEMENT_REQUEST_KEYS.history,
+        })
+        if (cancelled || result.stale || historyRequestSequenceRef.current !== requestSequence) return
+        setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+        const pageMovements = mergeMovementHistoryPages(result.movements)
+        setHistoryRemoteMovements(pageMovements)
+        setHistoryPage({ ...(result.page || {}), loaded: pageMovements.length })
+        setMovements((current) => {
+          const merged = mergeMovementHistoryPages(current, pageMovements).reverse()
+          return sameRecordVersions(current, merged) ? current : merged
+        })
+      } catch (error) {
+        if (cancelled || historyRequestSequenceRef.current !== requestSequence) return
+        console.warn('[adreem-ledger] history load failed:', error?.message || error)
+        setFeedback('تعذر تحميل السجل. حاول مرة أخرى.')
+      } finally {
+        if (!cancelled && historyRequestSequenceRef.current === requestSequence) setIsLoadingHistory(false)
+      }
+    }, historyQuery.trim() ? 180 : 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [activeSection, historyAccountId, historyDimensionId, historyExpenseCategoryId, historyQuery, historyStatus, historyType, isHydrated, ledgerStorageMode])
+
   async function changeUiLanguage(language) {
     const nextLanguage = normalizeUiLanguage(language)
     if (nextLanguage === normalizedUiLanguage || languageStatus === 'saving') return
@@ -2216,6 +2477,32 @@ export default function MohammadLedgerApp() {
     } catch {
       setLanguageStatus('error')
       setLanguageMessage('تعذر حفظ اللغة. حاول مرة أخرى.')
+    }
+  }
+
+  async function cleanupPermanentUploadedAttachments(item, coordinator) {
+    if (orphanCleanupInProgressRef.current) return
+    const storagePaths = pendingUploadedOrphanPaths(
+      item?.value,
+      Array.from(pendingUploadedAttachmentPathsRef.current),
+    )
+    if (!storagePaths.length) return
+    orphanCleanupInProgressRef.current = true
+    try {
+      const result = await cleanupAdreemUploadedAttachments(storagePaths)
+      const deletedPaths = new Set(result.deletedPaths)
+      if (!deletedPaths.size) return
+      for (const storagePath of deletedPaths) pendingUploadedAttachmentPathsRef.current.delete(storagePath)
+      coordinator?.discardFailed()
+      setLedgerExtras((current) => ({
+        ...current,
+        attachments: (current.attachments || []).filter((attachment) => !deletedPaths.has(attachment.storagePath)),
+      }))
+      setFeedback(result.failedPaths.length
+        ? 'لم يتم تأكيد الحفظ. نُظفت بعض المرفقات غير المرتبطة وستُحفظ بقية التغييرات من جديد.'
+        : 'لم يتم تأكيد الحفظ. نُظفت المرفقات غير المرتبطة وستُحفظ بقية التغييرات من جديد.')
+    } finally {
+      orphanCleanupInProgressRef.current = false
     }
   }
 
@@ -2238,7 +2525,26 @@ export default function MohammadLedgerApp() {
           setSaveStatus(status)
         },
         onSaved(result, item) {
+          if (result.stale) return
+          const confirmedAttachmentPaths = new Set(
+            (result.state?.attachments || [])
+              .map((attachment) => String(attachment?.storagePath || '').trim())
+              .filter(Boolean),
+          )
+          for (const storagePath of pendingUploadedAttachmentPathsRef.current) {
+            if (confirmedAttachmentPaths.has(storagePath)) pendingUploadedAttachmentPathsRef.current.delete(storagePath)
+          }
           setStorageMode(result.mode)
+          setLedgerStorageMode(result.storageMode || 'legacy')
+          if (Number.isSafeInteger(Number(result.revision))) setLedgerRevision(Number(result.revision))
+          if (result.movementPage) {
+            setMovementPage((current) => ({
+              ...current,
+              ...result.movementPage,
+              loaded: result.state?.movements?.length || current.loaded,
+            }))
+          }
+          if (result.reports) setServerReports(result.reports)
           setSyncProblem(false)
           setFeedback((current) => (current.startsWith('لم يتم تأكيد الحفظ') ? 'تم الحفظ في السحابة.' : current))
           if (!result.state || coordinator?.hasPending()) return
@@ -2250,11 +2556,12 @@ export default function MohammadLedgerApp() {
           setAccounts((current) => (sameRecordVersions(current, mergedAccounts) ? current : mergedAccounts))
           setMovements((current) => (sameRecordVersions(current, mergedMovements) ? current : mergedMovements))
         },
-        onError(error, _item, retryDelay) {
+        onError(error, item, retryDelay) {
           console.warn('[adreem-ledger] cloud save failed:', error?.message || error)
           setStorageMode(error?.persistenceResult?.mode || getMohammadPersistenceMode())
           setSyncProblem(true)
           setFeedback(saveFailureMessage(error, retryDelay))
+          if (retryDelay === null) void cleanupPermanentUploadedAttachments(item, coordinator)
         },
       })
       saveCoordinatorRef.current = coordinator
@@ -2267,9 +2574,126 @@ export default function MohammadLedgerApp() {
     saveCoordinatorRef.current.submit({ ...ledgerExtras, accounts, movements })
   }, [accounts, movements, ledgerExtras, isHydrated, canPersist])
 
+  async function loadOlderMovements() {
+    const activePage = ledgerStorageMode === 'relational' ? historyPage : movementPage
+    if (isLoadingOlderMovements || !activePage?.hasMore) return
+    const requestSequence = historyRequestSequenceRef.current
+    setIsLoadingOlderMovements(true)
+    try {
+      if (ledgerStorageMode === 'relational') {
+        const result = await loadAdreemMovementPage({
+          before: activePage.nextCursor,
+          limit: activePage.limit || 100,
+          query: historyQuery,
+          type: historyType,
+          status: historyStatus,
+          accountId: historyAccountId,
+          dimensionId: historyDimensionId,
+          expenseCategoryId: historyExpenseCategoryId,
+          requestKey: MOVEMENT_REQUEST_KEYS.history,
+        })
+        if (result.stale || historyRequestSequenceRef.current !== requestSequence) return
+        setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+        const mergedHistory = mergeMovementHistoryPages(historyRemoteMovements, result.movements)
+        setHistoryRemoteMovements(mergedHistory)
+        setHistoryPage({
+          ...(result.page || {}),
+          total: activePage.total ?? result.page?.total ?? mergedHistory.length,
+          loaded: mergedHistory.length,
+        })
+        setMovements((current) => {
+          const merged = mergeMovementHistoryPages(current, result.movements).reverse()
+          return sameRecordVersions(current, merged) ? current : merged
+        })
+        return
+      }
+      const result = await loadMoreAdreemMovements({
+        before: activePage.nextCursor,
+        limit: activePage.limit || 100,
+        requestKey: MOVEMENT_REQUEST_KEYS.ledgerFeed,
+      })
+      if (result.stale) return
+      setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+      setMovements(result.allMovements || movements)
+      setMovementPage(result.page || { hasMore: false, nextCursor: null })
+    } catch (error) {
+      console.warn('[adreem-ledger] older movements load failed:', error?.message || error)
+      setFeedback('تعذر جلب الحركات الأقدم. حاول مرة أخرى.')
+    } finally {
+      if (historyRequestSequenceRef.current === requestSequence) setIsLoadingOlderMovements(false)
+    }
+  }
+
+  async function loadOlderReviewMovements() {
+    if (reviewLoadInProgressRef.current || !activeReviewPage?.hasMore) return
+    const requestSequence = reviewRequestSequenceRef.current
+    const expectedRevision = ledgerRevision
+    const expectedCursor = activeReviewPage.nextCursor
+    reviewLoadInProgressRef.current = true
+    setIsLoadingReview(true)
+    try {
+      const result = await loadAdreemMovementPage({
+        before: expectedCursor,
+        limit: activeReviewPage.limit || REVIEW_MOVEMENT_PAGE_SIZE,
+        status: MOVEMENT_STATUSES.NEEDS_REVIEW,
+        requestKey: MOVEMENT_REQUEST_KEYS.review,
+      })
+      if (reviewRequestSequenceRef.current !== requestSequence) return
+      const merged = mergeReviewMovementPage({ page: activeReviewPage }, result, expectedRevision)
+      if (!merged) return
+      setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+      setMovements((current) => mergeReviewMovementPage({ movements: current }, result, expectedRevision)?.movements || current)
+      setReviewPage((current) => {
+        if (current?.revision !== expectedRevision || current.nextCursor !== expectedCursor) return current
+        return mergeReviewMovementPage({ page: current }, result, expectedRevision)?.page || current
+      })
+    } catch (error) {
+      if (reviewRequestSequenceRef.current === requestSequence) {
+        console.warn('[adreem-ledger] older review movements load failed:', error?.message || error)
+        setFeedback('تعذر جلب الحركات الناقصة الأقدم.')
+      }
+    } finally {
+      if (reviewRequestSequenceRef.current === requestSequence) {
+        reviewLoadInProgressRef.current = false
+        setIsLoadingReview(false)
+      }
+    }
+  }
+
+  async function loadOlderAccountProfileMovements() {
+    if (!selectedAccountId || isLoadingAccountProfile || !activeAccountProfilePage?.hasMore) return
+    const requestSequence = accountProfileRequestSequenceRef.current
+    setIsLoadingAccountProfile(true)
+    try {
+      const result = await loadAdreemMovementPage({
+        accountId: selectedAccountId,
+        before: activeAccountProfilePage.nextCursor,
+        limit: activeAccountProfilePage.limit || 100,
+        requestKey: MOVEMENT_REQUEST_KEYS.accountProfile,
+      })
+      if (result.stale || accountProfileRequestSequenceRef.current !== requestSequence) return
+      setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+      setMovements((current) => {
+        const merged = mergeMovementHistoryPages(current, result.movements).reverse()
+        return sameRecordVersions(current, merged) ? current : merged
+      })
+      setAccountProfilePage({
+        accountId: selectedAccountId,
+        ...(result.page || {}),
+        total: activeAccountProfilePage.total ?? result.page?.total ?? null,
+        loaded: Number(activeAccountProfilePage.loaded || 0) + result.movements.length,
+      })
+    } catch (error) {
+      console.warn('[adreem-ledger] older account movements load failed:', error?.message || error)
+      setFeedback('تعذر جلب الحركات الأقدم لهذا الحساب.')
+    } finally {
+      if (accountProfileRequestSequenceRef.current === requestSequence) setIsLoadingAccountProfile(false)
+    }
+  }
+
   useEffect(() => {
     function warnBeforeClose(event) {
-      if (!saveCoordinatorRef.current?.hasPending()) return
+      if (!saveCoordinatorRef.current?.hasPending() && !pendingUploadedAttachmentPathsRef.current.size) return
       event.preventDefault()
       event.returnValue = ''
     }
@@ -2287,6 +2711,14 @@ export default function MohammadLedgerApp() {
     },
     [],
   )
+
+  async function requestCloudLogout() {
+    if (saveCoordinatorRef.current?.hasPending() || pendingUploadedAttachmentPathsRef.current.size) {
+      setFeedback('انتظر اكتمال حفظ التغييرات والمرفقات قبل تسجيل الخروج.')
+      return
+    }
+    await logoutFromCloudSession()
+  }
 
   useEffect(() => {
     if (!pendingUndo) return undefined
@@ -2588,6 +3020,7 @@ export default function MohammadLedgerApp() {
         },
         accounts,
         validationMovements,
+        { originalMovement },
       )
       if (!canCommitMovementEdit(originalMovement, movement)) {
         setFeedback(`لم يتم حفظ التعديل. أصلح الحركة أولًا حتى لا يتغير الرصيد: ${movement.validation.errors.map((error) => error.message).join(' ')}`)
@@ -2614,6 +3047,14 @@ export default function MohammadLedgerApp() {
         storagePath: uploadedAttachment?.storagePath || '',
         source: uploadedAttachment ? 'web-upload' : 'web',
       })
+      if (!attachment && uploadedAttachment?.storagePath) {
+        try {
+          await deleteAdreemUploadedAttachment(uploadedAttachment.storagePath)
+        } catch (error) {
+          console.warn('[adreem-ledger] orphan attachment cleanup failed:', error?.message || error)
+        }
+      }
+      if (attachment?.storagePath) pendingUploadedAttachmentPathsRef.current.add(attachment.storagePath)
       const recurringRule =
         movementDraft.recurringEnabled && movement.status === MOVEMENT_STATUSES.POSTED
           ? createRecurringRuleFromMovement(movement, {
@@ -2670,7 +3111,15 @@ export default function MohammadLedgerApp() {
         }
       : voidMovement(target, 'إلغاء من سجل الحركات', now).movement
     if (!voidedMovement) return
+    const balanceValidation = validateMovementBalanceTransition(target, voidedMovement, accounts, movements)
+    if (!balanceValidation.ok) {
+      setFeedback(balanceValidation.errors[0]?.message || 'لا يمكن أن يصبح حساب فلوسك أو الأصل بالسالب. الرصيد المتاح أقل من قيمة الحركة.')
+      return
+    }
     setMovements((current) => current.map((movement) => (movement.id === movementId ? voidedMovement : movement)))
+    setHistoryRemoteMovements((current) => Array.isArray(current)
+      ? current.map((movement) => (movement.id === movementId ? voidedMovement : movement))
+      : current)
     setLedgerExtras((current) => ({
       ...current,
       recurringRules: syncRecurringRulesFromSourceMovement(current.recurringRules, voidedMovement, now),
@@ -2873,9 +3322,17 @@ export default function MohammadLedgerApp() {
         source: uploadedAttachment ? 'web-upload' : 'web',
       })
       if (!attachment) {
+        if (uploadedAttachment?.storagePath) {
+          try {
+            await deleteAdreemUploadedAttachment(uploadedAttachment.storagePath)
+          } catch (error) {
+            console.warn('[adreem-ledger] orphan attachment cleanup failed:', error?.message || error)
+          }
+        }
         setFeedback('اكتب اسم المرفق أو رابطه.')
         return
       }
+      if (attachment.storagePath) pendingUploadedAttachmentPathsRef.current.add(attachment.storagePath)
       setLedgerExtras((current) => ({
         ...current,
         attachments: [...(current.attachments || []), attachment],
@@ -3255,11 +3712,12 @@ export default function MohammadLedgerApp() {
             <div>
               <h2>مراجعة</h2>
             </div>
-            <span>{formatCount(reviewItems.length)}</span>
+            <span>{formatCount(reviewItemTotal)}</span>
           </div>
+          {ledgerStorageMode !== 'relational' && movementPage.reviewTruncated ? <p className="ml3-empty">اعرض بقية الحركات الناقصة من السجل.</p> : null}
           <div className="ml3-review-workspace">
             <div className="ml3-review-queue" aria-label="قائمة المراجعة">
-              {reviewItems.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
+              {reviewItems.length === 0 && !isLoadingReview ? <p className="ml3-empty">لا شيء</p> : null}
               {reviewItems.map((item, index) => (
                 <button type="button" key={item.key} className={`ml3-review-ticket ml3-review-ticket--${item.tone} ${activeReviewItem?.key === item.key ? 'is-active' : ''}`} onClick={() => setActiveReviewKey(item.key)}>
                   <span>{formatCount(index + 1)}</span>
@@ -3267,6 +3725,13 @@ export default function MohammadLedgerApp() {
                   <b>{item.detail}</b>
                 </button>
               ))}
+              {ledgerStorageMode === 'relational' && activeReviewPage ? <p className="ml3-empty">الحركات الناقصة · {formatCount(reviewMovementTotal)}</p> : null}
+              {ledgerStorageMode === 'relational' && activeReviewPage?.hasMore ? (
+                <button type="button" className="ml3-history-more" disabled={isLoadingReview} onClick={loadOlderReviewMovements}>
+                  {isLoadingReview ? 'جاري التحميل' : 'حركات أقدم'}
+                </button>
+              ) : null}
+              {ledgerStorageMode === 'relational' && isLoadingReview && !activeReviewPage ? <p className="ml3-empty">جاري تحميل الحركات الناقصة</p> : null}
             </div>
             <div className="ml3-review-active">
               {activeReviewItem?.type === 'account' ? <ReviewAccountCard key={activeReviewItem.bucket.account.id} bucket={activeReviewItem.bucket} activeAccounts={activeAccounts} onResolve={resolveReviewAccount} onMerge={mergeReviewAccount} onDisable={disableAccount} /> : null}
@@ -3290,7 +3755,7 @@ export default function MohammadLedgerApp() {
             <div>
               <h2>السجل</h2>
             </div>
-            <span>{formatCount(filteredHistoryMovements.length)}</span>
+            <span>{formatCount(activeHistoryPage?.total ?? filteredHistoryMovements.length)}</span>
           </div>
           <details className="ml3-filter-disclosure">
             <summary>
@@ -3343,7 +3808,8 @@ export default function MohammadLedgerApp() {
             </div>
           </details>
           <div className="ml3-history-list">
-            {filteredHistoryMovements.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
+            {isLoadingHistory ? <p className="ml3-empty">جاري التحميل</p> : null}
+            {!isLoadingHistory && filteredHistoryMovements.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
             {historyGroups.map((group) => (
               <section className="ml3-history-day" key={group.key}>
                 <div className="ml3-history-day-head">
@@ -3355,6 +3821,16 @@ export default function MohammadLedgerApp() {
                 ))}
               </section>
             ))}
+            {activeHistoryPage?.hasMore ? (
+              <button
+                type="button"
+                className="ml3-history-more"
+                disabled={isLoadingOlderMovements || isLoadingHistory}
+                onClick={loadOlderMovements}
+              >
+                {isLoadingOlderMovements ? 'جاري التحميل' : 'عرض حركات أقدم'}
+              </button>
+            ) : null}
           </div>
         </section>
       )
@@ -3520,7 +3996,9 @@ export default function MohammadLedgerApp() {
   }
 
   return (
-    <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovements.length} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} profile={protectedUserProfile(userProfile)} language={normalizedUiLanguage} languageStatus={languageStatus} languageMessage={languageMessage} onLanguageChange={changeUiLanguage} onRetrySave={() => saveCoordinatorRef.current?.retryNow()} onOpenAdmin={openAdminUsersPage} onLogout={logoutFromCloudSession} onSectionChange={switchSection}>
+    <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovementCount} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} profile={protectedUserProfile(userProfile)} language={normalizedUiLanguage} languageStatus={languageStatus} languageMessage={languageMessage} onLanguageChange={changeUiLanguage} onRetrySave={() => {
+      if (!orphanCleanupInProgressRef.current) saveCoordinatorRef.current?.retryNow()
+    }} onOpenAdmin={openAdminUsersPage} onLogout={requestCloudLogout} onSectionChange={switchSection}>
       {activeSection !== 'entry' ? <AlertBoard reviewAccounts={balancesByKind.review} reviewMovements={reviewMovements} externalMissing={unresolvedExternalAccounts} balances={balances} movements={postedUserMovements} totals={totals} dueRecurringCount={dueRules.length} reconciliationDiffCount={reconciliationDiffCount} /> : null}
 
       <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
@@ -3800,11 +4278,11 @@ export default function MohammadLedgerApp() {
                 <div className="ml3-today-head">
                   <h2>آخر حركات اليوم</h2>
                   <button type="button" onClick={() => switchSection('history')}>
-                    الكل <span>{formatCount(todayMovements.length)}</span>
+                    الكل <span>{formatCount(todayMovementCount)}</span>
                   </button>
                 </div>
                 <div className="ml3-today-list">
-                  {todayMovements.length === 0 ? <p className="ml3-empty">لا توجد حركات اليوم.</p> : null}
+                  {todayMovementCount === 0 ? <p className="ml3-empty">لا توجد حركات اليوم.</p> : null}
                   {todayPreviewMovements.map((movement) => (
                     <MovementMiniRow key={movement.id} movement={movement} accountById={accountById} attachments={ledgerExtras.attachments || []} dimensions={activeDimensions} onCancel={cancelMovement} onDeleteAttachment={deleteAttachment} />
                   ))}
@@ -3974,7 +4452,7 @@ export default function MohammadLedgerApp() {
           </section>
         ) : null}
       </section>
-      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} />
+      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
     </AdreemChrome>
   )
 }

@@ -1,9 +1,13 @@
-name: Deploy to GitHub Pages
+name: Deploy legacy ADREEM to GitHub Pages
 
 on:
-  push:
-    branches: ['main']
   workflow_dispatch:
+    inputs:
+      deploy_legacy:
+        description: Confirm deployment of the legacy GitHub Pages runtime
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,7 +20,13 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ inputs.deploy_legacy == true }}
     runs-on: ubuntu-latest
+    env:
+      ADREEM_WEB_DEPLOY_TARGET: github-pages
+      ADREEM_WEB_RUNTIME_MODE: ${{ vars.ADREEM_WEB_RUNTIME_MODE }}
+      ADREEM_LEGACY_PAGES_DEPLOY: ${{ vars.ADREEM_LEGACY_PAGES_DEPLOY }}
+      ADREEM_WEB_PUBLIC_ORIGIN: https://aneerabee.github.io
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +42,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Refuse non-legacy GitHub Pages deployment
+        run: node server/ops/verifyProductionWebEnv.js
+        env:
+          VITE_ADREEM_API_URL: ${{ secrets.VITE_ADREEM_API_URL }}
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -43,11 +58,6 @@ jobs:
 
       - name: Test
         run: pnpm test
-
-      - name: Verify cloud configuration
-        run: pnpm verify:web-env
-        env:
-          VITE_ADREEM_API_URL: ${{ secrets.VITE_ADREEM_API_URL }}
 
       - name: Build
         run: pnpm build
