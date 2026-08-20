@@ -233,7 +233,7 @@ describe('telegram account service', () => {
       currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
     })
 
-    expect(result).toMatchObject({ rejected: true, reason: 'movement-history' })
+    expect(result).toMatchObject({ rejected: true, reason: 'account-structure-locked' })
     expect(repository.state.accounts.find((item) => item.id === person.id).currencyKind).toBe(ACCOUNT_CURRENCY_KINDS.DINAR)
     expect(repository.state.auditEvents).toEqual([])
   })

@@ -8,6 +8,7 @@ import {
   applyAccountName,
   emptyAccountDraft,
 } from '../../../src/mohammadLedger/accountConfig.js'
+import { accountStructureUsage } from '../../../src/mohammadLedger/accountEditing.js'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES } from '../../../src/mohammadLedger/accountCatalog.js'
 import {
   accountIdempotencyKey,
@@ -15,6 +16,7 @@ import {
   resolveTelegramReviewAccount,
   updateTelegramAccount,
   validateAccountDraft,
+  validateExistingAccountDraft,
 } from '../../mohammadLedger/accountService.js'
 import { accountLabel } from '../../mohammadLedger/ledgerService.js'
 import {
@@ -52,6 +54,7 @@ function createAccountSession(options = {}) {
     editAccountId: options.editAccountId || '',
     reviewOriginalLabel: options.reviewOriginalLabel || '',
     selectedDetail: hasExistingDraft ? options.draft?.subAccountName || '' : '',
+    structureLocked: Boolean(options.structureLocked),
     uiMessageId: null,
   }
 }
@@ -103,6 +106,16 @@ async function upsertAccountMessage(ctx, session, payload) {
   return sent
 }
 
+function validateSessionDraft(session, state) {
+  if (session.mode === 'create') return validateAccountDraft(session.draft, state.accounts)
+  return validateExistingAccountDraft(
+    state,
+    session.mode === 'edit' ? session.editAccountId : session.reviewAccountId,
+    session.draft,
+    session.mode,
+  )
+}
+
 async function sendStep(ctx, session, result = null) {
   if (session.step === STEPS.GROUP) {
     return upsertAccountMessage(ctx, session, {
@@ -143,7 +156,7 @@ async function sendStep(ctx, session, result = null) {
     if (!reviewResult) {
       try {
         const current = await ctx.repository.load()
-        reviewResult = validateAccountDraft(session.draft, current.state.accounts)
+        reviewResult = validateSessionDraft(session, current.state)
       } catch (error) {
         console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
         return sendAccountConnectionError(ctx, session)
@@ -214,6 +227,12 @@ export async function startEditAccount(ctx, accountId) {
     mode: 'edit',
     editAccountId: account.id,
     reviewOriginalLabel: accountLabel(account),
+    structureLocked: accountStructureUsage(account, {
+      movements: state.movements || [],
+      reconciliations: state.reconciliations || [],
+      recurringRules: state.recurringRules || [],
+      dimensions: state.dimensions || [],
+    }).locked,
     draft: {
       ...emptyAccountDraft(),
       ownerName: account.ownerName || '',
@@ -296,7 +315,7 @@ export async function handleAccountCallback(ctx, data) {
     if (session.step === STEPS.CURRENCY) return sendStep(ctx, session)
     try {
       const current = await ctx.repository.load()
-      return sendStep(ctx, session, validateAccountDraft(session.draft, current.state.accounts))
+      return sendStep(ctx, session, validateSessionDraft(session, current.state))
     } catch (error) {
       console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
       return sendAccountConnectionError(ctx, session)
@@ -311,7 +330,7 @@ export async function handleAccountCallback(ctx, data) {
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     try {
       const current = await ctx.repository.load()
-      return sendStep(ctx, session, validateAccountDraft(session.draft, current.state.accounts))
+      return sendStep(ctx, session, validateSessionDraft(session, current.state))
     } catch (error) {
       console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
       return sendAccountConnectionError(ctx, session)
@@ -401,14 +420,16 @@ export async function handleAccountText(ctx, text) {
     }
     session.draft = applyAccountName(session.draft, accountName)
     const preset = accountPresetFor(session.draft.type, session.draft.valueKind)
-    session.step = preset.skipDetail
+    session.step = session.mode === 'edit' && session.structureLocked
+      ? STEPS.REVIEW
+      : preset.skipDetail
       ? (accountNeedsCurrency(session.draft) ? STEPS.CURRENCY : STEPS.REVIEW)
       : STEPS.DETAIL
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     if (session.step === STEPS.REVIEW) {
       try {
         const current = await ctx.repository.load()
-        await sendStep(ctx, session, validateAccountDraft(session.draft, current.state.accounts))
+        await sendStep(ctx, session, validateSessionDraft(session, current.state))
       } catch (error) {
         console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
         await sendAccountConnectionError(ctx, session)
@@ -436,7 +457,7 @@ export async function handleAccountText(ctx, text) {
     }
     try {
       const current = await ctx.repository.load()
-      await sendStep(ctx, session, validateAccountDraft(session.draft, current.state.accounts))
+      await sendStep(ctx, session, validateSessionDraft(session, current.state))
     } catch (error) {
       console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
       await sendAccountConnectionError(ctx, session)
@@ -451,6 +472,7 @@ export async function handleAccountText(ctx, text) {
 function previousStep(session) {
   const step = session?.step
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
+  if (session?.mode === 'edit' && session?.structureLocked && step === STEPS.REVIEW) return STEPS.OWNER
   if (step === STEPS.TYPE) return STEPS.GROUP
   if (step === STEPS.OWNER) return groupNeedsTypeStep(session?.presetGroup) ? STEPS.TYPE : STEPS.GROUP
   if (step === STEPS.DETAIL) return STEPS.OWNER

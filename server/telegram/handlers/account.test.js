@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createSessionStore } from '../sessionStore.js'
 import { handleAccountCallback, handleAccountText, startAccount, startEditAccount, startReviewAccount } from './account.js'
 
@@ -364,6 +365,48 @@ describe('telegram account flow', () => {
     expect(ctx.repository.state.accounts[0].subAccountName).toBe('الخزنة')
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم إلغاء تعديل الحساب')
+  })
+
+  it('edits only the name when the account structure is locked by a posted movement', async () => {
+    const ctx = createCtx()
+    ctx.repository = memoryRepository({
+      ...emptyState(),
+      accounts: [{
+        id: 'used-person',
+        ownerName: 'سيف',
+        subAccountName: 'كاش بيننا',
+        type: ACCOUNT_TYPES.PERSON,
+        valueKind: VALUE_KINDS.RECEIVABLE,
+        currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+        status: ACCOUNT_STATUSES.ACTIVE,
+      }],
+      movements: [{
+        id: 'used-transfer',
+        type: MOVEMENT_TYPES.OPENING_BALANCE,
+        status: MOVEMENT_STATUSES.POSTED,
+        amount: 100,
+        currency: CURRENCIES.DINAR,
+        destinationAccountId: 'used-person',
+        createdAt: '2026-08-20T10:00:00.000Z',
+        updatedAt: '2026-08-20T10:00:00.000Z',
+      }],
+      auditEvents: [],
+    })
+
+    await startEditAccount(ctx, 'used-person')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({ structureLocked: true, step: 'owner' })
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('النوع وطريقة التعامل والعملة ثابتة')
+
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 59 }, 'شركة سيف')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('review')
+    expect(ctx.telegram.calls.at(-1).payload.text).not.toContain('لا يمكن الحفظ الآن')
+    await handleAccountCallback(ctx, 'acct:confirm')
+
+    expect(ctx.repository.state.accounts[0]).toMatchObject({
+      ownerName: 'شركة سيف',
+      subAccountName: 'كاش بيننا',
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+    })
   })
 
   it('keeps unexpected text inside an account button step', async () => {

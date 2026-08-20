@@ -196,7 +196,10 @@ export function accountStepText(session) {
   const preset = accountPresetFor(draft.type, draft.valueKind)
   const group = accountPresetGroupFor(session?.presetGroup || preset)
   const hasTypeStep = group.keys.length > 1
-  const steps = ['group', ...(hasTypeStep ? ['type'] : []), 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), 'review']
+  const structureLocked = session?.mode === 'edit' && session?.structureLocked
+  const steps = structureLocked
+    ? ['owner', 'review']
+    : ['group', ...(hasTypeStep ? ['type'] : []), 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), 'review']
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = `${currentIndex + 1}/${steps.length}`
   const summary = []
@@ -218,6 +221,9 @@ export function accountStepText(session) {
     '',
     ...(session?.mode !== 'create' && session.reviewOriginalLabel
       ? [`<blockquote>${escapeHtml(`الحساب الحالي:\n${session.reviewOriginalLabel}`)}</blockquote>`, '']
+      : []),
+    ...(structureLocked
+      ? ['<code>الاسم قابل للتعديل. النوع وطريقة التعامل والعملة ثابتة بعد استعمال الحساب.</code>', '']
       : []),
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
     `<b>${escapeHtml(accountStepTitle(session))}</b>`,

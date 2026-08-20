@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { accountStructureLockErrors } from '../../src/mohammadLedger/accountEditing.js'
 import {
   CURRENCIES,
   MOVEMENT_STATUSES,
@@ -465,6 +466,20 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
 
   for (const account of accounts) {
     if (!changedRecord(account, previousAccounts)) continue
+    const previousAccount = previousAccounts.get(cleanId(account.id))
+    if (previousAccount) {
+      accountStructureLockErrors(previousAccount, account, {
+        movements: currentState.movements || [],
+        reconciliations: currentState.reconciliations || [],
+        recurringRules: currentState.recurringRules || [],
+        dimensions: currentState.dimensions || [],
+      }).forEach((error) => errors.push({
+        code: 'account-structure-locked',
+        id: account.id,
+        field: error.field,
+        message: error.message,
+      }))
+    }
     const validation = validateAccount(account, accounts.filter((item) => item.id !== account.id))
     validation.errors.forEach((error) => errors.push({
       code: 'invalid-account',

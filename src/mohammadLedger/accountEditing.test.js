@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
-import { accountEditChanges, prepareAccountUpdate } from './accountEditing.js'
-import { createAccount } from './ledgerCore.js'
+import { accountEditChanges, accountStructureUsage, prepareAccountUpdate } from './accountEditing.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements } from './ledgerCore.js'
 
 const EDIT_CASES = [
   { type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE, ownerName: 'سعيد', subAccountName: 'كاش بيننا', nextName: 'شركة سعيد', field: 'ownerName' },
@@ -81,5 +81,85 @@ describe('account editing', () => {
 
     expect(result).toMatchObject({ ok: false, reason: 'account-validation' })
     expect(result.errors.map((error) => error.field)).toContain('subAccountName')
+  })
+
+  it('locks type, person balance method, and currency after the first posted movement', () => {
+    const account = createAccount({
+      id: 'used-person',
+      ownerName: 'سيف',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+    })
+    const movement = {
+      id: 'posted-transfer',
+      type: MOVEMENT_TYPES.TRANSFER,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: account.id,
+    }
+    const result = prepareAccountUpdate({
+      accounts: [account],
+      movements: [movement],
+      accountId: account.id,
+      draft: {
+        ...account,
+        subAccountName: 'شيك بيننا',
+        currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+      },
+    })
+
+    expect(result).toMatchObject({ ok: false, reason: 'account-structure-locked' })
+  })
+
+  it('still allows renaming a used account without changing its accounting identity', () => {
+    const account = createAccount({
+      id: 'used-person',
+      ownerName: 'سيف',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+      openingDinar: 100,
+    })
+    const movement = createOpeningMovements([account])[0]
+    const result = prepareAccountUpdate({
+      accounts: [account],
+      movements: [movement],
+      accountId: account.id,
+      draft: { ...account, ownerName: 'شركة سيف' },
+    })
+
+    expect(result).toMatchObject({ ok: true, account: { ownerName: 'شركة سيف' } })
+  })
+
+  it('locks structural fields when an account is linked to reconciliation, recurrence, or a dimension', () => {
+    const accountId = 'linked-account'
+    expect(accountStructureUsage(accountId, { reconciliations: [{ accountId }] }).locked).toBe(true)
+    expect(accountStructureUsage(accountId, { recurringRules: [{ template: { sourceAccountId: accountId } }] }).locked).toBe(true)
+    expect(accountStructureUsage(accountId, { dimensions: [{ linkedAccountId: accountId }] }).locked).toBe(true)
+    expect(accountStructureUsage(accountId, { movements: [{ status: MOVEMENT_STATUSES.VOIDED, sourceAccountId: accountId }] }).locked).toBe(true)
+    expect(accountStructureUsage(accountId, { movements: [{ status: MOVEMENT_STATUSES.NEEDS_REVIEW, sourceAccountId: accountId }] }).locked).toBe(false)
+  })
+
+  it('locks a project after a posted movement uses its generated tracking dimension', () => {
+    const project = createAccount({
+      id: 'truck-project',
+      ownerName: 'الشاحنة',
+      subAccountName: 'مشروع',
+      type: ACCOUNT_TYPES.PROJECT,
+      valueKind: VALUE_KINDS.PROJECT,
+    })
+    const usage = accountStructureUsage(project, {
+      movements: [{
+        id: 'truck-expense',
+        status: MOVEMENT_STATUSES.POSTED,
+        dimensionId: `dimension-account-${project.id}`,
+      }],
+    })
+
+    expect(usage).toMatchObject({ movement: true, locked: true })
   })
 })

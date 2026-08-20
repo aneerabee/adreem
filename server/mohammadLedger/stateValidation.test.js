@@ -180,8 +180,26 @@ describe('server ledger state validation', () => {
     const result = validateLedgerStateTransition({ ...current, accounts: [reclassified] }, current)
 
     expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'account-structure-locked',
+      id: 'cash-main',
+    }))
+    expect(result.errors).toContainEqual(expect.objectContaining({
       code: 'invalid-posted-movement',
       id: 'opening-1',
+    }))
+  })
+
+  it('allows renaming a used account but rejects changing its currency', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [opening()] }
+    const renamed = cashAccount({ subAccountName: 'خزنة البيت', updatedAt: validationNow })
+    expect(validateLedgerStateTransition({ ...current, accounts: [renamed] }, current).ok).toBe(true)
+
+    const changedCurrency = cashAccount({ currencyKind: CURRENCIES.USD, updatedAt: validationNow })
+    const result = validateLedgerStateTransition({ ...current, accounts: [changedCurrency] }, current)
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'account-structure-locked',
+      id: 'cash-main',
+      field: 'currencyKind',
     }))
   })
 

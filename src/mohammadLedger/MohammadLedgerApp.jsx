@@ -9,7 +9,7 @@ import './adreemStudio.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
-import { accountEditChanges, accountEditSnapshot, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
+import { accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, voidMovement } from './ledgerCore'
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammadPersistenceMode, loadMohammadPersistedState, logoutAdreemCloudSession, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
@@ -523,11 +523,14 @@ function accountClassificationCurrency(account, classification, requestedCurrenc
   return accountUpdateCurrency(account, classification, requestedCurrencyKind)
 }
 
-export function prepareAccountClassificationUpdate({ accounts = [], movements = [], accountId, ownerName, subAccountName, classificationValue, currencyKind, updatedAt = new Date().toISOString() } = {}) {
+export function prepareAccountClassificationUpdate({ accounts = [], movements = [], reconciliations = [], recurringRules = [], dimensions = [], accountId, ownerName, subAccountName, classificationValue, currencyKind, updatedAt = new Date().toISOString() } = {}) {
   const classification = parseClassification(classificationValue)
   return prepareAccountUpdate({
     accounts,
     movements,
+    reconciliations,
+    recurringRules,
+    dimensions,
     accountId,
     draft: { ownerName, subAccountName, ...classification, currencyKind },
     updatedAt,
@@ -1313,12 +1316,12 @@ function accountEditorDraft(account) {
   }
 }
 
-export function AccountClassificationEditorFields({ account, className = '' }) {
-  const editorKey = [account.id, account.updatedAt, account.ownerName, account.subAccountName, account.type, account.valueKind, account.currencyKind].join(':')
-  return <AccountClassificationEditor key={editorKey} account={account} className={className} />
+export function AccountClassificationEditorFields({ account, className = '', structureLocked = false }) {
+  const editorKey = [account.id, account.updatedAt, account.ownerName, account.subAccountName, account.type, account.valueKind, account.currencyKind, structureLocked].join(':')
+  return <AccountClassificationEditor key={editorKey} account={account} className={className} structureLocked={structureLocked} />
 }
 
-function AccountClassificationEditor({ account, className = '' }) {
+function AccountClassificationEditor({ account, className = '', structureLocked = false }) {
   const [draft, setDraft] = useState(() => accountEditorDraft(account))
   const classification = classificationValue(draft)
   const parsedClassification = parseClassification(classification)
@@ -1333,11 +1336,15 @@ function AccountClassificationEditor({ account, className = '' }) {
     <div className={`ml3-profile-editor-grid ${className}`.trim()}>
       <input type="hidden" name="ownerName" value={draft.ownerName || ''} />
       <input type="hidden" name="subAccountName" value={draft.subAccountName || ''} />
+      {structureLocked ? <input type="hidden" name="classification" value={classification} /> : null}
+      {structureLocked && accountNeedsCurrency(parsedClassification) ? <input type="hidden" name="currencyKind" value={currencyFieldValue} /> : null}
+      {structureLocked ? <p className="ml3-profile-lock-note">النوع وطريقة التعامل والعملة ثابتة بعد استعمال الحساب. الاسم فقط قابل للتعديل.</p> : null}
       <label>
         هذا الحساب هو
         <select
-          name="classification"
+          name={structureLocked ? undefined : 'classification'}
           value={classification}
+          disabled={structureLocked}
           onChange={(event) => {
             const next = parseClassification(event.target.value)
             setDraft((current) => applyAccountClassification(current, next.type, next.valueKind))
@@ -1357,7 +1364,7 @@ function AccountClassificationEditor({ account, className = '' }) {
       {showDetail ? (
         <label>
           {preset.detailLabel || 'نوع التعامل'}
-          <select value={draft.subAccountName || detailOptions[0]} onChange={(event) => setDraft((current) => ({ ...current, subAccountName: event.target.value }))}>
+          <select value={draft.subAccountName || detailOptions[0]} disabled={structureLocked} onChange={(event) => setDraft((current) => ({ ...current, subAccountName: event.target.value }))}>
             {detailOptions.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
@@ -1367,7 +1374,7 @@ function AccountClassificationEditor({ account, className = '' }) {
       {accountNeedsCurrency(parsedClassification) ? (
         <label>
           العملة
-          <select name="currencyKind" value={currencyFieldValue} onChange={(event) => setDraft((current) => ({ ...current, currencyKind: event.target.value }))}>
+          <select name={structureLocked ? undefined : 'currencyKind'} value={currencyFieldValue} disabled={structureLocked} onChange={(event) => setDraft((current) => ({ ...current, currencyKind: event.target.value }))}>
             {showLegacyMultiCurrency ? <option value="">اتركها فارغة بدون تغيير</option> : null}
             <option value={ACCOUNT_CURRENCY_KINDS.DINAR}>دينار</option>
             <option value={ACCOUNT_CURRENCY_KINDS.USD}>دولار</option>
@@ -1378,10 +1385,11 @@ function AccountClassificationEditor({ account, className = '' }) {
   )
 }
 
-function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], auditEvents = [], isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment }) {
+function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment }) {
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
+  const structureLocked = accountStructureUsage(account, { movements, reconciliations, recurringRules, dimensions }).locked
   const accountAttachments = attachmentsForRecord(attachments, {
     accountId: account.id,
   })
@@ -1482,7 +1490,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
 
         <form className="ml3-profile-editor" onSubmit={(event) => onUpdateAccount(event, account.id)}>
           <h3>بيانات الحساب</h3>
-          <AccountClassificationEditorFields account={account} />
+          <AccountClassificationEditorFields account={account} structureLocked={structureLocked} />
           <button type="submit">حفظ التعديل</button>
         </form>
 
@@ -2713,6 +2721,9 @@ export default function MohammadLedgerApp() {
     const result = prepareAccountClassificationUpdate({
       accounts,
       movements,
+      reconciliations: ledgerExtras.reconciliations || [],
+      recurringRules: ledgerExtras.recurringRules || [],
+      dimensions: ledgerExtras.dimensions || [],
       accountId,
       ownerName: formData.get('ownerName'),
       subAccountName: formData.get('subAccountName'),
@@ -3923,7 +3934,7 @@ export default function MohammadLedgerApp() {
           </section>
         ) : null}
       </section>
-      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} auditEvents={ledgerExtras.auditEvents || []} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} />
+      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} />
     </AdreemChrome>
   )
 }

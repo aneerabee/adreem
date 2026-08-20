@@ -1315,6 +1315,8 @@
 .ml3-profile-note { margin-bottom: 7px; color: var(--muted); font-size: 0.68rem; }
 .ml3-profile-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .ml3-profile-editor-grid label:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.ml3-profile-lock-note { grid-column: 1 / -1; margin: 0; padding: 7px 9px; border-inline-start: 3px solid var(--amber); background: #fff8e8; color: #604914; font-size: 0.66rem; line-height: 1.55; }
+.ml3-profile-editor-grid select:disabled { border-color: #dfe5e2; background: #f1f4f2; color: #6d7974; cursor: not-allowed; opacity: 1; }
 .ml3-profile-reconcile > button,
 .ml3-profile-editor > button { min-height: 36px; margin-top: 7px; border: 1px solid var(--green); border-radius: 6px; padding: 0 11px; background: var(--green); color: #fff; font-size: 0.72rem; font-weight: 700; cursor: pointer; }
 .ml3-profile-reconcile > button:disabled,

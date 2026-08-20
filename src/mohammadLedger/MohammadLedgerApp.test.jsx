@@ -191,6 +191,24 @@ describe('MohammadLedgerApp account review', () => {
     expect(markup).toContain(`value="${ACCOUNT_CURRENCY_KINDS.USD}"`)
   })
 
+  it('shows used account structure as fixed while keeping its name editable', () => {
+    const account = createAccount({
+      id: 'used-person',
+      ownerName: 'سيف',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+    })
+
+    const markup = renderToStaticMarkup(<AccountClassificationEditorFields account={account} structureLocked />)
+
+    expect(markup).toContain('النوع وطريقة التعامل والعملة ثابتة')
+    expect(markup.match(/disabled=""/g)).toHaveLength(3)
+    expect(markup).toContain('name="classification"')
+    expect(markup).toContain('name="currencyKind"')
+  })
+
   it('updates an eligible account currency and preserves non-financial currency data', () => {
     const person = createAccount({
       id: 'person',
@@ -279,7 +297,7 @@ describe('MohammadLedgerApp account review', () => {
     })
 
     expect(movement.status).toBe(MOVEMENT_STATUSES.POSTED)
-    expect(result).toMatchObject({ ok: false, reason: 'movement-history' })
+    expect(result).toMatchObject({ ok: false, reason: 'account-structure-locked' })
     expect(result.errors).not.toHaveLength(0)
   })
 })

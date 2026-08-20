@@ -2,6 +2,11 @@ import { ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog.js'
 import { accountDetailName, accountNeedsCurrency, accountPresetFor, accountPrimaryName } from './accountConfig.js'
 import { MOVEMENT_STATUSES, validateAccount, validateMovement } from './ledgerCore.js'
 
+const STRUCTURE_LOCKING_MOVEMENT_STATUSES = new Set([
+  MOVEMENT_STATUSES.POSTED,
+  MOVEMENT_STATUSES.VOIDED,
+])
+
 export function accountEditSnapshot(account = {}) {
   return {
     ownerName: account.ownerName || '',
@@ -60,7 +65,80 @@ export function accountUpdateMovementErrors(accountId, candidateAccounts = [], m
     )
 }
 
-export function prepareAccountUpdate({ accounts = [], movements = [], accountId, draft = {}, updatedAt = new Date().toISOString() } = {}) {
+function referencesAccount(record = {}, accountId) {
+  return [record.sourceAccountId, record.destinationAccountId, record.expenseCategoryId].includes(accountId)
+}
+
+export function accountStructureUsage(accountOrId, {
+  movements = [],
+  reconciliations = [],
+  recurringRules = [],
+  dimensions = [],
+} = {}) {
+  const account = accountOrId && typeof accountOrId === 'object' ? accountOrId : null
+  const id = String(account?.id || accountOrId || '').trim()
+  if (!id) return { movement: false, reconciliation: false, recurringRule: false, dimension: false, locked: false }
+
+  const linkedDimensions = dimensions.filter((item) => item.linkedAccountId === id)
+  const dimensionIds = new Set([
+    account?.dimensionId,
+    `dimension-account-${id}`,
+    ...linkedDimensions.map((item) => item.id),
+  ].filter(Boolean))
+  const movement = movements.some((item) => STRUCTURE_LOCKING_MOVEMENT_STATUSES.has(item.status) && (
+    referencesAccount(item, id) || dimensionIds.has(item.dimensionId)
+  ))
+  const reconciliation = reconciliations.some((item) => item.accountId === id)
+  const recurringRule = recurringRules.some((item) => (
+    referencesAccount(item.template, id) || dimensionIds.has(item.template?.dimensionId)
+  ))
+  const dimension = linkedDimensions.length > 0
+  return {
+    movement,
+    reconciliation,
+    recurringRule,
+    dimension,
+    locked: movement || reconciliation || recurringRule || dimension,
+  }
+}
+
+function isPersonBalance(account = {}) {
+  return account.valueKind === VALUE_KINDS.RECEIVABLE
+}
+
+export function accountStructureChanges(before = {}, after = {}) {
+  const changes = []
+  if (before.type !== after.type) changes.push('type')
+  if (before.valueKind !== after.valueKind) changes.push('valueKind')
+  if (before.currencyKind !== after.currencyKind) changes.push('currencyKind')
+  if (
+    (isPersonBalance(before) || isPersonBalance(after)) &&
+    accountDetailName(before) !== accountDetailName(after)
+  ) changes.push('subAccountName')
+  return changes
+}
+
+export function accountStructureLockErrors(currentAccount, nextAccount, context = {}) {
+  const usage = accountStructureUsage(currentAccount, context)
+  if (!usage.locked) return []
+  const fields = accountStructureChanges(currentAccount, nextAccount)
+  if (!fields.length) return []
+  return [{
+    field: fields[0],
+    message: 'لا يمكن تغيير نوع الحساب أو طريقة التعامل أو العملة بعد استعماله. يمكنك تعديل الاسم والملاحظات فقط.',
+  }]
+}
+
+export function prepareAccountUpdate({
+  accounts = [],
+  movements = [],
+  reconciliations = [],
+  recurringRules = [],
+  dimensions = [],
+  accountId,
+  draft = {},
+  updatedAt = new Date().toISOString(),
+} = {}) {
   const currentAccount = accounts.find((account) => account.id === accountId)
   if (!currentAccount) return { ok: false, reason: 'missing-account', errors: [{ message: 'الحساب غير موجود.' }] }
 
@@ -79,6 +157,14 @@ export function prepareAccountUpdate({ accounts = [], movements = [], accountId,
     updatedAt,
   }
   const candidateAccounts = accounts.map((account) => (account.id === accountId ? nextAccount : account))
+  const structureErrors = accountStructureLockErrors(currentAccount, nextAccount, {
+    movements,
+    reconciliations,
+    recurringRules,
+    dimensions,
+  })
+  if (structureErrors.length) return { ok: false, reason: 'account-structure-locked', errors: structureErrors }
+
   const validation = validateAccount(nextAccount, accounts.filter((account) => account.id !== accountId))
   if (!validation.ok) return { ok: false, reason: 'account-validation', errors: validation.errors }
 
