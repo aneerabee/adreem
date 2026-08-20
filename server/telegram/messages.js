@@ -119,26 +119,26 @@ function currentStepTitle(session) {
 }
 
 function currentStepHelp(session) {
-  if (session?.step === 'type') return 'زر واحد فقط.'
+  if (session?.step === 'type') return ''
   if (session?.step === 'amount') return 'اكتب الرقم فقط.'
-  if (session?.step === 'currency') return 'الحسابات ستتفلتر حسب العملة.'
+  if (session?.step === 'currency') return ''
   if (session?.step === 'rate') return 'مثال: 7.45'
-  if (session?.step === 'source') return 'اختر من أين تخرج القيمة.'
-  if (session?.step === 'destination') return 'اختر أين تدخل القيمة.'
+  if (session?.step === 'source') return ''
+  if (session?.step === 'destination') return ''
   if (session?.step === 'note') return 'اختياري.'
   if (session?.step === 'dimension') return 'اختياري.'
-  if (session?.step === 'category') return 'اختياري، ويسهّل معرفة أين صُرفت الفلوس.'
+  if (session?.step === 'category') return 'اختياري.'
   if (session?.step === 'attachment') return 'اختياري.'
-  if (session?.step === 'recurring') return 'اختياري.'
-  if (session?.step === 'review') return 'تأكد ثم احفظ.'
+  if (session?.step === 'recurring') return ''
+  if (session?.step === 'review') return ''
   return ''
 }
 
 export function mainMenuText(summary = null) {
-  const lines = ['<b>ADREEM</b>', '<code>إضافة · الأرصدة · السجل · المراجعة</code>']
+  const lines = ['<b>ADREEM</b>']
   if (summary) {
     lines.push('')
-    lines.push(`<blockquote>${escapeHtml(`جاهز لعملية جديدة\nاليوم: ${summary.todayCount} حركة\nالمراجعة: ${summary.reviewCount}`)}</blockquote>`)
+    lines.push(`<blockquote>${escapeHtml(`اليوم: ${summary.todayCount} حركة\nالمراجعة: ${summary.reviewCount}`)}</blockquote>`)
   }
   lines.push('', '<b>ماذا تريد الآن؟</b>')
   return lines.join('\n')
@@ -212,16 +212,16 @@ export function accountStepText(session) {
   }
 
   const title = session?.mode === 'review' ? 'ADREEM · إصلاح حساب' : session?.mode === 'edit' ? 'ADREEM · تعديل حساب' : 'ADREEM · حساب جديد'
+  const help = accountStepHelp(session)
   const lines = [
-    `<b>${title}</b>`,
-    `<code>${progress}</code>`,
+    `<b>${title}</b> · <code>${progress}</code>`,
     '',
     ...(session?.mode !== 'create' && session.reviewOriginalLabel
       ? [`<blockquote>${escapeHtml(`الحساب الحالي:\n${session.reviewOriginalLabel}`)}</blockquote>`, '']
       : []),
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
     `<b>${escapeHtml(accountStepTitle(session))}</b>`,
-    `<code>${escapeHtml(accountStepHelp(session))}</code>`,
+    ...(help ? [`<code>${escapeHtml(help)}</code>`] : []),
   ]
   return lines.join('\n')
 }
@@ -292,7 +292,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = `${currentIndex + 1}/${steps.length}`
   const summary = []
-  if (draft.type) summary.push(htmlLine('الحركة', movementLabels[draft.type] || draft.type))
+  if (session?.mode === 'review' && draft.type) summary.push(htmlLine('الحركة', movementLabels[draft.type] || draft.type))
   if (amountText) summary.push(htmlLine('المبلغ', amountText))
   if (movementNeedsRate(draft.type) && draft.rate) summary.push(htmlLine('السعر', formatRate(draft.rate)))
   if (!movementNeedsRate(draft.type) && draft.currencyConfirmed) summary.push(htmlLine('العملة', currencyLabel(draft.currency)))
@@ -303,15 +303,16 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   if (expenseCategory) summary.push(htmlDataLine('نوع المصروف', accountPrimaryName(expenseCategory)))
   if (draft.attachmentLabel || draft.attachmentUrl) summary.push(htmlDataLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   if (draft.recurringEnabled) summary.push(htmlLine('تكرار', 'شهري'))
-  const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : 'ADREEM · إدخال'
+  const movementTitle = draft.type ? movementLabels[draft.type] || draft.type : 'حركة جديدة'
+  const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : `ADREEM · ${movementTitle}`
+  const help = currentStepHelp(session)
   const lines = [
-    `<b>${title}</b>`,
-    `<code>${progress}</code>`,
+    `<b>${escapeHtml(title)}</b> · <code>${progress}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`] : []),
     ...(summary.length ? [''] : []),
     `<b>${escapeHtml(currentStepTitle(session))}</b>`,
-    `<code>${escapeHtml(currentStepHelp(session))}</code>`,
+    ...(help ? [`<code>${escapeHtml(help)}</code>`] : []),
   ]
   return lines.join('\n')
 }
@@ -330,12 +331,11 @@ export function reconciliationStepText(session, accountsById = new Map(), balanc
   if (draft.note) summary.push(htmlDataLine('ملاحظة', draft.note))
 
   const lines = [
-    '<b>ADREEM · مطابقة رصيد</b>',
-    `<code>${progress}</code>`,
+    `<b>ADREEM · مطابقة رصيد</b> · <code>${progress}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
     `<b>${escapeHtml(reconciliationStepTitle(session, account, bucket))}</b>`,
-    `<code>${escapeHtml(reconciliationStepHelp(session))}</code>`,
+    ...(reconciliationStepHelp(session) ? [`<code>${escapeHtml(reconciliationStepHelp(session))}</code>`] : []),
   ]
   return lines.join('\n')
 }
@@ -379,21 +379,6 @@ export function reconciliationReviewText(session, preview = {}) {
   return lines.join('\n')
 }
 
-export function stepPromptText(session) {
-  if (session?.step === 'amount') return 'أرسل المبلغ الآن كرقم فقط.'
-  if (session?.step === 'rate') return 'أرسل سعر الصرف الآن.'
-  if (session?.step === 'currency') return 'اضغط على العملة المناسبة.'
-  if (session?.step === 'source') return `اضغط على الحساب الذي ستخرج منه القيمة.`
-  if (session?.step === 'destination') return `اضغط على الحساب الذي ستدخل إليه القيمة.`
-  if (session?.step === 'note') return 'اكتب ملاحظة قصيرة أو اضغط بدون ملاحظة.'
-  if (session?.step === 'dimension') return 'اختر مشروعًا أو اضغط بدون مشروع.'
-  if (session?.step === 'category') return 'اختر نوع المصروف أو اضغط بدون تصنيف.'
-  if (session?.step === 'attachment') return 'اكتب وصف المرفق أو رابطه، أو اضغط بدون مرفق.'
-  if (session?.step === 'recurring') return 'اختر هل هذه الحركة شهرية.'
-  if (session?.step === 'review') return 'راجع التأثير، ثم اضغط تأكيد الحفظ.'
-  return 'اختر من الأزرار.'
-}
-
 export function accountChoiceText(session, account, bucket, index) {
   const presentation = accountBalancePresentation(account, bucket)
   return `${index + 1}. ${presentation.icon} ${protectedAccountPrimaryName(account)}\n   ${protectedAccountContext(account)} · ${presentation.text}`
@@ -404,13 +389,13 @@ export function compactAccountChoiceText(account, bucket) {
   return `${presentation.icon} ${protectedAccountPrimaryName(account)} · ${presentation.text}`
 }
 
-export function accountChoiceButtonText(account, bucket) {
-  const presentation = accountBalancePresentation(account, bucket)
+export function accountChoiceButtonText(account, bucket, currency = '') {
+  const presentation = accountBalancePresentation(account, bucket, currency)
   return `${presentation.icon} ${protectedAccountLabel(account)} | ${presentation.text}`
 }
 
-export function accountChoiceButtonStyle(account, bucket) {
-  return accountBalancePresentation(account, bucket).buttonStyle
+export function accountChoiceButtonStyle(account, bucket, currency = '') {
+  return accountBalancePresentation(account, bucket, currency).buttonStyle
 }
 
 export function accountBlockquote(account, bucket) {
@@ -476,9 +461,11 @@ export function movementBlockquote(movement, accountsById = new Map(), options =
   return `<blockquote>${escapeHtml(lines.join('\n'))}</blockquote>`
 }
 
-function accountBalancePresentation(account, bucket) {
+function accountBalancePresentation(account, bucket, currency = '') {
   const dinar = Math.round(Number(bucket?.dinar || 0))
   const usd = Math.round(Number(bucket?.usd || 0))
+  if (currency === CURRENCIES.USD) return balancePresentationFor(account, usd, CURRENCIES.USD)
+  if (currency === CURRENCIES.DINAR) return balancePresentationFor(account, dinar, CURRENCIES.DINAR)
   if (usd && !dinar) return balancePresentationFor(account, usd, CURRENCIES.USD)
   if (!dinar) {
     return {
@@ -495,6 +482,15 @@ function balancePresentationFor(account, amount, currency) {
   const value = Math.round(Number(amount || 0))
   const absolute = formatMoney(Math.abs(value), currency)
   const positive = value > 0
+
+  if (!value) {
+    return {
+      icon: '⚪',
+      text: formatMoney(0, currency),
+      tone: 'zero',
+      buttonStyle: 'primary',
+    }
+  }
 
   if (account?.valueKind === VALUE_KINDS.CASH || account?.valueKind === VALUE_KINDS.BANK) {
     return {
@@ -528,9 +524,13 @@ function balancePresentationFor(account, amount, currency) {
   }
 }
 
-export function reviewMovementText(session, preview) {
+export function reviewMovementText(session, preview, context = {}) {
   const draft = session?.draft || {}
   const config = movementConfigFor(draft.type)
+  const source = context.accountsById?.get(draft.sourceAccountId)
+  const destination = context.accountsById?.get(draft.destinationAccountId)
+  const dimension = context.dimensionsById?.get(draft.dimensionId)
+  const expenseCategory = context.expenseCategoriesById?.get(draft.expenseCategoryId)
   const lines = [
     '<b>تأكيد الحركة</b>',
     '<code>راجع التأثير قبل الحفظ</code>',
@@ -538,12 +538,17 @@ export function reviewMovementText(session, preview) {
     `<blockquote>${escapeHtml(`${movementLabels[draft.type] || draft.type} ${formatMoney(draft.amount, draft.currency)}`)}</blockquote>`,
   ]
   if (draft.rate) lines.push(htmlLine('السعر', formatRate(draft.rate)))
+  if (dimension) lines.push(htmlDataLine('مشروع', dimension.name))
+  if (expenseCategory) lines.push(htmlDataLine('نوع المصروف', accountPrimaryName(expenseCategory)))
   if (draft.note) lines.push(htmlDataLine('ملاحظة', draft.note))
   if (draft.attachmentLabel || draft.attachmentUrl) lines.push(htmlDataLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   if (draft.recurringEnabled) lines.push(htmlLine('تكرار', 'شهري'))
   lines.push('')
 
   if (!preview.validation.ok) {
+    if (source) lines.push(htmlLine(config.sourceLabel, protectedAccountLabel(source)))
+    if (movementNeedsDestination(draft.type) && destination) lines.push(htmlLine(config.destinationLabel, protectedAccountLabel(destination)))
+    if (source || destination) lines.push('')
     lines.push('<b>الحركة ناقصة</b>')
     preview.validation.errors.forEach((error) => lines.push(`- ${escapeHtml(error.message)}`))
     return lines.join('\n')

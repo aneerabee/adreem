@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { MOVEMENT_TYPES } from './ledgerCore.js'
+import { CURRENCIES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
+  movementAccountCurrencyForRole,
   movementConfigFor,
   movementDefaultsFor,
   movementLabels,
@@ -36,5 +37,12 @@ describe('mohammad movement config', () => {
     expect(movementSupportsDimension(MOVEMENT_TYPES.TRANSFER)).toBe(false)
     expect(movementSupportsDimension(MOVEMENT_TYPES.USD_SALE)).toBe(false)
     expect(movementSupportsDimension(MOVEMENT_TYPES.USD_PURCHASE)).toBe(false)
+  })
+
+  it('maps each exchange side to the currency shown in its account list', () => {
+    expect(movementAccountCurrencyForRole(MOVEMENT_TYPES.USD_SALE, 'source', CURRENCIES.DINAR)).toBe(CURRENCIES.USD)
+    expect(movementAccountCurrencyForRole(MOVEMENT_TYPES.USD_SALE, 'destination', CURRENCIES.USD)).toBe(CURRENCIES.DINAR)
+    expect(movementAccountCurrencyForRole(MOVEMENT_TYPES.USD_PURCHASE, 'source', CURRENCIES.USD)).toBe(CURRENCIES.DINAR)
+    expect(movementAccountCurrencyForRole(MOVEMENT_TYPES.USD_PURCHASE, 'destination', CURRENCIES.DINAR)).toBe(CURRENCIES.USD)
   })
 })

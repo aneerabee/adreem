@@ -95,9 +95,9 @@ export function getMovementAccounts(state, movementType, role, selected = {}) {
   return getSharedMovementAccounts(snapshot.accounts, snapshot.balanceByAccountId, movementType, role, selected)
 }
 
-export function rankAccountsForTelegram(accounts, state, query = '') {
+export function rankAccountsForTelegram(accounts, state, query = '', currency = '') {
   const snapshot = buildLedgerSnapshot(state)
-  return rankMovementAccounts(accounts, snapshot.balanceByAccountId, query)
+  return rankMovementAccounts(accounts, snapshot.balanceByAccountId, query, currency)
 }
 
 export function previewDraft(state, draft) {

@@ -72,4 +72,31 @@ describe('shared movement account choices', () => {
 
     expect(result.map((item) => item.id)).toEqual(['cash-lyd-b'])
   })
+
+  it('offers only cash-to-bank for deposits and bank-to-cash for withdrawals', () => {
+    const accounts = [
+      account('cash', VALUE_KINDS.CASH),
+      account('bank', VALUE_KINDS.BANK),
+      account('person', VALUE_KINDS.RECEIVABLE),
+    ]
+
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.CASH_DEPOSIT, 'source', { currency: CURRENCIES.DINAR }).map((item) => item.id)).toEqual(['cash'])
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.CASH_DEPOSIT, 'destination', { currency: CURRENCIES.DINAR }).map((item) => item.id)).toEqual(['bank'])
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.CASH_WITHDRAWAL, 'source', { currency: CURRENCIES.DINAR }).map((item) => item.id)).toEqual(['bank'])
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.CASH_WITHDRAWAL, 'destination', { currency: CURRENCIES.DINAR }).map((item) => item.id)).toEqual(['cash'])
+  })
+
+  it('ranks accounts by the currency of the current movement side', () => {
+    const accounts = [
+      account('large-dinar', VALUE_KINDS.CASH, { currencyKind: 'multi' }),
+      account('large-usd', VALUE_KINDS.CASH, { currencyKind: 'multi' }),
+    ]
+    const balances = new Map([
+      ['large-dinar', { dinar: 100_000, usd: 5 }],
+      ['large-usd', { dinar: 100, usd: 500 }],
+    ])
+
+    expect(rankMovementAccounts(accounts, balances, '', CURRENCIES.USD).map((item) => item.id)).toEqual(['large-usd', 'large-dinar'])
+    expect(rankMovementAccounts(accounts, balances, '', CURRENCIES.DINAR).map((item) => item.id)).toEqual(['large-dinar', 'large-usd'])
+  })
 })

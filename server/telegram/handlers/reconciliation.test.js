@@ -152,6 +152,18 @@ describe('telegram reconciliation flow', () => {
     expect(ctx.repository.state.reconciliations).toHaveLength(0)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('مطابقة قديمة')
   })
+
+  it('keeps unexpected text inside a reconciliation button step', async () => {
+    const ctx = createCtx()
+    await startReconciliation(ctx)
+    await handleReconciliationCallback(ctx, `rec:account:${choiceTokenFor(ctx, 'me-cash')}`)
+
+    const handled = await handleReconciliationText({ ...ctx, isCallback: false, messageId: 56 }, 'نص غير متوقع')
+
+    expect(handled).toBe(true)
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('currency')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('اختر من الأزرار')
+  })
 })
 
 function choiceTokenFor(ctx, accountId) {

@@ -8,6 +8,7 @@ import {
   AccountClassificationEditorFields,
   ExternalAccountCard,
   ReviewAccountCard,
+  accountBalanceChip,
   areMergeAccountsCompatible,
   accountClassificationMovementErrors,
   accountEditChanges,
@@ -40,6 +41,17 @@ beforeAll(() => {
 
 afterAll(() => {
   globalThis.React = previousReact
+})
+
+describe('MohammadLedgerApp movement account balances', () => {
+  it('shows only the currency used by the current movement side', () => {
+    const account = { valueKind: VALUE_KINDS.CASH }
+    const bucket = { dinar: 50_000, usd: 500 }
+
+    expect(accountBalanceChip(account, bucket, CURRENCIES.USD)).toEqual({ tone: 'positive', text: '500 $' })
+    expect(accountBalanceChip(account, bucket, CURRENCIES.DINAR)).toEqual({ tone: 'positive', text: '50,000 د.ل' })
+    expect(accountBalanceChip(account, { dinar: 50_000, usd: 0 }, CURRENCIES.USD)).toEqual({ tone: 'zero', text: '0 $' })
+  })
 })
 
 describe('MohammadLedgerApp movement editing', () => {

@@ -243,6 +243,12 @@ export function movementCurrencyFor(type, fallback = CURRENCIES.DINAR) {
   return movementConfigFor(type).currency || fallback
 }
 
+export function movementAccountCurrencyForRole(type, role, fallback = CURRENCIES.DINAR) {
+  if (type === MOVEMENT_TYPES.USD_SALE) return role === 'source' ? CURRENCIES.USD : CURRENCIES.DINAR
+  if (type === MOVEMENT_TYPES.USD_PURCHASE) return role === 'source' ? CURRENCIES.DINAR : CURRENCIES.USD
+  return movementCurrencyFor(type, fallback)
+}
+
 export function movementTone(type) {
   if (type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) return 'expense'
   if (type === MOVEMENT_TYPES.EXTERNAL_INCOME || type === MOVEMENT_TYPES.TRUCK_INCOME) return 'income'

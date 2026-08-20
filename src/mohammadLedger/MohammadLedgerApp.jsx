@@ -13,7 +13,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, can
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammadPersistenceMode, loadMohammadPersistedState, logoutAdreemCloudSession, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
-import { MOVEMENT_ENTRY_STEPS, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
+import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
 import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccounts, sameLogicalAccount } from './movementAccounts'
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, buildReconciliationCorrectionDrafts, createAttachment, createAuditEvent, createReconciliation, createRecurringRuleFromMovement, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, lastReconciliationForAccount, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
@@ -708,9 +708,11 @@ function accountKindText(account) {
   return account ? accountKindLabel(account) : ''
 }
 
-function accountBalanceChip(account, bucket) {
+export function accountBalanceChip(account, bucket, currency = '') {
   const dinar = Number(bucket?.dinar || 0)
   const usd = Number(bucket?.usd || 0)
+  if (currency === CURRENCIES.DINAR) return accountBalanceChipForCurrency(account, dinar, CURRENCIES.DINAR)
+  if (currency === CURRENCIES.USD) return accountBalanceChipForCurrency(account, usd, CURRENCIES.USD)
   const hasDinar = hasMoneyValue(dinar)
   const hasUsd = hasMoneyValue(usd)
 
@@ -740,6 +742,25 @@ function accountBalanceChip(account, bucket) {
   return {
     tone: dinar > 0 ? 'positive' : 'negative',
     text: dinar > 0 ? `أقبض ${money(dinar)}` : `أدفع ${money(Math.abs(dinar))}`,
+  }
+}
+
+function accountBalanceChipForCurrency(account, amount, currency) {
+  const value = Number(amount || 0)
+  if (!hasMoneyValue(value)) return { tone: 'zero', text: money(0, currency) }
+  const absolute = money(Math.abs(value), currency)
+
+  if (account?.valueKind === VALUE_KINDS.CASH || account?.valueKind === VALUE_KINDS.BANK) {
+    return {
+      tone: value > 0 ? 'positive' : 'negative',
+      text: value > 0 ? absolute : `ناقص ${absolute}`,
+    }
+  }
+  if (account?.valueKind === VALUE_KINDS.EXPENSE) return { tone: 'expense', text: absolute }
+  if (account?.valueKind === VALUE_KINDS.ASSET) return { tone: 'asset', text: absolute }
+  return {
+    tone: value > 0 ? 'positive' : 'negative',
+    text: value > 0 ? `أقبض ${absolute}` : `أدفع ${absolute}`,
   }
 }
 
@@ -882,19 +903,21 @@ function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfi
   )
 }
 
-function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = true, preferredAccountIds = [], balanceByAccountId = new Map() }) {
+function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = true, preferredAccountIds = [], balanceByAccountId = new Map(), balanceCurrency = '' }) {
   const [query, setQuery] = useState('')
   const [isChanging, setIsChanging] = useState(false)
   const [quickFilter, setQuickFilter] = useState('')
   const [showAllResults, setShowAllResults] = useState(false)
   const normalizedQuery = normalizeAccountSearchText(query)
   const selectedAccount = accounts.find((account) => account.id === value)
-  const selectedBalance = selectedAccount ? accountBalanceChip(selectedAccount, balanceByAccountId.get(selectedAccount.id)) : null
+  const selectedBalance = selectedAccount ? accountBalanceChip(selectedAccount, balanceByAccountId.get(selectedAccount.id), balanceCurrency) : null
   const showChooser = !selectedAccount || isChanging
   const preferredIndexById = new Map(preferredAccountIds.map((accountId, index) => [accountId, index]))
   const accountBucket = (account) => balanceByAccountId.get(account.id) || { dinar: 0, usd: 0 }
   const accountMagnitude = (account) => {
     const bucket = accountBucket(account)
+    if (balanceCurrency === CURRENCIES.USD) return Math.abs(Number(bucket.usd || 0))
+    if (balanceCurrency === CURRENCIES.DINAR) return Math.abs(Number(bucket.dinar || 0))
     return Math.max(Math.abs(Number(bucket.dinar || 0)), Math.abs(Number(bucket.usd || 0)))
   }
   const hasVisibleBalance = (account) => accountMagnitude(account) > 0
@@ -1022,7 +1045,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
           </div>
           <div className="ml3-picker-results">
             {shownResultAccounts.map((account) => {
-              const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id))
+              const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id), balanceCurrency)
               const hasBalance = hasVisibleBalance(account)
               return (
                 <button type="button" key={account.id} className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`} onClick={() => chooseAccount(account.id)}>
@@ -1049,8 +1072,8 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   )
 }
 
-function preferredAccountIdsFor(accounts, balanceByAccountId) {
-  return rankMovementAccounts(accounts, balanceByAccountId)
+function preferredAccountIdsFor(accounts, balanceByAccountId, currency = '') {
+  return rankMovementAccounts(accounts, balanceByAccountId, '', currency)
     .slice(0, 4)
     .map((account) => account.id)
 }
@@ -1593,6 +1616,8 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
   const reviewNeedsSource = movementNeedsSource(reviewDraft.type)
   const reviewSourceAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'source', reviewDraft)
   const reviewDestinationAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'destination', reviewDraft)
+  const reviewSourceCurrency = movementAccountCurrencyForRole(reviewDraft.type, 'source', reviewDraft.currency)
+  const reviewDestinationCurrency = movementAccountCurrencyForRole(reviewDraft.type, 'destination', reviewDraft.currency)
 
   function updateReviewDraft(field, value) {
     setReviewDraft((current) => {
@@ -1656,12 +1681,12 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
         ) : null}
         {reviewNeedsSource ? (
           <div className="ml3-decision-wide">
-            <AccountSearchSelect label={reviewConfig.sourceLabel || 'من'} value={reviewDraft.sourceAccountId || ''} accounts={reviewSourceAccounts} onChange={(value) => updateReviewDraft('sourceAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewSourceAccounts, balanceByAccountId)} balanceByAccountId={balanceByAccountId} />
+            <AccountSearchSelect label={reviewConfig.sourceLabel || 'من'} value={reviewDraft.sourceAccountId || ''} accounts={reviewSourceAccounts} onChange={(value) => updateReviewDraft('sourceAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewSourceAccounts, balanceByAccountId, reviewSourceCurrency)} balanceByAccountId={balanceByAccountId} balanceCurrency={reviewSourceCurrency} />
           </div>
         ) : null}
         {reviewConfig.needsDestination ? (
           <div className="ml3-decision-wide">
-            <AccountSearchSelect label={reviewConfig.destinationLabel || 'إلى'} value={reviewDraft.destinationAccountId || ''} accounts={reviewDestinationAccounts} onChange={(value) => updateReviewDraft('destinationAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewDestinationAccounts, balanceByAccountId)} balanceByAccountId={balanceByAccountId} />
+            <AccountSearchSelect label={reviewConfig.destinationLabel || 'إلى'} value={reviewDraft.destinationAccountId || ''} accounts={reviewDestinationAccounts} onChange={(value) => updateReviewDraft('destinationAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewDestinationAccounts, balanceByAccountId, reviewDestinationCurrency)} balanceByAccountId={balanceByAccountId} balanceCurrency={reviewDestinationCurrency} />
           </div>
         ) : null}
         <label className="ml3-decision-wide">
@@ -2393,7 +2418,8 @@ export default function MohammadLedgerApp() {
   }
 
   function preferredMovementAccountIds(role) {
-    return preferredAccountIdsFor(movementAccountsFor(role), balanceByAccountId)
+    const currency = movementAccountCurrencyForRole(movementDraft.type, role, movementDraft.currency)
+    return preferredAccountIdsFor(movementAccountsFor(role), balanceByAccountId, currency)
   }
 
   const visibleMovementSteps = movementVisibleSteps(movementConfig, movementSourceRequired)
@@ -3559,7 +3585,7 @@ export default function MohammadLedgerApp() {
                 {movementSourceRequired && movementStep === MOVEMENT_ENTRY_STEPS.SOURCE ? (
                   <section className="ml3-step ml3-step--source is-open">
                     <div className="ml3-route-picker is-single">
-                      <AccountSearchSelect label={movementConfig.sourceLabel} value={movementDraft.sourceAccountId || ''} accounts={movementAccountsFor('source')} onChange={(value) => updateMovementDraft('sourceAccountId', value)} preferredAccountIds={preferredMovementAccountIds('source')} balanceByAccountId={balanceByAccountId} />
+                      <AccountSearchSelect label={movementConfig.sourceLabel} value={movementDraft.sourceAccountId || ''} accounts={movementAccountsFor('source')} onChange={(value) => updateMovementDraft('sourceAccountId', value)} preferredAccountIds={preferredMovementAccountIds('source')} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'source', movementDraft.currency)} />
                     </div>
                     <div className="ml3-step-controls">
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
@@ -3575,7 +3601,7 @@ export default function MohammadLedgerApp() {
                 {movementConfig.needsDestination && movementStep === MOVEMENT_ENTRY_STEPS.DESTINATION ? (
                   <section className="ml3-step ml3-step--destination is-open">
                     <div className="ml3-route-picker is-single">
-                      <AccountSearchSelect label={movementConfig.destinationLabel} value={movementDraft.destinationAccountId || ''} accounts={movementAccountsFor('destination')} onChange={(value) => updateMovementDraft('destinationAccountId', value)} balanceByAccountId={balanceByAccountId} />
+                      <AccountSearchSelect label={movementConfig.destinationLabel} value={movementDraft.destinationAccountId || ''} accounts={movementAccountsFor('destination')} onChange={(value) => updateMovementDraft('destinationAccountId', value)} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'destination', movementDraft.currency)} />
                     </div>
                     <div className="ml3-step-controls">
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>

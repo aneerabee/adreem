@@ -8,7 +8,7 @@ import {
   applyAccountName,
   emptyAccountDraft,
 } from '../../../src/mohammadLedger/accountConfig.js'
-import { ACCOUNT_STATUSES } from '../../../src/mohammadLedger/accountCatalog.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES } from '../../../src/mohammadLedger/accountCatalog.js'
 import {
   accountIdempotencyKey,
   appendTelegramAccount,
@@ -139,8 +139,18 @@ async function sendStep(ctx, session, result = null) {
     })
   }
   if (session.step === STEPS.REVIEW) {
+    let reviewResult = result
+    if (!reviewResult) {
+      try {
+        const current = await ctx.repository.load()
+        reviewResult = validateAccountDraft(session.draft, current.state.accounts)
+      } catch (error) {
+        console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
+        return sendAccountConnectionError(ctx, session)
+      }
+    }
     return upsertAccountMessage(ctx, session, {
-      text: accountReviewText(session, result),
+      text: accountReviewText(session, reviewResult),
       reply_markup: accountConfirmKeyboard(session.mode),
     })
   }
@@ -294,7 +304,9 @@ export async function handleAccountCallback(ctx, data) {
   }
 
   if (data.startsWith('acct:currency:')) {
-    session.draft.currencyKind = data.slice('acct:currency:'.length)
+    const currency = data.slice('acct:currency:'.length)
+    if (![ACCOUNT_CURRENCY_KINDS.DINAR, ACCOUNT_CURRENCY_KINDS.USD].includes(currency)) return sendStep(ctx, session)
+    session.draft.currencyKind = currency
     session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     try {
@@ -432,7 +444,8 @@ export async function handleAccountText(ctx, text) {
     return true
   }
 
-  return false
+  await sendStep(ctx, session)
+  return true
 }
 
 function previousStep(session) {

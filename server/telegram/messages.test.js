@@ -15,7 +15,16 @@ import {
   movementStepText,
   reviewMovementText,
 } from './messages.js'
-import { accountConfirmKeyboard, mainMenuKeyboard, moreMenuKeyboard, movementTypeKeyboard } from './keyboards.js'
+import {
+  accountConfirmKeyboard,
+  currencyKeyboard,
+  dimensionKeyboard,
+  expenseCategoryKeyboard,
+  mainMenuKeyboard,
+  moreMenuKeyboard,
+  movementTextStepKeyboard,
+  movementTypeKeyboard,
+} from './keyboards.js'
 
 const receivable = {
   ownerName: 'سعيد',
@@ -51,6 +60,16 @@ describe('telegram account balance presentation', () => {
   it('uses the same visual direction for my own money accounts', () => {
     expect(formatAccountBalance(cash, { dinar: 9000, usd: 0 })).toBe('موجود 9,000 د.ل')
     expect(formatAccountBalance(cash, { dinar: -500, usd: 0 })).toBe('ناقص 500 د.ل')
+  })
+
+  it('shows the balance of the currency requested by the movement step', () => {
+    const bucket = { dinar: 50_000, usd: 500 }
+
+    expect(stripUiDataProtection(accountChoiceButtonText(cash, bucket, CURRENCIES.USD))).toContain('موجود 500 $')
+    expect(stripUiDataProtection(accountChoiceButtonText(cash, bucket, CURRENCIES.USD))).not.toContain('50,000')
+    expect(stripUiDataProtection(accountChoiceButtonText(cash, bucket, CURRENCIES.DINAR))).toContain('موجود 50,000 د.ل')
+    expect(stripUiDataProtection(accountChoiceButtonText(cash, { dinar: 50_000, usd: 0 }, CURRENCIES.USD))).toContain('⚪')
+    expect(stripUiDataProtection(accountChoiceButtonText(cash, { dinar: 50_000, usd: 0 }, CURRENCIES.USD))).toContain('0 $')
   })
 
   it('protects colliding account names while translating account type and currency labels', () => {
@@ -132,7 +151,7 @@ describe('telegram account balance presentation', () => {
 describe('telegram movement presentation', () => {
   it('uses ADREEM as the bot ledger name', () => {
     expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('<b>ADREEM</b>')
-    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('إضافة · الأرصدة · السجل · المراجعة')
+    expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).not.toContain('إضافة · الأرصدة · السجل · المراجعة')
     expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('اليوم: 2 حركة')
   })
 
@@ -198,8 +217,41 @@ describe('telegram movement presentation', () => {
     expect(accountText).not.toContain('الخطوة الحالية')
   })
 
+  it('keeps account and movement review summaries in their correct flows', () => {
+    const accountText = accountStepText({
+      mode: 'review',
+      step: 'owner',
+      presetGroup: 'people',
+      draft: { type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE },
+    })
+    const movementText = movementStepText({
+      mode: 'review',
+      step: 'amount',
+      draft: { type: MOVEMENT_TYPES.EXPENSE, amount: 0, currency: CURRENCIES.DINAR },
+    })
+
+    expect(accountText).not.toContain('الحركة')
+    expect(accountText).not.toContain('person')
+    expect(movementText).toContain('<b>الحركة:</b> مصروف')
+  })
+
   it('keeps movement choices in compact visual rows', () => {
     expect(movementTypeKeyboard().inline_keyboard.map((row) => row.length)).toEqual([2, 1, 2, 2, 1])
+    expect(movementTextStepKeyboard().inline_keyboard.flat().map((button) => button.callback_data)).toEqual(['mv:back', 'mv:cancel'])
+  })
+
+  it('marks the current choice clearly when the user goes back', () => {
+    const selectedType = movementTypeKeyboard(MOVEMENT_TYPES.EXPENSE).inline_keyboard.flat()
+      .find((button) => button.callback_data === `mv:type:${MOVEMENT_TYPES.EXPENSE}`)
+    const selectedCurrency = currencyKeyboard(CURRENCIES.DINAR).inline_keyboard.flat()
+      .find((button) => button.callback_data === `mv:currency:${CURRENCIES.DINAR}`)
+    const selectedDimension = dimensionKeyboard([{ id: 'truck', name: 'شاحنة العمل' }], { selectedId: 'truck' }).inline_keyboard[0][0]
+    const selectedCategory = expenseCategoryKeyboard([{ id: 'fuel', ownerName: 'وقود' }], { selectedId: 'fuel' }).inline_keyboard[0][0]
+
+    for (const button of [selectedType, selectedCurrency, selectedDimension, selectedCategory]) {
+      expect(button.text).toContain('✓')
+      expect(button.style).toBe('success')
+    }
   })
 
   it('renders each movement as a clear standalone card', () => {
@@ -263,5 +315,38 @@ describe('telegram movement presentation', () => {
     expect(text).toContain('🟢 إلى: سعيد · كاش بيننا · دينار')
     expect(text).toContain('التغيير: +500 د.ل')
     expect(text).toContain('بعد: 600 د.ل')
+  })
+
+  it('shows the selected project and expense type in the final review', () => {
+    const text = stripUiDataProtection(reviewMovementText(
+      {
+        draft: {
+          type: MOVEMENT_TYPES.EXPENSE,
+          amount: 500,
+          currency: CURRENCIES.DINAR,
+          sourceAccountId: 'me-cash',
+          dimensionId: 'truck',
+          expenseCategoryId: 'fuel',
+        },
+      },
+      {
+        validation: { ok: true },
+        effects: [{
+          account: { id: 'me-cash', ownerName: 'أنا', subAccountName: 'كاش' },
+          before: 2_000,
+          delta: -500,
+          after: 1_500,
+          currency: CURRENCIES.DINAR,
+        }],
+      },
+      {
+        accountsById: new Map([['me-cash', { id: 'me-cash', ownerName: 'أنا', subAccountName: 'كاش' }]]),
+        dimensionsById: new Map([['truck', { id: 'truck', name: 'شاحنة العمل' }]]),
+        expenseCategoriesById: new Map([['fuel', { id: 'fuel', ownerName: 'وقود' }]]),
+      },
+    ))
+
+    expect(text).toContain('<b>مشروع:</b> شاحنة العمل')
+    expect(text).toContain('<b>نوع المصروف:</b> وقود')
   })
 })

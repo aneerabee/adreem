@@ -100,6 +100,25 @@ describe('telegram movement flow safety', () => {
       .toBe('<b>Save failed.</b>\n<blockquote>This entry is no longer in Review.</blockquote>')
   })
 
+  it('translates invalid callback feedback without leaving the active step', async () => {
+    const ctx = createCtx('en')
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      mode: 'create',
+      step: 'currency',
+      sessionId: 'invalid-english-currency',
+      uiMessageId: ctx.messageId,
+      choices: {},
+      draft: { type: MOVEMENT_TYPES.TRANSFER, amount: 100, currency: '', currencyConfirmed: false },
+    })
+
+    await handleMovementCallback(ctx, 'mv:currency:EUR')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('currency')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('Choose a valid currency.')
+    expect(ctx.telegram.calls.at(-1).payload.text).not.toContain('اختر عملة')
+  })
+
   it('preserves colliding notes and generated attachment names in English review text', async () => {
     const ctx = createCtx('en')
     ctx.telegram.getFile = async () => ({ file_path: 'documents/income.pdf' })
@@ -521,6 +540,160 @@ describe('telegram movement flow safety', () => {
 
     const saved = ctx.repository.state.movements.find((movement) => movement.source === 'telegram')
     expect(saved.expenseCategoryId).toBe(categoryId)
+  })
+
+  it.each([
+    [MOVEMENT_TYPES.TRANSFER, 'currency'],
+    [MOVEMENT_TYPES.EXPENSE, 'currency'],
+    [MOVEMENT_TYPES.CASH_DEPOSIT, 'currency'],
+    [MOVEMENT_TYPES.CASH_WITHDRAWAL, 'currency'],
+    [MOVEMENT_TYPES.EXTERNAL_INCOME, 'currency'],
+    [MOVEMENT_TYPES.USD_SALE, 'rate'],
+    [MOVEMENT_TYPES.USD_PURCHASE, 'rate'],
+  ])('routes %s through the expected step after amount', async (type, expectedStep) => {
+    const ctx = createCtx()
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${type}`)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '250')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe(expectedStep)
+  })
+
+  it.each([
+    { type: MOVEMENT_TYPES.TRANSFER, amount: '100', currency: CURRENCIES.DINAR, source: 'me-cash', destination: 'saeed-cash' },
+    { type: MOVEMENT_TYPES.EXPENSE, amount: '100', currency: CURRENCIES.DINAR, source: 'me-cash' },
+    { type: MOVEMENT_TYPES.CASH_DEPOSIT, amount: '100', currency: CURRENCIES.DINAR, source: 'me-cash', destination: 'me-jumhouria' },
+    { type: MOVEMENT_TYPES.CASH_WITHDRAWAL, amount: '100', currency: CURRENCIES.DINAR, source: 'me-jumhouria', destination: 'me-cash' },
+    { type: MOVEMENT_TYPES.EXTERNAL_INCOME, amount: '100', currency: CURRENCIES.DINAR, destination: 'me-cash' },
+    { type: MOVEMENT_TYPES.USD_SALE, amount: '10', rate: '7.5', source: 'me-cash', destination: 'me-jumhouria' },
+    { type: MOVEMENT_TYPES.USD_PURCHASE, amount: '75', rate: '7.5', source: 'me-jumhouria', destination: 'me-cash' },
+  ])('completes and posts the full $type bot path', async ({ type, amount, currency, rate, source, destination }) => {
+    const ctx = createCtx()
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${type}`)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, amount)
+
+    if (ctx.sessions.get(ctx.chatId, ctx.userId).step === 'currency') {
+      await handleMovementCallback(ctx, `mv:currency:${currency}`)
+    }
+    if (ctx.sessions.get(ctx.chatId, ctx.userId).step === 'rate') {
+      await handleMovementText({ ...ctx, isCallback: false, messageId: 57 }, rate)
+    }
+    if (ctx.sessions.get(ctx.chatId, ctx.userId).step === 'source') {
+      await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', source)}`)
+    }
+    if (ctx.sessions.get(ctx.chatId, ctx.userId).step === 'destination') {
+      await handleMovementCallback(ctx, `mv:account:destination:${choiceTokenFor(ctx, 'destination', destination)}`)
+    }
+
+    await handleMovementCallback(ctx, 'mv:note:skip')
+    if (ctx.sessions.get(ctx.chatId, ctx.userId).step === 'dimension') await handleMovementCallback(ctx, 'mv:dimension:skip')
+    if (ctx.sessions.get(ctx.chatId, ctx.userId).step === 'category') await handleMovementCallback(ctx, 'mv:category:skip')
+    await handleMovementCallback(ctx, 'mv:attachment:skip')
+    await handleMovementCallback(ctx, 'mv:recurring:no')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('review')
+
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const saved = ctx.repository.state.movements.find((movement) => movement.source === 'telegram')
+    expect(saved).toMatchObject({ type, status: MOVEMENT_STATUSES.POSTED })
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+  })
+
+  it.each([
+    ['amount', 'type'],
+    ['currency', 'amount'],
+    ['source', 'currency'],
+    ['destination', 'source'],
+    ['note', 'destination'],
+    ['attachment', 'note'],
+    ['recurring', 'attachment'],
+    ['review', 'recurring'],
+  ])('returns safely from %s to %s', async (step, expectedStep) => {
+    const ctx = createCtx()
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      mode: 'create',
+      step,
+      sessionId: `back-${step}`,
+      uiMessageId: ctx.messageId,
+      choices: {},
+      draft: {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 250,
+        currency: CURRENCIES.DINAR,
+        currencyConfirmed: true,
+        sourceAccountId: 'me-cash',
+        destinationAccountId: 'saeed-cash',
+        note: '',
+        recurringEnabled: false,
+      },
+    })
+
+    await handleMovementCallback(ctx, 'mv:back')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe(expectedStep)
+  })
+
+  it('keeps unexpected text inside the active button step without opening another menu', async () => {
+    const ctx = createCtx()
+    await startMovement(ctx)
+
+    const handled = await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, 'نص غير متوقع')
+
+    expect(handled).toBe(true)
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('type')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('اختر من الأزرار')
+    expect(ctx.telegram.calls.at(-1).payload.text).not.toContain('افتح ADREEM من /start')
+  })
+
+  it.each([
+    ['currency', 'mv:currency:EUR', 'currency'],
+    ['dimension', 'mv:dimension:missing', 'dimension'],
+    ['category', 'mv:category:missing', 'category'],
+    ['recurring', 'mv:recurring:weekly', 'recurring'],
+  ])('does not advance %s when callback data is invalid', async (step, callbackData, expectedStep) => {
+    const ctx = createCtx()
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      mode: 'create',
+      step,
+      sessionId: `invalid-${step}`,
+      uiMessageId: ctx.messageId,
+      choices: { dimension: {}, category: {} },
+      draft: {
+        type: MOVEMENT_TYPES.EXPENSE,
+        amount: 100,
+        currency: CURRENCIES.DINAR,
+        currencyConfirmed: step !== 'currency',
+        sourceAccountId: 'me-cash',
+        destinationAccountId: '',
+        note: '',
+        dimensionId: '',
+        expenseCategoryId: '',
+        recurringEnabled: false,
+      },
+    })
+
+    await handleMovementCallback(ctx, callbackData)
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe(expectedStep)
+    expect(ctx.repository.state.movements).toHaveLength(createMohammadFallbackState().movements.length)
+  })
+
+  it('shows account search as one compact question without repeated instructions', async () => {
+    const ctx = createCtx()
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.TRANSFER}`)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, '250')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 57 }, 'أنا')
+
+    const text = ctx.telegram.calls.at(-1).payload.text
+    expect(text.match(/من أين تخرج الفلوس؟/gu)).toHaveLength(1)
+    expect(text).toContain('بحث:')
+    expect(text).not.toContain('اختيارات مناسبة')
+    expect(text).not.toContain('اضغط على الحساب')
   })
 })
 

@@ -76,10 +76,12 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
   return transferReadyAccounts
 }
 
-export function rankMovementAccounts(accounts = [], balancesByAccountId = new Map(), query = '') {
+export function rankMovementAccounts(accounts = [], balancesByAccountId = new Map(), query = '', currency = '') {
   const normalizedQuery = normalizeAccountSearchText(query)
   const magnitude = (account) => {
     const bucket = balancesByAccountId.get(account.id)
+    if (currency === 'USD') return Math.abs(Math.round(bucket?.usd || 0))
+    if (currency === 'LYD') return Math.abs(Math.round(bucket?.dinar || 0))
     return Math.max(Math.abs(Math.round(bucket?.dinar || 0)), Math.abs(Math.round(bucket?.usd || 0)))
   }
 

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
 import { CURRENCIES } from '../../../src/mohammadLedger/ledgerCore.js'
 import {
+  movementAccountCurrencyForRole,
   movementConfigFor,
   movementCurrencyFor,
   movementLabels,
@@ -36,11 +37,12 @@ import {
   dimensionKeyboard,
   expenseCategoryKeyboard,
   mainMenuKeyboard,
+  movementTextStepKeyboard,
   movementTypeKeyboard,
   noteKeyboard,
   recurringKeyboard,
 } from '../keyboards.js'
-import { escapeHtml, movementStepText, reviewMovementText, stepPromptText } from '../messages.js'
+import { escapeHtml, movementStepText, reviewMovementText } from '../messages.js'
 import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
 
 const STEPS = {
@@ -132,25 +134,25 @@ async function sendStep(ctx, session, textPrefix = '') {
   const expenseCategories = state.accounts.filter((account) => account.status === 'active' && account.valueKind === VALUE_KINDS.EXPENSE)
   const expenseCategoryById = new Map(expenseCategories.map((category) => [category.id, category]))
   const header = movementStepText(session, snapshot.accountById, dimensionById, expenseCategoryById)
-  const text = textPrefix ? `${header}\n\n${textPrefix}` : header
+  const text = textPrefix ? `${header}\n\n<blockquote>${escapeHtml(textPrefix)}</blockquote>` : header
 
   if (session.step === STEPS.TYPE) {
-    return upsertFlowMessage(ctx, session, { text, reply_markup: movementTypeKeyboard() })
+    return upsertFlowMessage(ctx, session, { text, reply_markup: movementTypeKeyboard(session.draft.type) })
   }
   if (session.step === STEPS.AMOUNT) {
-    return upsertFlowMessage(ctx, session, { text: `${text}\n\n${stepPromptText(session)}` })
+    return upsertFlowMessage(ctx, session, { text, reply_markup: movementTextStepKeyboard() })
   }
   if (session.step === STEPS.CURRENCY) {
     return upsertFlowMessage(ctx, session, { text, reply_markup: currencyKeyboard(session.draft.currency) })
   }
   if (session.step === STEPS.RATE) {
-    return upsertFlowMessage(ctx, session, { text: `${text}\n\n${stepPromptText(session)}` })
+    return upsertFlowMessage(ctx, session, { text, reply_markup: movementTextStepKeyboard() })
   }
   if (session.step === STEPS.SOURCE || session.step === STEPS.DESTINATION) {
     return sendAccountChoices(ctx, session, state, session.step)
   }
   if (session.step === STEPS.NOTE) {
-    return upsertFlowMessage(ctx, session, { text: `${text}\n\n${stepPromptText(session)}`, reply_markup: noteKeyboard() })
+    return upsertFlowMessage(ctx, session, { text, reply_markup: noteKeyboard() })
   }
   if (session.step === STEPS.DIMENSION) {
     if (!movementSupportsDimension(session.draft.type) || !dimensions.length) {
@@ -164,8 +166,8 @@ async function sendStep(ctx, session, textPrefix = '') {
     }
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return upsertFlowMessage(ctx, session, {
-      text: `${text}\n\n${stepPromptText(session)}`,
-      reply_markup: dimensionKeyboard(dimensions),
+      text,
+      reply_markup: dimensionKeyboard(dimensions, { selectedId: session.draft.dimensionId }),
     })
   }
   if (session.step === STEPS.CATEGORY) {
@@ -180,25 +182,32 @@ async function sendStep(ctx, session, textPrefix = '') {
     }
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return upsertFlowMessage(ctx, session, {
-      text: `${text}\n\n${stepPromptText(session)}`,
-      reply_markup: expenseCategoryKeyboard(expenseCategories),
+      text,
+      reply_markup: expenseCategoryKeyboard(expenseCategories, { selectedId: session.draft.expenseCategoryId }),
     })
   }
   if (session.step === STEPS.ATTACHMENT) {
     return upsertFlowMessage(ctx, session, {
-      text: `${text}\n\n${stepPromptText(session)}`,
+      text,
       reply_markup: attachmentKeyboard(),
     })
   }
   if (session.step === STEPS.RECURRING) {
     return upsertFlowMessage(ctx, session, {
-      text: `${text}\n\n${stepPromptText(session)}`,
+      text,
       reply_markup: recurringKeyboard(),
     })
   }
   if (session.step === STEPS.REVIEW) {
     const preview = previewDraft(state, session.draft)
-    return upsertFlowMessage(ctx, session, { text: reviewMovementText(session, preview), reply_markup: confirmKeyboard() })
+    return upsertFlowMessage(ctx, session, {
+      text: reviewMovementText(session, preview, {
+        accountsById: snapshot.accountById,
+        dimensionsById: dimensionById,
+        expenseCategoriesById: expenseCategoryById,
+      }),
+      reply_markup: confirmKeyboard(),
+    })
   }
   return null
 }
@@ -237,7 +246,8 @@ async function upsertFlowMessage(ctx, session, payload) {
 
 async function sendAccountChoices(ctx, session, state, role, query = '') {
   const accounts = getMovementAccounts(state, session.draft.type, role, session.draft)
-  const rankedAll = rankAccountsForTelegram(accounts, state, query)
+  const displayCurrency = movementAccountCurrencyForRole(session.draft.type, role, session.draft.currency)
+  const rankedAll = rankAccountsForTelegram(accounts, state, query, displayCurrency)
   const ranked = rankedAll.slice(0, 8)
   session.choices = {
     ...session.choices,
@@ -249,13 +259,12 @@ async function sendAccountChoices(ctx, session, state, role, query = '') {
   const dimensions = dimensionsFromAccounts(state.accounts, state.dimensions)
   const dimensionById = new Map(dimensions.map((dimension) => [dimension.id, dimension]))
   const expenseCategoryById = new Map(state.accounts.filter((account) => account.valueKind === VALUE_KINDS.EXPENSE).map((category) => [category.id, category]))
-  const lines = [movementStepText(session, snapshot.accountById, dimensionById, expenseCategoryById), '']
-  lines.push(stepPromptText(session))
-  if (query) lines.push(`<b>بحث:</b> ${escapeHtml(preserveUiData(query))}`)
-  lines.push(ranked.length ? `<b>${ranked.length} اختيارات مناسبة.</b> اضغط الاسم المطلوب.` : '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
+  const lines = [movementStepText(session, snapshot.accountById, dimensionById, expenseCategoryById)]
+  if (query) lines.push('', `<code>بحث: ${escapeHtml(preserveUiData(query))}</code>`)
+  if (!ranked.length) lines.push('', '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
   return upsertFlowMessage(ctx, session, {
     text: lines.join('\n'),
-    reply_markup: accountChoicesKeyboard(ranked, role, snapshot.balanceByAccountId),
+    reply_markup: accountChoicesKeyboard(ranked, role, snapshot.balanceByAccountId, displayCurrency),
   })
 }
 
@@ -300,7 +309,7 @@ export async function startReviewMovement(ctx, movementId) {
     },
   })
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
-  return sendStep(ctx, session, 'إصلاح حركة من المراجعة. راجع الخطوات ثم احفظ.')
+  return sendStep(ctx, session)
 }
 
 export async function handleMovementCallback(ctx, data) {
@@ -360,11 +369,15 @@ export async function handleMovementCallback(ctx, data) {
     }
     session.step = STEPS.AMOUNT
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
-    return sendStep(ctx, session, `تم اختيار: ${movementLabels[type]}.`)
+    return sendStep(ctx, session)
   }
 
   if (data.startsWith('mv:currency:')) {
-    session.draft.currency = data.slice('mv:currency:'.length)
+    const currency = data.slice('mv:currency:'.length)
+    if (![CURRENCIES.DINAR, CURRENCIES.USD].includes(currency)) {
+      return sendStep(ctx, session, 'اختر عملة صحيحة.')
+    }
+    session.draft.currency = currency
     session.draft.currencyConfirmed = true
     session.step = firstAccountStep(session.draft.type)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -399,7 +412,9 @@ export async function handleMovementCallback(ctx, data) {
 
   if (data.startsWith('mv:dimension:')) {
     const token = data.slice('mv:dimension:'.length)
-    session.draft.dimensionId = token === 'skip' ? '' : session.choices?.dimension?.[token] || ''
+    const dimensionId = token === 'skip' ? '' : session.choices?.dimension?.[token]
+    if (token !== 'skip' && !dimensionId) return sendStep(ctx, session, 'المشروع غير متاح. أعد الاختيار.')
+    session.draft.dimensionId = dimensionId || ''
     session.step = nextAfterDimension(session.draft.type)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -407,7 +422,9 @@ export async function handleMovementCallback(ctx, data) {
 
   if (data.startsWith('mv:category:')) {
     const token = data.slice('mv:category:'.length)
-    session.draft.expenseCategoryId = token === 'skip' ? '' : session.choices?.category?.[token] || ''
+    const expenseCategoryId = token === 'skip' ? '' : session.choices?.category?.[token]
+    if (token !== 'skip' && !expenseCategoryId) return sendStep(ctx, session, 'نوع المصروف غير متاح. أعد الاختيار.')
+    session.draft.expenseCategoryId = expenseCategoryId || ''
     session.step = STEPS.ATTACHMENT
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -427,7 +444,9 @@ export async function handleMovementCallback(ctx, data) {
   }
 
   if (data.startsWith('mv:recurring:')) {
-    session.draft.recurringEnabled = data.endsWith(':monthly')
+    const recurringChoice = data.slice('mv:recurring:'.length)
+    if (!['monthly', 'no'].includes(recurringChoice)) return sendStep(ctx, session, 'اختر التكرار من الأزرار.')
+    session.draft.recurringEnabled = recurringChoice === 'monthly'
     session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -631,7 +650,8 @@ export async function handleMovementText(ctx, text) {
     return true
   }
 
-  return false
+  await sendStep(ctx, session, 'اختر من الأزرار.')
+  return true
 }
 
 export async function handleMovementMedia(ctx, message = {}) {

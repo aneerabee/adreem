@@ -332,4 +332,12 @@ describe('English dynamic Telegram localization', () => {
 
     expect(localizeTelegramPayload(payload, 'en')).toEqual(payload)
   })
+
+  it('localizes the review wizard title without leaking Arabic system text', () => {
+    const payload = {
+      text: movementStepText({ ...movementSession, mode: 'review' }, accountsById),
+    }
+
+    expect(remainingArabicLines(localizeTelegramPayload(payload, 'en'))).toEqual([])
+  })
 })

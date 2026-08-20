@@ -37,7 +37,6 @@ import {
   movementLabels,
   movementStepText,
   protectedAccountLabel,
-  stepPromptText,
 } from './messages.js'
 import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountInState } from './reviewActions.js'
 import {
@@ -48,7 +47,7 @@ import {
   relatedReportMovements,
   voidRecentMovementInState,
 } from './historyActions.js'
-import { createSessionStore } from './sessionStore.js'
+import { createSessionStore, sessionWithReplacementMessage } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
 import { createLocalizedTelegramClient } from './localizedTelegram.js'
 import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
@@ -154,12 +153,16 @@ async function sendScreen(ctx, text, replyMarkup = mainMenuKeyboard()) {
       // Fall back to a new message if the selected Telegram message is no longer editable.
     }
   }
-  return ctx.telegram.sendMessage({
+  const sent = await ctx.telegram.sendMessage({
     chat_id: ctx.chatId,
     text,
     parse_mode: 'HTML',
     reply_markup: replyMarkup,
   })
+  const session = sessions.get(ctx.chatId, ctx.userId)
+  const nextSession = sessionWithReplacementMessage(session, ctx.isCallback ? ctx.messageId : null, sent.message_id)
+  if (nextSession && nextSession !== session) sessions.set(ctx.chatId, ctx.userId, nextSession)
+  return sent
 }
 
 async function deleteUserInput(ctx) {
@@ -184,7 +187,7 @@ async function showMoreMenu(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
   return sendScreen(
     ctx,
-    '<b>ADREEM · المزيد</b>\n<blockquote>أدوات أقل استعمالًا، في مكان واحد.</blockquote>',
+    '<b>ADREEM · المزيد</b>',
     moreMenuKeyboard(),
   )
 }
@@ -703,12 +706,11 @@ async function showMovementPickerPage(ctx, kind, requestedPage) {
   const text = [
     movementStepText(nextSession, snapshot.accountById, dimensionById, expenseCategoryById),
     '',
-    stepPromptText(nextSession),
     `<code>${choices.length} ${label} · صفحة ${page + 1}/${pageCount}</code>`,
   ].join('\n')
   const keyboard = kind === 'category'
-    ? expenseCategoryKeyboard(expenseCategories, { page, pageSize: MOVEMENT_PICKER_PAGE_SIZE })
-    : dimensionKeyboard(dimensions, { page, pageSize: MOVEMENT_PICKER_PAGE_SIZE })
+    ? expenseCategoryKeyboard(expenseCategories, { page, pageSize: MOVEMENT_PICKER_PAGE_SIZE, selectedId: nextSession.draft.expenseCategoryId })
+    : dimensionKeyboard(dimensions, { page, pageSize: MOVEMENT_PICKER_PAGE_SIZE, selectedId: nextSession.draft.dimensionId })
   return sendScreen(ctx, text, keyboard)
 }
 

@@ -199,6 +199,21 @@ describe('telegram account flow', () => {
     expect(session.draft.valueKind).toBe(VALUE_KINDS.RECEIVABLE)
   })
 
+  it('does not advance when an invalid account currency callback arrives', async () => {
+    const ctx = createCtx()
+    await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:group:people')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'سعيد')
+    await handleAccountCallback(ctx, 'acct:detail:0')
+
+    await handleAccountCallback(ctx, 'acct:currency:EUR')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.step).toBe('currency')
+    expect(session.draft.currencyKind).not.toBe('EUR')
+    expect(ctx.repository.state.accounts).toHaveLength(0)
+  })
+
   it('does not overwrite an active movement flow when an old account button is pressed', async () => {
     const ctx = createCtx()
     ctx.sessions.set(ctx.chatId, ctx.userId, { flow: 'movement', step: 'amount', draft: { amount: 0 } })
@@ -349,5 +364,16 @@ describe('telegram account flow', () => {
     expect(ctx.repository.state.accounts[0].subAccountName).toBe('الخزنة')
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم إلغاء تعديل الحساب')
+  })
+
+  it('keeps unexpected text inside an account button step', async () => {
+    const ctx = createCtx()
+    await startAccount(ctx)
+
+    const handled = await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'نص غير متوقع')
+
+    expect(handled).toBe(true)
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('group')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('ماذا تريد أن تضيف')
   })
 })

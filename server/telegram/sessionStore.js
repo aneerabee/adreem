@@ -1,5 +1,11 @@
 const DEFAULT_TTL_MS = 30 * 60 * 1000
 
+export function sessionWithReplacementMessage(session, currentMessageId, replacementMessageId) {
+  if (!session || !replacementMessageId) return session
+  if (session.uiMessageId && currentMessageId && session.uiMessageId !== currentMessageId) return session
+  return { ...session, uiMessageId: replacementMessageId }
+}
+
 export function createSessionStore({ ttlMs = DEFAULT_TTL_MS } = {}) {
   const sessions = new Map()
 

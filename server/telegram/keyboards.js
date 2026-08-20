@@ -156,11 +156,11 @@ function accountTypeIcon(key) {
   return '◼'
 }
 
-export function movementTypeKeyboard() {
+export function movementTypeKeyboard(selectedType = '') {
   const buttonFor = (option) => ({
-      text: movementTypeButtonText(option),
+      text: `${selectedType === option.type ? '✓ ' : ''}${movementTypeButtonText(option)}`,
       callback_data: `mv:type:${option.type}`,
-      style: movementTypeButtonStyle(option.tone),
+      style: selectedType === option.type ? 'success' : movementTypeButtonStyle(option.tone),
     })
   const optionsByTone = new Map(movementTypeOptions.map((option) => [option.tone, option]))
   const rows = [
@@ -196,21 +196,29 @@ export function currencyKeyboard(selectedCurrency = '') {
   return {
     inline_keyboard: [
       [
-        { text: `${selectedCurrency === CURRENCIES.DINAR ? '✓ ' : ''}دينار د.ل`, callback_data: `mv:currency:${CURRENCIES.DINAR}`, style: 'primary' },
-        { text: `${selectedCurrency === CURRENCIES.USD ? '✓ ' : ''}دولار $`, callback_data: `mv:currency:${CURRENCIES.USD}`, style: 'primary' },
+        { text: `${selectedCurrency === CURRENCIES.DINAR ? '✓ ' : ''}دينار د.ل`, callback_data: `mv:currency:${CURRENCIES.DINAR}`, style: selectedCurrency === CURRENCIES.DINAR ? 'success' : 'primary' },
+        { text: `${selectedCurrency === CURRENCIES.USD ? '✓ ' : ''}دولار $`, callback_data: `mv:currency:${CURRENCIES.USD}`, style: selectedCurrency === CURRENCIES.USD ? 'success' : 'primary' },
       ],
       [{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }],
     ],
   }
 }
 
-export function accountChoicesKeyboard(accounts, role, balancesByAccountId = new Map()) {
+export function movementTextStepKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '↩️ رجوع', callback_data: 'mv:back', style: 'primary' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }],
+    ],
+  }
+}
+
+export function accountChoicesKeyboard(accounts, role, balancesByAccountId = new Map(), currency = '') {
   const rows = accounts.map((account) => {
     const bucket = balancesByAccountId.get(account.id)
     return [{
-      text: accountChoiceButtonText(account, bucket),
+      text: accountChoiceButtonText(account, bucket, currency),
       callback_data: `mv:account:${role}:${accountChoiceToken(account)}`,
-      style: accountChoiceButtonStyle(account, bucket),
+      style: accountChoiceButtonStyle(account, bucket, currency),
     }]
   })
   rows.push([{ text: '🔎 اكتب اسمًا للبحث', callback_data: `mv:searchhint:${role}`, style: 'primary' }])
@@ -318,9 +326,9 @@ export function noteKeyboard() {
 export function dimensionKeyboard(dimensions = [], options = {}) {
   const { items, page, pageCount } = paginatedItems(dimensions, options)
   const rows = items.map((dimension, index) => ([{
-    text: `📍 ${preserveUiData(dimension.name)}`,
+    text: `${options.selectedId === dimension.id ? '✓ ' : ''}📍 ${preserveUiData(dimension.name)}`,
     callback_data: `mv:dimension:${index}`,
-    style: 'primary',
+    style: options.selectedId === dimension.id ? 'success' : 'primary',
   }]))
   rows.push(...paginationRows('mv:dimension', page, pageCount))
   rows.push([{ text: 'بدون مشروع', callback_data: 'mv:dimension:skip', style: 'primary' }])
@@ -331,9 +339,9 @@ export function dimensionKeyboard(dimensions = [], options = {}) {
 export function expenseCategoryKeyboard(categories = [], options = {}) {
   const { items, page, pageCount } = paginatedItems(categories, options)
   const rows = items.map((category, index) => ([{
-    text: `🧾 ${preserveUiData(accountPrimaryName(category))}`,
+    text: `${options.selectedId === category.id ? '✓ ' : ''}🧾 ${preserveUiData(accountPrimaryName(category))}`,
     callback_data: `mv:category:${index}`,
-    style: 'primary',
+    style: options.selectedId === category.id ? 'success' : 'primary',
   }]))
   rows.push(...paginationRows('mv:category', page, pageCount))
   rows.push([{ text: 'بدون تصنيف', callback_data: 'mv:category:skip', style: 'primary' }])

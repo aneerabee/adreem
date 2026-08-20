@@ -106,9 +106,9 @@ async function sendAccountChoices(ctx, session, state, query = '') {
   }
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
 
-  const lines = [reconciliationStepText(session, snapshot.accountById, snapshot.balanceByAccountId), '']
-  if (query) lines.push(`<b>بحث:</b> ${escapeHtml(preserveUiData(query))}`)
-  lines.push(ranked.length ? `<b>${ranked.length} حسابات مناسبة.</b> اختر الحساب.` : '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
+  const lines = [reconciliationStepText(session, snapshot.accountById, snapshot.balanceByAccountId)]
+  if (query) lines.push('', `<code>بحث: ${escapeHtml(preserveUiData(query))}</code>`)
+  if (!ranked.length) lines.push('', '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
   return upsertFlowMessage(ctx, session, {
     text: lines.join('\n'),
     reply_markup: reconciliationAccountKeyboard(ranked, snapshot.balanceByAccountId),
@@ -250,7 +250,8 @@ export async function handleReconciliationText(ctx, text) {
     await sendStep(ctx, session)
     return true
   }
-  return false
+  await sendStep(ctx, session, 'اختر من الأزرار.')
+  return true
 }
 
 function previousStep(session) {
