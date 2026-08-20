@@ -829,8 +829,9 @@
 .ml3-picked-account.is-selected { border-inline-start-color: var(--green); background: #f2f8f5; }
 .ml3-picked-account--expense.is-selected,
 .ml3-picked-account--review.is-selected { border-inline-start-color: var(--red); background: #fff5f3; }
-.ml3-picked-account > div:first-child { min-width: 0; }
-.ml3-picked-account strong { font-size: 0.82rem; }
+.ml3-picked-account > div:first-child { min-width: 0; display: grid; gap: 1px; }
+.ml3-picked-account strong { overflow: hidden; font-size: 0.82rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-picked-account small { overflow: hidden; color: var(--muted); font-size: 0.64rem; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-picked-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
 .ml3-picked-actions button { min-height: 29px; border: 1px solid var(--line); border-radius: 5px; padding: 0 8px; background: #fff; color: var(--green); font-size: 0.66rem; font-weight: 700; cursor: pointer; }
 .ml3-balance-chip { max-width: 150px; overflow: hidden; border-radius: 5px; padding: 4px 7px; background: #edf1ef; color: var(--ink); font-size: 0.66rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -1086,8 +1087,11 @@
 .ml3-account-main > strong { overflow: hidden; font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-account-meta { min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden; color: var(--muted); font-size: 0.66rem; white-space: nowrap; }
 .ml3-account-meta small { font-size: inherit; }
-.ml3-account-kind { flex: 0 0 auto; color: var(--green); font-weight: 700; }
-.ml3-account-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ml3-account-context { min-width: 0; overflow: hidden; color: var(--muted); font-weight: 650; text-overflow: ellipsis; }
+.ml3-account-row--cash .ml3-account-context,
+.ml3-account-row--bank .ml3-account-context { color: #405049; }
+.ml3-account-row--expense .ml3-account-context,
+.ml3-account-row--review .ml3-account-context { color: var(--red); }
 .ml3-account-main b { color: var(--red); }
 .ml3-account-values { min-width: 0; text-align: end; }
 .ml3-account-values strong { display: block; font-size: 0.72rem; }
@@ -2125,6 +2129,11 @@
   overflow-y: auto;
 }
 
+.ml3-account-choice-list {
+  align-content: start;
+  grid-auto-rows: minmax(46px, auto);
+}
+
 .ml3-more-actions[open] .ml3-more-actions-grid,
 .ml3-filter-disclosure[open] .ml3-history-filters,
 .ml3-ops-disclosure[open] .ml3-ops-grid { animation: adreem-reveal 170ms cubic-bezier(0.25, 1, 0.5, 1) both; }
@@ -2190,6 +2199,23 @@
     max-height: none;
   }
   .adreem-flow-head { min-height: 64px; }
+  .adreem-flow-progress-meta { align-items: flex-start; }
+  .adreem-flow-trail {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+  .adreem-flow-trail button {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+  .adreem-flow-trail button span { display: none; }
+  .adreem-flow-trail button strong {
+    min-width: 0;
+    max-width: none;
+  }
   .ml3-step,
   .ml3-account-stage { min-height: 0; }
   .ml3-account-choice-list button {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { accountPresetGroups, accountPresets } from '../../src/mohammadLedger/accountConfig.js'
+import { accountPresetGroups, accountPresets, accountPrimaryName } from '../../src/mohammadLedger/accountConfig.js'
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
 import { movementTypeOptions } from '../../src/mohammadLedger/movementConfig.js'
 import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
@@ -127,11 +127,11 @@ export function accountCurrencyKeyboard(selectedCurrency = CURRENCIES.DINAR) {
   }
 }
 
-export function accountConfirmKeyboard() {
+export function accountConfirmKeyboard(isReview = false) {
   return {
     inline_keyboard: [
-      [{ text: 'تأكيد إنشاء الحساب', callback_data: 'acct:confirm', style: 'success' }],
-      [{ text: '↩️ تعديل التفصيل', callback_data: 'acct:back', style: 'primary' }, { text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
+      [{ text: isReview ? 'تأكيد إصلاح الحساب' : 'تأكيد إنشاء الحساب', callback_data: 'acct:confirm', style: 'success' }],
+      [{ text: '↩️ تعديل الحساب', callback_data: 'acct:back', style: 'primary' }, { text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
     ],
   }
 }
@@ -328,7 +328,7 @@ export function dimensionKeyboard(dimensions = [], options = {}) {
 export function expenseCategoryKeyboard(categories = [], options = {}) {
   const { items, page, pageCount } = paginatedItems(categories, options)
   const rows = items.map((category, index) => ([{
-    text: `🧾 ${preserveUiData(category.ownerName || category.subAccountName)}`,
+    text: `🧾 ${preserveUiData(accountPrimaryName(category))}`,
     callback_data: `mv:category:${index}`,
     style: 'primary',
   }]))

@@ -35,7 +35,7 @@ describe('telegram account balance presentation', () => {
     expect(formatAccountBalance(receivable, bucket)).toBe('أقبض منه 12,500 د.ل')
     expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('🟢 سعيد · كاش بيننا · دينار | أقبض منه 12,500 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('success')
-    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🟢 سعيد · كاش بيننا')
+    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🟢 سعيد\nكاش بيننا · دينار')
   })
 
   it('marks money I should pay in red terms', () => {
@@ -44,7 +44,7 @@ describe('telegram account balance presentation', () => {
     expect(formatAccountBalance(receivable, bucket)).toBe('أدفع له 3,200 د.ل')
     expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('🔴 سعيد · كاش بيننا · دينار | أدفع له 3,200 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('danger')
-    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🔴 سعيد · كاش بيننا')
+    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🔴 سعيد\nكاش بيننا · دينار')
   })
 
   it('uses the same visual direction for my own money accounts', () => {
@@ -74,9 +74,9 @@ describe('telegram account balance presentation', () => {
       ].join('\n'),
     }, 'en')
 
-    expect(localized.text).toContain('دخل · Cash between us · Dinar')
-    expect(localized.text).toContain('Cash: مالك · Dinar')
-    expect(localized.text).not.toContain('Income · Cash between us')
+    expect(localized.text).toContain('🟢 دخل\nCash between us · Dinar')
+    expect(localized.text).toContain('🟢 مالك\nCash · Dinar')
+    expect(localized.text).not.toContain('🟢 Income')
   })
 })
 
@@ -170,7 +170,7 @@ describe('telegram movement presentation', () => {
 
     expect(card).toContain('<blockquote>')
     expect(card).toContain('🔁 تحويل · 1,250 د.ل')
-    expect(card).toContain('كاش: كاش ← سعيد · كاش')
+    expect(card).toContain('كاش عندي · كاش · دينار ← سعيد · كاش بيننا · دينار')
     expect(card).toContain('ملاحظة: تجربة &lt;مهمة&gt;')
   })
 
@@ -207,11 +207,11 @@ describe('telegram movement presentation', () => {
     ))
 
     expect(text).toContain('<b>تأكيد الحركة</b>')
-    expect(text).toContain('🔴 من: كاش: كاش')
+    expect(text).toContain('🔴 من: كاش عندي · كاش · دينار')
     expect(text).toContain('قبل: 2,000 د.ل')
     expect(text).toContain('التغيير: -500 د.ل')
     expect(text).toContain('بعد: 1,500 د.ل')
-    expect(text).toContain('🟢 إلى: سعيد · كاش')
+    expect(text).toContain('🟢 إلى: سعيد · كاش بيننا · دينار')
     expect(text).toContain('التغيير: +500 د.ل')
     expect(text).toContain('بعد: 600 د.ل')
   })

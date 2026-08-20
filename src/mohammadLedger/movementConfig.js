@@ -1,6 +1,7 @@
 import { CURRENCIES, MOVEMENT_TYPES } from './ledgerCore.js'
 
 export const movementLabels = {
+  [MOVEMENT_TYPES.OPENING_BALANCE]: 'رصيد افتتاحي',
   [MOVEMENT_TYPES.TRANSFER]: 'تحويل',
   [MOVEMENT_TYPES.CASH_DEPOSIT]: 'إيداع في المصرف',
   [MOVEMENT_TYPES.CASH_WITHDRAWAL]: 'سحب من المصرف',

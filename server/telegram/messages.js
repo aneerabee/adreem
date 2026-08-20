@@ -1,14 +1,14 @@
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
 import {
-  accountDisplayName,
+  accountContextLabel,
   accountDetailName,
-  accountDraftSummary,
+  accountDetailOptionsFor,
   accountNeedsCurrency,
-  accountKindLabel,
   accountNameValue,
   accountPresetFor,
   accountPresetGroupFor,
   accountPresetStepCopy,
+  accountPrimaryName,
 } from '../../src/mohammadLedger/accountConfig.js'
 import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import {
@@ -21,7 +21,7 @@ import {
   movementSupportsExpenseCategory,
   movementTone,
 } from '../../src/mohammadLedger/movementConfig.js'
-import { accountLabel, formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
+import { formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
 import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
 
 export { movementLabels }
@@ -43,23 +43,27 @@ function htmlDataLine(label, value) {
   return htmlLine(label, preserveUiData(value))
 }
 
-function protectAccountName(account = {}) {
-  const preset = accountPresetFor(account.type, account.valueKind)
-  const nameKey = preset.nameTarget === 'subAccountName' ? 'subAccountName' : 'ownerName'
-  if (!account[nameKey]) return account
-  if (nameKey === 'ownerName' && /^(أنا|انا)$/u.test(account[nameKey])) return account
-  return {
-    ...account,
-    [nameKey]: preserveUiData(account[nameKey]),
-  }
-}
-
-function protectAccountDraftName(draft = {}) {
-  return protectAccountName(draft)
-}
-
 export function protectedAccountLabel(account) {
-  return account ? accountLabel(protectAccountName(account)) : ''
+  if (!account) return ''
+  const primaryName = protectedAccountPrimaryName(account)
+  const context = protectedAccountContext(account)
+  return context && context !== primaryName ? `${primaryName} · ${context}` : primaryName
+}
+
+function protectedAccountPrimaryName(account) {
+  if (!account) return ''
+  const primaryName = accountPrimaryName(account)
+  const enteredName = String(accountNameValue(account) || '').trim().replace(/\s+/g, ' ')
+  return enteredName && enteredName === primaryName ? preserveUiData(primaryName) : primaryName
+}
+
+function protectedAccountContext(account) {
+  if (!account) return ''
+  const context = accountContextLabel(account)
+  const detail = accountDetailName(account)
+  const knownDetails = accountDetailOptionsFor(account.type, account.valueKind)
+  if (knownDetails.some((knownDetail) => context.startsWith(knownDetail))) return context
+  return detail && context.includes(detail) ? context.replace(detail, preserveUiData(detail)) : context
 }
 
 function currencyLabel(currency) {
@@ -129,12 +133,6 @@ function currentStepHelp(session) {
   return ''
 }
 
-function typeTag(account) {
-  if (!account) return ''
-  if (account.valueKind === VALUE_KINDS.RECEIVABLE) return accountDetailName(account)
-  return accountKindLabel(account)
-}
-
 export function mainMenuText(summary = null) {
   const lines = ['<b>ADREEM</b>', '<code>إضافة · الأرصدة · السجل · المراجعة</code>']
   if (summary) {
@@ -201,8 +199,8 @@ export function accountStepText(session) {
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = `${currentIndex + 1}/${steps.length}`
   const summary = []
-  if (currentIndex > steps.indexOf('group')) summary.push(htmlLine('القسم', group.title))
-  if (hasTypeStep && currentIndex > steps.indexOf('type') && draft.type) summary.push(htmlLine('النوع', preset.title))
+  if (currentIndex > steps.indexOf('group')) summary.push(htmlLine('الفئة', group.title))
+  if (hasTypeStep && currentIndex > steps.indexOf('type') && draft.type) summary.push(htmlLine('الحساب', preset.title))
   const nameValue = accountNameValue(draft)
   if (currentIndex > steps.indexOf('owner') && nameValue) summary.push(htmlDataLine(preset.nameLabel || 'الاسم', nameValue))
   if (!preset.skipDetail && currentIndex > steps.indexOf('detail') && draft.subAccountName) {
@@ -229,15 +227,14 @@ export function accountStepText(session) {
 
 export function accountReviewText(session, result = null) {
   const draft = session?.draft || {}
-  const preset = accountPresetFor(draft.type, draft.valueKind)
   const lines = [
     '<b>تأكيد الحساب</b>',
     '<code>راجع قبل الحفظ</code>',
     '',
     '<blockquote>',
-    escapeHtml(accountDraftSummary(protectAccountDraftName(draft))),
+    escapeHtml(protectedAccountPrimaryName(draft)),
     '\n',
-    escapeHtml(preset.title),
+    escapeHtml(protectedAccountContext(draft)),
     '\n',
     escapeHtml('الرصيد الافتتاحي: صفر'),
     '</blockquote>',
@@ -252,13 +249,12 @@ export function accountReviewText(session, result = null) {
 
 export function accountCreatedText(account, { duplicate = false, reviewed = false } = {}) {
   const title = reviewed ? 'تم إصلاح الحساب واعتماده.' : (duplicate ? 'كان محفوظًا سابقًا ولم يتكرر.' : 'تم إنشاء الحساب.')
-  const preset = accountPresetFor(account?.type, account?.valueKind)
   return [
     `<b>${escapeHtml(title)}</b>`,
     '<blockquote>',
-    escapeHtml(protectedAccountLabel(account)),
+    escapeHtml(protectedAccountPrimaryName(account)),
     '\n',
-    escapeHtml(preset.title),
+    escapeHtml(protectedAccountContext(account)),
     '\n',
     escapeHtml('الرصيد: صفر'),
     '</blockquote>',
@@ -301,7 +297,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, protectedAccountLabel(destination)))
   if (draft.note) summary.push(htmlDataLine('ملاحظة', draft.note))
   if (dimension) summary.push(htmlDataLine('مشروع', dimension.name))
-  if (expenseCategory) summary.push(htmlDataLine('نوع المصروف', expenseCategory.ownerName || expenseCategory.subAccountName))
+  if (expenseCategory) summary.push(htmlDataLine('نوع المصروف', accountPrimaryName(expenseCategory)))
   if (draft.attachmentLabel || draft.attachmentUrl) summary.push(htmlDataLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   if (draft.recurringEnabled) summary.push(htmlLine('تكرار', 'شهري'))
   const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : 'ADREEM · إدخال'
@@ -397,17 +393,17 @@ export function stepPromptText(session) {
 
 export function accountChoiceText(session, account, bucket, index) {
   const presentation = accountBalancePresentation(account, bucket)
-  return `${index + 1}. ${presentation.icon} ${protectedAccountLabel(account)}\n   ${typeTag(account)} · ${presentation.text}`
+  return `${index + 1}. ${presentation.icon} ${protectedAccountPrimaryName(account)}\n   ${protectedAccountContext(account)} · ${presentation.text}`
 }
 
 export function compactAccountChoiceText(account, bucket) {
   const presentation = accountBalancePresentation(account, bucket)
-  return `${presentation.icon} ${typeTag(account)} · ${presentation.text}`
+  return `${presentation.icon} ${protectedAccountPrimaryName(account)} · ${presentation.text}`
 }
 
 export function accountChoiceButtonText(account, bucket) {
   const presentation = accountBalancePresentation(account, bucket)
-  return `${presentation.icon} ${accountDisplayName(protectAccountName(account))} | ${presentation.text}`
+  return `${presentation.icon} ${protectedAccountLabel(account)} | ${presentation.text}`
 }
 
 export function accountChoiceButtonStyle(account, bucket) {
@@ -418,11 +414,11 @@ export function accountBlockquote(account, bucket) {
   const presentation = accountBalancePresentation(account, bucket)
   return [
     '<blockquote>',
-    escapeHtml(`${presentation.icon} ${accountDisplayName(protectAccountName(account))}`),
+    escapeHtml(`${presentation.icon} ${protectedAccountPrimaryName(account)}`),
+    '\n',
+    escapeHtml(protectedAccountContext(account)),
     '\n',
     escapeHtml(presentation.text),
-    '\n',
-    escapeHtml(typeTag(account)),
     '</blockquote>',
   ].join('')
 }

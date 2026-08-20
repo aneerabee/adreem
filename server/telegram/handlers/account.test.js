@@ -72,6 +72,12 @@ describe('telegram account flow', () => {
     expect(ctx.telegram.calls.at(-1).payload.text).not.toContain('النوع: شخص أو جهة')
 
     await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'شركة النور')
+    const detailButtons = ctx.telegram.calls.at(-1).payload.reply_markup.inline_keyboard
+      .flat()
+      .filter((button) => button.callback_data?.startsWith('acct:detail:'))
+    expect(detailButtons.map((button) => button.text)).toEqual(['كاش بيننا', 'شيك بيننا'])
+    expect(detailButtons.every((button) => button.style === 'primary')).toBe(true)
+
     await handleAccountCallback(ctx, 'acct:detail:0')
     await handleAccountCallback(ctx, 'acct:currency:USD')
     await handleAccountCallback(ctx, 'acct:confirm')

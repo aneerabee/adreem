@@ -289,9 +289,9 @@ describe('MohammadLedgerApp English user data protection', () => {
         <AccountRow bucket={{ account: { ...account, subAccountName: 'كاش بيننا' }, dinar: 0, usd: 0 }} />,
       ))
 
-      expect(custom).toContain('>دخل<')
-      expect(custom).not.toContain('>Income<')
-      expect(standard).toContain('>Cash between us<')
+      expect(custom).toContain('>دخل · Dinar<')
+      expect(custom).not.toContain('>Income · Dinar<')
+      expect(standard).toContain('>Cash between us · Dinar<')
     } finally {
       setActiveUiLanguage('ar')
     }

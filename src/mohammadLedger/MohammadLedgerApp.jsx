@@ -7,7 +7,7 @@ import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, Brie
 import './adreemDesk.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
-import { accountClassificationOptions, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
+import { accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, voidMovement } from './ledgerCore'
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammadPersistenceMode, loadMohammadPersistedState, logoutAdreemCloudSession, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
@@ -276,6 +276,12 @@ function accountLabel(account) {
   return account ? accountDisplayName(account) : ''
 }
 
+function accountPrimaryUserValue(account) {
+  const primaryName = accountPrimaryName(account)
+  const enteredName = String(accountNameValue(account) || '').trim().replace(/\s+/g, ' ')
+  return enteredName && enteredName === primaryName ? primaryName : ''
+}
+
 function protectUiValues(value, protectedValues = []) {
   const values = Array.from(new Set(protectedValues
     .map((item) => String(item || '').trim())
@@ -288,16 +294,28 @@ function protectUiValues(value, protectedValues = []) {
 
 function protectedAccountLabel(account) {
   if (!account) return ''
-  return protectUiValues(accountLabel(account), [account.ownerName, account.subAccountName, account.legacyName])
+  const protectedValues = [accountPrimaryUserValue(account)]
+  const context = accountContextLabel(account)
+  const detail = accountDetailName(account)
+  const knownDetails = accountDetailOptionsFor(account.type, account.valueKind)
+  if (detail && context.includes(detail) && !knownDetails.some((knownDetail) => context.startsWith(knownDetail))) {
+    protectedValues.push(detail)
+  }
+  return protectUiValues(accountLabel(account), protectedValues)
 }
 
-function protectedAccountDetail(account) {
+function protectedAccountPrimaryName(account) {
   if (!account) return ''
+  return protectUiValues(accountPrimaryName(account), [accountPrimaryUserValue(account)])
+}
+
+function protectedAccountContext(account) {
+  if (!account) return ''
+  const context = accountContextLabel(account)
   const detail = accountDetailName(account)
-  const preset = accountPresetFor(account.type, account.valueKind)
-  const isUserNamedDetail = preset.nameTarget === 'subAccountName'
-  const isKnownSystemDetail = accountDetailOptionsFor(account.type, account.valueKind).includes(detail)
-  return isUserNamedDetail || !isKnownSystemDetail ? preserveUiData(detail) : detail
+  const knownDetails = accountDetailOptionsFor(account.type, account.valueKind)
+  if (knownDetails.some((knownDetail) => context.startsWith(knownDetail))) return context
+  return detail && context.includes(detail) ? protectUiValues(context, [detail]) : context
 }
 
 function protectedAccountDraftSummary(accountDraft) {
@@ -768,15 +786,12 @@ function compareBalanceBuckets(a, b) {
 export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
   const { account, dinar, usd } = bucket
   const balanceTone = dinar > 0 ? 'is-positive' : dinar < 0 ? 'is-negative' : 'is-zero'
-  const kindText = accountKindText(account)
-  const detailText = accountDetailName(account)
   return (
     <article className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
-        <strong>{preserveUiData(account.ownerName)}</strong>
+        <strong>{protectedAccountPrimaryName(account)}</strong>
         <span className="ml3-account-meta">
-          {kindText ? <small className="ml3-account-kind">{kindText}</small> : null}
-          {detailText && detailText !== kindText ? <small className="ml3-account-detail">{protectedAccountDetail(account)}</small> : null}
+          <small className="ml3-account-context">{protectedAccountContext(account)}</small>
           {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b>تأكيد</b> : null}
         </span>
       </button>
@@ -898,7 +913,8 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
     <div className="ml3-account-picker" aria-label={label}>
       <div className={`ml3-picked-account ${selectedAccount ? `is-selected ml3-picked-account--${visualKind(selectedAccount)}` : ''}`}>
         <div>
-          <strong>{selectedAccount ? protectedAccountLabel(selectedAccount) : 'اختر الحساب'}</strong>
+          <strong>{selectedAccount ? protectedAccountPrimaryName(selectedAccount) : 'اختر الحساب'}</strong>
+          {selectedAccount ? <small>{protectedAccountContext(selectedAccount)}</small> : null}
         </div>
         {selectedAccount ? (
           <div className="ml3-picked-actions">
@@ -937,8 +953,8 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
               <div className="ml3-picker-favorites" aria-label="اختيارات سريعة">
                 {preferredAccounts.map((account) => (
                   <button type="button" key={account.id} className={`ml3-picker-favorite--${visualKind(account)} ${account.id === value ? 'is-selected' : ''}`} onClick={() => chooseAccount(account.id)}>
-                    <strong>{preserveUiData(account.ownerName)}</strong>
-                    <span>{protectedAccountDetail(account)}</span>
+                    <strong>{protectedAccountPrimaryName(account)}</strong>
+                    <span>{protectedAccountContext(account)}</span>
                   </button>
                 ))}
               </div>
@@ -974,8 +990,8 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
                 <button type="button" key={account.id} className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`} onClick={() => chooseAccount(account.id)}>
                   <span className={`ml3-picker-dot ml3-picker-dot--${visualKind(account)}`} aria-hidden="true" />
                   <span className="ml3-picker-option-copy">
-                    <strong>{preserveUiData(account.ownerName)}</strong>
-                    <small>{protectedAccountDetail(account)}</small>
+                    <strong>{protectedAccountPrimaryName(account)}</strong>
+                    <small>{protectedAccountContext(account)}</small>
                   </span>
                   <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
                   {account.id === value ? <em>مختار</em> : null}
@@ -1055,6 +1071,17 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDe
   )
 }
 
+function AttachmentFileField({ name = 'attachmentFile' }) {
+  const [fileName, setFileName] = useState('')
+  return (
+    <label className="ml3-file-field">
+      ملف
+      <span>{fileName ? preserveUiData(fileName) : 'اختر ملفًا'}</span>
+      <input name={name} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setFileName(event.target.files?.[0]?.name || '')} />
+    </label>
+  )
+}
+
 function AttachmentLink({ attachment, onDelete }) {
   const [status, setStatus] = useState('idle')
 
@@ -1117,7 +1144,7 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
             const account = accountById.get(effect.accountId)
             return (
               <span key={`${effect.accountId}-${effect.currency}`}>
-                {preserveUiData(account?.ownerName || effect.accountId)} {signedMoney(effect.delta, effect.currency)}
+                {account ? protectedAccountPrimaryName(account) : preserveUiData(effect.accountId)} {signedMoney(effect.delta, effect.currency)}
               </span>
             )
           })}
@@ -1125,7 +1152,7 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
       ) : null}
       {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
       {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
-      {expenseCategory ? <small>نوع المصروف: {preserveUiData(expenseCategory.ownerName)}</small> : null}
+      {expenseCategory ? <small>نوع المصروف: {protectedAccountPrimaryName(expenseCategory)}</small> : null}
       {movementAttachments.length ? (
         <div className="ml3-attachment-list">
           {movementAttachments.map((item) => (
@@ -1171,7 +1198,7 @@ function HistoryMovementRow({ movement, accountById, attachments = [], dimension
             const account = accountById.get(effect.accountId)
             return (
               <span key={`${movement.id}-${effect.accountId}-${effect.currency}`}>
-                {preserveUiData(account?.ownerName || effect.accountId)}: {signedMoney(effect.delta, effect.currency)}
+                {account ? protectedAccountPrimaryName(account) : preserveUiData(effect.accountId)}: {signedMoney(effect.delta, effect.currency)}
               </span>
             )
           })}
@@ -1185,7 +1212,7 @@ function HistoryMovementRow({ movement, accountById, attachments = [], dimension
       ) : null}
       {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
       {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
-      {expenseCategory ? <small>نوع المصروف: {preserveUiData(expenseCategory.ownerName)}</small> : null}
+      {expenseCategory ? <small>نوع المصروف: {protectedAccountPrimaryName(expenseCategory)}</small> : null}
       {movementAttachments.length ? (
         <div className="ml3-attachment-list">
           {movementAttachments.map((item) => (
@@ -1206,27 +1233,44 @@ function movementAccountImpact(movement, accountId) {
   return buildPostingEntries(movement).filter((entry) => entry.accountId === accountId)
 }
 
-export function AccountClassificationEditorFields({ account }) {
-  const [classification, setClassification] = useState(classificationValue(account))
-  const [currencyKind, setCurrencyKind] = useState(account.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR)
+function accountEditorDraft(account) {
+  return {
+    ...account,
+    subAccountName: accountDetailName(account),
+    currencyKind: account.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR,
+  }
+}
+
+export function AccountClassificationEditorFields({ account, className = '' }) {
+  const editorKey = [account.id, account.updatedAt, account.ownerName, account.subAccountName, account.type, account.valueKind, account.currencyKind].join(':')
+  return <AccountClassificationEditor key={editorKey} account={account} className={className} />
+}
+
+function AccountClassificationEditor({ account, className = '' }) {
+  const [draft, setDraft] = useState(() => accountEditorDraft(account))
+  const classification = classificationValue(draft)
   const parsedClassification = parseClassification(classification)
-  const selectedCurrencyKind = accountClassificationCurrency(account, parsedClassification, currencyKind)
+  const preset = accountPresetFor(parsedClassification.type, parsedClassification.valueKind)
+  const detailOptions = accountDetailOptionsFor(parsedClassification.type, parsedClassification.valueKind)
+  const showDetail = !preset.skipDetail && detailOptions.length > 0
+  const selectedCurrencyKind = accountClassificationCurrency(account, parsedClassification, draft.currencyKind)
   const showLegacyMultiCurrency = selectedCurrencyKind === ACCOUNT_CURRENCY_KINDS.MULTI
   const currencyFieldValue = showLegacyMultiCurrency ? '' : selectedCurrencyKind
 
   return (
-    <div className="ml3-profile-editor-grid">
+    <div className={`ml3-profile-editor-grid ${className}`.trim()}>
+      <input type="hidden" name="ownerName" value={draft.ownerName || ''} />
+      <input type="hidden" name="subAccountName" value={draft.subAccountName || ''} />
       <label>
-        الاسم الظاهر
-        <input name="ownerName" defaultValue={account.ownerName} />
-      </label>
-      <label>
-        الوصف
-        <input name="subAccountName" defaultValue={accountDetailName(account)} />
-      </label>
-      <label>
-        التصنيف
-        <select name="classification" value={classification} onChange={(event) => setClassification(event.target.value)}>
+        هذا الحساب هو
+        <select
+          name="classification"
+          value={classification}
+          onChange={(event) => {
+            const next = parseClassification(event.target.value)
+            setDraft((current) => applyAccountClassification(current, next.type, next.valueKind))
+          }}
+        >
           {accountClassificationOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -1234,10 +1278,24 @@ export function AccountClassificationEditorFields({ account }) {
           ))}
         </select>
       </label>
+      <label>
+        {preset.nameLabel || 'اسم الحساب'}
+        <input value={accountNameValue(draft)} onChange={(event) => setDraft((current) => applyAccountName(current, event.target.value))} placeholder={preset.namePlaceholder || 'اكتب الاسم'} />
+      </label>
+      {showDetail ? (
+        <label>
+          {preset.detailLabel || 'نوع التعامل'}
+          <select value={draft.subAccountName || detailOptions[0]} onChange={(event) => setDraft((current) => ({ ...current, subAccountName: event.target.value }))}>
+            {detailOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       {accountNeedsCurrency(parsedClassification) ? (
         <label>
           العملة
-          <select name="currencyKind" value={currencyFieldValue} onChange={(event) => setCurrencyKind(event.target.value)}>
+          <select name="currencyKind" value={currencyFieldValue} onChange={(event) => setDraft((current) => ({ ...current, currencyKind: event.target.value }))}>
             {showLegacyMultiCurrency ? <option value="">اتركها فارغة بدون تغيير</option> : null}
             <option value={ACCOUNT_CURRENCY_KINDS.DINAR}>دينار</option>
             <option value={ACCOUNT_CURRENCY_KINDS.USD}>دولار</option>
@@ -1271,9 +1329,9 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
             إغلاق
           </button>
           <div>
-            <span>{accountKindText(account)}</span>
-            <h2>{protectedAccountLabel(account)}</h2>
-            <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'دين / رصيد' : 'داخل الدفتر'}</p>
+            <span>{protectedAccountContext(account)}</span>
+            <h2>{protectedAccountPrimaryName(account)}</h2>
+            <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'ما لك وما عليك معه' : account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK ? 'مكان من أماكن فلوسك' : 'حساب للمتابعة'}</p>
           </div>
         </div>
 
@@ -1284,7 +1342,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
 
         <div className="ml3-profile-facts">
           <div>
-            <span>التصنيف</span>
+            <span>نوع الحساب</span>
             <strong>{accountKindText(account)}</strong>
           </div>
           <div>
@@ -1334,10 +1392,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
               الرابط
               <input name="attachmentUrl" placeholder="اختياري" />
             </label>
-            <label>
-              ملف
-              <input name="attachmentFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
-            </label>
+            <AttachmentFileField />
           </div>
           <button type="submit" disabled={isAddingAttachment}>
             {isAddingAttachment ? 'جاري رفع المرفق' : 'ربط مرفق'}
@@ -1352,9 +1407,9 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
         </form>
 
         <form className="ml3-profile-editor" onSubmit={(event) => onUpdateAccount(event, account.id)}>
-          <h3>تصنيف الحساب</h3>
+          <h3>بيانات الحساب</h3>
           <AccountClassificationEditorFields account={account} />
-          <button type="submit">حفظ التصنيف</button>
+          <button type="submit">حفظ التعديل</button>
         </form>
 
         <div className="ml3-profile-movements">
@@ -1402,64 +1457,29 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
   )
 }
 
-function AccountReviewCurrencyField({ classification, currencyKind, onChange }) {
-  const selection = accountReviewSelection(classification, currencyKind)
-  if (!accountNeedsCurrency(selection)) return null
-
-  return (
-    <label>
-      العملة
-      <select name="currencyKind" value={selection.currencyKind} onChange={(event) => onChange(event.target.value)}>
-        <option value={ACCOUNT_CURRENCY_KINDS.DINAR}>دينار</option>
-        <option value={ACCOUNT_CURRENCY_KINDS.USD}>دولار</option>
-      </select>
-    </label>
-  )
-}
-
 export function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisable }) {
   const { account, dinar, usd } = bucket
   const mergeTargets = activeAccounts.filter((target) => areMergeAccountsCompatible(account, target))
-  const [classification, setClassification] = useState(classificationValue(account))
-  const [currencyKind, setCurrencyKind] = useState(() => accountReviewSelection(classificationValue(account), account.currencyKind).currencyKind)
 
   return (
     <article className="ml3-review-card">
       <div className="ml3-review-card-head">
         <div>
-          <strong>{preserveUiData(account.ownerName)}</strong>
+          <strong>{protectedAccountPrimaryName(account)}</strong>
           <span>{account.notes ? preserveUiData(account.notes) : 'يحتاج تحديد طريقة التعامل معه.'}</span>
         </div>
         <b>{formatDisplayMeaning(account, dinar)}</b>
       </div>
       {hasMoneyValue(usd) ? <p className="ml3-review-usd">{money(usd, CURRENCIES.USD)}</p> : null}
       <form className="ml3-decision-grid" onSubmit={(event) => onResolve(event, account.id)}>
-        <label>
-          الاسم
-          <input name="ownerName" defaultValue={account.ownerName} />
-        </label>
-        <label>
-          الوصف
-          <input name="subAccountName" defaultValue={accountDetailName(account)} />
-        </label>
-        <label>
-          التصنيف
-          <select name="classification" value={classification} onChange={(event) => setClassification(event.target.value)}>
-            {accountClassificationOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <AccountReviewCurrencyField classification={classification} currencyKind={currencyKind} onChange={setCurrencyKind} />
+        <AccountClassificationEditorFields account={account} className="ml3-decision-wide" />
         <label className="ml3-decision-wide">
-          ملاحظة القرار
-          <input name="notes" defaultValue={account.notes || ''} placeholder="سبب التصنيف أو أي توضيح" />
+          ملاحظة
+          <input name="notes" defaultValue={account.notes || ''} placeholder="اختياري" />
         </label>
         <div className="ml3-decision-actions">
           <button type="submit" className="ml3-mini-action is-confirm">
-            اعتماد بهذا التصنيف
+            اعتماد الحساب
           </button>
           <button type="button" className="ml3-mini-action is-muted" onClick={() => onDisable(account.id)}>
             إخفاء كغير مستخدم
@@ -1484,38 +1504,27 @@ export function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, 
 }
 
 export function ExternalAccountCard({ account, onCreate, onIgnore }) {
-  const initialClassification = `${ACCOUNT_TYPES.PERSON}|${VALUE_KINDS.RECEIVABLE}`
-  const [classification, setClassification] = useState(initialClassification)
-  const [currencyKind, setCurrencyKind] = useState(() => accountReviewSelection(initialClassification, account.currencyKind).currencyKind)
+  const draftAccount = {
+    ...account,
+    type: account.type || ACCOUNT_TYPES.PERSON,
+    valueKind: account.valueKind || VALUE_KINDS.RECEIVABLE,
+    currencyKind: account.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR,
+  }
 
   return (
     <article className="ml3-review-card">
       <div className="ml3-review-card-head">
         <div>
-          <strong>{preserveUiData(account.ownerName)}</strong>
+          <strong>{protectedAccountPrimaryName(draftAccount)}</strong>
           <span>{preserveUiData(account.notes)}</span>
         </div>
         <b>اسم جديد</b>
       </div>
       <form className="ml3-decision-grid" onSubmit={(event) => onCreate(event, account)}>
-        <label>
-          الوصف
-          <input name="subAccountName" defaultValue={accountDetailName(account)} />
-        </label>
-        <label>
-          التصنيف
-          <select name="classification" value={classification} onChange={(event) => setClassification(event.target.value)}>
-            {accountClassificationOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <AccountReviewCurrencyField classification={classification} currencyKind={currencyKind} onChange={setCurrencyKind} />
+        <AccountClassificationEditorFields account={draftAccount} className="ml3-decision-wide" />
         <div className="ml3-decision-actions">
           <button type="submit" className="ml3-mini-action is-confirm">
-            إنشاء بهذا التصنيف
+            إنشاء الحساب
           </button>
           <button type="button" className="ml3-mini-action is-muted" onClick={() => onIgnore(account)}>
             تجاهل الاسم
@@ -1748,7 +1757,7 @@ export default function MohammadLedgerApp() {
   const [activeSection, setActiveSection] = useState('entry')
   const [activeEntryMode, setActiveEntryMode] = useState('movement')
   const [activeAccountGroup, setActiveAccountGroup] = useState('people')
-  const [activeAccountPresetGroup, setActiveAccountPresetGroup] = useState('people')
+  const [activeAccountPresetGroup, setActiveAccountPresetGroup] = useState('')
   const [movementDraft, setMovementDraft] = useState(() => emptyMovementDraft())
   const [movementAttachmentFile, setMovementAttachmentFile] = useState(null)
   const [movementStep, setMovementStep] = useState(MOVEMENT_ENTRY_STEPS.TYPE)
@@ -1780,6 +1789,8 @@ export default function MohammadLedgerApp() {
   const [accountQuery, setAccountQuery] = useState('')
   const [showZeroAccounts, setShowZeroAccounts] = useState(false)
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
+  const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
+  const [activeAccountDetail, setActiveAccountDetail] = useState('')
   const saveCoordinatorRef = useRef(null)
   const hasHydratedSnapshotRef = useRef(false)
   const movementSaveLockRef = useRef(false)
@@ -1835,29 +1846,29 @@ export default function MohammadLedgerApp() {
   const accountWizardStages = [
     {
       key: ACCOUNT_WIZARD_STEPS.GROUP,
-      title: 'ما الذي تضيفه؟',
-      summary: selectedAccountPresetGroup.title,
+      title: 'الفئة',
+      summary: activeAccountPresetGroup ? selectedAccountPresetGroup.title : 'اختر',
     },
     ...(accountNeedsPresetChoice
       ? [
           {
             key: ACCOUNT_WIZARD_STEPS.PRESET,
             title: selectedAccountPresetCopy.title,
-            summary: selectedAccountPreset.title,
+            summary: activeAccountPresetKey ? selectedAccountPreset.title : 'اختر',
           },
         ]
       : []),
     {
       key: ACCOUNT_WIZARD_STEPS.NAME,
-      title: 'الاسم',
+      title: selectedAccountPreset.nameLabel || 'الاسم',
       summary: accountDraftNameValue || 'اكتب الاسم',
     },
     ...(accountNeedsDetailChoice
       ? [
           {
             key: ACCOUNT_WIZARD_STEPS.DETAIL,
-            title: 'كيف تتعاملان؟',
-            summary: accountDraft.subAccountName || 'اختر',
+            title: selectedAccountPreset.detailLabel || 'نوع التعامل',
+            summary: activeAccountDetail || 'اختر',
           },
         ]
       : []),
@@ -1914,16 +1925,16 @@ export default function MohammadLedgerApp() {
     const accountItems = (balancesByKind.review || []).map((bucket) => ({
       key: `account:${bucket.account.id}`,
       type: 'account',
-      label: bucket.account.ownerName,
-      detail: accountDetailName(bucket.account),
+      label: accountPrimaryName(bucket.account),
+      detail: protectedAccountContext(bucket.account),
       tone: 'danger',
       bucket,
     }))
     const externalItems = unresolvedExternalAccounts.map((account) => ({
       key: `external:${account.id}`,
       type: 'external',
-      label: account.ownerName,
-      detail: accountDetailName(account),
+      label: accountPrimaryName(account),
+      detail: protectedAccountContext(account),
       tone: 'info',
       account,
     }))
@@ -2352,6 +2363,8 @@ export default function MohammadLedgerApp() {
     commitFlowChange(
       () => {
         if (presetGroup) setActiveAccountPresetGroup(presetGroup.key)
+        setActiveAccountPresetKey(preset.key)
+        setActiveAccountDetail('')
         if (nextStep) setAccountWizardStep(nextStep)
         setAccountDraft((current) => ({
           ...current,
@@ -2374,6 +2387,8 @@ export default function MohammadLedgerApp() {
     const nextStep = group.keys.length > 1 ? ACCOUNT_WIZARD_STEPS.PRESET : ACCOUNT_WIZARD_STEPS.NAME
     commitFlowChange(() => {
       setActiveAccountPresetGroup(group.key)
+      setActiveAccountPresetKey(group.keys.length === 1 ? firstPreset.key : '')
+      setActiveAccountDetail('')
       setAccountWizardStep(nextStep)
       const currentPresetIsVisible = group.keys.includes(selectedAccountPreset.key)
       if (currentPresetIsVisible) return
@@ -2527,7 +2542,9 @@ export default function MohammadLedgerApp() {
     }))
     setFeedback('تم إنشاء الحساب.')
     setAccountDraft(emptyAccountDraft())
-    setActiveAccountPresetGroup('people')
+    setActiveAccountPresetGroup('')
+    setActiveAccountPresetKey('')
+    setActiveAccountDetail('')
     setAccountWizardStep(ACCOUNT_WIZARD_STEPS.GROUP)
   }
 
@@ -2565,7 +2582,7 @@ export default function MohammadLedgerApp() {
     }
     const movementErrors = accountClassificationMovementErrors(accountId, candidateAccounts, movements)
     if (movementErrors.length) {
-      setFeedback(`هذا التصنيف لا يناسب الحركات السابقة: ${movementErrors.map((error) => error.message).join(' ')}`)
+      setFeedback(`نوع الحساب لا يناسب الحركات السابقة: ${movementErrors.map((error) => error.message).join(' ')}`)
       return
     }
     setAccounts(candidateAccounts)
@@ -2586,7 +2603,7 @@ export default function MohammadLedgerApp() {
     })
     if (!result.ok) {
       const message = result.errors.map((error) => error.message).join(' ')
-      setFeedback(result.reason === 'movement-history' ? `هذا التصنيف لا يناسب الحركات السابقة: ${message}` : message)
+      setFeedback(result.reason === 'movement-history' ? `نوع الحساب لا يناسب الحركات السابقة: ${message}` : message)
       return
     }
     setAccounts(result.accounts)
@@ -2825,10 +2842,10 @@ export default function MohammadLedgerApp() {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     const selection = accountReviewSelection(formData.get('classification'), formData.get('currencyKind'))
-    const submissionKey = JSON.stringify(['external-account', externalAccountKey(externalAccount), selection, formData.get('subAccountName')])
+    const submissionKey = JSON.stringify(['external-account', externalAccountKey(externalAccount), selection, formData.get('ownerName'), formData.get('subAccountName')])
     if (!claimSubmission(accountCreationLockRef, submissionKey)) return
     const account = createAccount({
-      ownerName: externalAccount.ownerName,
+      ownerName: String(formData.get('ownerName') || externalAccount.ownerName).trim(),
       subAccountName: String(formData.get('subAccountName') || externalAccount.subAccountName).trim(),
       ...selection,
       notes: externalAccount.notes,
@@ -3037,7 +3054,7 @@ export default function MohammadLedgerApp() {
                 <button type="button" key={item.key} className={`ml3-review-ticket ml3-review-ticket--${item.tone} ${activeReviewItem?.key === item.key ? 'is-active' : ''}`} onClick={() => setActiveReviewKey(item.key)}>
                   <span>{formatCount(index + 1)}</span>
                   <strong>{item.type === 'movement' ? item.label : preserveUiData(item.label)}</strong>
-                  <b>{item.type === 'movement' ? item.detail : preserveUiData(item.detail)}</b>
+                  <b>{item.detail}</b>
                 </button>
               ))}
             </div>
@@ -3110,7 +3127,7 @@ export default function MohammadLedgerApp() {
                 <option value="">كل أنواع المصروف</option>
                 {activeExpenseCategories.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {preserveUiData(account.ownerName)}
+                    {protectedAccountPrimaryName(account)}
                   </option>
                 ))}
               </select>
@@ -3268,7 +3285,7 @@ export default function MohammadLedgerApp() {
     key: step.key,
     step: step.key,
     label: step.title,
-    value: step.key === ACCOUNT_WIZARD_STEPS.NAME || step.key === ACCOUNT_WIZARD_STEPS.DETAIL ? preserveUiData(step.summary) : step.summary,
+    value: step.key === ACCOUNT_WIZARD_STEPS.NAME ? preserveUiData(step.summary) : step.summary,
   }))
 
   if (!isHydrated || loadFailed) {
@@ -3512,7 +3529,7 @@ export default function MohammadLedgerApp() {
                             <option value="">بدون تصنيف</option>
                             {activeExpenseCategories.map((category) => (
                               <option key={category.id} value={category.id}>
-                                {preserveUiData(category.ownerName)}
+                                {protectedAccountPrimaryName(category)}
                               </option>
                             ))}
                           </select>
@@ -3599,23 +3616,23 @@ export default function MohammadLedgerApp() {
                       {formatCount(currentAccountWizardIndex + 1)}/{formatCount(accountWizardStages.length)}
                     </span>
                     <h2>{accountWizardStages[currentAccountWizardIndex]?.title}</h2>
-                    <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME || currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? preserveUiData(accountWizardStages[currentAccountWizardIndex]?.summary) : accountWizardStages[currentAccountWizardIndex]?.summary}</p>
+                    <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME && hasAccountDraftName ? preserveUiData(accountWizardStages[currentAccountWizardIndex]?.summary) : accountWizardStages[currentAccountWizardIndex]?.summary}</p>
                   </div>
-                  <b>{selectedAccountPreset.title}</b>
+                  <b>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'حساب جديد' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetGroup.title : selectedAccountPreset.title}</b>
                 </header>
                 <FlowProgress current={currentAccountWizardIndex + 1} total={accountWizardStages.length} items={completedAccountStages} onEdit={goToAccountWizardStep} />
 
                 <section key={currentAccountWizardStep} className={`ml3-account-stage ml3-account-stage--${currentAccountWizardStep}`}>
                   <div className="ml3-account-stage-head">
-                    <h3>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'ماذا تريد أن تضيف؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.question : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? 'ما الاسم الذي ستبحث به؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'كيف يكون الرصيد بينكما؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'بأي عملة؟' : 'هل كل شيء صحيح؟'}</h3>
-                    <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر شخصًا، مكان فلوسك، أو شيئًا تريد متابعته.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.hint : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? 'اسم قصير وواضح يكفي.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'اختر هل الرصيد كاش بينكم أو شيك بينكم.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'دينار أو دولار.' : 'راجع السطر ثم احفظ الحساب.'}</p>
+                    <h3>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'الحساب يخص ماذا؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.question : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.nameLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? selectedAccountPreset.detailLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'بأي عملة؟' : 'راجع الحساب'}</h3>
+                    <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر الأقرب فقط.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.hint : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.namePlaceholder : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'اختر كاش بينكما أو شيك بينكما.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'اختر دينارًا أو دولارًا.' : 'تأكد من الاسم والنوع والعملة.'}</p>
                   </div>
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? (
                     <div className="ml3-account-choice-list" aria-label="نوع الحساب">
                       {accountPresetGroups.map((group) => {
                         return (
-                          <button type="button" className={hasAccountDraftName && activeAccountPresetGroup === group.key ? 'is-active' : ''} key={group.key} onClick={() => chooseAccountPresetGroup(group.key)}>
+                          <button type="button" className={activeAccountPresetGroup === group.key ? 'is-active' : ''} key={group.key} onClick={() => chooseAccountPresetGroup(group.key)} aria-current={activeAccountPresetGroup === group.key ? 'true' : undefined}>
                             <i>
                               <AccountGroupIcon groupKey={group.key} />
                             </i>
@@ -3637,7 +3654,7 @@ export default function MohammadLedgerApp() {
                         .filter(Boolean)
                         .map((preset) => {
                           return (
-                            <button type="button" key={preset.key} className={hasAccountDraftName && accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'is-active' : ''} onClick={() => chooseAccountPreset(preset)} aria-current={hasAccountDraftName && accountDraft.type === preset.type && accountDraft.valueKind === preset.valueKind ? 'true' : undefined}>
+                            <button type="button" key={preset.key} className={activeAccountPresetKey === preset.key ? 'is-active' : ''} onClick={() => chooseAccountPreset(preset)} aria-current={activeAccountPresetKey === preset.key ? 'true' : undefined}>
                               <i>
                                 <AccountPresetIcon presetKey={preset.key} />
                               </i>
@@ -3656,22 +3673,23 @@ export default function MohammadLedgerApp() {
                     <label className="ml3-account-field">
                       <span>{selectedAccountPreset.nameLabel || 'الاسم'}</span>
                       <input value={accountDraftNameValue} onChange={(event) => setAccountDraft((current) => applyAccountName(current, event.target.value))} placeholder={selectedAccountPreset.namePlaceholder || 'اكتب الاسم'} />
-                      <small>اكتب الاسم كما تريد أن يظهر في الأرصدة والبحث.</small>
+                      <small>هذا هو الاسم الذي سيظهر في الأرصدة والبحث.</small>
                     </label>
                   ) : null}
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? (
-                    <div className="ml3-account-choice-list is-compact" aria-label={selectedAccountPreset.detailLabel || 'الوصف'}>
+                    <div className="ml3-account-choice-list is-compact" aria-label={selectedAccountPreset.detailLabel || 'نوع التعامل'}>
                       {selectedAccountDetails.map((option) => (
                         <button
                           type="button"
                           key={option}
-                          className={accountDraft.subAccountName === option ? 'is-active' : ''}
+                          className={activeAccountDetail === option ? 'is-active' : ''}
                           onClick={() => {
                             setAccountDraft((current) => ({
                               ...current,
                               subAccountName: option,
                             }))
+                            setActiveAccountDetail(option)
                             goToAccountWizardStep(accountNeedsCurrencyChoice ? ACCOUNT_WIZARD_STEPS.CURRENCY : ACCOUNT_WIZARD_STEPS.SAVE)
                           }}
                         >
@@ -3714,7 +3732,7 @@ export default function MohammadLedgerApp() {
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
                     <div className="ml3-account-summary">
-                      <span>سيُحفظ الحساب كالتالي</span>
+                      <span>الحساب بعد الحفظ</span>
                       <strong>{protectedAccountDraftSummary(accountDraft)}</strong>
                     </div>
                   ) : null}

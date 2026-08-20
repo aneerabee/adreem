@@ -48,6 +48,7 @@ function createAccountSession(options = {}) {
       : ''),
     reviewAccountId: options.reviewAccountId || '',
     reviewOriginalLabel: options.reviewOriginalLabel || '',
+    selectedDetail: '',
     uiMessageId: null,
   }
 }
@@ -61,6 +62,7 @@ function applyPresetToSession(session, preset) {
     subAccountName: preset.subAccountName,
     currencyKind: session.draft.currencyKind,
   }
+  session.selectedDetail = ''
 }
 
 function groupNeedsTypeStep(groupOrKey) {
@@ -122,7 +124,7 @@ async function sendStep(ctx, session, result = null) {
     return upsertAccountMessage(ctx, session, {
       text: accountStepText(session),
       reply_markup: accountDetailKeyboard(
-        session.draft.subAccountName,
+        session.selectedDetail,
         accountDetailOptionsFor(session.draft.type, session.draft.valueKind),
       ),
     })
@@ -136,7 +138,7 @@ async function sendStep(ctx, session, result = null) {
   if (session.step === STEPS.REVIEW) {
     return upsertAccountMessage(ctx, session, {
       text: accountReviewText(session, result),
-      reply_markup: accountConfirmKeyboard(),
+      reply_markup: accountConfirmKeyboard(session.mode === 'review'),
     })
   }
   return null
@@ -145,7 +147,7 @@ async function sendStep(ctx, session, result = null) {
 async function sendAccountConnectionError(ctx, session) {
   return upsertAccountMessage(ctx, session, {
     text: '<b>تعذر الاتصال بالدفتر الآن.</b>\n<blockquote>حاول مرة أخرى بعد لحظات.</blockquote>',
-    reply_markup: accountConfirmKeyboard(),
+    reply_markup: accountConfirmKeyboard(session.mode === 'review'),
   })
 }
 
@@ -243,6 +245,7 @@ export async function handleAccountCallback(ctx, data) {
     const detail = Number.isInteger(index) ? detailOptions[index] : ''
     if (!detail) return sendStep(ctx, session)
     session.draft.subAccountName = detail
+    session.selectedDetail = detail
     session.step = accountNeedsCurrency(session.draft) ? STEPS.CURRENCY : STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     if (session.step === STEPS.CURRENCY) return sendStep(ctx, session)
@@ -372,6 +375,7 @@ export async function handleAccountText(ctx, text) {
       return true
     }
     session.draft.subAccountName = subAccountName
+    session.selectedDetail = subAccountName
     session.step = accountNeedsCurrency(session.draft) ? STEPS.CURRENCY : STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     if (session.step === STEPS.CURRENCY) {
