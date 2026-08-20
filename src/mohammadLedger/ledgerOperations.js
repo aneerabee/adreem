@@ -45,21 +45,25 @@ function sameId(left, right) {
   return String(left || '') === String(right || '')
 }
 
+function dimensionFromAccount(account) {
+  if (account?.valueKind !== VALUE_KINDS.PROJECT && account?.valueKind !== VALUE_KINDS.ASSET) return null
+  return {
+    id: account.dimensionId || `dimension-account-${account.id}`,
+    name: account.ownerName || account.subAccountName || account.legacyName || 'بدون اسم',
+    type: account.type === 'project' ? DIMENSION_TYPES.PROJECT : DIMENSION_TYPES.ASSET,
+    linkedAccountId: account.id,
+    status: account.status === 'inactive' ? 'inactive' : 'active',
+    createdAt: account.createdAt || nowIso(),
+  }
+}
+
 export function dimensionsFromAccounts(accounts = [], dimensions = []) {
   const byId = new Map((Array.isArray(dimensions) ? dimensions : []).filter(Boolean).map((dimension) => [dimension.id, dimension]))
   for (const account of accounts) {
     if (account?.status === 'inactive') continue
-    if (account?.valueKind !== VALUE_KINDS.PROJECT && account?.valueKind !== VALUE_KINDS.ASSET) continue
-    const id = account.dimensionId || `dimension-account-${account.id}`
-    if (byId.has(id)) continue
-    byId.set(id, {
-      id,
-      name: account.ownerName || account.subAccountName || account.legacyName || 'بدون اسم',
-      type: account.type === 'project' ? DIMENSION_TYPES.PROJECT : DIMENSION_TYPES.ASSET,
-      linkedAccountId: account.id,
-      status: 'active',
-      createdAt: account.createdAt || nowIso(),
-    })
+    const dimension = dimensionFromAccount(account)
+    if (!dimension || byId.has(dimension.id)) continue
+    byId.set(dimension.id, dimension)
   }
   return Array.from(byId.values()).filter((dimension) => dimension?.status !== 'inactive')
 }
@@ -96,7 +100,26 @@ export function buildExpenseCategoryReports(state = {}) {
 export function buildDimensionReports(state = {}) {
   const accounts = Array.isArray(state.accounts) ? state.accounts : []
   const movements = Array.isArray(state.movements) ? state.movements : []
-  const dimensions = dimensionsFromAccounts(accounts, state.dimensions)
+  const dimensionsById = new Map(dimensionsFromAccounts(accounts, state.dimensions).map((dimension) => [dimension.id, dimension]))
+  const historicDimensionIds = new Set(
+    movements
+      .filter((movement) => movement?.status === MOVEMENT_STATUSES.POSTED && movement.dimensionId)
+      .map((movement) => movement.dimensionId),
+  )
+  const knownDimensions = new Map(
+    (Array.isArray(state.dimensions) ? state.dimensions : [])
+      .filter(Boolean)
+      .map((dimension) => [dimension.id, dimension]),
+  )
+  for (const account of accounts) {
+    const dimension = dimensionFromAccount(account)
+    if (dimension && !knownDimensions.has(dimension.id)) knownDimensions.set(dimension.id, dimension)
+  }
+  for (const dimensionId of historicDimensionIds) {
+    const dimension = knownDimensions.get(dimensionId)
+    if (dimension && !dimensionsById.has(dimensionId)) dimensionsById.set(dimensionId, dimension)
+  }
+  const dimensions = Array.from(dimensionsById.values())
   return dimensions.map((dimension) => {
     const related = movements.filter((movement) => movement.status === MOVEMENT_STATUSES.POSTED && sameId(movement.dimensionId, dimension.id))
     const totals = related.reduce(
@@ -236,10 +259,52 @@ export function buildReconciliationCorrectionDrafts(reconciliation) {
     }))
 }
 
+export function findUnresolvedReconciliationDifferences(reconciliations = [], movements = []) {
+  const postedCorrections = (Array.isArray(movements) ? movements : []).filter((movement) =>
+    movement?.type === MOVEMENT_TYPES.CORRECTION && movement.status === MOVEMENT_STATUSES.POSTED,
+  )
+
+  return (Array.isArray(reconciliations) ? reconciliations : []).map((reconciliation) => {
+    const corrected = postedCorrections
+      .filter((movement) =>
+        sameId(movement.reconciliationId, reconciliation.id) &&
+        sameId(movement.destinationAccountId, reconciliation.accountId),
+      )
+      .reduce(
+        (totals, movement) => {
+          if (movement.currency === CURRENCIES.USD) {
+            return { ...totals, usd: roundMoney(totals.usd + Number(movement.amount || 0)) }
+          }
+          return { ...totals, dinar: roundMoney(totals.dinar + Number(movement.amount || 0)) }
+        },
+        { dinar: 0, usd: 0 },
+      )
+    return {
+      reconciliation,
+      unresolvedDinar: roundMoney(Number(reconciliation.diffDinar || 0) - corrected.dinar),
+      unresolvedUsd: roundMoney(Number(reconciliation.diffUsd || 0) - corrected.usd),
+    }
+  }).filter((item) => item.unresolvedDinar !== 0 || item.unresolvedUsd !== 0)
+}
+
 export function lastReconciliationForAccount(reconciliations = [], accountId) {
   return (Array.isArray(reconciliations) ? reconciliations : [])
     .filter((item) => item.accountId === accountId)
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0] || null
+}
+
+export function recurringTemplateFromMovement(movement = {}) {
+  return {
+    type: movement.type,
+    amount: movement.amount,
+    currency: movement.currency,
+    sourceAccountId: movement.sourceAccountId || null,
+    destinationAccountId: movement.destinationAccountId || null,
+    rate: movement.rate,
+    note: movement.note,
+    dimensionId: movement.dimensionId || '',
+    expenseCategoryId: movement.expenseCategoryId || '',
+  }
 }
 
 export function createRecurringRuleFromMovement(movement, { frequency = RECURRING_FREQUENCIES.MONTHLY, name = '', dayOfMonth } = {}) {
@@ -252,17 +317,8 @@ export function createRecurringRuleFromMovement(movement, { frequency = RECURRIN
     frequency,
     dayOfMonth: Math.min(31, Math.max(1, Math.round(Number(dayOfMonth || new Date(movement.createdAt || createdAt).getDate())))),
     executionMode: 'manual',
-    template: {
-      type: movement.type,
-      amount: movement.amount,
-      currency: movement.currency,
-      sourceAccountId: movement.sourceAccountId || null,
-      destinationAccountId: movement.destinationAccountId || null,
-      rate: movement.rate,
-      note: movement.note,
-      dimensionId: movement.dimensionId || '',
-      expenseCategoryId: movement.expenseCategoryId || '',
-    },
+    sourceMovementId: movement.id,
+    template: recurringTemplateFromMovement(movement),
     lastRunKey: '',
     createdAt,
     updatedAt: createdAt,
@@ -272,10 +328,15 @@ export function createRecurringRuleFromMovement(movement, { frequency = RECURRIN
 export function dueRecurringRules(rules = [], date = new Date()) {
   const key = monthKey(date)
   const day = date.getDate()
+  const lastDayOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
   return (Array.isArray(rules) ? rules : [])
     .filter((rule) => rule?.status === 'active')
     .filter((rule) => rule.frequency === RECURRING_FREQUENCIES.MONTHLY)
-    .filter((rule) => day >= Math.min(31, Math.max(1, Number(rule.dayOfMonth || 1))))
+    .filter((rule) => {
+      const createdAt = new Date(rule.createdAt || 0)
+      return Number.isNaN(createdAt.getTime()) || monthKey(createdAt) !== key
+    })
+    .filter((rule) => day >= Math.min(lastDayOfMonth, Math.min(31, Math.max(1, Number(rule.dayOfMonth || 1)))))
     .filter((rule) => rule.lastRunKey !== key)
 }
 
@@ -392,6 +453,31 @@ export function syncRecurringRulesFromMovement(rules = [], movement, updatedAt =
           updatedAt,
         }
       : rule,
+  )
+}
+
+export function syncRecurringRuleFromSourceMovement(rule, movement, updatedAt = nowIso()) {
+  if (!rule) return null
+  if (!movement || !sameId(rule.sourceMovementId, movement.id)) return rule
+  if (movement.status === MOVEMENT_STATUSES.VOIDED) {
+    return {
+      ...rule,
+      status: 'inactive',
+      disabledAt: movement.voidedAt || movement.updatedAt || updatedAt,
+      updatedAt,
+    }
+  }
+  if (movement.status !== MOVEMENT_STATUSES.POSTED) return rule
+  return {
+    ...rule,
+    template: recurringTemplateFromMovement(movement),
+    updatedAt,
+  }
+}
+
+export function syncRecurringRulesFromSourceMovement(rules = [], movement, updatedAt = nowIso()) {
+  return (Array.isArray(rules) ? rules : []).map((rule) =>
+    syncRecurringRuleFromSourceMovement(rule, movement, updatedAt),
   )
 }
 

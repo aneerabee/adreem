@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
+import { createLocalizedTelegramClient } from '../localizedTelegram.js'
 import { attachmentPathIsReferenced, handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './movement.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
@@ -36,9 +37,12 @@ function createTelegramStub() {
   }
 }
 
-function createCtx() {
+function createCtx(language = 'ar') {
+  const client = createTelegramStub()
+  const telegram = language === 'en' ? createLocalizedTelegramClient(client, language) : client
+  telegram.calls = client.calls
   return {
-    telegram: createTelegramStub(),
+    telegram,
     repository: memoryRepository(),
     sessions: createSessionStore(),
     chatId: 278516861,
@@ -49,6 +53,91 @@ function createCtx() {
 }
 
 describe('telegram movement flow safety', () => {
+  it('translates attachment upload failure while preserving a colliding file name', async () => {
+    const ctx = createCtx('en')
+    ctx.repository.uploadAttachmentFile = async () => {
+      throw new Error('upload failed')
+    }
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      mode: 'create',
+      step: 'review',
+      sessionId: 'english-upload-failure',
+      uiMessageId: ctx.messageId,
+      draft: {
+        type: MOVEMENT_TYPES.EXPENSE,
+        amount: 100,
+        currency: CURRENCIES.DINAR,
+        attachmentLabel: 'دخل',
+        attachmentPending: { fileName: 'دخل', mimeType: 'application/pdf', buffer: Buffer.from('pdf') },
+      },
+    })
+
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const text = ctx.telegram.calls.at(-1).payload.text
+    expect(text).toContain('Attachment upload failed.')
+    expect(text).toContain('Attachment: دخل')
+    expect(text).toContain('The entry was not saved.')
+    expect(text).not.toContain('تعذر')
+  })
+
+  it('translates a rejected review save', async () => {
+    const ctx = createCtx('en')
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      mode: 'review',
+      step: 'review',
+      sessionId: 'english-rejected-review',
+      reviewMovementId: 'missing-review-entry',
+      uiMessageId: ctx.messageId,
+      draft: { type: MOVEMENT_TYPES.EXPENSE, amount: 100, currency: CURRENCIES.DINAR },
+    })
+
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    expect(ctx.telegram.calls.at(-1).payload.text)
+      .toBe('<b>Save failed.</b>\n<blockquote>This entry is no longer in Review.</blockquote>')
+  })
+
+  it('preserves colliding notes and generated attachment names in English review text', async () => {
+    const ctx = createCtx('en')
+    ctx.telegram.getFile = async () => ({ file_path: 'documents/income.pdf' })
+    ctx.telegram.downloadFile = async () => Buffer.from('pdf')
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      mode: 'create',
+      step: 'attachment',
+      sessionId: 'english-protected-data',
+      uiMessageId: ctx.messageId,
+      choices: {},
+      draft: {
+        type: MOVEMENT_TYPES.TRANSFER,
+        amount: 100,
+        currency: CURRENCIES.DINAR,
+        currencyConfirmed: true,
+        sourceAccountId: 'me-cash',
+        destinationAccountId: 'saeed-cash',
+        note: 'مالك',
+      },
+    })
+
+    await handleMovementMedia(ctx, {
+      document: {
+        file_id: 'income-file',
+        file_unique_id: 'income-file',
+        file_name: 'دخل',
+        mime_type: 'application/pdf',
+        file_size: 3,
+      },
+    })
+
+    const text = ctx.telegram.calls.at(-1).payload.text
+    expect(text).toContain('<b>Note:</b> مالك')
+    expect(text).toContain('<b>Attachment:</b> دخل')
+    expect(text).not.toContain('<b>Attachment:</b> Income')
+  })
+
   it('recognizes an uploaded attachment already linked to the ledger', () => {
     const storagePath = 'main/2026-08-19/receipt.pdf'
     expect(attachmentPathIsReferenced({ attachments: [{ storagePath }] }, storagePath)).toBe(true)

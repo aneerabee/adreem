@@ -35,7 +35,7 @@ describe('telegram ledger service', () => {
     expect(parseAmountText('-1')).toBe(null)
     expect(parseBalanceText('0')).toBe(0)
     expect(parseBalanceText('١٢٬٥٠٠')).toBe(12500)
-    expect(parseBalanceText('١٢٫٥٠')).toBe(12.5)
+    expect(parseBalanceText('١٢٫٥٠')).toBe(13)
     expect(parseBalanceText('-1')).toBe(null)
   })
 
@@ -254,7 +254,7 @@ describe('telegram ledger service', () => {
     expect(repository.state.movements.filter((movement) => movement.reconciliationId === first.reconciliation.id)).toHaveLength(1)
   })
 
-  it('keeps fractional ledger balances exact when reconciling from telegram', async () => {
+  it('normalizes legacy fractional balances before reconciling from telegram', async () => {
     const initialState = createMohammadFallbackState()
     const fractionalState = {
       ...initialState,
@@ -287,11 +287,10 @@ describe('telegram ledger service', () => {
 
     expect(result.reconciliation).toMatchObject({
       expectedDinar,
-      actualDinar: expectedDinar - 0.1,
-      diffDinar: -0.1,
+      actualDinar: expectedDinar,
+      diffDinar: 0,
     })
-    expect(result.correctionMovements).toHaveLength(1)
-    expect(result.correctionMovements[0].amount).toBe(-0.1)
+    expect(result.correctionMovements).toHaveLength(0)
   })
 
   it('rejects telegram reconciliation without a clear note', async () => {

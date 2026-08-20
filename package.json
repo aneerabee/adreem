@@ -18,7 +18,8 @@
     "ops:create-ledger-access": "node server/ops/createLedgerAccess.js"
   },
   "dependencies": {
-    "@fontsource-variable/noto-sans-arabic": "5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource/ibm-plex-sans-arabic": "^5.3.0",
     "@supabase/supabase-js": "2.103.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.4",

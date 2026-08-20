@@ -14,12 +14,13 @@ import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
 import { MOVEMENT_ENTRY_STEPS, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
 import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccounts, sameLogicalAccount } from './movementAccounts'
-import { RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, buildReconciliationCorrectionDrafts, createAttachment, createAuditEvent, createReconciliation, createRecurringRuleFromMovement, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, hideAttachment, lastReconciliationForAccount, syncRecurringRulesFromMovement, updateRecurringRule } from './ledgerOperations'
+import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, buildReconciliationCorrectionDrafts, createAttachment, createAuditEvent, createReconciliation, createRecurringRuleFromMovement, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, lastReconciliationForAccount, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
-import { getActiveUiLanguage, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage } from './uiTranslation'
+import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
+const USD_MAXIMUM_FRACTION_DIGITS = 6
 
 const accountGroupTabs = [
   { key: 'people', label: 'الناس', title: 'الناس' },
@@ -109,12 +110,9 @@ function MovementChoiceButton({ option, active, onChoose }) {
 }
 
 function FlowProgress({ current, total, items = [], onEdit }) {
-  const progress = total > 0 ? Math.max(0, Math.min(100, (current / total) * 100)) : 0
   return (
     <div className="adreem-flow-progress" aria-label={`الخطوة ${formatCount(current)} من ${formatCount(total)}`}>
-      <div className="adreem-flow-progress-line" aria-hidden="true">
-        <i style={{ width: `${progress}%` }} />
-      </div>
+      <progress className="adreem-flow-progress-line" max={Math.max(1, total)} value={Math.max(0, Math.min(total, current))} aria-hidden="true" />
       <div className="adreem-flow-progress-meta">
         <span>
           {formatCount(current)} من {formatCount(total)}
@@ -122,7 +120,7 @@ function FlowProgress({ current, total, items = [], onEdit }) {
         {items.length ? (
           <div className="adreem-flow-trail" aria-label="الاختيارات السابقة">
             {items.map((item) => (
-              <button type="button" key={item.key} onClick={() => onEdit?.(item.step)} title={`تعديل ${item.label}`}>
+              <button type="button" key={item.key} onClick={() => onEdit?.(item.step)} title={getActiveUiLanguage() === 'en' ? `Edit ${translateUiText(item.label, 'en')}` : `تعديل ${item.label}`}>
                 <Check aria-hidden="true" size={13} strokeWidth={2.7} />
                 <span>{item.label}</span>
                 <strong>{item.value}</strong>
@@ -167,20 +165,68 @@ function sameLedgerExtras(left, right) {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
-function money(value, currency = CURRENCIES.DINAR) {
-  const unit = currency === CURRENCIES.USD ? '$' : 'د.ل'
-  const rounded = Math.round(Number(value || 0))
-  return `${formatInteger(rounded)} ${unit}`
+function localizeDigit(character) {
+  const code = character.charCodeAt(0)
+  if (code >= 0x0660 && code <= 0x0669) return String(code - 0x0660)
+  if (code >= 0x06f0 && code <= 0x06f9) return String(code - 0x06f0)
+  return character
 }
 
-function signedMoney(value, currency = CURRENCIES.DINAR) {
-  const rounded = Math.round(Number(value || 0))
-  const prefix = rounded > 0 ? '+' : rounded < 0 ? '-' : ''
-  return `${prefix}${formatInteger(Math.abs(rounded))} ${currency === CURRENCIES.USD ? '$' : 'د.ل'}`
+export function normalizeLocalizedNumericInput(value, { allowDecimal = false, allowNegative = false } = {}) {
+  const raw = String(value ?? '')
+    .replace(/[\u0660-\u0669\u06f0-\u06f9]/g, localizeDigit)
+    .replace(/\u2212/g, '-')
+  const decimalIndex = raw.search(/[.\u066b]/)
+  const wholeSource = decimalIndex >= 0 ? raw.slice(0, decimalIndex) : raw
+  const whole = wholeSource.replace(/\D/g, '')
+  const sign = allowNegative && /^\s*-/.test(raw) && whole ? '-' : ''
+
+  if (!allowDecimal) return whole ? `${sign}${whole}` : ''
+  const fractionSource = decimalIndex >= 0 ? raw.slice(decimalIndex + 1).split(/[.\u066b]/, 1)[0] : ''
+  const fraction = fractionSource.replace(/\D/g, '')
+  if (!whole && decimalIndex < 0) return ''
+  return `${sign}${whole || '0'}${decimalIndex >= 0 ? `.${fraction}` : ''}`
+}
+
+export function parseLocalizedDecimal(value) {
+  const normalized = normalizeLocalizedNumericInput(value, { allowDecimal: true, allowNegative: true })
+  const number = Number(normalized)
+  return Number.isFinite(number) ? number : 0
+}
+
+export function parseWholeAmount(value) {
+  return Math.round(parseLocalizedDecimal(value))
+}
+
+export function parseMoneyAmount(value) {
+  return parseWholeAmount(value)
+}
+
+export function formatMoneyNumber(value) {
+  const number = Number(value || 0)
+  if (!Number.isFinite(number)) return '0'
+  return Math.round(number).toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
+
+function hasMoneyValue(value) {
+  const number = Number(value || 0)
+  return Number.isFinite(number) && number !== 0
+}
+
+export function money(value, currency = CURRENCIES.DINAR) {
+  const unit = currency === CURRENCIES.USD ? '$' : 'د.ل'
+  return `${formatMoneyNumber(value, currency)} ${unit}`
+}
+
+export function signedMoney(value, currency = CURRENCIES.DINAR) {
+  const number = Number(value || 0)
+  const displayValue = Math.round(number)
+  const prefix = displayValue > 0 ? '+' : displayValue < 0 ? '-' : ''
+  return `${prefix}${formatMoneyNumber(Math.abs(displayValue), currency)} ${currency === CURRENCIES.USD ? '$' : 'د.ل'}`
 }
 
 function formatInteger(value) {
-  const rounded = Math.round(Number(value || 0))
+  const rounded = parseWholeAmount(value)
   return rounded.toLocaleString('en-US')
 }
 
@@ -189,27 +235,22 @@ function formatCount(value) {
 }
 
 function formatRate(value) {
-  const number = Number(value || 0)
+  const number = parseLocalizedDecimal(value)
   if (!Number.isFinite(number)) return ''
   return number.toLocaleString('en-US', {
-    maximumFractionDigits: 6,
+    maximumFractionDigits: USD_MAXIMUM_FRACTION_DIGITS,
   })
 }
 
 function formatNumericEntryValue(value, allowDecimal = false) {
-  const raw = String(value || '')
+  const raw = normalizeLocalizedNumericInput(value, { allowDecimal })
   if (!raw) return ''
   if (allowDecimal) {
     const [whole, fraction = ''] = raw.split('.')
     const formattedWhole = whole ? formatInteger(whole) : '0'
     return raw.includes('.') ? `${formattedWhole}.${fraction}` : formattedWhole
   }
-  return formatInteger(raw.replace(/\D/g, ''))
-}
-
-function parseWholeAmount(value) {
-  const number = Number(String(value || '').replace(/,/g, ''))
-  return Number.isFinite(number) ? Math.round(number) : 0
+  return formatInteger(raw)
 }
 
 function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
@@ -233,6 +274,44 @@ function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
 
 function accountLabel(account) {
   return account ? accountDisplayName(account) : ''
+}
+
+function protectUiValues(value, protectedValues = []) {
+  const values = Array.from(new Set(protectedValues
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)))
+    .sort((left, right) => right.length - left.length)
+  if (!values.length) return String(value || '')
+  const pattern = new RegExp(values.map((item) => item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gu')
+  return String(value || '').replace(pattern, (item) => preserveUiData(item))
+}
+
+function protectedAccountLabel(account) {
+  if (!account) return ''
+  return protectUiValues(accountLabel(account), [account.ownerName, account.subAccountName, account.legacyName])
+}
+
+function protectedAccountDetail(account) {
+  if (!account) return ''
+  const detail = accountDetailName(account)
+  const preset = accountPresetFor(account.type, account.valueKind)
+  const isUserNamedDetail = preset.nameTarget === 'subAccountName'
+  const isKnownSystemDetail = accountDetailOptionsFor(account.type, account.valueKind).includes(detail)
+  return isUserNamedDetail || !isKnownSystemDetail ? preserveUiData(detail) : detail
+}
+
+function protectedAccountDraftSummary(accountDraft) {
+  return protectUiValues(accountDraftSummary(accountDraft), [accountNameValue(accountDraft)])
+}
+
+function protectedUserProfile(profile) {
+  if (!profile) return profile
+  return {
+    ...profile,
+    displayName: profile.displayName ? preserveUiData(profile.displayName) : profile.displayName,
+    email: profile.email ? preserveUiData(profile.email) : profile.email,
+    userId: profile.userId ? preserveUiData(profile.userId) : profile.userId,
+  }
 }
 
 function movementStatusLabel(status) {
@@ -394,7 +473,7 @@ function movementStepCopy(step, config = {}) {
 }
 
 function nonZero(bucket) {
-  return Math.round(Math.abs(bucket.dinar)) !== 0 || Math.round(Math.abs(bucket.usd)) !== 0
+  return hasMoneyValue(bucket.dinar) || hasMoneyValue(bucket.usd)
 }
 
 function externalAccountKey(account = {}) {
@@ -428,6 +507,199 @@ export function accountClassificationMovementErrors(accountId, candidateAccounts
     )
 }
 
+function accountClassificationCurrency(account, classification, requestedCurrencyKind) {
+  if (!accountNeedsCurrency(classification)) return account.currencyKind
+  if (requestedCurrencyKind === ACCOUNT_CURRENCY_KINDS.DINAR || requestedCurrencyKind === ACCOUNT_CURRENCY_KINDS.USD) return requestedCurrencyKind
+  if (requestedCurrencyKind === ACCOUNT_CURRENCY_KINDS.MULTI && account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI) return requestedCurrencyKind
+  return account.currencyKind === ACCOUNT_CURRENCY_KINDS.USD || account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI
+    ? account.currencyKind
+    : ACCOUNT_CURRENCY_KINDS.DINAR
+}
+
+export function prepareAccountClassificationUpdate({ accounts = [], movements = [], accountId, ownerName, subAccountName, classificationValue, currencyKind, updatedAt = new Date().toISOString() } = {}) {
+  const currentAccount = accounts.find((account) => account.id === accountId)
+  if (!currentAccount) return { ok: false, reason: 'missing-account', errors: [{ message: 'الحساب غير موجود.' }] }
+
+  const classification = parseClassification(classificationValue)
+  const nextAccount = {
+    ownerName: String(ownerName || '').trim(),
+    subAccountName: String(subAccountName || '').trim(),
+    type: classification.type,
+    valueKind: classification.valueKind,
+    currencyKind: accountClassificationCurrency(currentAccount, classification, currencyKind),
+  }
+  const candidateAccounts = accounts.map((account) =>
+    account.id === accountId
+      ? {
+          ...account,
+          ...nextAccount,
+          updatedAt,
+        }
+      : account,
+  )
+  const candidate = candidateAccounts.find((account) => account.id === accountId)
+  const validation = validateAccount(candidate, accounts.filter((account) => account.id !== accountId))
+  if (!validation.ok) return { ok: false, reason: 'account-validation', errors: validation.errors }
+
+  const movementErrors = accountClassificationMovementErrors(accountId, candidateAccounts, movements)
+  if (movementErrors.length) return { ok: false, reason: 'movement-history', errors: movementErrors }
+  return { ok: true, accounts: candidateAccounts, account: candidate }
+}
+
+export function cancelMovementConfirmation(target) {
+  const cancelLabel = `${movementLabels[target.type] || 'الحركة'} بقيمة ${money(target.amount, target.currency)}`
+  return translateUiText(`هل تريد إلغاء ${cancelLabel}؟ ستبقى الحركة ظاهرة في السجل.`)
+}
+
+export function mergeAccountsConfirmation(sourceAccount, targetAccount) {
+  const sourceName = preserveUiData(accountLabel(sourceAccount))
+  const targetName = preserveUiData(accountLabel(targetAccount))
+  return translateUiText(`هل تريد دمج حساب ${sourceName} داخل ${targetName}؟ ستُنقل الحركات ومرفقات الحساب إلى الحساب المختار.`)
+}
+
+export function claimSubmission(lock, key) {
+  if (!lock || lock.current === key) return false
+  lock.current = key
+  return true
+}
+
+export function releaseSubmission(lock, key) {
+  if (lock?.current === key) lock.current = ''
+}
+
+export function filterMovementHistory({ movements = [], query = '', type = '', status = '', accountId = '', dimensionId = '', expenseCategoryId = '', accountById = new Map(), dimensionById = new Map() } = {}) {
+  const normalizedQuery = normalizeAccountSearchText(query)
+  return movements.filter((movement) => {
+    if (type && movement.type !== type) return false
+    if (status && movement.status !== status) return false
+    if (accountId && movement.sourceAccountId !== accountId && movement.destinationAccountId !== accountId) return false
+    if (dimensionId && movement.dimensionId !== dimensionId) return false
+    if (expenseCategoryId && movement.expenseCategoryId !== expenseCategoryId) return false
+    if (!normalizedQuery) return true
+    const source = accountById.get(movement.sourceAccountId)
+    const destination = accountById.get(movement.destinationAccountId)
+    const expenseCategory = accountById.get(movement.expenseCategoryId)
+    const dimension = dimensionById.get(movement.dimensionId)
+    const haystack = normalizeAccountSearchText([
+      movementLabels[movement.type],
+      movementStatusLabel(movement.status),
+      movement.note,
+      source ? accountLabel(source) : '',
+      destination ? accountLabel(destination) : '',
+      expenseCategory ? accountLabel(expenseCategory) : '',
+      dimension?.name,
+    ].join(' '))
+    return haystack.includes(normalizedQuery)
+  })
+}
+
+export function mergeLedgerAccountState({ accounts = [], movements = [], attachments = [], dimensions = [], recurringRules = [], reconciliations = [] } = {}, sourceAccountId, targetAccountId, updatedAt = new Date().toISOString()) {
+  const nextMovements = movements.map((movement) => {
+    const affected = movement.sourceAccountId === sourceAccountId || movement.destinationAccountId === sourceAccountId || movement.expenseCategoryId === sourceAccountId
+    if (!affected) return movement
+    return {
+      ...movement,
+      sourceAccountId: movement.sourceAccountId === sourceAccountId ? targetAccountId : movement.sourceAccountId,
+      destinationAccountId: movement.destinationAccountId === sourceAccountId ? targetAccountId : movement.destinationAccountId,
+      expenseCategoryId: movement.expenseCategoryId === sourceAccountId ? targetAccountId : movement.expenseCategoryId,
+      mergedFromAccountId: sourceAccountId,
+      updatedAt,
+    }
+  })
+  const nextAccounts = accounts.map((account) => {
+    if (account.id === sourceAccountId) {
+      return {
+        ...account,
+        status: ACCOUNT_STATUSES.INACTIVE,
+        mergedIntoAccountId: targetAccountId,
+        disabledAt: updatedAt,
+        updatedAt,
+      }
+    }
+    return account.id === targetAccountId ? { ...account, updatedAt } : account
+  })
+  const nextAttachments = attachments.map((attachment) =>
+    attachment.accountId === sourceAccountId
+      ? {
+          ...attachment,
+          accountId: targetAccountId,
+          mergedFromAccountId: sourceAccountId,
+          updatedAt,
+        }
+      : attachment,
+  )
+  const nextDimensions = dimensions.map((dimension) =>
+    dimension.linkedAccountId === sourceAccountId
+      ? { ...dimension, linkedAccountId: targetAccountId, mergedFromAccountId: sourceAccountId, updatedAt }
+      : dimension,
+  )
+  const nextRecurringRules = recurringRules.map((rule) => {
+    const template = rule?.template || {}
+    const affected = [template.sourceAccountId, template.destinationAccountId, template.expenseCategoryId].includes(sourceAccountId)
+    if (!affected) return rule
+    return {
+      ...rule,
+      template: {
+        ...template,
+        sourceAccountId: template.sourceAccountId === sourceAccountId ? targetAccountId : template.sourceAccountId,
+        destinationAccountId: template.destinationAccountId === sourceAccountId ? targetAccountId : template.destinationAccountId,
+        expenseCategoryId: template.expenseCategoryId === sourceAccountId ? targetAccountId : template.expenseCategoryId,
+      },
+      mergedFromAccountId: sourceAccountId,
+      updatedAt,
+    }
+  })
+  const nextReconciliations = reconciliations.map((reconciliation) =>
+    reconciliation.accountId === sourceAccountId
+      ? { ...reconciliation, accountId: targetAccountId, mergedFromAccountId: sourceAccountId, updatedAt }
+      : reconciliation,
+  )
+  return {
+    accounts: nextAccounts,
+    movements: nextMovements,
+    attachments: nextAttachments,
+    dimensions: nextDimensions,
+    recurringRules: nextRecurringRules,
+    reconciliations: nextReconciliations,
+  }
+}
+
+export function areMergeAccountsCompatible(sourceAccount, targetAccount) {
+  if (!sourceAccount || !targetAccount || sourceAccount.id === targetAccount.id) return false
+  if (targetAccount.status !== ACCOUNT_STATUSES.ACTIVE) return false
+  if (sourceAccount.valueKind === VALUE_KINDS.REVIEW) return true
+  if (sourceAccount.valueKind !== targetAccount.valueKind) return false
+  const sourceCurrency = sourceAccount.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR
+  const targetCurrency = targetAccount.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR
+  return sourceCurrency === targetCurrency
+}
+
+export function mergeAccountReferenceErrors({ candidate, sourceAccount, targetAccount } = {}) {
+  const errors = []
+  if (!areMergeAccountsCompatible(sourceAccount, targetAccount)) errors.push('تصنيف أو عملة الحسابين غير متوافقين.')
+
+  for (const dimension of candidate?.dimensions || []) {
+    if (dimension.mergedFromAccountId !== sourceAccount?.id || dimension.linkedAccountId !== targetAccount?.id) continue
+    const expectedValueKind = dimension.type === DIMENSION_TYPES.ASSET ? VALUE_KINDS.ASSET : VALUE_KINDS.PROJECT
+    if (targetAccount.valueKind !== expectedValueKind) errors.push('المشروع أو الأصل لا يطابق الحساب المختار.')
+  }
+
+  const reconciliableKinds = new Set([VALUE_KINDS.CASH, VALUE_KINDS.BANK])
+  if ((candidate?.reconciliations || []).some((item) => item.mergedFromAccountId === sourceAccount?.id) && !reconciliableKinds.has(targetAccount?.valueKind)) {
+    errors.push('مطابقات الرصيد تحتاج حساب كاش أو مصرف.')
+  }
+
+  for (const rule of candidate?.recurringRules || []) {
+    if (rule.mergedFromAccountId !== sourceAccount?.id || rule.status !== ACCOUNT_STATUSES.ACTIVE) continue
+    const movement = { ...rule.template, status: MOVEMENT_STATUSES.POSTED }
+    if (!validateMovement(movement, candidate.accounts, candidate.movements || []).ok) {
+      errors.push('إحدى الحركات الشهرية لا تناسب الحساب المختار.')
+    }
+  }
+
+  return Array.from(new Set(errors))
+}
+
 function MetricChip({ label, value, tone = 'neutral', currency = CURRENCIES.DINAR }) {
   return (
     <article className={`ml3-metric ml3-metric--${tone}`}>
@@ -455,8 +727,8 @@ function accountKindText(account) {
 function accountBalanceChip(account, bucket) {
   const dinar = Number(bucket?.dinar || 0)
   const usd = Number(bucket?.usd || 0)
-  const hasDinar = Math.round(Math.abs(dinar)) !== 0
-  const hasUsd = Math.round(Math.abs(usd)) !== 0
+  const hasDinar = hasMoneyValue(dinar)
+  const hasUsd = hasMoneyValue(usd)
 
   if (!hasDinar && hasUsd) {
     return {
@@ -493,7 +765,7 @@ function compareBalanceBuckets(a, b) {
   return Number(bActive) - Number(aActive) || Math.abs(b.dinar) - Math.abs(a.dinar) || Math.abs(b.usd) - Math.abs(a.usd)
 }
 
-function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
+export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
   const { account, dinar, usd } = bucket
   const balanceTone = dinar > 0 ? 'is-positive' : dinar < 0 ? 'is-negative' : 'is-zero'
   const kindText = accountKindText(account)
@@ -501,16 +773,16 @@ function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
   return (
     <article className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
-        <strong>{account.ownerName}</strong>
+        <strong>{preserveUiData(account.ownerName)}</strong>
         <span className="ml3-account-meta">
           {kindText ? <small className="ml3-account-kind">{kindText}</small> : null}
-          {detailText && detailText !== kindText ? <small className="ml3-account-detail">{detailText}</small> : null}
+          {detailText && detailText !== kindText ? <small className="ml3-account-detail">{protectedAccountDetail(account)}</small> : null}
           {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b>تأكيد</b> : null}
         </span>
       </button>
       <div className={`ml3-account-values ${balanceTone}`}>
-        {Math.round(Math.abs(dinar)) !== 0 ? <strong>{formatDisplayMeaning(account, dinar)}</strong> : <span>صفر</span>}
-        {Math.round(Math.abs(usd)) !== 0 ? <strong>{money(usd, CURRENCIES.USD)}</strong> : null}
+        {hasMoneyValue(dinar) ? <strong>{formatDisplayMeaning(account, dinar)}</strong> : <span>صفر</span>}
+        {hasMoneyValue(usd) ? <strong>{money(usd, CURRENCIES.USD)}</strong> : null}
       </div>
       {(onConfirm || onDisable) && (
         <div className="ml3-row-actions">
@@ -570,7 +842,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   const accountBucket = (account) => balanceByAccountId.get(account.id) || { dinar: 0, usd: 0 }
   const accountMagnitude = (account) => {
     const bucket = accountBucket(account)
-    return Math.max(Math.abs(Math.round(bucket.dinar || 0)), Math.abs(Math.round(bucket.usd || 0)))
+    return Math.max(Math.abs(Number(bucket.dinar || 0)), Math.abs(Number(bucket.usd || 0)))
   }
   const hasVisibleBalance = (account) => accountMagnitude(account) > 0
   const preferredAccounts = preferredAccountIds.map((accountId) => accounts.find((account) => account.id === accountId)).filter(Boolean)
@@ -626,7 +898,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
     <div className="ml3-account-picker" aria-label={label}>
       <div className={`ml3-picked-account ${selectedAccount ? `is-selected ml3-picked-account--${visualKind(selectedAccount)}` : ''}`}>
         <div>
-          <strong>{selectedAccount ? accountLabel(selectedAccount) : 'اختر الحساب'}</strong>
+          <strong>{selectedAccount ? protectedAccountLabel(selectedAccount) : 'اختر الحساب'}</strong>
         </div>
         {selectedAccount ? (
           <div className="ml3-picked-actions">
@@ -665,8 +937,8 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
               <div className="ml3-picker-favorites" aria-label="اختيارات سريعة">
                 {preferredAccounts.map((account) => (
                   <button type="button" key={account.id} className={`ml3-picker-favorite--${visualKind(account)} ${account.id === value ? 'is-selected' : ''}`} onClick={() => chooseAccount(account.id)}>
-                    <strong>{account.ownerName}</strong>
-                    <span>{accountDetailName(account)}</span>
+                    <strong>{preserveUiData(account.ownerName)}</strong>
+                    <span>{protectedAccountDetail(account)}</span>
                   </button>
                 ))}
               </div>
@@ -702,8 +974,8 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
                 <button type="button" key={account.id} className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`} onClick={() => chooseAccount(account.id)}>
                   <span className={`ml3-picker-dot ml3-picker-dot--${visualKind(account)}`} aria-hidden="true" />
                   <span className="ml3-picker-option-copy">
-                    <strong>{account.ownerName}</strong>
-                    <small>{accountDetailName(account)}</small>
+                    <strong>{preserveUiData(account.ownerName)}</strong>
+                    <small>{protectedAccountDetail(account)}</small>
                   </span>
                   <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
                   {account.id === value ? <em>مختار</em> : null}
@@ -751,7 +1023,7 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDe
           value={textValue}
           placeholder={placeholder}
           onChange={(event) => {
-            const clean = allowDecimal ? event.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1') : event.target.value.replace(/\D/g, '')
+            const clean = normalizeLocalizedNumericInput(event.target.value, { allowDecimal })
             onChange(clean)
           }}
         />
@@ -805,7 +1077,7 @@ function AttachmentLink({ attachment, onDelete }) {
   return (
     <span className="ml3-attachment-action">
       <button type="button" onClick={openAttachment} disabled={status === 'opening'}>
-        {status === 'opening' ? 'فتح...' : attachment.label}
+        {status === 'opening' ? 'فتح...' : preserveUiData(attachment.label)}
       </button>
       {onDelete ? (
         <button type="button" className="is-danger" onClick={() => onDelete(attachment.id)}>
@@ -836,8 +1108,8 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
         </span>
       </div>
       <div className="ml3-today-route">
-        {source ? <b>{accountLabel(source)}</b> : null}
-        {destination ? <b>{accountLabel(destination)}</b> : null}
+        {source ? <b>{protectedAccountLabel(source)}</b> : null}
+        {destination ? <b>{protectedAccountLabel(destination)}</b> : null}
       </div>
       {effects.length ? (
         <div className="ml3-today-effects">
@@ -845,15 +1117,15 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
             const account = accountById.get(effect.accountId)
             return (
               <span key={`${effect.accountId}-${effect.currency}`}>
-                {account?.ownerName || effect.accountId} {signedMoney(effect.delta, effect.currency)}
+                {preserveUiData(account?.ownerName || effect.accountId)} {signedMoney(effect.delta, effect.currency)}
               </span>
             )
           })}
         </div>
       ) : null}
-      {movement.note ? <small>{movement.note}</small> : null}
-      {dimension ? <small>ملف: {dimension.name}</small> : null}
-      {expenseCategory ? <small>نوع المصروف: {expenseCategory.ownerName}</small> : null}
+      {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
+      {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
+      {expenseCategory ? <small>نوع المصروف: {preserveUiData(expenseCategory.ownerName)}</small> : null}
       {movementAttachments.length ? (
         <div className="ml3-attachment-list">
           {movementAttachments.map((item) => (
@@ -890,8 +1162,8 @@ function HistoryMovementRow({ movement, accountById, attachments = [], dimension
         </span>
       </div>
       <div className="ml3-history-route">
-        {source ? <b>{accountLabel(source)}</b> : <b>بدون مصدر</b>}
-        {destination ? <b>{accountLabel(destination)}</b> : null}
+        {source ? <b>{protectedAccountLabel(source)}</b> : <b>بدون مصدر</b>}
+        {destination ? <b>{protectedAccountLabel(destination)}</b> : null}
       </div>
       {effects.length ? (
         <div className="ml3-history-effects">
@@ -899,7 +1171,7 @@ function HistoryMovementRow({ movement, accountById, attachments = [], dimension
             const account = accountById.get(effect.accountId)
             return (
               <span key={`${movement.id}-${effect.accountId}-${effect.currency}`}>
-                {account?.ownerName || effect.accountId}: {signedMoney(effect.delta, effect.currency)}
+                {preserveUiData(account?.ownerName || effect.accountId)}: {signedMoney(effect.delta, effect.currency)}
               </span>
             )
           })}
@@ -911,9 +1183,9 @@ function HistoryMovementRow({ movement, accountById, attachments = [], dimension
           ))}
         </div>
       ) : null}
-      {movement.note ? <small>{movement.note}</small> : null}
-      {dimension ? <small>ملف: {dimension.name}</small> : null}
-      {expenseCategory ? <small>نوع المصروف: {expenseCategory.ownerName}</small> : null}
+      {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
+      {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
+      {expenseCategory ? <small>نوع المصروف: {preserveUiData(expenseCategory.ownerName)}</small> : null}
       {movementAttachments.length ? (
         <div className="ml3-attachment-list">
           {movementAttachments.map((item) => (
@@ -932,6 +1204,48 @@ function HistoryMovementRow({ movement, accountById, attachments = [], dimension
 
 function movementAccountImpact(movement, accountId) {
   return buildPostingEntries(movement).filter((entry) => entry.accountId === accountId)
+}
+
+export function AccountClassificationEditorFields({ account }) {
+  const [classification, setClassification] = useState(classificationValue(account))
+  const [currencyKind, setCurrencyKind] = useState(account.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR)
+  const parsedClassification = parseClassification(classification)
+  const selectedCurrencyKind = accountClassificationCurrency(account, parsedClassification, currencyKind)
+  const showLegacyMultiCurrency = selectedCurrencyKind === ACCOUNT_CURRENCY_KINDS.MULTI
+  const currencyFieldValue = showLegacyMultiCurrency ? '' : selectedCurrencyKind
+
+  return (
+    <div className="ml3-profile-editor-grid">
+      <label>
+        الاسم الظاهر
+        <input name="ownerName" defaultValue={account.ownerName} />
+      </label>
+      <label>
+        الوصف
+        <input name="subAccountName" defaultValue={accountDetailName(account)} />
+      </label>
+      <label>
+        التصنيف
+        <select name="classification" value={classification} onChange={(event) => setClassification(event.target.value)}>
+          {accountClassificationOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {accountNeedsCurrency(parsedClassification) ? (
+        <label>
+          العملة
+          <select name="currencyKind" value={currencyFieldValue} onChange={(event) => setCurrencyKind(event.target.value)}>
+            {showLegacyMultiCurrency ? <option value="">اتركها فارغة بدون تغيير</option> : null}
+            <option value={ACCOUNT_CURRENCY_KINDS.DINAR}>دينار</option>
+            <option value={ACCOUNT_CURRENCY_KINDS.USD}>دولار</option>
+          </select>
+        </label>
+      ) : null}
+    </div>
+  )
 }
 
 function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment }) {
@@ -958,14 +1272,14 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
           </button>
           <div>
             <span>{accountKindText(account)}</span>
-            <h2>{accountLabel(account)}</h2>
+            <h2>{protectedAccountLabel(account)}</h2>
             <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'دين / رصيد' : 'داخل الدفتر'}</p>
           </div>
         </div>
 
         <div className={`ml3-profile-balance ${dinar > 0 ? 'is-positive' : dinar < 0 ? 'is-negative' : 'is-zero'}`}>
           <strong>{formatDisplayMeaning(account, dinar)}</strong>
-          <span>{Math.round(Math.abs(usd)) !== 0 ? money(usd, CURRENCIES.USD) : 'لا يوجد دولار'}</span>
+          <span>{hasMoneyValue(usd) ? money(usd, CURRENCIES.USD) : 'لا يوجد دولار'}</span>
         </div>
 
         <div className="ml3-profile-facts">
@@ -988,7 +1302,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
             <h3>مطابقة</h3>
             {lastReconciliation ? (
               <p className="ml3-profile-note">
-                آخر مطابقة: {movementDateTime(lastReconciliation.createdAt)} · {lastReconciliation.note}
+                آخر مطابقة: {movementDateTime(lastReconciliation.createdAt)} · {preserveUiData(lastReconciliation.note)}
               </p>
             ) : null}
             <div className="ml3-profile-editor-grid">
@@ -998,7 +1312,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
               </label>
               <label>
                 الدولار الفعلي
-                <input name="actualUsd" inputMode="numeric" defaultValue={formatInteger(usd)} />
+                <input name="actualUsd" inputMode="numeric" defaultValue={formatMoneyNumber(usd)} />
               </label>
               <label>
                 ملاحظة
@@ -1039,26 +1353,7 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
 
         <form className="ml3-profile-editor" onSubmit={(event) => onUpdateAccount(event, account.id)}>
           <h3>تصنيف الحساب</h3>
-          <div className="ml3-profile-editor-grid">
-            <label>
-              الاسم الظاهر
-              <input name="ownerName" defaultValue={account.ownerName} />
-            </label>
-            <label>
-              الوصف
-              <input name="subAccountName" defaultValue={accountDetailName(account)} />
-            </label>
-            <label>
-              التصنيف
-              <select name="classification" defaultValue={classificationValue(account)}>
-                {accountClassificationOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <AccountClassificationEditorFields account={account} />
           <button type="submit">حفظ التصنيف</button>
         </form>
 
@@ -1077,9 +1372,9 @@ function AccountProfile({ bucket, movements, accounts, attachments = [], reconci
                 <div>
                   <strong>{movementLabels[movement.type] || movement.type}</strong>
                   <span>
-                    {accountLabel(source) || 'بدون مصدر'} ← {accountLabel(destination) || 'بدون وجهة'}
+                    {source ? protectedAccountLabel(source) : 'بدون مصدر'} ← {destination ? protectedAccountLabel(destination) : 'بدون وجهة'}
                   </span>
-                  {movement.note ? <small>{movement.note}</small> : null}
+                  {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
                   {movementAttachments.length ? (
                     <div className="ml3-attachment-list">
                       {movementAttachments.map((item) => (
@@ -1124,7 +1419,7 @@ function AccountReviewCurrencyField({ classification, currencyKind, onChange }) 
 
 export function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, onDisable }) {
   const { account, dinar, usd } = bucket
-  const mergeTargets = activeAccounts.filter((target) => target.id !== account.id)
+  const mergeTargets = activeAccounts.filter((target) => areMergeAccountsCompatible(account, target))
   const [classification, setClassification] = useState(classificationValue(account))
   const [currencyKind, setCurrencyKind] = useState(() => accountReviewSelection(classificationValue(account), account.currencyKind).currencyKind)
 
@@ -1132,12 +1427,12 @@ export function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, 
     <article className="ml3-review-card">
       <div className="ml3-review-card-head">
         <div>
-          <strong>{account.ownerName}</strong>
-          <span>{account.notes || 'يحتاج تحديد طريقة التعامل معه.'}</span>
+          <strong>{preserveUiData(account.ownerName)}</strong>
+          <span>{account.notes ? preserveUiData(account.notes) : 'يحتاج تحديد طريقة التعامل معه.'}</span>
         </div>
         <b>{formatDisplayMeaning(account, dinar)}</b>
       </div>
-      {Math.round(Math.abs(usd)) !== 0 ? <p className="ml3-review-usd">{money(usd, CURRENCIES.USD)}</p> : null}
+      {hasMoneyValue(usd) ? <p className="ml3-review-usd">{money(usd, CURRENCIES.USD)}</p> : null}
       <form className="ml3-decision-grid" onSubmit={(event) => onResolve(event, account.id)}>
         <label>
           الاسم
@@ -1178,7 +1473,7 @@ export function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, 
             <option value="">اختر حسابًا موجودًا للدمج</option>
             {mergeTargets.map((target) => (
               <option key={target.id} value={target.id}>
-                {accountLabel(target)}
+                {protectedAccountLabel(target)}
               </option>
             ))}
           </select>
@@ -1197,8 +1492,8 @@ export function ExternalAccountCard({ account, onCreate, onIgnore }) {
     <article className="ml3-review-card">
       <div className="ml3-review-card-head">
         <div>
-          <strong>{account.ownerName}</strong>
-          <span>{account.notes}</span>
+          <strong>{preserveUiData(account.ownerName)}</strong>
+          <span>{preserveUiData(account.notes)}</span>
         </div>
         <b>اسم جديد</b>
       </div>
@@ -1379,9 +1674,9 @@ function OperationsPanel({ reports, expenseReports, dueRules, recurringRules, at
           <span>{formatCount(reports.length)}</span>
         </div>
         {reports.length === 0 ? <p className="ml3-empty">لا توجد مراكز متابعة بعد.</p> : null}
-        {reports.slice(0, 6).map((item) => (
+        {reports.map((item) => (
           <div className="ml3-ops-row" key={item.dimension.id}>
-            <span>{item.dimension.name}</span>
+            <span>{preserveUiData(item.dimension.name)}</span>
             <b className={(item.net || item.netUsd) >= 0 ? 'is-positive' : 'is-negative'}>{signedMoney(item.net)}</b>
             <small>
               دخل {money(item.income)} · مصروف {money(item.expense)}
@@ -1400,9 +1695,9 @@ function OperationsPanel({ reports, expenseReports, dueRules, recurringRules, at
           <span>{formatCount(expenseReports.length)}</span>
         </div>
         {expenseReports.length === 0 ? <p className="ml3-empty">لا توجد مصروفات مصنفة.</p> : null}
-        {expenseReports.slice(0, 6).map((item) => (
+        {expenseReports.map((item) => (
           <div className="ml3-ops-row" key={item.categoryId || 'uncategorized'}>
-            <span>{item.name}</span>
+            <span>{preserveUiData(item.name)}</span>
             <b>{money(item.dinar)}</b>
             {item.usd ? <small>{money(item.usd, CURRENCIES.USD)}</small> : null}
           </div>
@@ -1416,7 +1711,7 @@ function OperationsPanel({ reports, expenseReports, dueRules, recurringRules, at
         {activeRecurringRules.length === 0 ? <p className="ml3-empty">لا توجد حركة شهرية.</p> : null}
         {activeRecurringRules.slice(0, 5).map((rule) => (
           <div className="ml3-ops-row" key={rule.id}>
-            <span>{rule.name}</span>
+            <span>{preserveUiData(rule.name)}</span>
             <label className="ml3-recurring-day">
               يوم
               <input type="number" min="1" max="31" value={rule.dayOfMonth || 1} onChange={(event) => onUpdateRecurring(rule.id, event.target.value)} />
@@ -1480,6 +1775,8 @@ export default function MohammadLedgerApp() {
   const [historyType, setHistoryType] = useState('')
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyAccountId, setHistoryAccountId] = useState('')
+  const [historyDimensionId, setHistoryDimensionId] = useState('')
+  const [historyExpenseCategoryId, setHistoryExpenseCategoryId] = useState('')
   const [accountQuery, setAccountQuery] = useState('')
   const [showZeroAccounts, setShowZeroAccounts] = useState(false)
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
@@ -1487,6 +1784,8 @@ export default function MohammadLedgerApp() {
   const hasHydratedSnapshotRef = useRef(false)
   const movementSaveLockRef = useRef(false)
   const accountAttachmentLockRef = useRef(false)
+  const accountCreationLockRef = useRef('')
+  const reconciliationLockRef = useRef('')
   const motionTimerRef = useRef(null)
   const normalizedUiLanguage = normalizeUiLanguage(uiLanguage)
   const uiDirection = uiLanguageDirection(normalizedUiLanguage)
@@ -1519,6 +1818,9 @@ export default function MohammadLedgerApp() {
 
   const activeAccounts = useMemo(() => getActivePostingAccounts(accounts), [accounts])
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts])
+  const activeDimensions = useMemo(() => dimensionsFromAccounts(accounts, ledgerExtras.dimensions), [accounts, ledgerExtras.dimensions])
+  const dimensionById = useMemo(() => new Map(activeDimensions.map((dimension) => [dimension.id, dimension])), [activeDimensions])
+  const activeExpenseCategories = useMemo(() => accounts.filter((account) => account.status === ACCOUNT_STATUSES.ACTIVE && account.valueKind === VALUE_KINDS.EXPENSE), [accounts])
   const balances = useMemo(() => summarizeBalances(accounts, movements), [accounts, movements])
   const balanceByAccountId = useMemo(() => new Map(balances.map((bucket) => [bucket.account.id, bucket])), [balances])
   const selectedAccountPreset = accountPresetFor(accountDraft.type, accountDraft.valueKind)
@@ -1640,19 +1942,17 @@ export default function MohammadLedgerApp() {
     .filter((movement) => !movement.id?.startsWith('opening-'))
     .slice()
     .reverse()
-  const filteredHistoryMovements = useMemo(() => {
-    const normalizedQuery = normalizeAccountSearchText(historyQuery)
-    return postedUserMovements.filter((movement) => {
-      if (historyType && movement.type !== historyType) return false
-      if (historyStatus && movement.status !== historyStatus) return false
-      if (historyAccountId && movement.sourceAccountId !== historyAccountId && movement.destinationAccountId !== historyAccountId) return false
-      if (!normalizedQuery) return true
-      const source = accountById.get(movement.sourceAccountId)
-      const destination = accountById.get(movement.destinationAccountId)
-      const haystack = normalizeAccountSearchText([movementLabels[movement.type], movementStatusLabel(movement.status), movement.note, source ? accountLabel(source) : '', destination ? accountLabel(destination) : ''].join(' '))
-      return haystack.includes(normalizedQuery)
-    })
-  }, [accountById, historyAccountId, historyQuery, historyStatus, historyType, postedUserMovements])
+  const filteredHistoryMovements = useMemo(() => filterMovementHistory({
+    movements: postedUserMovements,
+    query: historyQuery,
+    type: historyType,
+    status: historyStatus,
+    accountId: historyAccountId,
+    dimensionId: historyDimensionId,
+    expenseCategoryId: historyExpenseCategoryId,
+    accountById,
+    dimensionById,
+  }), [accountById, dimensionById, historyAccountId, historyDimensionId, historyExpenseCategoryId, historyQuery, historyStatus, historyType, postedUserMovements])
   const historyGroups = useMemo(() => {
     const groupsByKey = new Map()
     for (const movement of filteredHistoryMovements) {
@@ -1701,11 +2001,11 @@ export default function MohammadLedgerApp() {
   const movementUsesDimension = movementSupportsDimension(movementDraft.type)
   const normalizedDraft = {
     ...movementDraft,
-    amount: parseWholeAmount(movementDraft.amount),
+    amount: parseMoneyAmount(movementDraft.amount, movementConfig.currency || movementDraft.currency),
     currency: movementConfig.currency || movementDraft.currency,
     sourceAccountId: movementSourceRequired ? movementDraft.sourceAccountId : null,
     destinationAccountId: movementConfig.needsDestination ? movementDraft.destinationAccountId : null,
-    rate: movementDraft.rate === '' ? undefined : Number(movementDraft.rate),
+    rate: movementDraft.rate === '' ? undefined : parseLocalizedDecimal(movementDraft.rate),
     dimensionId: movementUsesDimension ? movementDraft.dimensionId || '' : '',
     expenseCategoryId: movementDraft.type === MOVEMENT_TYPES.EXPENSE || movementDraft.type === MOVEMENT_TYPES.TRUCK_EXPENSE ? movementDraft.expenseCategoryId || '' : '',
   }
@@ -1716,12 +2016,10 @@ export default function MohammadLedgerApp() {
   const canChooseMovementAccounts = hasMovementAmount && hasMovementRate
   const selectedSourceAccount = accountById.get(movementDraft.sourceAccountId)
   const selectedDestinationAccount = accountById.get(movementDraft.destinationAccountId)
-  const activeDimensions = useMemo(() => dimensionsFromAccounts(accounts, ledgerExtras.dimensions), [accounts, ledgerExtras.dimensions])
-  const activeExpenseCategories = useMemo(() => accounts.filter((account) => account.status === ACCOUNT_STATUSES.ACTIVE && account.valueKind === VALUE_KINDS.EXPENSE), [accounts])
   const dimensionReports = useMemo(() => buildDimensionReports({ ...ledgerExtras, accounts, movements }), [accounts, movements, ledgerExtras])
   const expenseCategoryReports = useMemo(() => buildExpenseCategoryReports({ ...ledgerExtras, accounts, movements }), [accounts, movements, ledgerExtras])
   const dueRules = useMemo(() => dueRecurringRules(ledgerExtras.recurringRules), [ledgerExtras.recurringRules])
-  const reconciliationDiffCount = useMemo(() => (ledgerExtras.reconciliations || []).filter((item) => Math.round(Number(item.actualDinar || 0)) !== Math.round(Number(item.expectedDinar || 0)) || Math.round(Number(item.actualUsd || 0)) !== Math.round(Number(item.expectedUsd || 0))).length, [ledgerExtras.reconciliations])
+  const reconciliationDiffCount = useMemo(() => findUnresolvedReconciliationDifferences(ledgerExtras.reconciliations, movements).length, [ledgerExtras.reconciliations, movements])
   const hasMovementAccounts = (!movementSourceRequired || Boolean(movementDraft.sourceAccountId)) && (!movementConfig.needsDestination || Boolean(movementDraft.destinationAccountId)) && (!movementConfig.needsDestination || !selectedSourceAccount || !sameLogicalAccount(selectedSourceAccount, selectedDestinationAccount))
   const canReviewMovement = canChooseMovementAccounts && hasMovementAccounts && movementStep >= MOVEMENT_ENTRY_STEPS.REVIEW
   const selectedBucket = balances.find((bucket) => bucket.account.id === selectedAccountId) || null
@@ -2142,18 +2440,21 @@ export default function MohammadLedgerApp() {
               frequency: movementDraft.recurringFrequency,
             })
           : null
-      setLedgerExtras((current) => ({
-        ...current,
-        attachments: attachment ? [...(current.attachments || []), attachment] : current.attachments,
-        recurringRules: recurringRule ? [...(current.recurringRules || []), recurringRule] : current.recurringRules,
-        auditEvents: [
-          ...(current.auditEvents || []),
-          createAuditEvent(originalMovement ? 'movement.updated' : 'movement.created', {
-            movementId: movement.id,
-            status: movement.status,
-          }),
-        ],
-      }))
+      setLedgerExtras((current) => {
+        const syncedRecurringRules = originalMovement ? syncRecurringRulesFromSourceMovement(current.recurringRules, movement) : current.recurringRules
+        return {
+          ...current,
+          attachments: attachment ? [...(current.attachments || []), attachment] : current.attachments,
+          recurringRules: recurringRule ? [...(syncedRecurringRules || []), recurringRule] : syncedRecurringRules,
+          auditEvents: [
+            ...(current.auditEvents || []),
+            createAuditEvent(originalMovement ? 'movement.updated' : 'movement.created', {
+              movementId: movement.id,
+              status: movement.status,
+            }),
+          ],
+        }
+      })
       setPendingUndo({
         movementId: movement.id,
         label: `${movementLabels[movement.type] || 'حركة'} · ${money(movement.amount, movement.currency)}`,
@@ -2172,27 +2473,28 @@ export default function MohammadLedgerApp() {
 
   function cancelMovement(movementId) {
     const target = movements.find((movement) => movement.id === movementId)
+    if (!target || target.status === MOVEMENT_STATUSES.VOIDED) return
     if (target?.status === MOVEMENT_STATUSES.POSTED && !canCancelMovement(target)) {
       setFeedback(`الإلغاء المباشر متاح فقط خلال آخر ${formatCount(CANCEL_WINDOW_HOURS)} ساعة. للحركات القديمة استخدم حركة تصحيح.`)
       return
     }
-    setMovements((current) =>
-      current.map((movement) => {
-        if (movement.id !== movementId) return movement
-        if (movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW) {
-          const now = new Date().toISOString()
-          return {
-            ...movement,
-            status: MOVEMENT_STATUSES.VOIDED,
-            voidReason: 'إلغاء حركة ناقصة',
-            voidedAt: now,
-            updatedAt: now,
-          }
+    if (typeof window !== 'undefined' && !window.confirm(cancelMovementConfirmation(target))) return
+    const now = new Date().toISOString()
+    const voidedMovement = target.status === MOVEMENT_STATUSES.NEEDS_REVIEW
+      ? {
+          ...target,
+          status: MOVEMENT_STATUSES.VOIDED,
+          voidReason: 'إلغاء حركة ناقصة',
+          voidedAt: now,
+          updatedAt: now,
         }
-        const result = voidMovement(movement, 'إلغاء من سجل الحركات')
-        return result.ok ? result.movement : movement
-      }),
-    )
+      : voidMovement(target, 'إلغاء من سجل الحركات', now).movement
+    if (!voidedMovement) return
+    setMovements((current) => current.map((movement) => (movement.id === movementId ? voidedMovement : movement)))
+    setLedgerExtras((current) => ({
+      ...current,
+      recurringRules: syncRecurringRulesFromSourceMovement(current.recurringRules, voidedMovement, now),
+    }))
     setPendingUndo((current) => (current?.movementId === movementId ? null : current))
     setFeedback('تم إلغاء الحركة وبقيت في السجل.')
   }
@@ -2209,9 +2511,12 @@ export default function MohammadLedgerApp() {
       setFeedback('اكتب اسمًا واضحًا للحساب قبل الحفظ.')
       return
     }
+    const submissionKey = JSON.stringify(['account', accountDraft])
+    if (!claimSubmission(accountCreationLockRef, submissionKey)) return
     const account = createAccount(accountDraft)
     const validation = validateAccount(account, accounts)
     if (!validation.ok) {
+      releaseSubmission(accountCreationLockRef, submissionKey)
       setFeedback(validation.errors.map((error) => error.message).join(' '))
       return
     }
@@ -2270,37 +2575,21 @@ export default function MohammadLedgerApp() {
   function updateAccountClassification(event, accountId) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    const classification = parseClassification(formData.get('classification'))
-    const nextAccount = {
-      ownerName: String(formData.get('ownerName') || '').trim(),
-      subAccountName: String(formData.get('subAccountName') || '').trim(),
-      type: classification.type,
-      valueKind: classification.valueKind,
-    }
-    const candidateAccounts = accounts.map((account) =>
-      account.id === accountId
-        ? {
-            ...account,
-            ...nextAccount,
-            updatedAt: new Date().toISOString(),
-          }
-        : account,
-    )
-    const candidate = candidateAccounts.find((account) => account.id === accountId)
-    const validation = validateAccount(
-      candidate,
-      accounts.filter((account) => account.id !== accountId),
-    )
-    if (!validation.ok) {
-      setFeedback(validation.errors.map((error) => error.message).join(' '))
+    const result = prepareAccountClassificationUpdate({
+      accounts,
+      movements,
+      accountId,
+      ownerName: formData.get('ownerName'),
+      subAccountName: formData.get('subAccountName'),
+      classificationValue: formData.get('classification'),
+      currencyKind: formData.get('currencyKind'),
+    })
+    if (!result.ok) {
+      const message = result.errors.map((error) => error.message).join(' ')
+      setFeedback(result.reason === 'movement-history' ? `هذا التصنيف لا يناسب الحركات السابقة: ${message}` : message)
       return
     }
-    const movementErrors = accountClassificationMovementErrors(accountId, candidateAccounts, movements)
-    if (movementErrors.length) {
-      setFeedback(`هذا التصنيف لا يناسب الحركات السابقة: ${movementErrors.map((error) => error.message).join(' ')}`)
-      return
-    }
-    setAccounts(candidateAccounts)
+    setAccounts(result.accounts)
     setFeedback('تم تعديل الحساب.')
   }
 
@@ -2308,12 +2597,14 @@ export default function MohammadLedgerApp() {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     const actualDinar = parseWholeAmount(formData.get('actualDinar'))
-    const actualUsd = parseWholeAmount(formData.get('actualUsd'))
+    const actualUsd = parseMoneyAmount(formData.get('actualUsd'), CURRENCIES.USD)
     const note = String(formData.get('note') || '').trim()
     if (!note) {
       setFeedback('المطابقة تحتاج ملاحظة واضحة.')
       return
     }
+    const submissionKey = JSON.stringify([accountId, currentDinar, currentUsd, actualDinar, actualUsd, note])
+    if (!claimSubmission(reconciliationLockRef, submissionKey)) return
     const record = createReconciliation({
       accountId,
       actualDinar,
@@ -2403,7 +2694,7 @@ export default function MohammadLedgerApp() {
   function deleteAttachment(attachmentId) {
     const attachment = (ledgerExtras.attachments || []).find((item) => item.id === attachmentId)
     if (!attachment) return
-    if (typeof window !== 'undefined' && !window.confirm('حذف هذا المرفق؟')) return
+    if (typeof window !== 'undefined' && !window.confirm(translateUiText('حذف هذا المرفق؟'))) return
     const hiddenAt = new Date().toISOString()
     setLedgerExtras((current) => ({
       ...current,
@@ -2474,45 +2765,68 @@ export default function MohammadLedgerApp() {
   }
 
   function mergeReviewAccount(sourceAccountId, targetAccountId) {
-    if (!targetAccountId || sourceAccountId === targetAccountId) return
-    const candidateMovements = movements.map((movement) => ({
-      ...movement,
-      sourceAccountId: movement.sourceAccountId === sourceAccountId ? targetAccountId : movement.sourceAccountId,
-      destinationAccountId: movement.destinationAccountId === sourceAccountId ? targetAccountId : movement.destinationAccountId,
-      mergedFromAccountId: movement.sourceAccountId === sourceAccountId || movement.destinationAccountId === sourceAccountId ? sourceAccountId : movement.mergedFromAccountId,
-    }))
-    const candidateAccounts = accounts.map((account) =>
-      account.id === sourceAccountId
-        ? {
-            ...account,
-            status: ACCOUNT_STATUSES.INACTIVE,
-            mergedIntoAccountId: targetAccountId,
-            updatedAt: new Date().toISOString(),
-          }
-        : account,
-    )
-    const invalidMovement = candidateMovements.find((movement) => {
+    if (!targetAccountId || sourceAccountId === targetAccountId) return false
+    const sourceAccount = accounts.find((account) => account.id === sourceAccountId)
+    const targetAccount = accounts.find((account) => account.id === targetAccountId)
+    if (!sourceAccount || !targetAccount) return false
+    const mergedAt = new Date().toISOString()
+    const candidate = mergeLedgerAccountState({
+      accounts,
+      movements,
+      attachments: ledgerExtras.attachments || [],
+      dimensions: ledgerExtras.dimensions || [],
+      recurringRules: ledgerExtras.recurringRules || [],
+      reconciliations: ledgerExtras.reconciliations || [],
+    }, sourceAccountId, targetAccountId, mergedAt)
+    const invalidMovement = candidate.movements.find((movement, index) => {
+      if (movement === movements[index]) return false
       if (movement.status !== MOVEMENT_STATUSES.POSTED) return false
-      if (movement.sourceAccountId !== targetAccountId && movement.destinationAccountId !== targetAccountId) return false
       return !validateMovement(
         movement,
-        candidateAccounts,
-        candidateMovements.filter((item) => item.id !== movement.id),
+        candidate.accounts,
+        candidate.movements.filter((item) => item.id !== movement.id),
       ).ok
     })
-    if (invalidMovement) {
+    const referenceErrors = mergeAccountReferenceErrors({ candidate, sourceAccount, targetAccount })
+    if (invalidMovement || referenceErrors.length) {
       setFeedback('لم يتم الدمج. الحساب المختار لا يناسب عملة أو نوع بعض الحركات المرتبطة.')
-      return
+      return false
     }
-    setMovements((current) => current.map((movement) => candidateMovements.find((candidate) => candidate.id === movement.id) || movement))
-    setAccounts((current) => current.map((account) => candidateAccounts.find((candidate) => candidate.id === account.id) || account))
+    if (typeof window !== 'undefined' && !window.confirm(mergeAccountsConfirmation(sourceAccount, targetAccount))) return false
+    setMovements(candidate.movements)
+    setAccounts(candidate.accounts)
+    setLedgerExtras((current) => {
+      const mergedExtras = mergeLedgerAccountState({
+        attachments: current.attachments || [],
+        dimensions: current.dimensions || [],
+        recurringRules: current.recurringRules || [],
+        reconciliations: current.reconciliations || [],
+      }, sourceAccountId, targetAccountId, mergedAt)
+      return {
+        ...current,
+        attachments: mergedExtras.attachments,
+        dimensions: mergedExtras.dimensions,
+        recurringRules: mergedExtras.recurringRules,
+        reconciliations: mergedExtras.reconciliations,
+        auditEvents: [
+          ...(current.auditEvents || []),
+          createAuditEvent('account.merged', {
+            sourceAccountId,
+            targetAccountId,
+          }),
+        ],
+      }
+    })
     setFeedback('تم دمج الحساب.')
+    return true
   }
 
   function addExternalAccount(event, externalAccount) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     const selection = accountReviewSelection(formData.get('classification'), formData.get('currencyKind'))
+    const submissionKey = JSON.stringify(['external-account', externalAccountKey(externalAccount), selection, formData.get('subAccountName')])
+    if (!claimSubmission(accountCreationLockRef, submissionKey)) return
     const account = createAccount({
       ownerName: externalAccount.ownerName,
       subAccountName: String(formData.get('subAccountName') || externalAccount.subAccountName).trim(),
@@ -2521,6 +2835,7 @@ export default function MohammadLedgerApp() {
     })
     const validation = validateAccount(account, accounts)
     if (!validation.ok) {
+      releaseSubmission(accountCreationLockRef, submissionKey)
       setFeedback(validation.errors.map((error) => error.message).join(' '))
       return
     }
@@ -2536,7 +2851,7 @@ export default function MohammadLedgerApp() {
         }),
       ],
     }))
-    setFeedback(`تم إنشاء حساب ${externalAccount.ownerName}.`)
+    setFeedback(`تم إنشاء حساب ${preserveUiData(externalAccount.ownerName)}.`)
   }
 
   function ignoreExternalAccount(externalAccount) {
@@ -2589,11 +2904,11 @@ export default function MohammadLedgerApp() {
       {
         ...movement,
         type: reviewDraft.type,
-        amount: parseWholeAmount(reviewDraft.amount),
+        amount: parseMoneyAmount(reviewDraft.amount, config.currency || reviewDraft.currency),
         currency: config.currency || reviewDraft.currency,
         sourceAccountId: movementNeedsSource(reviewDraft.type) ? reviewDraft.sourceAccountId || null : null,
         destinationAccountId: config.needsDestination ? reviewDraft.destinationAccountId || null : null,
-        rate: reviewDraft.rate === '' ? undefined : Number(reviewDraft.rate),
+        rate: reviewDraft.rate === '' ? undefined : parseLocalizedDecimal(reviewDraft.rate),
         note: String(reviewDraft.note || '').trim(),
         dimensionId: movementSupportsDimension(reviewDraft.type) ? movement.dimensionId || '' : '',
         expenseCategoryId: reviewDraft.expenseCategoryId || movement.expenseCategoryId || '',
@@ -2602,12 +2917,10 @@ export default function MohammadLedgerApp() {
       movements.filter((item) => item.id !== movement.id),
     )
     setMovements((current) => current.map((item) => (item.id === movement.id ? candidate : item)))
-    if (candidate.status === MOVEMENT_STATUSES.POSTED && candidate.recurringRuleId) {
-      setLedgerExtras((current) => ({
-        ...current,
-        recurringRules: syncRecurringRulesFromMovement(current.recurringRules, candidate),
-      }))
-    }
+    setLedgerExtras((current) => ({
+      ...current,
+      recurringRules: syncRecurringRulesFromSourceMovement(syncRecurringRulesFromMovement(current.recurringRules, candidate), candidate),
+    }))
     setFeedback(candidate.status === MOVEMENT_STATUSES.POSTED ? 'تم إصلاح الحركة.' : 'ما زالت ناقصة.')
   }
 
@@ -2723,8 +3036,8 @@ export default function MohammadLedgerApp() {
               {reviewItems.map((item, index) => (
                 <button type="button" key={item.key} className={`ml3-review-ticket ml3-review-ticket--${item.tone} ${activeReviewItem?.key === item.key ? 'is-active' : ''}`} onClick={() => setActiveReviewKey(item.key)}>
                   <span>{formatCount(index + 1)}</span>
-                  <strong>{item.label}</strong>
-                  <b>{item.detail}</b>
+                  <strong>{item.type === 'movement' ? item.label : preserveUiData(item.label)}</strong>
+                  <b>{item.type === 'movement' ? item.detail : preserveUiData(item.detail)}</b>
                 </button>
               ))}
             </div>
@@ -2758,7 +3071,7 @@ export default function MohammadLedgerApp() {
               <span>
                 <SlidersHorizontal aria-hidden="true" size={15} /> بحث وتصفية
               </span>
-              {historyQuery || historyType || historyStatus || historyAccountId ? <b>مفعلة</b> : null}
+              {historyQuery || historyType || historyStatus || historyAccountId || historyDimensionId || historyExpenseCategoryId ? <b>مفعلة</b> : null}
             </summary>
             <div className="ml3-history-filters" aria-label="فلترة الحركات">
               <input aria-label="بحث في السجل" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="اسم أو ملاحظة" />
@@ -2781,7 +3094,23 @@ export default function MohammadLedgerApp() {
                 <option value="">كل الحسابات</option>
                 {activeAccounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {accountLabel(account)}
+                    {protectedAccountLabel(account)}
+                  </option>
+                ))}
+              </select>
+              <select aria-label="المشروع أو الأصل" value={historyDimensionId} onChange={(event) => setHistoryDimensionId(event.target.value)}>
+                <option value="">كل المشاريع والأصول</option>
+                {activeDimensions.map((dimension) => (
+                  <option key={dimension.id} value={dimension.id}>
+                    {preserveUiData(dimension.name)}
+                  </option>
+                ))}
+              </select>
+              <select aria-label="نوع المصروف" value={historyExpenseCategoryId} onChange={(event) => setHistoryExpenseCategoryId(event.target.value)}>
+                <option value="">كل أنواع المصروف</option>
+                {activeExpenseCategories.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {preserveUiData(account.ownerName)}
                   </option>
                 ))}
               </select>
@@ -2916,7 +3245,7 @@ export default function MohammadLedgerApp() {
           key: 'source',
           step: MOVEMENT_ENTRY_STEPS.SOURCE,
           label: movementConfig.sourceLabel || 'من',
-          value: draftSourceAccount ? accountLabel(draftSourceAccount) : 'اختر',
+          value: draftSourceAccount ? protectedAccountLabel(draftSourceAccount) : 'اختر',
         }
       : null,
     movementConfig.needsDestination
@@ -2924,14 +3253,14 @@ export default function MohammadLedgerApp() {
           key: 'destination',
           step: MOVEMENT_ENTRY_STEPS.DESTINATION,
           label: movementConfig.destinationLabel || 'إلى',
-          value: draftDestinationAccount ? accountLabel(draftDestinationAccount) : 'اختر',
+          value: draftDestinationAccount ? protectedAccountLabel(draftDestinationAccount) : 'اختر',
         }
       : null,
     {
       key: 'note',
       step: MOVEMENT_ENTRY_STEPS.NOTE,
       label: 'ملاحظة',
-      value: movementDraft.note || 'بدون',
+      value: movementDraft.note ? preserveUiData(movementDraft.note) : 'بدون',
     },
   ].filter(Boolean)
   const completedMovementReceipt = movementReceipt.filter((item) => visibleMovementSteps.indexOf(item.step) < currentMovementStepIndex)
@@ -2939,7 +3268,7 @@ export default function MohammadLedgerApp() {
     key: step.key,
     step: step.key,
     label: step.title,
-    value: step.summary,
+    value: step.key === ACCOUNT_WIZARD_STEPS.NAME || step.key === ACCOUNT_WIZARD_STEPS.DETAIL ? preserveUiData(step.summary) : step.summary,
   }))
 
   if (!isHydrated || loadFailed) {
@@ -2965,7 +3294,7 @@ export default function MohammadLedgerApp() {
   }
 
   return (
-    <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovements.length} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} profile={userProfile} language={normalizedUiLanguage} languageStatus={languageStatus} languageMessage={languageMessage} onLanguageChange={changeUiLanguage} onRetrySave={() => saveCoordinatorRef.current?.retryNow()} onOpenAdmin={openAdminUsersPage} onLogout={logoutFromCloudSession} onSectionChange={switchSection}>
+    <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovements.length} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} profile={protectedUserProfile(userProfile)} language={normalizedUiLanguage} languageStatus={languageStatus} languageMessage={languageMessage} onLanguageChange={changeUiLanguage} onRetrySave={() => saveCoordinatorRef.current?.retryNow()} onOpenAdmin={openAdminUsersPage} onLogout={logoutFromCloudSession} onSectionChange={switchSection}>
       {activeSection !== 'entry' ? <AlertBoard reviewAccounts={balancesByKind.review} reviewMovements={reviewMovements} externalMissing={unresolvedExternalAccounts} balances={balances} movements={postedUserMovements} totals={totals} dueRecurringCount={dueRules.length} reconciliationDiffCount={reconciliationDiffCount} /> : null}
 
       <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
@@ -2981,29 +3310,31 @@ export default function MohammadLedgerApp() {
                 حساب جديد
               </button>
             </div>
-            {feedback ? <div className="ml3-feedback">{feedback}</div> : null}
-            {pendingUndo ? (
-              <div className="ml3-undo-banner">
-                <span>{pendingUndo.label}</span>
-                <button type="button" onClick={undoPendingMovement}>
-                  تراجع
-                </button>
-              </div>
-            ) : null}
-            {editingMovementId ? (
-              <div className="ml3-edit-banner">
-                <span>تعديل حركة محفوظة</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingMovementId('')
-                    setMovementDraft(emptyMovementDraft(movementDraft.type))
-                    setMovementStep(MOVEMENT_ENTRY_STEPS.TYPE)
-                    setFeedback('تم ترك التعديل بدون تغيير الحركة.')
-                  }}
-                >
-                  ترك
-                </button>
+            {feedback || pendingUndo || editingMovementId ? (
+              <div className="adreem-notice-stack">
+                {feedback ? <div className="ml3-feedback">{feedback}</div> : null}
+                {pendingUndo ? (
+                  <div className="ml3-undo-banner">
+                    <span>{pendingUndo.label}</span>
+                    <button type="button" onClick={undoPendingMovement}>تراجع</button>
+                  </div>
+                ) : null}
+                {editingMovementId ? (
+                  <div className="ml3-edit-banner">
+                    <span>تعديل حركة محفوظة</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingMovementId('')
+                        setMovementDraft(emptyMovementDraft(movementDraft.type))
+                        setMovementStep(MOVEMENT_ENTRY_STEPS.TYPE)
+                        setFeedback('تم ترك التعديل بدون تغيير الحركة.')
+                      }}
+                    >
+                      ترك
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {activeEntryMode === 'movement' ? (
@@ -3168,7 +3499,7 @@ export default function MohammadLedgerApp() {
                             <option value="">بدون ربط</option>
                             {activeDimensions.map((dimension) => (
                               <option key={dimension.id} value={dimension.id}>
-                                {dimension.name}
+                                {preserveUiData(dimension.name)}
                               </option>
                             ))}
                           </select>
@@ -3181,7 +3512,7 @@ export default function MohammadLedgerApp() {
                             <option value="">بدون تصنيف</option>
                             {activeExpenseCategories.map((category) => (
                               <option key={category.id} value={category.id}>
-                                {category.ownerName}
+                                {preserveUiData(category.ownerName)}
                               </option>
                             ))}
                           </select>
@@ -3197,7 +3528,7 @@ export default function MohammadLedgerApp() {
                       </label>
                       <label className="ml3-file-field">
                         ملف
-                        <span>{movementAttachmentFile?.name || 'اختر ملفًا'}</span>
+                        <span>{movementAttachmentFile?.name ? preserveUiData(movementAttachmentFile.name) : 'اختر ملفًا'}</span>
                         <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setMovementAttachmentFile(event.target.files?.[0] || null)} />
                       </label>
                       <label className="ml3-checkline">
@@ -3224,7 +3555,7 @@ export default function MohammadLedgerApp() {
                       ))}
                       {preview.effects.map((effect) => (
                         <div className="ml3-effect" key={`${effect.accountId}-${effect.currency}`}>
-                          <span>{accountLabel(effect.account)}</span>
+                          <span>{protectedAccountLabel(effect.account)}</span>
                           <b>{money(effect.before, effect.currency)}</b>
                           <i>{signedMoney(effect.delta, effect.currency)}</i>
                           <strong>{money(effect.after, effect.currency)}</strong>
@@ -3268,7 +3599,7 @@ export default function MohammadLedgerApp() {
                       {formatCount(currentAccountWizardIndex + 1)}/{formatCount(accountWizardStages.length)}
                     </span>
                     <h2>{accountWizardStages[currentAccountWizardIndex]?.title}</h2>
-                    <p>{accountWizardStages[currentAccountWizardIndex]?.summary}</p>
+                    <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME || currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? preserveUiData(accountWizardStages[currentAccountWizardIndex]?.summary) : accountWizardStages[currentAccountWizardIndex]?.summary}</p>
                   </div>
                   <b>{selectedAccountPreset.title}</b>
                 </header>
@@ -3384,7 +3715,7 @@ export default function MohammadLedgerApp() {
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
                     <div className="ml3-account-summary">
                       <span>سيُحفظ الحساب كالتالي</span>
-                      <strong>{accountDraftSummary(accountDraft)}</strong>
+                      <strong>{protectedAccountDraftSummary(accountDraft)}</strong>
                     </div>
                   ) : null}
 

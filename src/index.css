@@ -1,13 +1,29 @@
 :root {
-  font-family: 'Noto Sans Arabic Variable', 'Noto Sans Arabic', system-ui, sans-serif;
+  --adreem-font-ar: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', system-ui, sans-serif;
+  --adreem-font-en: 'Manrope Variable', system-ui, sans-serif;
+  --adreem-flow-next-shift: -10px;
+  --adreem-flow-back-shift: 10px;
+  --adreem-drawer-shift: 18px;
+  --adreem-drawer-shadow: 18px;
+  font-family: var(--adreem-font-ar);
   line-height: 1.5;
   font-weight: 400;
   color: #1a1a1a;
   background: #f5f5f5;
   font-synthesis: none;
+  font-kerning: normal;
+  letter-spacing: 0;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html[lang='en'] {
+  --adreem-flow-next-shift: 10px;
+  --adreem-flow-back-shift: -10px;
+  --adreem-drawer-shift: -18px;
+  --adreem-drawer-shadow: -18px;
+  font-family: var(--adreem-font-en);
 }
 
 * { box-sizing: border-box; }

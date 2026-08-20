@@ -298,6 +298,30 @@ describe('mohammad ledger core', () => {
     expect(sale.status).toBe(MOVEMENT_STATUSES.POSTED)
   })
 
+  it('posts exchange results as whole balances while keeping a decimal rate', () => {
+    const purchaseEntries = buildPostingEntries({
+      type: MOVEMENT_TYPES.USD_PURCHASE,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      rate: 7.5,
+      sourceAccountId: 'dinar-cash',
+      destinationAccountId: 'usd-cash',
+      status: MOVEMENT_STATUSES.POSTED,
+    })
+    const saleEntries = buildPostingEntries({
+      type: MOVEMENT_TYPES.USD_SALE,
+      amount: 13,
+      currency: CURRENCIES.USD,
+      rate: 7.55,
+      sourceAccountId: 'usd-cash',
+      destinationAccountId: 'dinar-cash',
+      status: MOVEMENT_STATUSES.POSTED,
+    })
+
+    expect(purchaseEntries[1].delta).toBe(13)
+    expect(saleEntries[1].delta).toBe(98)
+  })
+
   it('rejects normal usd transfers into dinar-only accounts', () => {
     const movement = postMovement(
       {

@@ -13,6 +13,13 @@ const MAX_ACTIVE_SESSIONS = 12
 const REGISTRY_LOCK_TIMEOUT_MS = 1_000
 const REGISTRY_LOCK_RETRY_MS = 10
 const REGISTRY_STALE_LOCK_MS = 30_000
+const REMOVED_USER_AUTH_FIELDS = new Set([
+  'passwordHash',
+  'sessions',
+  'sessionTokenHash',
+  'sessionExpiresAt',
+  'webTokenHash',
+])
 const lockWaitBuffer = new Int32Array(new SharedArrayBuffer(4))
 
 export function parseIdList(value = '') {
@@ -67,6 +74,12 @@ function normalizeSessions(entry = {}) {
   return Array.from(byHash.values())
     .sort((left, right) => new Date(left.createdAt || 0) - new Date(right.createdAt || 0))
     .slice(-MAX_ACTIVE_SESSIONS)
+}
+
+function sanitizeRemovedUserEntry(entry = {}) {
+  return Object.fromEntries(
+    Object.entries(entry).filter(([key]) => !REMOVED_USER_AUTH_FIELDS.has(key)),
+  )
 }
 
 export function createPasswordHash(password = '') {
@@ -129,7 +142,11 @@ export function loadTelegramUserRegistry(filePath = defaultRegistryPath()) {
   try {
     const data = JSON.parse(readFileSync(filePath, 'utf8'))
     const users = Array.isArray(data?.users) ? data.users.map(normalizeTelegramUserEntry).filter(Boolean) : []
-    const removed = Array.isArray(data?.removed) ? data.removed.filter((entry) => entry && typeof entry === 'object') : []
+    const removed = Array.isArray(data?.removed)
+      ? data.removed
+        .filter((entry) => entry && typeof entry === 'object')
+        .map(sanitizeRemovedUserEntry)
+      : []
     return { users, removed }
   } catch (error) {
     if (error?.code === 'ENOENT') return { users: [], removed: [] }
@@ -143,7 +160,7 @@ function writeTelegramUserRegistryFile(filePath, registry) {
   const payload = `${JSON.stringify({
     ...registry,
     users: registry.users || [],
-    removed: registry.removed || [],
+    removed: (registry.removed || []).map(sanitizeRemovedUserEntry),
   }, null, 2)}\n`
   try {
     writeFileSync(temporaryPath, payload, { mode: 0o600, flag: 'wx' })
@@ -446,6 +463,10 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
         result = { ok: false, error: 'invalid-email' }
         return null
       }
+      if (isOwnerUser(target) && !isOwnerUser(entry)) {
+        result = { ok: false, error: 'owner-identity-required' }
+        return null
+      }
       const telegramConflict = envTelegramConflict(entry)
       if (telegramConflict) {
         result = telegramConflict
@@ -500,13 +521,14 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
         result = { ok: false, error: 'owner-protected' }
         return null
       }
-      result = { ok: true, removed: target }
+      const removedUser = sanitizeRemovedUserEntry(target)
+      result = { ok: true, removed: removedUser }
       return {
         ...registry,
         users: registry.users.filter((user) => user.userId !== targetUserId),
         removed: [
           ...(registry.removed || []),
-          { ...target, removedAt: new Date().toISOString(), removedBy: requestedBy },
+          { ...removedUser, removedAt: new Date().toISOString(), removedBy: requestedBy },
         ],
       }
     })

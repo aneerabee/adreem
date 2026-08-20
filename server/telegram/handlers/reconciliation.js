@@ -18,6 +18,7 @@ import {
   reconciliationTextStepKeyboard,
 } from '../keyboards.js'
 import { escapeHtml, reconciliationReviewText, reconciliationStepText } from '../messages.js'
+import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
 
 const STEPS = {
   ACCOUNT: 'account',
@@ -106,7 +107,7 @@ async function sendAccountChoices(ctx, session, state, query = '') {
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
 
   const lines = [reconciliationStepText(session, snapshot.accountById, snapshot.balanceByAccountId), '']
-  if (query) lines.push(`<b>بحث:</b> ${escapeHtml(query)}`)
+  if (query) lines.push(`<b>بحث:</b> ${escapeHtml(preserveUiData(query))}`)
   lines.push(ranked.length ? `<b>${ranked.length} حسابات مناسبة.</b> اختر الحساب.` : '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
   return upsertFlowMessage(ctx, session, {
     text: lines.join('\n'),

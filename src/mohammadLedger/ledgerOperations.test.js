@@ -13,9 +13,12 @@ import {
   disableRecurringRule,
   dueRecurringRules,
   executeRecurringRuleInState,
+  findUnresolvedReconciliationDifferences,
   hideAttachment,
   runRecurringRule,
+  syncRecurringRuleFromSourceMovement,
   syncRecurringRulesFromMovement,
+  syncRecurringRulesFromSourceMovement,
   updateRecurringRule,
   validateAttachmentDraft,
 } from './ledgerOperations.js'
@@ -87,6 +90,45 @@ describe('adreem operational features', () => {
     })
   })
 
+  it('keeps hidden projects with posted history in dimension reports', () => {
+    const reports = buildDimensionReports({
+      accounts: [
+        accounts[0],
+        { ...accounts[1], status: 'inactive', disabledAt: '2026-05-20T00:00:00.000Z' },
+      ],
+      dimensions: [
+        {
+          id: 'dimension-account-truck',
+          name: 'الشاحنة',
+          type: 'project',
+          linkedAccountId: 'truck',
+          status: 'inactive',
+        },
+      ],
+      movements: [
+        {
+          id: 'historic-expense-1',
+          type: MOVEMENT_TYPES.EXPENSE,
+          status: MOVEMENT_STATUSES.POSTED,
+          currency: CURRENCIES.DINAR,
+          amount: 200,
+          sourceAccountId: 'me-cash',
+          dimensionId: 'dimension-account-truck',
+        },
+      ],
+    })
+
+    expect(reports).toHaveLength(1)
+    expect(reports[0]).toMatchObject({
+      dimension: {
+        id: 'dimension-account-truck',
+        status: 'inactive',
+      },
+      expense: 200,
+      movementCount: 1,
+    })
+  })
+
   it('keeps attachments as ledger records linked to a movement or account', () => {
     const attachment = createAttachment({
       movementId: 'm1',
@@ -150,7 +192,7 @@ describe('adreem operational features', () => {
     })
   })
 
-  it('preserves reconciliation precision for actual, expected, and difference values', () => {
+  it('normalizes reconciliation balances to whole currency units', () => {
     const reconciliation = createReconciliation({
       accountId: 'me-cash',
       expectedDinar: 100.125,
@@ -161,12 +203,12 @@ describe('adreem operational features', () => {
     })
 
     expect(reconciliation).toMatchObject({
-      expectedDinar: 100.125,
-      actualDinar: 100.375,
-      diffDinar: 0.25,
-      expectedUsd: 2.5,
-      actualUsd: 2.25,
-      diffUsd: -0.25,
+      expectedDinar: 100,
+      actualDinar: 100,
+      diffDinar: 0,
+      expectedUsd: 3,
+      actualUsd: 2,
+      diffUsd: -1,
     })
   })
 
@@ -189,6 +231,42 @@ describe('adreem operational features', () => {
         destinationAccountId: 'me-cash',
         note: 'مطابقة الصندوق',
         reconciliationId: reconciliation.id,
+      },
+    ])
+  })
+
+  it('finds only reconciliation differences not settled by posted corrections', () => {
+    const reconciliations = [
+      { id: 'settled', accountId: 'me-cash', diffDinar: -50, diffUsd: 0 },
+      { id: 'pending', accountId: 'me-cash', diffDinar: 25, diffUsd: -5 },
+      { id: 'matched', accountId: 'me-cash', diffDinar: 0, diffUsd: 0 },
+    ]
+    const movements = [
+      {
+        id: 'settled-correction',
+        type: MOVEMENT_TYPES.CORRECTION,
+        status: MOVEMENT_STATUSES.POSTED,
+        currency: CURRENCIES.DINAR,
+        amount: -50,
+        destinationAccountId: 'me-cash',
+        reconciliationId: 'settled',
+      },
+      {
+        id: 'pending-review-correction',
+        type: MOVEMENT_TYPES.CORRECTION,
+        status: MOVEMENT_STATUSES.NEEDS_REVIEW,
+        currency: CURRENCIES.DINAR,
+        amount: 25,
+        destinationAccountId: 'me-cash',
+        reconciliationId: 'pending',
+      },
+    ]
+
+    expect(findUnresolvedReconciliationDifferences(reconciliations, movements)).toEqual([
+      {
+        reconciliation: reconciliations[1],
+        unresolvedDinar: 25,
+        unresolvedUsd: -5,
       },
     ])
   })
@@ -330,6 +408,23 @@ describe('adreem operational features', () => {
     expect(dueRecurringRules([synced], new Date('2026-05-30T12:00:00.000Z'))).toHaveLength(0)
   })
 
+  it('does not mark a new monthly rule due during its creation month', () => {
+    const rule = {
+      ...createRecurringRuleFromMovement({
+        id: 'rent-1',
+        type: MOVEMENT_TYPES.EXPENSE,
+        status: MOVEMENT_STATUSES.POSTED,
+        currency: CURRENCIES.DINAR,
+        amount: 100,
+        sourceAccountId: 'me-cash',
+      }, { dayOfMonth: 1 }),
+      createdAt: '2026-05-05T12:00:00.000Z',
+    }
+
+    expect(dueRecurringRules([rule], new Date('2026-05-31T12:00:00.000Z'))).toHaveLength(0)
+    expect(dueRecurringRules([rule], new Date('2026-06-01T12:00:00.000Z'))).toEqual([rule])
+  })
+
   it('only marks a monthly rule due on or after its chosen day', () => {
     const movement = {
       id: 'rent-1',
@@ -344,6 +439,27 @@ describe('adreem operational features', () => {
 
     expect(dueRecurringRules([rule], new Date('2026-05-19T12:00:00.000Z'))).toHaveLength(0)
     expect(dueRecurringRules([rule], new Date('2026-05-20T12:00:00.000Z'))).toHaveLength(1)
+  })
+
+  it.each([29, 30, 31])('makes day %i due on the last day of a shorter month', (dayOfMonth) => {
+    const rule = {
+      ...createRecurringRuleFromMovement({
+        id: `rent-${dayOfMonth}`,
+        type: MOVEMENT_TYPES.EXPENSE,
+        status: MOVEMENT_STATUSES.POSTED,
+        currency: CURRENCIES.DINAR,
+        amount: 100,
+        sourceAccountId: 'me-cash',
+      }, { dayOfMonth }),
+      createdAt: '2026-01-10T12:00:00.000Z',
+    }
+
+    expect(dueRecurringRules([rule], new Date('2026-02-27T12:00:00.000Z'))).toHaveLength(0)
+    expect(dueRecurringRules([rule], new Date('2026-02-28T12:00:00.000Z'))).toEqual([rule])
+
+    const leapYearRule = { ...rule, createdAt: '2028-01-10T12:00:00.000Z' }
+    expect(dueRecurringRules([leapYearRule], new Date('2028-02-28T12:00:00.000Z'))).toHaveLength(0)
+    expect(dueRecurringRules([leapYearRule], new Date('2028-02-29T12:00:00.000Z'))).toEqual([leapYearRule])
   })
 
   it('keeps an invalid recurring rule due after a failed review run', () => {
@@ -408,6 +524,54 @@ describe('adreem operational features', () => {
       name: 'إيجار المقر',
       lastRunKey: '2026-04',
       updatedAt: '2026-05-01T00:00:00.000Z',
+    })
+  })
+
+  it('syncs source movement edits and cancellation into their monthly rules', () => {
+    const source = {
+      id: 'rent-1',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      currency: CURRENCIES.DINAR,
+      amount: 100,
+      sourceAccountId: 'me-cash',
+      note: 'إيجار قديم',
+    }
+    const rule = createRecurringRuleFromMovement(source, { dayOfMonth: 5 })
+    const editedSource = {
+      ...source,
+      amount: 150,
+      note: 'إيجار محدث',
+      expenseCategoryId: 'rent-expense',
+    }
+
+    const synced = syncRecurringRuleFromSourceMovement(rule, editedSource, '2026-05-01T00:00:00.000Z')
+
+    expect(synced).toMatchObject({
+      sourceMovementId: source.id,
+      status: 'active',
+      template: {
+        amount: 150,
+        note: 'إيجار محدث',
+        expenseCategoryId: 'rent-expense',
+      },
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    })
+
+    const [disabled] = syncRecurringRulesFromSourceMovement([
+      synced,
+      { ...rule, id: 'unrelated-rule', sourceMovementId: 'other-movement' },
+    ], {
+      ...editedSource,
+      status: MOVEMENT_STATUSES.VOIDED,
+      voidedAt: '2026-05-02T00:00:00.000Z',
+    }, '2026-05-02T00:01:00.000Z')
+
+    expect(disabled).toMatchObject({
+      id: rule.id,
+      status: 'inactive',
+      disabledAt: '2026-05-02T00:00:00.000Z',
+      updatedAt: '2026-05-02T00:01:00.000Z',
     })
   })
 

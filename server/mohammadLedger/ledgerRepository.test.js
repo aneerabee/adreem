@@ -4,9 +4,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ADREEM_LEDGER_VERSION,
+  createEmptyAdreemState,
   createMohammadFallbackState,
 } from '../../src/mohammadLedger/ledgerState.js'
 import {
+  PersistedLedgerStateError,
   assertLedgerStateTransition,
   createLedgerRepository,
   hasPersistedLedgerRow,
@@ -16,6 +18,8 @@ import {
   prepareLedgerStateForSave,
   resolveLedgerConfig,
   resolveTelegramLedgerId,
+  selectLedgerRowsForLoad,
+  validatePersistedLedgerPayload,
   writeLedgerBackup,
 } from './ledgerRepository.js'
 
@@ -165,6 +169,105 @@ describe('ledger repository state preparation', () => {
 
     expect(repository.ledgerConfig.rowId).toBe('adreem:adreem:rabee-book')
     expect(repository.ledgerConfig.readableRowIds).toEqual(['adreem:adreem:rabee-book'])
+  })
+
+  it('rejects a malformed primary cloud row instead of normalizing it as an empty ledger', () => {
+    const fallback = createEmptyAdreemState('2026-08-19T10:00:00.000Z')
+    const config = resolveLedgerConfig({})
+    const legacyPayload = {
+      version: 1,
+      accounts: [{ id: 'legacy-account', ownerName: 'قديم', subAccountName: 'كاش' }],
+      movements: [],
+    }
+    const load = () => selectLedgerRowsForLoad([
+      { id: config.legacyRowId, payload: legacyPayload, updated_at: '2026-08-19T09:00:00.000Z' },
+      { id: config.rowId, payload: { version: 2, accounts: [] }, updated_at: '2026-08-19T10:00:00.000Z' },
+    ], fallback, {
+      primaryRowId: config.rowId,
+      legacyRowId: config.legacyRowId,
+    })
+
+    expect(load).toThrow(PersistedLedgerStateError)
+    try {
+      load()
+    } catch (error) {
+      expect(error).toMatchObject({
+        rowId: config.rowId,
+        validation: {
+          ok: false,
+          errors: [expect.objectContaining({ code: 'invalid-persisted-list', field: 'movements' })],
+        },
+      })
+    }
+  })
+
+  it('rejects malformed optional cloud collections before normalization can discard them', () => {
+    const validation = validatePersistedLedgerPayload({
+      accounts: [],
+      movements: [],
+      dimensions: { id: 'not-an-array' },
+    })
+
+    expect(validation).toEqual({
+      ok: false,
+      errors: [expect.objectContaining({ code: 'invalid-persisted-list', field: 'dimensions' })],
+    })
+  })
+
+  it('rejects non-string ignored account ids before normalization can rewrite them', () => {
+    const validation = validatePersistedLedgerPayload({
+      accounts: [],
+      movements: [],
+      ignoredExternalAccounts: [{ id: 'rewritten-as-object-text' }],
+    })
+
+    expect(validation.errors).toContainEqual(expect.objectContaining({
+      code: 'invalid-persisted-record',
+      field: 'ignoredExternalAccounts',
+      index: 0,
+    }))
+  })
+
+  it('loads a structurally valid v1 migration without losing its accounts or movements', () => {
+    const fallback = createEmptyAdreemState('2026-08-19T10:00:00.000Z')
+    const config = resolveLedgerConfig({})
+    const selected = selectLedgerRowsForLoad([{
+      id: config.legacyRowId,
+      updated_at: '2026-08-19T09:00:00.000Z',
+      payload: {
+        version: 1,
+        savedAt: '2026-08-19T09:00:00.000Z',
+        accounts: [{ id: 'legacy-account', ownerName: 'قديم', subAccountName: 'كاش' }],
+        movements: [{ id: 'legacy-movement', createdAt: '2026-08-19T08:00:00.000Z' }],
+      },
+    }], fallback, {
+      primaryRowId: config.rowId,
+      legacyRowId: config.legacyRowId,
+    })
+
+    expect(selected.source).toBe('legacy')
+    expect(selected.state.migratedFrom).toBe('mohammad-ledger-v1')
+    expect(selected.state.accounts.map((account) => account.id)).toEqual(['legacy-account'])
+    expect(selected.state.movements.map((movement) => movement.id)).toEqual(['legacy-movement'])
+  })
+
+  it('does not let a malformed unused legacy row block a valid primary row', () => {
+    const fallback = createEmptyAdreemState('2026-08-19T10:00:00.000Z')
+    const config = resolveLedgerConfig({})
+    const selected = selectLedgerRowsForLoad([
+      { id: config.legacyRowId, payload: null, updated_at: '2026-08-19T09:00:00.000Z' },
+      {
+        id: config.rowId,
+        payload: { accounts: [{ id: 'primary-account' }], movements: [] },
+        updated_at: '2026-08-19T10:00:00.000Z',
+      },
+    ], fallback, {
+      primaryRowId: config.rowId,
+      legacyRowId: config.legacyRowId,
+    })
+
+    expect(selected.source).toBe('primary')
+    expect(selected.state.accounts.map((account) => account.id)).toEqual(['primary-account'])
   })
 
   it('writes automatic ledger backups to the configured backup directory', () => {

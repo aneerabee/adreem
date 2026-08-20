@@ -72,7 +72,7 @@ function isoNow() {
 }
 
 export function roundMoney(value) {
-  return Math.round((asNumber(value) + Number.EPSILON) * 1_000_000) / 1_000_000
+  return Math.round(asNumber(value))
 }
 
 export function createOpeningMovements(accounts = [], createdAt = isoNow()) {
@@ -307,7 +307,7 @@ export function buildPostingEntries(movement) {
         {
           accountId: movement.destinationAccountId,
           currency: CURRENCIES.DINAR,
-          delta: roundMoney(Math.abs(amount) * asNumber(movement.rate)),
+          delta: Math.round(Math.abs(amount) * asNumber(movement.rate)),
         },
       ]
     case MOVEMENT_TYPES.USD_PURCHASE:
@@ -316,7 +316,7 @@ export function buildPostingEntries(movement) {
         {
           accountId: movement.destinationAccountId,
           currency: CURRENCIES.USD,
-          delta: roundMoney(Math.abs(amount) / asNumber(movement.rate)),
+          delta: Math.round(Math.abs(amount) / asNumber(movement.rate)),
         },
       ]
     case MOVEMENT_TYPES.CORRECTION:
@@ -453,7 +453,7 @@ export function validateAccount(account, existingAccounts = []) {
   if (existingAccounts.some((item) => item.id === account?.id)) {
     errors.push({ field: 'id', message: 'معرف الحساب مستخدم مسبقًا.' })
   }
-  const hasDuplicateLogicalAccount = existingAccounts.some((item) => {
+  const hasDuplicateLogicalAccount = account.status !== ACCOUNT_STATUSES.INACTIVE && existingAccounts.some((item) => {
     if (!item || item.status === ACCOUNT_STATUSES.INACTIVE) return false
     return (
       normalizeAccountText(item.ownerName) === ownerName &&

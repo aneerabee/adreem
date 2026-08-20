@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
-import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { localizeTelegramPayload, stripUiDataProtection } from '../../src/mohammadLedger/uiTranslation.js'
 import {
   accountBlockquote,
   accountChoiceButtonStyle,
@@ -32,23 +33,50 @@ describe('telegram account balance presentation', () => {
     const bucket = { dinar: 12500, usd: 0 }
 
     expect(formatAccountBalance(receivable, bucket)).toBe('أقبض منه 12,500 د.ل')
-    expect(accountChoiceButtonText(receivable, bucket)).toBe('🟢 سعيد · كاش بيننا · دينار | أقبض منه 12,500 د.ل')
+    expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('🟢 سعيد · كاش بيننا · دينار | أقبض منه 12,500 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('success')
-    expect(accountBlockquote(receivable, bucket)).toContain('🟢 سعيد · كاش بيننا')
+    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🟢 سعيد · كاش بيننا')
   })
 
   it('marks money I should pay in red terms', () => {
     const bucket = { dinar: -3200, usd: 0 }
 
     expect(formatAccountBalance(receivable, bucket)).toBe('أدفع له 3,200 د.ل')
-    expect(accountChoiceButtonText(receivable, bucket)).toBe('🔴 سعيد · كاش بيننا · دينار | أدفع له 3,200 د.ل')
+    expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('🔴 سعيد · كاش بيننا · دينار | أدفع له 3,200 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('danger')
-    expect(accountBlockquote(receivable, bucket)).toContain('🔴 سعيد · كاش بيننا')
+    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🔴 سعيد · كاش بيننا')
   })
 
   it('uses the same visual direction for my own money accounts', () => {
     expect(formatAccountBalance(cash, { dinar: 9000, usd: 0 })).toBe('موجود 9,000 د.ل')
     expect(formatAccountBalance(cash, { dinar: -500, usd: 0 })).toBe('ناقص 500 د.ل')
+  })
+
+  it('protects colliding account names while translating account type and currency labels', () => {
+    const person = {
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      ownerName: 'دخل',
+      subAccountName: 'كاش',
+      currencyKind: CURRENCIES.DINAR,
+    }
+    const ownCash = {
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      ownerName: 'أنا',
+      subAccountName: 'مالك',
+      currencyKind: CURRENCIES.DINAR,
+    }
+    const localized = localizeTelegramPayload({
+      text: [
+        accountBlockquote(person, { dinar: 100 }),
+        accountBlockquote(ownCash, { dinar: 200 }),
+      ].join('\n'),
+    }, 'en')
+
+    expect(localized.text).toContain('دخل · Cash between us · Dinar')
+    expect(localized.text).toContain('Cash: مالك · Dinar')
+    expect(localized.text).not.toContain('Income · Cash between us')
   })
 })
 
@@ -130,7 +158,7 @@ describe('telegram movement presentation', () => {
       ['me-cash', { ownerName: 'أنا', subAccountName: 'كاش' }],
       ['saeed-cash', { ownerName: 'سعيد', subAccountName: 'كاش' }],
     ])
-    const card = movementBlockquote({
+    const card = stripUiDataProtection(movementBlockquote({
       type: MOVEMENT_TYPES.TRANSFER,
       amount: 1250,
       currency: CURRENCIES.DINAR,
@@ -138,7 +166,7 @@ describe('telegram movement presentation', () => {
       destinationAccountId: 'saeed-cash',
       createdAt: '2026-05-13T10:15:00.000Z',
       note: 'تجربة <مهمة>',
-    }, accounts)
+    }, accounts))
 
     expect(card).toContain('<blockquote>')
     expect(card).toContain('🔁 تحويل · 1,250 د.ل')
@@ -147,7 +175,7 @@ describe('telegram movement presentation', () => {
   })
 
   it('renders review effects as before, change, after', () => {
-    const text = reviewMovementText(
+    const text = stripUiDataProtection(reviewMovementText(
       {
         draft: {
           type: MOVEMENT_TYPES.TRANSFER,
@@ -176,7 +204,7 @@ describe('telegram movement presentation', () => {
           },
         ],
       },
-    )
+    ))
 
     expect(text).toContain('<b>تأكيد الحركة</b>')
     expect(text).toContain('🔴 من: كاش: كاش')

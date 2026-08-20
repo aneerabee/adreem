@@ -24,10 +24,10 @@ export function createLatestSaveCoordinator({
     retryTimer = null
   }
 
-  async function run() {
-    if (stopped || running || !pending) return
-    const item = pending
-    pending = null
+  async function run(retryItem = null) {
+    if (stopped || running || failed || (!retryItem && !pending)) return
+    const item = retryItem || pending
+    if (!retryItem) pending = null
     running = true
     onStatus('saving')
 
@@ -44,8 +44,7 @@ export function createLatestSaveCoordinator({
     } catch (error) {
       running = false
       if (!shouldRetry(error)) {
-        failed = pending && pending.id > item.id ? pending : item
-        pending = null
+        failed = item
         onError(error, item, null)
         onStatus('failed')
         return
@@ -68,7 +67,6 @@ export function createLatestSaveCoordinator({
       if (stopped) return 0
       const item = { id: sequence + 1, value }
       sequence = item.id
-      failed = null
       pending = item
       if (retryTimer !== null) {
         clearRetryTimer()
@@ -80,9 +78,11 @@ export function createLatestSaveCoordinator({
     retryNow() {
       if (stopped) return
       clearRetryTimer()
-      if (!pending && failed) {
-        pending = failed
+      if (failed) {
+        const item = failed
         failed = null
+        void run(item)
+        return
       }
       void run()
     },

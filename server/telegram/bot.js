@@ -5,35 +5,58 @@ import {
   buildDimensionReports,
   buildExpenseCategoryReports,
   buildLedgerAlerts,
+  dimensionsFromAccounts,
   dueRecurringRules,
   executeRecurringRuleInState,
 } from '../../src/mohammadLedger/ledgerOperations.js'
 import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
-import { accountLabel, buildLedgerSnapshot, formatMoney } from '../mohammadLedger/ledgerService.js'
+import { buildLedgerSnapshot, formatMoney } from '../mohammadLedger/ledgerService.js'
 import {
   accountChoiceToken,
   accountProfileKeyboard,
   accountsBrowserKeyboard,
+  dimensionKeyboard,
+  expenseCategoryKeyboard,
   historyCancelConfirmKeyboard,
   historyKeyboard,
   mainMenuKeyboard,
   moreMenuKeyboard,
   recurringRulesKeyboard,
+  reportDetailKeyboard,
   reportKeyboard,
+  reportListKeyboard,
   reviewKeyboard,
 } from './keyboards.js'
-import { accountBlockquote, alertsText, escapeHtml, mainMenuText, movementBlockquote, movementLabels } from './messages.js'
+import {
+  accountBlockquote,
+  alertsText,
+  escapeHtml,
+  mainMenuText,
+  movementBlockquote,
+  movementLabels,
+  movementStepText,
+  protectedAccountLabel,
+  stepPromptText,
+} from './messages.js'
 import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountInState } from './reviewActions.js'
-import { buildHistorySession, HISTORY_ACTION_LIMIT, recentHistoryMovements, voidRecentMovementInState } from './historyActions.js'
+import {
+  buildHistorySession,
+  HISTORY_ACTION_LIMIT,
+  historyMovementStatusLabel,
+  movementsForDate,
+  relatedReportMovements,
+  voidRecentMovementInState,
+} from './historyActions.js'
 import { createSessionStore } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
 import { createLocalizedTelegramClient } from './localizedTelegram.js'
+import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
 import { handleAccountCallback, handleAccountText, startAccount, startReviewAccount } from './handlers/account.js'
 import { handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './handlers/movement.js'
 import { handleReconciliationCallback, handleReconciliationText, startReconciliation } from './handlers/reconciliation.js'
 import { createTelegramUserAccess, validateTelegramLedgerAssignments } from './userRegistry.js'
 import { buildRecurringSession, disableRecurringRuleInState } from './recurringActions.js'
-import { parseActionCallback } from './actionTokens.js'
+import { parseActionCallback, stableActionToken } from './actionTokens.js'
 import { isPrivateTelegramUpdate, processTelegramUpdates, shouldSkipOldUpdates } from './updateSafety.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
@@ -52,6 +75,9 @@ const telegram = createTelegramClient(token)
 const repositoriesByLedgerId = new Map()
 const sessions = createSessionStore()
 const ACCOUNT_PAGE_SIZE = 8
+const MOVEMENT_PICKER_PAGE_SIZE = 8
+const REPORT_PAGE_SIZE = 8
+const TODAY_PREVIEW_LIMIT = 10
 
 let offset = 0
 
@@ -147,7 +173,7 @@ async function deleteUserInput(ctx) {
 async function showMainMenu(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
-  const today = movementsForToday(state).length
+  const today = movementsForDate(state).length
   const reviewCount = state.accounts.filter((account) => account.status === ACCOUNT_STATUSES.NEEDS_REVIEW).length +
     state.movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW).length
   return sendScreen(ctx, mainMenuText({ todayCount: today, reviewCount }))
@@ -160,15 +186,6 @@ async function showMoreMenu(ctx) {
     '<b>ADREEM · المزيد</b>\n<blockquote>أدوات أقل استعمالًا، في مكان واحد.</blockquote>',
     moreMenuKeyboard(),
   )
-}
-
-function movementsForToday(state) {
-  const today = new Date()
-  return state.movements.filter((movement) => {
-    if (movement.status !== MOVEMENT_STATUSES.POSTED || movement.id?.startsWith('opening-')) return false
-    const date = new Date(movement.createdAt || movement.updatedAt || '')
-    return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate()
-  })
 }
 
 async function showAccounts(ctx, requestedPage = 0) {
@@ -235,12 +252,11 @@ async function showToday(ctx) {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
-  const rows = movementsForToday(state)
-    .slice()
-    .reverse()
-    .slice(0, 10)
-    .map((movement) => movementBlockquote(movement, snapshot.accountById))
-  return sendScreen(ctx, rows.length ? `<b>ADREEM · سجل اليوم</b>\n<code>${rows.length} حركة</code>\n\n${rows.join('\n')}` : '<b>ADREEM · سجل اليوم</b>\n<blockquote>لا توجد حركات اليوم.</blockquote>')
+  const todayMovements = movementsForDate(state)
+  const visibleMovements = todayMovements.slice(0, TODAY_PREVIEW_LIMIT)
+  const rows = visibleMovements.map((movement, index) => historyMovementCard(movement, snapshot.accountById, index + 1))
+  const previewLabel = todayMovements.length > visibleMovements.length ? ` · أحدث ${visibleMovements.length}` : ''
+  return sendScreen(ctx, rows.length ? `<b>ADREEM · سجل اليوم</b>\n<code>${todayMovements.length} حركة${previewLabel}</code>\n\n${rows.join('\n')}` : '<b>ADREEM · سجل اليوم</b>\n<blockquote>لا توجد حركات اليوم.</blockquote>')
 }
 
 async function showHistory(ctx, notice = '', requestedPage = 0) {
@@ -249,15 +265,24 @@ async function showHistory(ctx, notice = '', requestedPage = 0) {
   const snapshot = buildLedgerSnapshot(state)
   const historySession = buildHistorySession(state, HISTORY_ACTION_LIMIT, requestedPage)
   sessions.set(ctx.chatId, ctx.userId, { ...historySession, uiMessageId: ctx.isCallback ? ctx.messageId : null })
-  const rows = recentHistoryMovements(state)
-    .slice(historySession.page * HISTORY_ACTION_LIMIT, (historySession.page + 1) * HISTORY_ACTION_LIMIT)
-    .map((movement) => movementBlockquote(movement, snapshot.accountById, { includeDate: true }))
+  const movementById = new Map((state.movements || []).map((movement) => [movement.id, movement]))
+  const rows = historySession.items
+    .map((item) => {
+      const movement = movementById.get(item.id)
+      return movement ? historyMovementCard(movement, snapshot.accountById, item.number, { includeDate: true }) : ''
+    })
+    .filter(Boolean)
   const noticeBlock = notice ? `\n\n<blockquote>${escapeHtml(notice)}</blockquote>` : ''
   return sendScreen(
     ctx,
     rows.length ? `<b>ADREEM · الحركات</b>\n<code>${historySession.total} حركة · صفحة ${historySession.page + 1}/${historySession.pageCount}</code>${noticeBlock}\n\n${rows.join('\n')}` : `<b>ADREEM · الحركات</b>${noticeBlock}\n<blockquote>لا توجد حركات.</blockquote>`,
     historyKeyboard(historySession),
   )
+}
+
+function historyMovementCard(movement, accountsById, number, options = {}) {
+  const status = historyMovementStatusLabel(movement?.status)
+  return `<b>#${number} · الحالة: ${escapeHtml(status)}</b>\n${movementBlockquote(movement, accountsById, options)}`
 }
 
 async function showAlerts(ctx) {
@@ -290,45 +315,154 @@ async function showReports(ctx) {
   const { state } = await ctx.repository.load()
   const projects = buildDimensionReports(state)
   const expenses = buildExpenseCategoryReports(state)
-  const lines = ['<b>ADREEM · التقارير</b>']
-  lines.push('', '<b>المشاريع والأصول</b>')
-  if (!projects.length) lines.push('<blockquote>لا توجد بيانات بعد.</blockquote>')
-  projects.slice(0, 6).forEach((item) => {
-    const dinar = `دخل ${formatMoney(item.income)} · مصروف ${formatMoney(item.expense)} · صافي ${formatMoney(item.net)}`
-    const usd = item.incomeUsd || item.expenseUsd
-      ? `\nدولار: دخل ${formatMoney(item.incomeUsd, CURRENCIES.USD)} · مصروف ${formatMoney(item.expenseUsd, CURRENCIES.USD)} · صافي ${formatMoney(item.netUsd, CURRENCIES.USD)}`
-      : ''
-    lines.push(`<blockquote>${escapeHtml(`${item.dimension.name}\n${dinar}${usd}`)}</blockquote>`)
-  })
-  lines.push('', '<b>المصروفات</b>')
-  if (!expenses.length) lines.push('<blockquote>لا توجد مصروفات مصنفة.</blockquote>')
-  expenses.slice(0, 6).forEach((item) => {
-    const usd = item.usd ? ` · ${formatMoney(item.usd, CURRENCIES.USD)}` : ''
-    lines.push(`<blockquote>${escapeHtml(`${item.name}\n${formatMoney(item.dinar)}${usd}`)}</blockquote>`)
-  })
-  return sendScreen(ctx, lines.join('\n'), reportKeyboard())
+  const text = [
+    '<b>ADREEM · التقارير</b>',
+    '<blockquote>اختر القائمة التي تريد فتحها.</blockquote>',
+    '',
+    `<code>${projects.length} مشروع أو أصل · ${expenses.length} نوع مصروف</code>`,
+  ].join('\n')
+  return sendScreen(ctx, text, reportKeyboard({ projects: projects.length, expenses: expenses.length }))
 }
 
-async function showRecurring(ctx, notice = '') {
+function reportItemsForKind(state, kind) {
+  return kind === 'expense' ? buildExpenseCategoryReports(state) : buildDimensionReports(state)
+}
+
+function reportItemId(item, kind) {
+  return kind === 'expense' ? item.categoryId || '' : item.dimension?.id || ''
+}
+
+function reportItemName(item, kind) {
+  const name = kind === 'expense' ? item.name : item.dimension?.name
+  return name ? preserveUiData(name) : 'بدون اسم'
+}
+
+function boundedPage(total, requestedPage, pageSize) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const page = Math.min(Math.max(0, Number(requestedPage) || 0), pageCount - 1)
+  return { page, pageCount }
+}
+
+function reportSummary(item, kind) {
+  if (kind === 'expense') {
+    const usd = item.usd ? ` · ${formatMoney(item.usd, CURRENCIES.USD)}` : ''
+    return `${reportItemName(item, kind)}\n${formatMoney(item.dinar)}${usd} · ${item.count} حركة معتمدة`
+  }
+  const dinar = `دخل ${formatMoney(item.income)} · مصروف ${formatMoney(item.expense)} · صافي ${formatMoney(item.net)}`
+  const usd = item.incomeUsd || item.expenseUsd
+    ? `\nدولار: دخل ${formatMoney(item.incomeUsd, CURRENCIES.USD)} · مصروف ${formatMoney(item.expenseUsd, CURRENCIES.USD)} · صافي ${formatMoney(item.netUsd, CURRENCIES.USD)}`
+    : ''
+  return `${reportItemName(item, kind)}\n${dinar}${usd} · ${item.movementCount} حركة معتمدة`
+}
+
+async function showReportList(ctx, kind, requestedPage = 0) {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
-  const session = buildRecurringSession(state)
+  const allItems = reportItemsForKind(state, kind)
+  const { page, pageCount } = boundedPage(allItems.length, requestedPage, REPORT_PAGE_SIZE)
+  const visibleItems = allItems.slice(page * REPORT_PAGE_SIZE, (page + 1) * REPORT_PAGE_SIZE)
+  const items = visibleItems.map((item, index) => {
+    const id = reportItemId(item, kind)
+    return {
+      id,
+      number: page * REPORT_PAGE_SIZE + index + 1,
+      token: stableActionToken(`${kind}:${id || 'uncategorized'}`),
+    }
+  })
+  const session = {
+    flow: 'reports',
+    view: 'list',
+    kind,
+    page,
+    pageCount,
+    total: allItems.length,
+    items,
+    choices: {
+      reports: Object.fromEntries(items.map((item) => [item.token, item.id])),
+    },
+    uiMessageId: ctx.isCallback ? ctx.messageId : null,
+  }
+  sessions.set(ctx.chatId, ctx.userId, session)
+  const title = kind === 'expense' ? 'أنواع المصروف' : 'المشاريع والأصول'
+  const lines = [`<b>ADREEM · ${title}</b>`, `<code>${allItems.length} عنصر · صفحة ${page + 1}/${pageCount}</code>`]
+  if (!visibleItems.length) lines.push('', '<blockquote>لا توجد بيانات بعد.</blockquote>')
+  visibleItems.forEach((item, index) => {
+    lines.push('', `<b>#${items[index].number}</b>`, `<blockquote>${escapeHtml(reportSummary(item, kind))}</blockquote>`)
+  })
+  return sendScreen(ctx, lines.join('\n'), reportListKeyboard(session))
+}
+
+async function showReportDetail(ctx, kind, reportId, listPage = 0, requestedPage = 0) {
+  sessions.clear(ctx.chatId, ctx.userId)
+  const { state } = await ctx.repository.load()
+  const report = reportItemsForKind(state, kind).find((item) => String(reportItemId(item, kind)) === String(reportId || ''))
+  if (!report) return showReportList(ctx, kind, listPage)
+  const movements = relatedReportMovements(state, kind, reportId)
+  const { page, pageCount } = boundedPage(movements.length, requestedPage, REPORT_PAGE_SIZE)
+  const visibleMovements = movements.slice(page * REPORT_PAGE_SIZE, (page + 1) * REPORT_PAGE_SIZE)
+  const session = {
+    flow: 'reports',
+    view: 'detail',
+    kind,
+    reportId,
+    listPage,
+    page,
+    pageCount,
+    total: movements.length,
+    uiMessageId: ctx.isCallback ? ctx.messageId : null,
+  }
+  sessions.set(ctx.chatId, ctx.userId, session)
+  const snapshot = buildLedgerSnapshot(state)
+  const lines = [
+    `<b>ADREEM · ${escapeHtml(reportItemName(report, kind))}</b>`,
+    `<blockquote>${escapeHtml(reportSummary(report, kind))}</blockquote>`,
+    `<code>${movements.length} حركة مرتبطة · صفحة ${page + 1}/${pageCount}</code>`,
+  ]
+  if (!visibleMovements.length) lines.push('', '<blockquote>لا توجد حركات مرتبطة.</blockquote>')
+  visibleMovements.forEach((movement, index) => {
+    lines.push('', historyMovementCard(movement, snapshot.accountById, page * REPORT_PAGE_SIZE + index + 1, { includeDate: true }))
+  })
+  return sendScreen(ctx, lines.join('\n'), reportDetailKeyboard(session))
+}
+
+async function handleReportsCallback(ctx, data) {
+  if (data === 'reports:home') return showReports(ctx)
+  const listMatch = data.match(/^reports:(project|expense):page:(\d+)$/)
+  if (listMatch) return showReportList(ctx, listMatch[1], Number(listMatch[2]))
+  const session = sessions.get(ctx.chatId, ctx.userId)
+  const detailPageMatch = data.match(/^reports:detail:page:(\d+)$/)
+  if (detailPageMatch && session?.flow === 'reports' && session.view === 'detail') {
+    return showReportDetail(ctx, session.kind, session.reportId, session.listPage, Number(detailPageMatch[1]))
+  }
+  const openMatch = data.match(/^reports:open:(project|expense):([^:]+)$/)
+  if (openMatch && session?.flow === 'reports' && session.view === 'list' && session.kind === openMatch[1]) {
+    const reportId = session.choices?.reports?.[openMatch[2]]
+    if (reportId !== undefined) return showReportDetail(ctx, session.kind, reportId, session.page)
+  }
+  return showReports(ctx)
+}
+
+async function showRecurring(ctx, notice = '', requestedPage = 0) {
+  sessions.clear(ctx.chatId, ctx.userId)
+  const { state } = await ctx.repository.load()
+  const session = buildRecurringSession(state, new Date(), undefined, requestedPage)
   sessions.set(ctx.chatId, ctx.userId, { ...session, uiMessageId: ctx.isCallback ? ctx.messageId : null })
   const byId = new Map((state.recurringRules || []).map((rule) => [rule.id, rule]))
   const dueRuleIds = new Set(session.dueRuleIds)
   const rules = Object.values(session.choices.rules).map((id) => byId.get(id)).filter(Boolean)
-  const lines = ['<b>ADREEM · الحركات الشهرية</b>', `<code>${rules.length} فعالة · ${dueRuleIds.size} مستحقة</code>`]
+  const lines = ['<b>ADREEM · الحركات الشهرية</b>', `<code>${session.total} فعالة · ${dueRuleIds.size} مستحقة · صفحة ${session.page + 1}/${session.pageCount}</code>`]
   if (notice) lines.push('', `<blockquote>${escapeHtml(notice)}</blockquote>`)
   if (!rules.length) lines.push('', '<blockquote>لا توجد حركة شهرية.</blockquote>')
   rules.forEach((rule, index) => {
     const amount = formatMoney(rule.template?.amount, rule.template?.currency)
     const status = dueRuleIds.has(rule.id) ? 'مستحقة الآن' : 'غير مستحقة'
-    lines.push('', `<blockquote>${escapeHtml(`#${index + 1} · ${rule.name}\n${amount} · يوم ${rule.dayOfMonth || 1}\n${status}`)}</blockquote>`)
+    lines.push('', `<blockquote>${escapeHtml(`#${session.items[index].number} · ${preserveUiData(rule.name)}\n${amount} · يوم ${rule.dayOfMonth || 1}\n${status}`)}</blockquote>`)
   })
   return sendScreen(ctx, lines.join('\n'), recurringRulesKeyboard(session))
 }
 
 async function handleRecurringCallback(ctx, data) {
+  if (data.startsWith('repeat:page:')) return showRecurring(ctx, '', Number(data.slice('repeat:page:'.length)))
   const session = sessions.get(ctx.chatId, ctx.userId)
   if (session?.flow !== 'recurring') return sendScreen(ctx, '<b>هذه أزرار تكرار قديمة.</b>\n<blockquote>افتح الحركات الشهرية من القائمة لعرض الأحدث.</blockquote>')
   const [action, token] = parseActionCallback(data, 'repeat', session) || []
@@ -340,7 +474,7 @@ async function handleRecurringCallback(ctx, data) {
     : action === 'disable'
       ? await ctx.repository.update((state) => disableRecurringRuleInState(state, ruleId))
       : { message: 'الأمر غير معروف.' }
-  return showRecurring(ctx, result.message)
+  return showRecurring(ctx, result.message, session.page)
 }
 
 async function showReview(ctx, notice = '', requestedPage = 0) {
@@ -354,7 +488,7 @@ async function showReview(ctx, notice = '', requestedPage = 0) {
   if (!reviewSession.total) lines.push('', '<blockquote>لا شيء معلق.</blockquote>')
   reviewSession.items.forEach((item) => {
     const description = item.kind === 'account'
-      ? `حساب · ${accountLabel(item.value)}`
+      ? `حساب · ${protectedAccountLabel(item.value)}`
       : `حركة · ${movementLabels[item.value.type] || item.value.type} · ${formatMoney(item.value.amount, item.value.currency)}`
     lines.push(`<blockquote>${escapeHtml(`#${item.number} · ${description}`)}</blockquote>`)
   })
@@ -528,6 +662,48 @@ async function handleAdminCommand(ctx, text) {
   return false
 }
 
+async function showMovementPickerPage(ctx, kind, requestedPage) {
+  const session = sessions.get(ctx.chatId, ctx.userId)
+  const step = kind === 'category' ? 'category' : 'dimension'
+  if (session?.flow !== 'movement' || session.step !== step) {
+    return handleMovementCallback(ctx, `mv:${step}:page:${requestedPage}`)
+  }
+  if (session.uiMessageId && ctx.messageId && session.uiMessageId !== ctx.messageId) {
+    return sendScreen(ctx, '<b>هذه أزرار من خطوة قديمة.</b>\n<blockquote>استخدم بطاقة الحركة الحالية.</blockquote>')
+  }
+
+  const { state } = await ctx.repository.load()
+  const dimensions = dimensionsFromAccounts(state.accounts, state.dimensions)
+  const expenseCategories = (state.accounts || []).filter((account) => account.status === 'active' && account.valueKind === VALUE_KINDS.EXPENSE)
+  const choices = kind === 'category' ? expenseCategories : dimensions
+  const { page, pageCount } = boundedPage(choices.length, requestedPage, MOVEMENT_PICKER_PAGE_SIZE)
+  const visibleChoices = choices.slice(page * MOVEMENT_PICKER_PAGE_SIZE, (page + 1) * MOVEMENT_PICKER_PAGE_SIZE)
+  const choiceKey = kind === 'category' ? 'category' : 'dimension'
+  const nextSession = {
+    ...session,
+    choices: {
+      ...session.choices,
+      [choiceKey]: Object.fromEntries(visibleChoices.map((item, index) => [String(index), item.id])),
+    },
+  }
+  sessions.set(ctx.chatId, ctx.userId, nextSession)
+
+  const snapshot = buildLedgerSnapshot(state)
+  const dimensionById = new Map(dimensions.map((dimension) => [dimension.id, dimension]))
+  const expenseCategoryById = new Map(expenseCategories.map((category) => [category.id, category]))
+  const label = kind === 'category' ? 'نوع مصروف' : 'مشروع أو أصل'
+  const text = [
+    movementStepText(nextSession, snapshot.accountById, dimensionById, expenseCategoryById),
+    '',
+    stepPromptText(nextSession),
+    `<code>${choices.length} ${label} · صفحة ${page + 1}/${pageCount}</code>`,
+  ].join('\n')
+  const keyboard = kind === 'category'
+    ? expenseCategoryKeyboard(expenseCategories, { page, pageSize: MOVEMENT_PICKER_PAGE_SIZE })
+    : dimensionKeyboard(dimensions, { page, pageSize: MOVEMENT_PICKER_PAGE_SIZE })
+  return sendScreen(ctx, text, keyboard)
+}
+
 async function handleCallback(ctx, update) {
   const data = update.callback_query?.data || ''
   console.log('[adreem-telegram-bot] callback', {
@@ -550,10 +726,13 @@ async function handleCallback(ctx, update) {
   if (data === 'main:reports') return showReports(ctx)
   if (data === 'main:recurring') return showRecurring(ctx)
   if (data.startsWith('accounts:')) return handleAccountsCallback(ctx, data)
+  if (data.startsWith('reports:')) return handleReportsCallback(ctx, data)
   if (data.startsWith('repeat:')) return handleRecurringCallback(ctx, data)
   if (data.startsWith('review:')) return handleReviewCallback(ctx, data)
   if (data.startsWith('history:')) return handleHistoryCallback(ctx, data)
   if (data.startsWith('acct:')) return handleAccountCallback(ctx, data)
+  if (data.startsWith('mv:dimension:page:')) return showMovementPickerPage(ctx, 'dimension', Number(data.slice('mv:dimension:page:'.length)))
+  if (data.startsWith('mv:category:page:')) return showMovementPickerPage(ctx, 'category', Number(data.slice('mv:category:page:'.length)))
   if (data.startsWith('mv:')) return handleMovementCallback(ctx, data)
   if (data.startsWith('rec:')) return handleReconciliationCallback(ctx, data)
   return sendScreen(ctx, 'أمر غير معروف.')

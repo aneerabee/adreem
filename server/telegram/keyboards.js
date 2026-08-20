@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { accountPresetGroups, accountPresets } from '../../src/mohammadLedger/accountConfig.js'
 import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
 import { movementTypeOptions } from '../../src/mohammadLedger/movementConfig.js'
+import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
 import {
   accountChoiceButtonStyle,
   accountChoiceButtonText,
@@ -236,26 +237,55 @@ export function accountProfileKeyboard(page = 0) {
 }
 
 export function recurringRulesKeyboard(session = {}) {
-  const rules = Object.entries(session.choices?.rules || {})
   const dueRuleIds = new Set(session.dueRuleIds || [])
-  const rows = rules.map(([token, ruleId], index) => {
+  const items = session.items || Object.entries(session.choices?.rules || {}).map(([token, id], index) => ({
+    id,
+    number: index + 1,
+    token,
+  }))
+  const rows = items.map((item) => {
     const row = []
-    if (dueRuleIds.has(ruleId)) {
-      row.push({ text: `تنفيذ #${index + 1}`, callback_data: actionCallbackData('repeat', session.actionSessionId, 'run', token), style: 'success' })
+    if (dueRuleIds.has(item.id)) {
+      row.push({ text: `تنفيذ #${item.number}`, callback_data: actionCallbackData('repeat', session.actionSessionId, 'run', item.token), style: 'success' })
     }
-    row.push({ text: `إيقاف #${index + 1}`, callback_data: actionCallbackData('repeat', session.actionSessionId, 'disable', token), style: 'danger' })
+    row.push({ text: `إيقاف #${item.number}`, callback_data: actionCallbackData('repeat', session.actionSessionId, 'disable', item.token), style: 'danger' })
     return row
   })
+  rows.push(...paginationRows('repeat', session.page, session.pageCount))
   rows.push([{ text: '↩️ المزيد', callback_data: 'main:more', style: 'primary' }])
   return { inline_keyboard: rows }
 }
 
-export function reportKeyboard() {
+export function reportKeyboard(counts = {}) {
   return {
     inline_keyboard: [
+      [{ text: `المشاريع والأصول · ${Number(counts.projects) || 0}`, callback_data: 'reports:project:page:0', style: 'primary' }],
+      [{ text: `أنواع المصروف · ${Number(counts.expenses) || 0}`, callback_data: 'reports:expense:page:0', style: 'primary' }],
       [{ text: '↩️ المزيد', callback_data: 'main:more', style: 'primary' }],
     ],
   }
+}
+
+export function reportListKeyboard(session = {}) {
+  const kind = session.kind === 'expense' ? 'expense' : 'project'
+  const rows = (session.items || []).map((item) => ([{
+    text: `تفاصيل #${item.number}`,
+    callback_data: `reports:open:${kind}:${item.token}`,
+    style: 'primary',
+  }]))
+  rows.push(...paginationRows(`reports:${kind}`, session.page, session.pageCount))
+  rows.push([{ text: '↩️ التقارير', callback_data: 'reports:home', style: 'primary' }])
+  return { inline_keyboard: rows }
+}
+
+export function reportDetailKeyboard(session = {}) {
+  const rows = paginationRows('reports:detail', session.page, session.pageCount)
+  rows.push([{
+    text: '↩️ القائمة',
+    callback_data: `reports:${session.kind === 'expense' ? 'expense' : 'project'}:page:${Math.max(0, Number(session.listPage) || 0)}`,
+    style: 'primary',
+  }])
+  return { inline_keyboard: rows }
 }
 
 function paginationRows(prefix, page = 0, pageCount = 1) {
@@ -282,26 +312,41 @@ export function noteKeyboard() {
   }
 }
 
-export function dimensionKeyboard(dimensions = []) {
-  const rows = dimensions.slice(0, 8).map((dimension, index) => ([{
-    text: `📍 ${dimension.name}`,
+export function dimensionKeyboard(dimensions = [], options = {}) {
+  const { items, page, pageCount } = paginatedItems(dimensions, options)
+  const rows = items.map((dimension, index) => ([{
+    text: `📍 ${preserveUiData(dimension.name)}`,
     callback_data: `mv:dimension:${index}`,
     style: 'primary',
   }]))
+  rows.push(...paginationRows('mv:dimension', page, pageCount))
   rows.push([{ text: 'بدون مشروع', callback_data: 'mv:dimension:skip', style: 'primary' }])
   rows.push([{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
   return { inline_keyboard: rows }
 }
 
-export function expenseCategoryKeyboard(categories = []) {
-  const rows = categories.slice(0, 8).map((category, index) => ([{
-    text: `🧾 ${category.ownerName || category.subAccountName}`,
+export function expenseCategoryKeyboard(categories = [], options = {}) {
+  const { items, page, pageCount } = paginatedItems(categories, options)
+  const rows = items.map((category, index) => ([{
+    text: `🧾 ${preserveUiData(category.ownerName || category.subAccountName)}`,
     callback_data: `mv:category:${index}`,
     style: 'primary',
   }]))
+  rows.push(...paginationRows('mv:category', page, pageCount))
   rows.push([{ text: 'بدون تصنيف', callback_data: 'mv:category:skip', style: 'primary' }])
   rows.push([{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
   return { inline_keyboard: rows }
+}
+
+function paginatedItems(items = [], options = {}) {
+  const pageSize = Math.max(1, Number(options.pageSize) || 8)
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize))
+  const page = Math.min(Math.max(0, Number(options.page) || 0), pageCount - 1)
+  return {
+    items: items.slice(page * pageSize, (page + 1) * pageSize),
+    page,
+    pageCount,
+  }
 }
 
 export function attachmentKeyboard() {
@@ -356,9 +401,13 @@ export function reviewKeyboard(reviewSession) {
 
 export function historyKeyboard(historySession) {
   const rows = []
-  const movementTokens = Object.keys(historySession?.choices?.movements || {})
-  movementTokens.forEach((token, index) => {
-    rows.push([{ text: `إلغاء حركة #${index + 1}`, callback_data: actionCallbackData('history', historySession.actionSessionId, 'cancel', token), style: 'danger' }])
+  const items = historySession?.items || Object.keys(historySession?.choices?.movements || {}).map((token, index) => ({
+    canCancel: true,
+    number: index + 1,
+    token,
+  }))
+  items.filter((item) => item.canCancel).forEach((item) => {
+    rows.push([{ text: `إلغاء حركة #${item.number}`, callback_data: actionCallbackData('history', historySession.actionSessionId, 'cancel', item.token), style: 'danger' }])
   })
   rows.push(...paginationRows('history', historySession?.page, historySession?.pageCount))
   rows.push([{ text: '↩️ القائمة', callback_data: 'main:home', style: 'primary' }])

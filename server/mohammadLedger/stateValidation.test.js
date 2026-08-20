@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
+import { DIMENSION_TYPES, RECURRING_FREQUENCIES } from '../../src/mohammadLedger/ledgerOperations.js'
 import { createEmptyAdreemState } from '../../src/mohammadLedger/ledgerState.js'
 import { validateLedgerStateTransition } from './stateValidation.js'
 
 const at = '2026-08-19T12:00:00.000Z'
+const validationNow = '2026-08-19T12:05:00.000Z'
 
 function cashAccount(overrides = {}) {
   return {
@@ -35,10 +37,86 @@ function opening(amount = 100) {
   }
 }
 
+function projectAccount(overrides = {}) {
+  return {
+    id: 'project-main',
+    ownerName: 'مشروع رئيسي',
+    subAccountName: 'مركز تكلفة',
+    type: ACCOUNT_TYPES.PROJECT,
+    valueKind: VALUE_KINDS.PROJECT,
+    currencyKind: CURRENCIES.DINAR,
+    status: ACCOUNT_STATUSES.ACTIVE,
+    createdAt: at,
+    updatedAt: at,
+    ...overrides,
+  }
+}
+
+function reconciliation(overrides = {}) {
+  return {
+    id: 'reconciliation-1',
+    accountId: 'cash-main',
+    actualDinar: 90,
+    actualUsd: 0,
+    expectedDinar: 100,
+    expectedUsd: 0,
+    diffDinar: -10,
+    diffUsd: 0,
+    note: 'مطابقة الصندوق',
+    createdAt: at,
+    ...overrides,
+  }
+}
+
+function monthlyRule(overrides = {}) {
+  return {
+    id: 'monthly-rent',
+    name: 'إيجار شهري',
+    status: 'active',
+    frequency: RECURRING_FREQUENCIES.MONTHLY,
+    dayOfMonth: 15,
+    executionMode: 'manual',
+    template: {
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash-main',
+      destinationAccountId: null,
+      dimensionId: '',
+      expenseCategoryId: '',
+    },
+    createdAt: at,
+    updatedAt: at,
+    ...overrides,
+  }
+}
+
 describe('server ledger state validation', () => {
   it('accepts a valid empty ledger', () => {
     const state = createEmptyAdreemState(at, { ledgerId: 'main' })
     expect(validateLedgerStateTransition(state, state, { ledgerId: 'main' })).toEqual({ ok: true, errors: [] })
+  })
+
+  it('allows an account merged into its active logical duplicate to become inactive', () => {
+    const target = cashAccount({ id: 'cash-target' })
+    const source = cashAccount({ id: 'cash-source', status: ACCOUNT_STATUSES.NEEDS_REVIEW })
+    const current = { ...createEmptyAdreemState(at), accounts: [source, target] }
+    const next = {
+      ...current,
+      savedAt: validationNow,
+      accounts: [
+        {
+          ...source,
+          status: ACCOUNT_STATUSES.INACTIVE,
+          mergedIntoAccountId: target.id,
+          disabledAt: validationNow,
+          updatedAt: validationNow,
+        },
+        target,
+      ],
+    }
+
+    expect(validateLedgerStateTransition(next, current)).toEqual({ ok: true, errors: [] })
   })
 
   it('rejects a new posted movement that overdraws owned cash', () => {
@@ -153,7 +231,7 @@ describe('server ledger state validation', () => {
       status: MOVEMENT_STATUSES.VOIDED,
       updatedAt: '2026-08-19T12:02:00.000Z',
     }
-    const result = validateLedgerStateTransition({ ...current, movements: [invalidVoid] }, current)
+    const result = validateLedgerStateTransition({ ...current, movements: [invalidVoid] }, current, { now: validationNow })
 
     expect(result.errors).toContainEqual(expect.objectContaining({ code: 'invalid-movement-status-transition' }))
   })
@@ -164,7 +242,7 @@ describe('server ledger state validation', () => {
     const result = validateLedgerStateTransition({
       ...current,
       movements: [{ ...reviewMovement, status: MOVEMENT_STATUSES.VOIDED, updatedAt: '2026-08-19T12:02:00.000Z' }],
-    }, current)
+    }, current, { now: validationNow })
 
     expect(result.errors).toContainEqual(expect.objectContaining({ code: 'invalid-movement-status-transition' }))
   })
@@ -179,7 +257,7 @@ describe('server ledger state validation', () => {
       voidedAt: '2026-08-19T12:02:00.000Z',
       updatedAt: '2026-08-19T12:02:00.000Z',
     }
-    const changedResult = validateLedgerStateTransition({ ...current, movements: [changedDuringVoid] }, current)
+    const changedResult = validateLedgerStateTransition({ ...current, movements: [changedDuringVoid] }, current, { now: validationNow })
     expect(changedResult.errors).toContainEqual(expect.objectContaining({ code: 'invalid-movement-status-transition' }))
 
     const voidedState = { ...current, movements: [{ ...opening(), status: MOVEMENT_STATUSES.VOIDED, voidReason: 'إلغاء', voidedAt: at }] }
@@ -232,5 +310,305 @@ describe('server ledger state validation', () => {
 
     expect(result.errors).toContainEqual(expect.objectContaining({ code: 'orphan-attachment' }))
     expect(result.errors).toContainEqual(expect.objectContaining({ code: 'invalid-stored-attachment' }))
+  })
+
+  it('rejects canceling a movement older than 24 hours using the server copy timestamp', () => {
+    const oldExpense = {
+      id: 'old-expense',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash-main',
+      createdAt: '2026-08-18T11:59:59.000Z',
+      updatedAt: '2026-08-18T11:59:59.000Z',
+    }
+    const current = {
+      ...createEmptyAdreemState(at),
+      accounts: [cashAccount()],
+      movements: [opening(), oldExpense],
+    }
+    const voided = {
+      ...oldExpense,
+      createdAt: validationNow,
+      status: MOVEMENT_STATUSES.VOIDED,
+      voidReason: 'إلغاء متأخر',
+      voidedAt: '2026-08-19T12:00:00.000Z',
+      updatedAt: '2026-08-19T12:00:00.000Z',
+    }
+
+    const result = validateLedgerStateTransition({ ...current, movements: [opening(), voided] }, current, {
+      now: '2026-08-19T12:00:00.000Z',
+    })
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'movement-void-window-expired',
+      id: 'old-expense',
+    }))
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'movement-created-at-immutable' }))
+  })
+
+  it('allows discarding an old movement under review because it never affected balances', () => {
+    const oldReview = {
+      id: 'old-review',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.NEEDS_REVIEW,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: null,
+      createdAt: '2026-08-01T12:00:00.000Z',
+      updatedAt: '2026-08-01T12:00:00.000Z',
+    }
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [oldReview] }
+    const voided = {
+      ...oldReview,
+      status: MOVEMENT_STATUSES.VOIDED,
+      voidReason: 'تنظيف حركة ناقصة',
+      voidedAt: validationNow,
+      updatedAt: validationNow,
+    }
+
+    const result = validateLedgerStateTransition({ ...current, movements: [voided] }, current, { now: validationNow })
+
+    expect(result.errors).not.toContainEqual(expect.objectContaining({ code: 'movement-void-window-expired' }))
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects invalid dimension records and missing linked project accounts', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [projectAccount()] }
+    const invalidDimension = {
+      id: 'dimension-1',
+      name: 'المشروع',
+      type: DIMENSION_TYPES.PROJECT,
+      status: 'active',
+      linkedAccountId: 'missing-project',
+      createdAt: at,
+    }
+
+    const result = validateLedgerStateTransition({ ...current, dimensions: [invalidDimension] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'dimension-account-missing',
+      id: 'dimension-1',
+      field: 'linkedAccountId',
+    }))
+  })
+
+  it('rejects posted movements that reference a missing dimension', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [opening()] }
+    const expense = {
+      id: 'dimension-expense',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash-main',
+      dimensionId: 'missing-dimension',
+      createdAt: validationNow,
+      updatedAt: validationNow,
+    }
+
+    const result = validateLedgerStateTransition({ ...current, movements: [...current.movements, expense] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'movement-dimension-invalid',
+      id: 'dimension-expense',
+      field: 'dimensionId',
+    }))
+  })
+
+  it('rejects a new fractional movement amount while preserving exchange-rate precision', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()] }
+    const correction = {
+      id: 'fractional-correction',
+      type: MOVEMENT_TYPES.CORRECTION,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 0.25,
+      rate: 7.125,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: 'cash-main',
+      note: 'تصحيح',
+      createdAt: validationNow,
+      updatedAt: validationNow,
+    }
+
+    const result = validateLedgerStateTransition({ ...current, movements: [correction] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'invalid-movement-amount',
+      id: 'fractional-correction',
+      field: 'amount',
+    }))
+    expect(result.errors.some((error) => error.field === 'rate')).toBe(false)
+  })
+
+  it('rejects reconciliations that reference a missing account', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()] }
+    const invalid = reconciliation({ accountId: 'missing-account' })
+
+    const result = validateLedgerStateTransition({ ...current, reconciliations: [invalid] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'reconciliation-account-missing',
+      id: 'reconciliation-1',
+      field: 'accountId',
+    }))
+  })
+
+  it('rejects reconciliation differences that do not match actual and expected values', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()] }
+    const invalid = reconciliation({ diffDinar: -9 })
+
+    const result = validateLedgerStateTransition({ ...current, reconciliations: [invalid] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'reconciliation-difference-mismatch',
+      id: 'reconciliation-1',
+      field: 'diffDinar',
+    }))
+  })
+
+  it('rejects fractional currency values in a new reconciliation', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()] }
+    const invalid = reconciliation({ actualDinar: 90.25, diffDinar: -9.75 })
+
+    const result = validateLedgerStateTransition({ ...current, reconciliations: [invalid] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'invalid-reconciliation-amount',
+      id: 'reconciliation-1',
+      field: 'actualDinar',
+    }))
+  })
+
+  it('rejects movements that reference a missing reconciliation', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()] }
+    const correction = {
+      id: 'correction-1',
+      type: MOVEMENT_TYPES.CORRECTION,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: 'cash-main',
+      reconciliationId: 'missing-reconciliation',
+      note: 'تصحيح مطابقة',
+      createdAt: validationNow,
+      updatedAt: validationNow,
+    }
+
+    const result = validateLedgerStateTransition({ ...current, movements: [correction] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'movement-reconciliation-missing',
+      id: 'correction-1',
+      field: 'reconciliationId',
+    }))
+  })
+
+  it('rejects a reconciliation correction whose amount differs from the recorded difference', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()] }
+    const record = reconciliation()
+    const correction = {
+      id: 'wrong-reconciliation-correction',
+      type: MOVEMENT_TYPES.CORRECTION,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: -9,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: 'cash-main',
+      reconciliationId: record.id,
+      note: 'تصحيح مطابقة',
+      createdAt: validationNow,
+      updatedAt: validationNow,
+    }
+
+    const result = validateLedgerStateTransition({
+      ...current,
+      movements: [correction],
+      reconciliations: [record],
+    }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'movement-reconciliation-amount-mismatch',
+      id: 'wrong-reconciliation-correction',
+      field: 'amount',
+    }))
+  })
+
+  it.each([
+    ['invalid-recurring-day', { dayOfMonth: 32 }],
+    ['invalid-recurring-movement-type', { template: { ...monthlyRule().template, type: 'unknown' } }],
+    ['recurring-account-reference-missing', { template: { ...monthlyRule().template, sourceAccountId: 'missing-account' } }],
+    ['invalid-recurring-template', { template: { ...monthlyRule().template, amount: 10.5 } }],
+  ])('rejects monthly rule failure %s', (code, overrides) => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()] }
+    const rule = monthlyRule(overrides)
+
+    const result = validateLedgerStateTransition({ ...current, recurringRules: [rule] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code, id: 'monthly-rent' }))
+  })
+
+  it('rejects a recurring movement whose type differs from its monthly rule', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()] }
+    const rule = monthlyRule()
+    const movement = {
+      id: 'recurring-mismatch',
+      type: MOVEMENT_TYPES.CORRECTION,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: 'cash-main',
+      recurringRuleId: rule.id,
+      recurringRunKey: '2026-08',
+      note: 'تصحيح',
+      createdAt: validationNow,
+      updatedAt: validationNow,
+    }
+
+    const result = validateLedgerStateTransition({
+      ...current,
+      movements: [movement],
+      recurringRules: [rule],
+    }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'movement-recurring-type-mismatch',
+      id: 'recurring-mismatch',
+    }))
+  })
+
+  it('rejects an active monthly rule that references an inactive account', () => {
+    const hiddenCash = cashAccount({ status: ACCOUNT_STATUSES.INACTIVE })
+    const current = { ...createEmptyAdreemState(at), accounts: [hiddenCash] }
+
+    const result = validateLedgerStateTransition({ ...current, recurringRules: [monthlyRule()] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'recurring-account-reference-inactive',
+      id: 'monthly-rent',
+      field: 'sourceAccountId',
+    }))
+  })
+
+  it('allows disabling a legacy monthly rule after its account was removed', () => {
+    const legacyRule = monthlyRule({ status: 'active' })
+    const current = { ...createEmptyAdreemState(at), recurringRules: [legacyRule] }
+    const disabledRule = { ...legacyRule, status: 'inactive', disabledAt: validationNow, updatedAt: validationNow }
+
+    expect(validateLedgerStateTransition({ ...current, recurringRules: [disabledRule] }, current)).toEqual({
+      ok: true,
+      errors: [],
+    })
+  })
+
+  it('grandfathers unchanged legacy operational records during unrelated saves', () => {
+    const current = {
+      ...createEmptyAdreemState(at),
+      dimensions: [{ id: 'legacy-dimension', name: 'قديم' }],
+      reconciliations: [{ id: 'legacy-reconciliation', accountId: 'old-account' }],
+      recurringRules: [{ id: 'legacy-rule', name: 'قديم' }],
+    }
+
+    expect(validateLedgerStateTransition({ ...current }, current)).toEqual({ ok: true, errors: [] })
   })
 })

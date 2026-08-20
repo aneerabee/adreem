@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -239,6 +239,41 @@ describe('telegram user registry', () => {
     })
   })
 
+  it('refuses removing the configured owner email and preserves the active session', () => {
+    const filePath = tempFile()
+    const access = createTelegramUserAccess({ ADREEM_OWNER_EMAILS: 'owner@example.com' }, filePath)
+    access.addUser({
+      userId: 'owner-main',
+      email: 'owner@example.com',
+      password: 'owner-password',
+      ledgerId: 'owner-main',
+    })
+    const login = access.loginUser({ email: 'owner@example.com', password: 'owner-password' })
+
+    const result = access.updateUser('owner-main', { email: 'renamed@example.com' })
+
+    expect(result).toEqual({ ok: false, error: 'owner-identity-required' })
+    expect(loadTelegramUserRegistry(filePath).users[0].email).toBe('owner@example.com')
+    expect(access.userForSessionToken(login.sessionToken)).toMatchObject({ userId: 'owner-main' })
+  })
+
+  it('refuses removing the configured owner Telegram identity', () => {
+    const filePath = tempFile()
+    const access = createTelegramUserAccess({ ADREEM_TELEGRAM_ADMIN_IDS: '100' }, filePath)
+    access.addUser({
+      userId: 'owner-main',
+      email: 'owner@example.com',
+      password: 'owner-password',
+      telegramUserId: '100',
+      ledgerId: 'owner-main',
+    })
+
+    const result = access.updateUser('owner-main', { telegramUserId: '200' })
+
+    expect(result).toEqual({ ok: false, error: 'owner-identity-required' })
+    expect(loadTelegramUserRegistry(filePath).users[0].telegramUserId).toBe('100')
+  })
+
   it('allows web access to an env ledger only when it explicitly links the same telegram owner', () => {
     const filePath = tempFile()
     const access = createTelegramUserAccess({
@@ -363,12 +398,19 @@ describe('telegram user registry', () => {
     const access = createTelegramUserAccess({}, filePath)
     access.addUser({ userId: 'first', email: 'first@example.com', password: 'secret-password', ledgerId: 'first' })
     access.addUser({ userId: 'second', email: 'second@example.com', password: 'secret-password', ledgerId: 'second' })
+    const login = access.loginUser({ email: 'first@example.com', password: 'secret-password' })
+    const activeUser = loadTelegramUserRegistry(filePath).users.find((user) => user.userId === 'first')
 
     expect(access.removeUserAccess('first', { requestedBy: 'owner' }).ok).toBe(true)
     access.addUser({ userId: 'third', email: 'third@example.com', password: 'secret-password', ledgerId: 'third' })
 
     const registry = loadTelegramUserRegistry(filePath)
+    const rawRegistry = readFileSync(filePath, 'utf8')
     expect(registry.removed).toHaveLength(1)
     expect(registry.removed[0]).toMatchObject({ userId: 'first', removedBy: 'owner' })
+    expect(registry.removed[0]).not.toHaveProperty('passwordHash')
+    expect(registry.removed[0]).not.toHaveProperty('sessions')
+    expect(rawRegistry).not.toContain(activeUser.passwordHash)
+    expect(rawRegistry).not.toContain(webTokenHash(login.sessionToken))
   })
 })

@@ -22,6 +22,7 @@ import {
   movementTone,
 } from '../../src/mohammadLedger/movementConfig.js'
 import { accountLabel, formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
+import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
 
 export { movementLabels }
 
@@ -36,6 +37,29 @@ export function escapeHtml(value) {
 
 export function htmlLine(label, value) {
   return `<b>${escapeHtml(label)}:</b> ${escapeHtml(value)}`
+}
+
+function htmlDataLine(label, value) {
+  return htmlLine(label, preserveUiData(value))
+}
+
+function protectAccountName(account = {}) {
+  const preset = accountPresetFor(account.type, account.valueKind)
+  const nameKey = preset.nameTarget === 'subAccountName' ? 'subAccountName' : 'ownerName'
+  if (!account[nameKey]) return account
+  if (nameKey === 'ownerName' && /^(أنا|انا)$/u.test(account[nameKey])) return account
+  return {
+    ...account,
+    [nameKey]: preserveUiData(account[nameKey]),
+  }
+}
+
+function protectAccountDraftName(draft = {}) {
+  return protectAccountName(draft)
+}
+
+export function protectedAccountLabel(account) {
+  return account ? accountLabel(protectAccountName(account)) : ''
 }
 
 function currencyLabel(currency) {
@@ -180,7 +204,7 @@ export function accountStepText(session) {
   if (currentIndex > steps.indexOf('group')) summary.push(htmlLine('القسم', group.title))
   if (hasTypeStep && currentIndex > steps.indexOf('type') && draft.type) summary.push(htmlLine('النوع', preset.title))
   const nameValue = accountNameValue(draft)
-  if (currentIndex > steps.indexOf('owner') && nameValue) summary.push(htmlLine(preset.nameLabel || 'الاسم', nameValue))
+  if (currentIndex > steps.indexOf('owner') && nameValue) summary.push(htmlDataLine(preset.nameLabel || 'الاسم', nameValue))
   if (!preset.skipDetail && currentIndex > steps.indexOf('detail') && draft.subAccountName) {
     summary.push(htmlLine(preset.detailLabel || 'التفصيل', accountDetailName(draft)))
   }
@@ -211,7 +235,7 @@ export function accountReviewText(session, result = null) {
     '<code>راجع قبل الحفظ</code>',
     '',
     '<blockquote>',
-    escapeHtml(accountDraftSummary(draft)),
+    escapeHtml(accountDraftSummary(protectAccountDraftName(draft))),
     '\n',
     escapeHtml(preset.title),
     '\n',
@@ -232,7 +256,7 @@ export function accountCreatedText(account, { duplicate = false, reviewed = fals
   return [
     `<b>${escapeHtml(title)}</b>`,
     '<blockquote>',
-    escapeHtml(accountLabel(account)),
+    escapeHtml(protectedAccountLabel(account)),
     '\n',
     escapeHtml(preset.title),
     '\n',
@@ -273,12 +297,12 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   if (amountText) summary.push(htmlLine('المبلغ', amountText))
   if (movementNeedsRate(draft.type) && draft.rate) summary.push(htmlLine('السعر', formatRate(draft.rate)))
   if (!movementNeedsRate(draft.type) && draft.currencyConfirmed) summary.push(htmlLine('العملة', currencyLabel(draft.currency)))
-  if (source) summary.push(htmlLine(config.sourceLabel, accountLabel(source)))
-  if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, accountLabel(destination)))
-  if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
-  if (dimension) summary.push(htmlLine('مشروع', dimension.name))
-  if (expenseCategory) summary.push(htmlLine('نوع المصروف', expenseCategory.ownerName || expenseCategory.subAccountName))
-  if (draft.attachmentLabel || draft.attachmentUrl) summary.push(htmlLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
+  if (source) summary.push(htmlLine(config.sourceLabel, protectedAccountLabel(source)))
+  if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, protectedAccountLabel(destination)))
+  if (draft.note) summary.push(htmlDataLine('ملاحظة', draft.note))
+  if (dimension) summary.push(htmlDataLine('مشروع', dimension.name))
+  if (expenseCategory) summary.push(htmlDataLine('نوع المصروف', expenseCategory.ownerName || expenseCategory.subAccountName))
+  if (draft.attachmentLabel || draft.attachmentUrl) summary.push(htmlDataLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   if (draft.recurringEnabled) summary.push(htmlLine('تكرار', 'شهري'))
   const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : 'ADREEM · إدخال'
   const lines = [
@@ -301,10 +325,10 @@ export function reconciliationStepText(session, accountsById = new Map(), balanc
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = `${currentIndex + 1}/${steps.length}`
   const summary = []
-  if (account) summary.push(htmlLine('الحساب', accountLabel(account)))
+  if (account) summary.push(htmlLine('الحساب', protectedAccountLabel(account)))
   if (draft.currency) summary.push(htmlLine('العملة', currencyLabel(draft.currency)))
   if (typeof draft.actualBalance === 'number') summary.push(htmlLine('الرصيد الفعلي', formatMoney(draft.actualBalance, draft.currency)))
-  if (draft.note) summary.push(htmlLine('ملاحظة', draft.note))
+  if (draft.note) summary.push(htmlDataLine('ملاحظة', draft.note))
 
   const lines = [
     '<b>ADREEM · مطابقة رصيد</b>',
@@ -346,7 +370,7 @@ export function reconciliationReviewText(session, preview = {}) {
     '<b>تأكيد المطابقة</b>',
     '<code>راجع قبل الحفظ</code>',
     '',
-    `<blockquote>${escapeHtml(accountLabel(account))}\n${escapeHtml(`دفتر: ${formatMoney(expected, draft.currency)}`)}\n${escapeHtml(`فعلي: ${formatMoney(actual, draft.currency)}`)}\n${escapeHtml(`الفرق: ${sign}${formatMoney(diff, draft.currency)}`)}\n${escapeHtml(`ملاحظة: ${draft.note || ''}`)}</blockquote>`,
+    `<blockquote>${escapeHtml(protectedAccountLabel(account))}\n${escapeHtml(`دفتر: ${formatMoney(expected, draft.currency)}`)}\n${escapeHtml(`فعلي: ${formatMoney(actual, draft.currency)}`)}\n${escapeHtml(`الفرق: ${sign}${formatMoney(diff, draft.currency)}`)}\n${escapeHtml(`ملاحظة: ${preserveUiData(draft.note || '')}`)}</blockquote>`,
   ]
   if (!diff) {
     lines.push('', '<blockquote>لا يوجد فرق. سيتم حفظ المطابقة بدون حركة تصحيح.</blockquote>')
@@ -373,7 +397,7 @@ export function stepPromptText(session) {
 
 export function accountChoiceText(session, account, bucket, index) {
   const presentation = accountBalancePresentation(account, bucket)
-  return `${index + 1}. ${presentation.icon} ${accountLabel(account)}\n   ${typeTag(account)} · ${presentation.text}`
+  return `${index + 1}. ${presentation.icon} ${protectedAccountLabel(account)}\n   ${typeTag(account)} · ${presentation.text}`
 }
 
 export function compactAccountChoiceText(account, bucket) {
@@ -383,7 +407,7 @@ export function compactAccountChoiceText(account, bucket) {
 
 export function accountChoiceButtonText(account, bucket) {
   const presentation = accountBalancePresentation(account, bucket)
-  return `${presentation.icon} ${accountDisplayName(account)} | ${presentation.text}`
+  return `${presentation.icon} ${accountDisplayName(protectAccountName(account))} | ${presentation.text}`
 }
 
 export function accountChoiceButtonStyle(account, bucket) {
@@ -394,7 +418,7 @@ export function accountBlockquote(account, bucket) {
   const presentation = accountBalancePresentation(account, bucket)
   return [
     '<blockquote>',
-    escapeHtml(`${presentation.icon} ${accountDisplayName(account)}`),
+    escapeHtml(`${presentation.icon} ${accountDisplayName(protectAccountName(account))}`),
     '\n',
     escapeHtml(presentation.text),
     '\n',
@@ -420,14 +444,14 @@ export function movementBlockquote(movement, accountsById = new Map(), options =
   if (movementNeedsRate(movement?.type) && movement?.rate) lines.push(`السعر: ${formatRate(movement.rate)}`)
 
   if (source && destination) {
-    lines.push(`${accountLabel(source)} ← ${accountLabel(destination)}`)
+    lines.push(`${protectedAccountLabel(source)} ← ${protectedAccountLabel(destination)}`)
   } else if (source) {
-    lines.push(`${config.sourceLabel || 'من'}: ${accountLabel(source)}`)
+    lines.push(`${config.sourceLabel || 'من'}: ${protectedAccountLabel(source)}`)
   } else if (destination) {
-    lines.push(`${config.destinationLabel || 'إلى'}: ${accountLabel(destination)}`)
+    lines.push(`${config.destinationLabel || 'إلى'}: ${protectedAccountLabel(destination)}`)
   }
 
-  if (note) lines.push(`ملاحظة: ${note}`)
+  if (note) lines.push(`ملاحظة: ${preserveUiData(note)}`)
   return `<blockquote>${escapeHtml(lines.join('\n'))}</blockquote>`
 }
 
@@ -493,8 +517,8 @@ export function reviewMovementText(session, preview) {
     `<blockquote>${escapeHtml(`${movementLabels[draft.type] || draft.type} ${formatMoney(draft.amount, draft.currency)}`)}</blockquote>`,
   ]
   if (draft.rate) lines.push(htmlLine('السعر', formatRate(draft.rate)))
-  if (draft.note) lines.push(htmlLine('ملاحظة', draft.note))
-  if (draft.attachmentLabel || draft.attachmentUrl) lines.push(htmlLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
+  if (draft.note) lines.push(htmlDataLine('ملاحظة', draft.note))
+  if (draft.attachmentLabel || draft.attachmentUrl) lines.push(htmlDataLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   if (draft.recurringEnabled) lines.push(htmlLine('تكرار', 'شهري'))
   lines.push('')
 
@@ -517,7 +541,7 @@ function movementEffectBlockquote(title, effect) {
   const icon = isIncrease ? '🟢' : '🔴'
   const sign = isIncrease ? '+' : '-'
   const lines = [
-    `${icon} ${title}: ${accountLabel(effect.account)}`,
+    `${icon} ${title}: ${protectedAccountLabel(effect.account)}`,
     `قبل: ${formatMoney(effect.before, effect.currency)}`,
     `التغيير: ${sign}${formatMoney(Math.abs(effect.delta), effect.currency)}`,
     `بعد: ${formatMoney(effect.after, effect.currency)}`,

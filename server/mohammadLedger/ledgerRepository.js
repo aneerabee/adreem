@@ -20,6 +20,9 @@ import { validateLedgerStateTransition } from './stateValidation.js'
 const MAX_SAVE_ATTEMPTS = 4
 const DEFAULT_BACKUP_LIMIT = 60
 const DEFAULT_REGISTRY_FILE = './adreem-telegram-users.json'
+const REQUIRED_PERSISTED_LISTS = ['accounts', 'movements']
+const OPTIONAL_PERSISTED_RECORD_LISTS = ['dimensions', 'attachments', 'recurringRules', 'reconciliations', 'auditEvents']
+const OPTIONAL_PERSISTED_LISTS = [...OPTIONAL_PERSISTED_RECORD_LISTS, 'ignoredExternalAccounts']
 
 export class ConcurrentLedgerUpdateError extends Error {
   constructor(message = 'Ledger state changed during save.') {
@@ -34,6 +37,80 @@ export class LedgerIntegrityError extends Error {
     this.name = 'LedgerIntegrityError'
     this.validation = validation
   }
+}
+
+export class PersistedLedgerStateError extends Error {
+  constructor(rowId, validation) {
+    super(`Persisted ledger row ${rowId || 'unknown'} is invalid: ${validation?.errors?.[0]?.message || 'invalid payload'}`)
+    this.name = 'PersistedLedgerStateError'
+    this.rowId = rowId || null
+    this.validation = validation
+  }
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function validatePersistedLedgerPayload(payload) {
+  const errors = []
+  if (!isRecord(payload)) {
+    return {
+      ok: false,
+      errors: [{ code: 'invalid-persisted-payload', field: 'payload', message: 'Cloud ledger payload must be an object.' }],
+    }
+  }
+
+  for (const field of REQUIRED_PERSISTED_LISTS) {
+    if (!Array.isArray(payload[field])) {
+      errors.push({ code: 'invalid-persisted-list', field, message: `Cloud ledger ${field} must be an array.` })
+    }
+  }
+  for (const field of OPTIONAL_PERSISTED_LISTS) {
+    if (Object.prototype.hasOwnProperty.call(payload, field) && !Array.isArray(payload[field])) {
+      errors.push({ code: 'invalid-persisted-list', field, message: `Cloud ledger ${field} must be an array when present.` })
+    }
+  }
+  for (const field of [...REQUIRED_PERSISTED_LISTS, ...OPTIONAL_PERSISTED_RECORD_LISTS]) {
+    if (!Array.isArray(payload[field])) continue
+    const invalidIndex = payload[field].findIndex((record) => !isRecord(record))
+    if (invalidIndex >= 0) {
+      errors.push({
+        code: 'invalid-persisted-record',
+        field,
+        index: invalidIndex,
+        message: `Cloud ledger ${field}[${invalidIndex}] must be an object.`,
+      })
+    }
+  }
+  if (Array.isArray(payload.ignoredExternalAccounts)) {
+    const invalidIndex = payload.ignoredExternalAccounts.findIndex((accountId) => typeof accountId !== 'string')
+    if (invalidIndex >= 0) {
+      errors.push({
+        code: 'invalid-persisted-record',
+        field: 'ignoredExternalAccounts',
+        index: invalidIndex,
+        message: `Cloud ledger ignoredExternalAccounts[${invalidIndex}] must be a string.`,
+      })
+    }
+  }
+
+  return { ok: errors.length === 0, errors }
+}
+
+export function selectLedgerRowsForLoad(rows, fallbackState, options = {}) {
+  const safeRows = Array.isArray(rows) ? rows : []
+  const primaryRowId = options.primaryRowId || MOHAMMAD_STATE_ROW_ID
+  const legacyRowId = options.legacyRowId || MOHAMMAD_LEGACY_STATE_ROW_ID
+  const selectedRow = safeRows.find((row) => row?.id === primaryRowId) ||
+    safeRows.find((row) => row?.id === legacyRowId)
+
+  if (selectedRow) {
+    const validation = validatePersistedLedgerPayload(selectedRow.payload)
+    if (!validation.ok) throw new PersistedLedgerStateError(selectedRow.id, validation)
+  }
+
+  return selectPersistedLedgerRows(safeRows, fallbackState, { primaryRowId, legacyRowId })
 }
 
 export function ledgerVersionMatches(currentUpdatedAt, expectedUpdatedAt) {
@@ -167,7 +244,7 @@ async function loadLedgerState(client, ledgerConfig) {
     .in('id', ledgerConfig.readableRowIds)
 
   if (error) throw error
-  return selectPersistedLedgerRows(data, fallback, {
+  return selectLedgerRowsForLoad(data, fallback, {
     primaryRowId: ledgerConfig.rowId,
     legacyRowId: ledgerConfig.legacyRowId || '__no_legacy_row__',
   })

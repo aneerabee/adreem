@@ -122,6 +122,33 @@ describe('latest cloud save coordinator', () => {
     expect(coordinator.hasPending()).toBe(false)
   })
 
+  it('keeps the exact failed item ahead of changes submitted while it was saving', async () => {
+    const first = deferred()
+    const retried = deferred()
+    const latest = deferred()
+    const save = vi.fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(retried.promise)
+      .mockReturnValueOnce(latest.promise)
+    const coordinator = createLatestSaveCoordinator({ save })
+
+    coordinator.submit({ version: 1 })
+    coordinator.submit({ version: 2 })
+    first.reject(Object.assign(new Error('conflict'), { retryable: false }))
+    await settle()
+
+    coordinator.retryNow()
+    expect(save.mock.calls.map(([state]) => state.version)).toEqual([1, 1])
+
+    retried.resolve({ ok: true })
+    await settle()
+    expect(save.mock.calls.map(([state]) => state.version)).toEqual([1, 1, 2])
+
+    latest.resolve({ ok: true })
+    await settle()
+    expect(coordinator.hasPending()).toBe(false)
+  })
+
   it('respects a longer retry-after delay from the server', async () => {
     const error = Object.assign(new Error('limited'), { retryable: true, retryAfterMs: 45_000 })
     const schedule = vi.fn(() => 1)

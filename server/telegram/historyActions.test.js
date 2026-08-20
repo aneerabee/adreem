@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
-import { buildHistorySession, canVoidRecentMovement, voidRecentMovementInState } from './historyActions.js'
+import {
+  buildHistorySession,
+  canVoidRecentMovement,
+  historyMovementStatusLabel,
+  movementsForDate,
+  relatedReportMovements,
+  voidRecentMovementInState,
+} from './historyActions.js'
 import { stableActionToken } from './actionTokens.js'
 
 const now = '2026-06-02T08:00:00.000Z'
@@ -19,29 +26,35 @@ function movement(overrides = {}) {
 }
 
 describe('telegram history actions', () => {
-  it('builds action choices from recent posted non-opening movements', () => {
+  it('shows approved, canceled, and incomplete movements while only offering valid cancellation', () => {
     const session = buildHistorySession({
       movements: [
         movement({ id: 'opening-me-cash', type: MOVEMENT_TYPES.OPENING_BALANCE }),
         movement({ id: 'posted-1' }),
         movement({ id: 'voided-1', status: MOVEMENT_STATUSES.VOIDED }),
+        movement({ id: 'review-1', status: MOVEMENT_STATUSES.NEEDS_REVIEW }),
       ],
-    })
+    }, undefined, 0, new Date(now).getTime())
 
     expect(session.flow).toBe('history')
-    expect(session.total).toBe(1)
+    expect(session.total).toBe(3)
     expect(session.page).toBe(0)
     expect(session.pageCount).toBe(1)
     expect(session.choices.movements[stableActionToken('posted-1')]).toBe('posted-1')
     expect(Object.values(session.choices.movements)).toEqual(['posted-1'])
+    expect(session.items).toEqual([
+      expect.objectContaining({ id: 'review-1', number: 1, status: MOVEMENT_STATUSES.NEEDS_REVIEW, canCancel: false }),
+      expect.objectContaining({ id: 'voided-1', number: 2, status: MOVEMENT_STATUSES.VOIDED, canCancel: false }),
+      expect.objectContaining({ id: 'posted-1', number: 3, status: MOVEMENT_STATUSES.POSTED, canCancel: true }),
+    ])
   })
 
-  it('paginates the full posted history and clamps invalid pages', () => {
+  it('paginates the full history and clamps invalid pages', () => {
     const movements = Array.from({ length: 19 }, (_, index) => movement({ id: `posted-${index + 1}` }))
 
-    const middle = buildHistorySession({ movements }, 8, 1)
-    const afterEnd = buildHistorySession({ movements }, 8, 99)
-    const beforeStart = buildHistorySession({ movements }, 8, -5)
+    const middle = buildHistorySession({ movements }, 8, 1, new Date(now).getTime())
+    const afterEnd = buildHistorySession({ movements }, 8, 99, new Date(now).getTime())
+    const beforeStart = buildHistorySession({ movements }, 8, -5, new Date(now).getTime())
 
     expect(middle).toMatchObject({ page: 1, pageCount: 3, total: 19 })
     expect(Object.values(middle.choices.movements)).toEqual([
@@ -65,6 +78,7 @@ describe('telegram history actions', () => {
       page: 0,
       pageCount: 1,
       total: 0,
+      items: [],
       choices: { movements: {} },
     })
   })
@@ -106,5 +120,63 @@ describe('telegram history actions', () => {
     expect(result.ok).toBe(false)
     expect(result.state.movements[0].status).toBe(MOVEMENT_STATUSES.POSTED)
     expect(result.message).toContain('آخر 24 ساعة')
+  })
+
+  it('uses one local-day set for approved, canceled, and incomplete counters', () => {
+    const state = {
+      movements: [
+        movement({ id: 'posted-today', status: MOVEMENT_STATUSES.POSTED }),
+        movement({ id: 'voided-today', status: MOVEMENT_STATUSES.VOIDED, createdAt: '', updatedAt: '2026-06-02T01:00:00.000Z' }),
+        movement({ id: 'review-today', status: MOVEMENT_STATUSES.NEEDS_REVIEW }),
+        movement({ id: 'opening-me-cash', type: MOVEMENT_TYPES.OPENING_BALANCE }),
+        movement({ id: 'yesterday', createdAt: '2026-06-01T18:00:00.000Z' }),
+        movement({ id: 'bad-date', createdAt: 'not-a-date' }),
+      ],
+    }
+
+    expect(movementsForDate(state, new Date(now)).map((item) => item.id)).toEqual([
+      'review-today',
+      'voided-today',
+      'posted-today',
+    ])
+  })
+
+  it('labels every history status clearly', () => {
+    expect(historyMovementStatusLabel(MOVEMENT_STATUSES.POSTED)).toBe('معتمدة')
+    expect(historyMovementStatusLabel(MOVEMENT_STATUSES.VOIDED)).toBe('ملغاة')
+    expect(historyMovementStatusLabel(MOVEMENT_STATUSES.NEEDS_REVIEW)).toBe('ناقصة')
+    expect(historyMovementStatusLabel(MOVEMENT_STATUSES.DRAFT)).toBe('مسودة')
+  })
+
+  it('finds project and expense details only through their relation fields', () => {
+    const state = {
+      movements: [
+        movement({ id: 'project-match', dimensionId: 'project-9' }),
+        movement({ id: 'category-match', expenseCategoryId: 'expense-9' }),
+        movement({ id: 'account-only', sourceAccountId: 'project-9', destinationAccountId: 'expense-9' }),
+        movement({ id: 'other', dimensionId: 'project-8', expenseCategoryId: 'expense-8' }),
+      ],
+    }
+
+    expect(relatedReportMovements(state, 'project', 'project-9').map((item) => item.id)).toEqual(['project-match'])
+    expect(relatedReportMovements(state, 'expense', 'expense-9').map((item) => item.id)).toEqual(['category-match'])
+    expect(relatedReportMovements(state, 'unknown', 'project-9')).toEqual([])
+  })
+
+  it('shows only posted expenses in the uncategorized expense report', () => {
+    const state = {
+      movements: [
+        movement({ id: 'uncategorized-expense', expenseCategoryId: '' }),
+        movement({ id: 'uncategorized-truck-expense', type: MOVEMENT_TYPES.TRUCK_EXPENSE, expenseCategoryId: '' }),
+        movement({ id: 'categorized-expense', expenseCategoryId: 'fuel' }),
+        movement({ id: 'income-without-category', type: MOVEMENT_TYPES.EXTERNAL_INCOME, expenseCategoryId: '' }),
+        movement({ id: 'voided-expense', status: MOVEMENT_STATUSES.VOIDED, expenseCategoryId: '' }),
+      ],
+    }
+
+    expect(relatedReportMovements(state, 'expense', '').map((item) => item.id)).toEqual([
+      'uncategorized-truck-expense',
+      'uncategorized-expense',
+    ])
   })
 })

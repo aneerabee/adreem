@@ -74,7 +74,7 @@ export function parseBalanceText(text) {
     .replace(/[٫]/g, '.')
   const number = Number(normalized)
   if (!Number.isFinite(number) || number < 0) return null
-  return roundMoney(number)
+  return Math.round(number)
 }
 
 export function buildLedgerSnapshot(state) {

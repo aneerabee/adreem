@@ -7,16 +7,28 @@ import { createActionSessionId, stableActionToken } from './actionTokens.js'
 
 export const RECURRING_ACTION_LIMIT = 8
 
-export function buildRecurringSession(state = {}, date = new Date(), limit = RECURRING_ACTION_LIMIT) {
-  const activeRules = (Array.isArray(state.recurringRules) ? state.recurringRules : [])
+export function buildRecurringSession(state = {}, date = new Date(), limit = RECURRING_ACTION_LIMIT, requestedPage = 0) {
+  const allActiveRules = (Array.isArray(state.recurringRules) ? state.recurringRules : [])
     .filter((rule) => rule?.status === 'active')
-    .slice(0, limit)
-  const dueRuleIds = dueRecurringRules(activeRules, date).map((rule) => rule.id)
+  const pageCount = Math.max(1, Math.ceil(allActiveRules.length / limit))
+  const page = Math.min(Math.max(0, Number(requestedPage) || 0), pageCount - 1)
+  const activeRules = allActiveRules.slice(page * limit, (page + 1) * limit)
+  const dueRuleIds = dueRecurringRules(allActiveRules, date).map((rule) => rule.id)
+  const items = activeRules.map((rule, index) => ({
+    id: rule.id,
+    number: page * limit + index + 1,
+    token: stableActionToken(rule.id),
+  }))
   return {
     flow: 'recurring',
     actionSessionId: createActionSessionId(),
+    page,
+    pageCount,
+    pageSize: limit,
+    total: allActiveRules.length,
+    items,
     choices: {
-      rules: Object.fromEntries(activeRules.map((rule) => [stableActionToken(rule.id), rule.id])),
+      rules: Object.fromEntries(items.map((item) => [item.token, item.id])),
     },
     dueRuleIds,
   }

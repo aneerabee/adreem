@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
+import { createLocalizedTelegramClient } from '../localizedTelegram.js'
 import { handleReconciliationCallback, handleReconciliationText, startReconciliation } from './reconciliation.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
@@ -36,9 +37,12 @@ function createTelegramStub() {
   }
 }
 
-function createCtx() {
+function createCtx(language = 'ar') {
+  const client = createTelegramStub()
+  const telegram = language === 'en' ? createLocalizedTelegramClient(client, language) : client
+  telegram.calls = client.calls
   return {
-    telegram: createTelegramStub(),
+    telegram,
     repository: memoryRepository(),
     sessions: createSessionStore(),
     chatId: 278516861,
@@ -49,6 +53,41 @@ function createCtx() {
 }
 
 describe('telegram reconciliation flow', () => {
+  it('translates a rejected save without exposing Arabic system text', async () => {
+    const ctx = createCtx('en')
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'reconciliation',
+      step: 'review',
+      sessionId: 'english-rejected-reconciliation',
+      uiMessageId: ctx.messageId,
+      draft: {
+        accountId: 'me-cash',
+        currency: CURRENCIES.DINAR,
+        actualBalance: 0,
+        note: '',
+      },
+    })
+
+    await handleReconciliationCallback(ctx, 'rec:confirm')
+
+    expect(ctx.telegram.calls.at(-1).payload.text)
+      .toBe('<b>Save failed.</b>\n<blockquote>Reconciliation needs a clear note.</blockquote>')
+  })
+
+  it('preserves a colliding reconciliation note in English review text', async () => {
+    const ctx = createCtx('en')
+
+    await startReconciliation(ctx)
+    await handleReconciliationCallback(ctx, `rec:account:${choiceTokenFor(ctx, 'me-cash')}`)
+    await handleReconciliationCallback(ctx, `rec:currency:${CURRENCIES.DINAR}`)
+    await handleReconciliationText({ ...ctx, isCallback: false, messageId: 56 }, '47000')
+    await handleReconciliationText({ ...ctx, isCallback: false, messageId: 57 }, 'دخل')
+
+    const text = ctx.telegram.calls.at(-1).payload.text
+    expect(text).toContain('Note: دخل')
+    expect(text).not.toContain('Note: Income')
+  })
+
   it('creates a correction from actual balance after confirmation', async () => {
     const ctx = createCtx()
 

@@ -3,6 +3,35 @@ import { DEFAULT_UI_LANGUAGE, normalizeUiLanguage, UI_LANGUAGES } from './uiLang
 export const ADREEM_UI_LANGUAGE_STORAGE_KEY = 'adreem-ui-language-v1'
 
 let activeUiLanguage = DEFAULT_UI_LANGUAGE
+const USER_DATA_START = '\u2068'
+const USER_DATA_END = '\u2069'
+
+export function preserveUiData(value) {
+  const text = String(value ?? '').replace(/[\u2068\u2069]/gu, '')
+  return `${USER_DATA_START}${text}${USER_DATA_END}`
+}
+
+export function stripUiDataProtection(value) {
+  return String(value ?? '').replace(/[\u2068\u2069]/gu, '')
+}
+
+function maskProtectedUiData(value) {
+  const protectedValues = []
+  const text = String(value).replace(/\u2068([\s\S]*?)\u2069/gu, (_match, content) => {
+    const token = `__ADREEM_USER_DATA_${protectedValues.length}__`
+    protectedValues.push(content)
+    return token
+  })
+  return {
+    text,
+    restore(translated) {
+      return protectedValues.reduce(
+        (result, content, index) => result.replaceAll(`__ADREEM_USER_DATA_${index}__`, preserveUiData(content)),
+        translated,
+      )
+    },
+  }
+}
 
 const ENGLISH_TEXT = Object.freeze({
   '8 أحرف على الأقل': 'At least 8 characters',
@@ -56,6 +85,7 @@ const ENGLISH_TEXT = Object.freeze({
   'أقبض': 'I collect',
   'أقبض منهم': 'They owe me',
   'أقبض منه': 'They owe me',
+  'أقبض من الناس': 'People owe me',
   'أقسام الدفتر': 'Ledger sections',
   'اكتب اسم المرفق أو رابطه.': 'Enter the attachment name or link.',
   'اكتب اسمًا واضحًا للحساب قبل الحفظ.': 'Enter a clear account name before saving.',
@@ -72,6 +102,9 @@ const ENGLISH_TEXT = Object.freeze({
   'الاسم': 'Name',
   'الاسم الرئيسي مطلوب.': 'A main name is required.',
   'الأصول والمشاريع': 'Assets and projects',
+  'المشروع أو الأصل': 'Project or asset',
+  'كل المشاريع والأصول': 'All projects and assets',
+  'كل أنواع المصروف': 'All expense types',
   'الأطراف': 'People and businesses',
   'الأكثر استعمالًا': 'Most used',
   'الإيداع': 'Deposit',
@@ -89,10 +122,12 @@ const ENGLISH_TEXT = Object.freeze({
   'التفصيل': 'Detail',
   'الحركات': 'Entries',
   'الحركة': 'Entry',
+  'الحركة:': 'Entry:',
   'الحركة الشهرية غير موجودة أو متوقفة.': 'This monthly entry does not exist or is stopped.',
   'الحركة مفتوحة للتعديل. لن تتغير الأرصدة إلا بعد الحفظ.': 'The entry is open for editing. Balances change only after you save.',
   'الحركة ناقصة وتحتاج مراجعة.': 'This entry is incomplete and needs review.',
   'الحساب': 'Account',
+  'الحساب:': 'Account:',
   'الحساب الذي خرجت منه الفلوس': 'Money came from',
   'الحساب الذي دخلت إليه الفلوس': 'Money went to',
   'الحساب غير موجود.': 'Account not found.',
@@ -116,6 +151,7 @@ const ENGLISH_TEXT = Object.freeze({
   'السعر': 'Rate',
   'العلاقة': 'Balance direction',
   'العملة': 'Currency',
+  'العملة:': 'Currency:',
   'العملة مطلوبة.': 'Currency is required.',
   'إلغاء': 'Cancel',
   'إلغاء حركة ناقصة': 'Cancel incomplete entry',
@@ -126,6 +162,7 @@ const ENGLISH_TEXT = Object.freeze({
   'الكاش': 'Cash',
   'الكل': 'All',
   'المبلغ': 'Amount',
+  'المبلغ:': 'Amount:',
   'المراجعة': 'Review',
   'المستخدم غير موجود أو تم حذفه.': 'User not found or was removed.',
   'المستخدمون': 'Users',
@@ -142,6 +179,7 @@ const ENGLISH_TEXT = Object.freeze({
   'الوصف': 'Description',
   'الوقت': 'Time',
   'إلى': 'To',
+  'إلى:': 'To:',
   'اليوم': 'Today',
   'اليومي': 'Daily',
   'أمس': 'Yesterday',
@@ -162,6 +200,7 @@ const ENGLISH_TEXT = Object.freeze({
   'أين موجودة فلوسك؟': 'Where is your money?',
   'بأي عملة؟': 'Which currency?',
   'بحث': 'Search',
+  'بحث:': 'Search:',
   'بحث في الأرصدة': 'Search balances',
   'بحث في السجل': 'Search history',
   'بدون': 'None',
@@ -193,6 +232,7 @@ const ENGLISH_TEXT = Object.freeze({
   'تصنيف': 'Category',
   'تطوير': 'Improve',
   'تعديل': 'Edit',
+  'تعديل حركة محفوظة': 'Edit a saved entry',
   'تعديل رصيد': 'Adjust balance',
   'تعديل مستخدم': 'Edit user',
   'تعذر اعتماد الحركة وحُفظت في المراجعة.': 'The entry could not be posted and was saved for review.',
@@ -347,6 +387,10 @@ const ENGLISH_TEXT = Object.freeze({
   'لم نعرض نسخة فارغة حتى تبقى بياناتك آمنة. أعد المحاولة بعد لحظة.': 'No empty copy was shown, to protect your data. Try again shortly.',
   'لم يتم التعديل. راجع البيانات أو سجل دخول المالك من جديد.': 'Changes were not saved. Check the details or sign in as owner again.',
   'لم يتم الدمج. الحساب المختار لا يناسب عملة أو نوع بعض الحركات المرتبطة.': 'Accounts were not merged because some linked entries use a different currency or type.',
+  'تصنيف أو عملة الحسابين غير متوافقين.': 'The account classifications or currencies do not match.',
+  'المشروع أو الأصل لا يطابق الحساب المختار.': 'The project or asset does not match the selected account.',
+  'مطابقات الرصيد تحتاج حساب كاش أو مصرف.': 'Balance reconciliations need a cash or bank account.',
+  'إحدى الحركات الشهرية لا تناسب الحساب المختار.': 'A monthly entry does not match the selected account.',
   'لم يتم تأكيد الحفظ': 'Save not confirmed',
   'لم يتم حذف المستخدم.': 'User was not removed.',
   'لم يدخل': 'Not entered',
@@ -473,6 +517,18 @@ const ENGLISH_TEXT = Object.freeze({
   'تظهر حسابات فلوسك فقط.': 'Only your money accounts are shown.',
   'تعذر الاتصال بالدفتر الآن. حاول مرة أخرى بعد لحظات.': 'Could not reach the ledger. Try again shortly.',
   'تعذر قراءة المرفق. حاول إرساله مرة أخرى.': 'Could not read the attachment. Send it again.',
+  'تعذر قراءة ملف المرفق.': 'Could not read the attachment file.',
+  'ملف المرفق غير صالح.': 'The attachment file is invalid.',
+  'انتهت جلسة الدخول.': 'The sign-in session has expired.',
+  'طلبات كثيرة. حاول بعد قليل.': 'Too many requests. Try again shortly.',
+  'تخزين المرفقات غير مهيأ.': 'Attachment storage is not configured.',
+  'تعذر حفظ المرفق في السحابة.': 'Could not save the attachment to cloud storage.',
+  'لا يمكنك فتح هذا المرفق.': 'You cannot open this attachment.',
+  'لم يعد المرفق موجودًا.': 'This attachment no longer exists.',
+  'تعذر فتح المرفق من السحابة.': 'Could not open the attachment from cloud storage.',
+  'تعذر فتح المرفق.': 'Could not open the attachment.',
+  'لم تُحفظ الحركة. حاول مرة أخرى أو ارجع واحذف المرفق.': 'The entry was not saved. Try again or go back and remove the attachment.',
+  'لم يتم الحفظ.': 'Save failed.',
   'تم اختيار:': 'Selected:',
   'تم إخفاء الحساب الصفري من المراجعة.': 'The zero-balance account was removed from review.',
   'تم إصلاح الحركة وتحديث الدفتر.': 'Entry fixed and ledger updated.',
@@ -488,6 +544,7 @@ const ENGLISH_TEXT = Object.freeze({
   'تم حفظها في المراجعة.': 'Saved for review.',
   'تنبيهات': 'Alerts',
   'جاهز لعملية جديدة': 'Ready for a new entry',
+  'لاحقًا': 'Later',
   'دفتر:': 'Ledger:',
   'دولار $': 'USD $',
   'دينار د.ل': 'Dinar LYD',
@@ -521,6 +578,13 @@ const ENGLISH_TEXT = Object.freeze({
   'افتح ADREEM من /start': 'Open ADREEM with /start',
   'الحركة ناقصة': 'Incomplete entry',
   'المشاريع والأصول': 'Projects and assets',
+  'أنواع المصروف': 'Expense types',
+  'اختر القائمة التي تريد فتحها.': 'Choose the list you want to open.',
+  'لا توجد حركات مرتبطة.': 'No linked entries.',
+  'معتمدة': 'Posted',
+  'ملغاة': 'Cancelled',
+  'ناقصة': 'Incomplete',
+  '↩️ التقارير': '↩️ Reports',
   'انتهت صلاحية هذه البطاقة.': 'This card has expired.',
   'بطاقة الحركات الحالية لم تتغير.': 'The current entries card was not changed.',
   'بطاقة الحركات الشهرية الحالية لم تتغير.': 'The current monthly entries card was not changed.',
@@ -590,6 +654,7 @@ const ENGLISH_TEXT = Object.freeze({
   'الحركات الشهرية': 'Monthly entries',
   'آخر حركات اليوم': 'Latest entries today',
   'الحركة لم تعد قابلة للإصلاح من هنا.': 'This entry can no longer be fixed here.',
+  'الحركة لم تعد في المراجعة.': 'This entry is no longer in Review.',
   'إلغاء حركة ناقصة من البوت': 'Cancel an incomplete entry from the bot',
   'إلغاء من سجل Telegram': 'Cancel from Telegram history',
   'القسم': 'Section',
@@ -633,11 +698,116 @@ const ENGLISH_TEXT = Object.freeze({
   'معرف الحساب مستخدم مسبقًا.': 'This account ID is already used.',
   'ملخص تجريبي': 'Sample summary',
   'من أي حساب خرج مصروف الشاحنة؟': 'Which account paid the truck expense?',
+  'من:': 'From:',
+  'مرفق:': 'Attachment:',
+  'تكرار:': 'Recurring:',
+  'الرصيد الفعلي:': 'Actual balance:',
   'من أي حساب مصرفي يخرج المبلغ؟': 'Which bank account pays the amount?',
   'من أي حساب يخرج المصروف؟': 'Which account pays the expense?',
   'من أي كاش يخرج المبلغ؟': 'Which cash account pays the amount?',
   'نوع الحركة غير صالح. اختر من الأزرار الظاهرة.': 'This entry type is not valid. Choose one of the shown buttons.',
   'نوع/اسم الحساب الفرعي مطلوب.': 'Account detail or subaccount name is required.',
+  'تأكيد': 'Confirm',
+  'تعطيل': 'Disable',
+  'تغيير': 'Change',
+  'مسح': 'Clear',
+  'الأقرب': 'Closest',
+  'فلترة': 'Filter',
+  'نتيجة': 'Result',
+  'مختار': 'Selected',
+  'عرض الكل ·': 'Show all ·',
+  'لا توجد نتيجة': 'No results',
+  'حذف': 'Delete',
+  'تعذر فتحه': 'Could not open',
+  'ملف:': 'File:',
+  'نوع المصروف:': 'Expense category:',
+  'التصنيف': 'Classification',
+  'الحالة': 'Status',
+  'مطابقة': 'Reconcile',
+  'آخر مطابقة:': 'Last reconciliation:',
+  'الدينار الفعلي': 'Actual dinars',
+  'الدولار الفعلي': 'Actual US dollars',
+  'إنشاء تصحيح': 'Create adjustment',
+  'مرفقات': 'Attachments',
+  'اسم المرفق': 'Attachment name',
+  'الرابط': 'Link',
+  'ملف': 'File',
+  'تصنيف الحساب': 'Account classification',
+  'الاسم الظاهر': 'Display name',
+  'حفظ التصنيف': 'Save classification',
+  'ملاحظة القرار': 'Decision note',
+  'اعتماد بهذا التصنيف': 'Approve with this classification',
+  'إخفاء كغير مستخدم': 'Hide as unused',
+  'دمج بدل إنشاء حساب مستقل': 'Merge into an existing account',
+  'اختر حسابًا موجودًا للدمج': 'Choose an existing account to merge',
+  'اسم جديد': 'New name',
+  'إنشاء بهذا التصنيف': 'Create with this classification',
+  'تجاهل الاسم': 'Ignore name',
+  'إصلاح واعتماد': 'Fix and approve',
+  'فتح في الإدخال': 'Open in Add',
+  'تنبيه': 'Alert',
+  'مشاريع وأصول': 'Projects and assets',
+  'لا توجد مراكز متابعة بعد.': 'No projects or assets yet.',
+  '· مصروف': '· Expense',
+  'دولار: دخل': 'USD income:',
+  'متكرر': 'Recurring',
+  'يوم': 'Day',
+  'تنفيذ': 'Run',
+  'إيقاف': 'Stop',
+  '· مرة واحدة في الشهر': '· Once a month',
+  'حفظ وأدلة': 'Records and evidence',
+  'المرفقات محفوظة في مساحة خاصة وآمنة.': 'Attachments are stored privately and securely.',
+  'مطابقات محفوظة:': 'Reconciliations saved:',
+  'عنصر': 'Item',
+  'صفر ·': 'Zero ·',
+  'راجع أو ألغ': 'Review or cancel',
+  'أدوات الدفتر': 'Ledger tools',
+  'كل الحركات والبحث': 'All entries and search',
+  'بحث وتصفية': 'Search and filter',
+  'مفعلة': 'Active',
+  'كل الأنواع': 'All types',
+  'كل الحالات': 'All statuses',
+  'كل الحسابات': 'All accounts',
+  'الأهم الآن': 'Priority now',
+  'أماكن الفلوس': 'My money',
+  'أكبر أرصدة الناس': 'Largest people balances',
+  'للتفاصيل الكاملة افتح قسم الأرصدة.': 'Open Balances for full details.',
+  'تسجيل الدخول من جديد': 'Sign in again',
+  'حركة جديدة': 'New entry',
+  'تراجع': 'Undo',
+  'ترك': 'Leave',
+  'عمليات أخرى': 'More actions',
+  'رجوع': 'Back',
+  'مشروع / أصل': 'Project / asset',
+  'بدون ربط': 'No link',
+  'بدون تغيير': 'No change',
+  'رابط المرفق': 'Attachment link',
+  'اكتب الاسم كما تريد أن يظهر في الأرصدة والبحث.': 'Enter the name as it should appear in balances and search.',
+  'سيُحفظ الحساب كالتالي': 'The account will be saved as',
+  'حفظ الحساب': 'Save account',
+  'اختر للمتابعة': 'Choose to continue',
+  'تيليغرام': 'Telegram',
+  'تحديث الجلسة': 'Refresh session',
+  'ادخل بحساب المالك': 'Sign in as owner',
+  'إدارة المستخدمين تعمل من جلسة حسابك العادي فقط. لا يوجد توكن إدارة يدوي.': 'User management uses your normal owner session. There is no manual admin token.',
+  'تسجيل الدخول': 'Sign in',
+  'الإدارة للمالك فقط': 'Owner access only',
+  'هذا الحساب لا يملك صلاحية إدارة المستخدمين، أو أن الجلسة انتهت.': 'This account cannot manage users, or the session has expired.',
+  'إعادة الفحص': 'Check again',
+  'كود الدفتر': 'Ledger code',
+  'رقم تيليغرام (اختياري)': 'Telegram ID (optional)',
+  'إلغاء التعديل': 'Cancel editing',
+  'تحديث': 'Refresh',
+  'لا يوجد مستخدمون بعد.': 'No users yet.',
+  'دفتره:': 'Ledger balance:',
+  'دفتره': 'Ledger balance',
+  'كم الرصيد الفعلي الآن؟': 'What is the actual balance now?',
+  'اكتب اسم شخص، جهة، كاش، أو مصرف.': 'Enter a person, business, cash, or bank name.',
+  'اضغط الاسم المطلوب.': 'Choose the account name.',
+  'اختر الحساب.': 'Choose the account.',
+  'ستظهر في قسم المراجعة.': 'It will appear in Review.',
+  'لا تغير الأرصدة قبل الاعتماد.': 'It does not change balances before approval.',
+  'افتح حسابًا': 'Open an account',
   'ADREEM · إصلاح حركة': 'ADREEM · Fix entry',
   'ADREEM · إصلاح حساب': 'ADREEM · Fix account',
   'ADREEM · مراجعة': 'ADREEM · Review',
@@ -655,21 +825,101 @@ const ENGLISH_TEXT = Object.freeze({
 })
 
 const ENGLISH_PATTERNS = [
+  [/^الخطوة\s+(.+)\s+من\s+(.+)$/u, 'Step $1 of $2'],
   [/^اليوم\s+(\d+)$/u, 'Today $1'],
   [/^مراجعة\s+(\d+)$/u, 'Review $1'],
   [/^(\d+)\s+نتيجة$/u, '$1 results'],
+  [/^(\d+)\s+تنبيه$/u, '$1 alerts'],
   [/^(\d+)\s+حركات?$/u, '$1 entries'],
   [/^الخطوة\s+(.+)$/u, 'Step $1'],
-  [/^موجود\s+(.+)$/u, 'Available $1'],
-  [/^ناقص\s+(.+)$/u, 'Short $1'],
-  [/^أقبض منه\s+(.+)$/u, 'They owe me $1'],
-  [/^أدفع له\s+(.+)$/u, 'I owe them $1'],
-  [/^أقبض\s+(.+)$/u, 'Collect $1'],
-  [/^أدفع\s+(.+)$/u, 'Pay $1'],
-  [/^قيمة\s+(.+)$/u, 'Value $1'],
-  [/^مصروف\s+(.+)$/u, 'Expense $1'],
+  [/^اليوم:\s*(\d+)\s+حركة$/u, 'Today: $1 entries'],
+  [/^المراجعة:\s*(\d+)$/u, 'Review: $1'],
+  [/^(\d+)\s+حساب\s+·\s+صفحة\s+(\d+)\/(\d+)$/u, '$1 accounts · Page $2/$3'],
+  [/^(\d+)\s+حركة\s+·\s+صفحة\s+(\d+)\/(\d+)$/u, '$1 entries · Page $2/$3'],
+  [/^(\d+)\s+حركة\s+·\s+أحدث\s+(\d+)$/u, '$1 entries · Latest $2'],
+  [/^(\d+)\s+مشروع أو أصل\s+·\s+(\d+)\s+نوع مصروف$/u, '$1 projects or assets · $2 expense types'],
+  [/^(\d+)\s+مشروع أو أصل\s+·\s+صفحة\s+(\d+)\/(\d+)$/u, '$1 projects or assets · Page $2/$3'],
+  [/^(\d+)\s+نوع مصروف\s+·\s+صفحة\s+(\d+)\/(\d+)$/u, '$1 expense types · Page $2/$3'],
+  [/^(\d+)\s+حركة مرتبطة\s+·\s+صفحة\s+(\d+)\/(\d+)$/u, '$1 linked entries · Page $2/$3'],
+  [/^(\d+)\s+حركة معتمدة$/u, '$1 posted entries'],
+  [/^آخر الحركات\s+·\s+(\d+)$/u, 'Latest entries · $1'],
+  [/^فلوسي:\s*(.+)$/u, 'My money: $1'],
+  [/^دخل\s+(.+)\s+·\s+مصروف\s+(.+)\s+·\s+صافي\s+(.+)\s+·\s+(\d+)\s+حركة معتمدة$/u, 'Income $1 · Expense $2 · Net $3 · $4 posted entries'],
+  [/^دولار:\s+دخل\s+(.+)\s+·\s+مصروف\s+(.+)\s+·\s+صافي\s+(.+)\s+·\s+(\d+)\s+حركة معتمدة$/u, 'USD: Income $1 · Expense $2 · Net $3 · $4 posted entries'],
+  [/^دخل\s+(.+)\s+·\s+مصروف\s+(.+)\s+·\s+صافي\s+(.+)$/u, 'Income $1 · Expense $2 · Net $3'],
+  [/^دولار:\s+دخل\s+(.+)\s+·\s+مصروف\s+(.+)\s+·\s+صافي\s+(.+)$/u, 'USD: Income $1 · Expense $2 · Net $3'],
+  [/^(\d+)\s+فعالة\s+·\s+(\d+)\s+مستحقة$/u, '$1 active · $2 due'],
+  [/^(\d+)\s+فعالة\s+·\s+(\d+)\s+مستحقة\s+·\s+صفحة\s+(\d+)\/(\d+)$/u, '$1 active · $2 due · Page $3/$4'],
+  [/^(.+)\s+·\s+يوم\s+(\d+)$/u, '$1 · Day $2'],
+  [/^·\s+صفحة\s+(\d+)\/(\d+)$/u, '· Page $1/$2'],
+  [/^(\d+)\s+عنصر\s+·\s+صفحة\s+(\d+)\/(\d+)$/u, '$1 items · Page $2/$3'],
+  [/^(\d+)\s+عنصر$/u, '$1 items'],
+  [/^المشاريع والأصول\s+·\s+(\d+)$/u, 'Projects and assets · $1'],
+  [/^أنواع المصروف\s+·\s+(\d+)$/u, 'Expense types · $1'],
+  [/^تفاصيل\s+#(\d+)$/u, 'Details #$1'],
+  [/^#(\d+)\s+·\s+الحالة:\s*(.+)$/u, (_match, number, status) => `#${number} · Status: ${translateKnownSegment(status)}`],
+  [/^(.+)\s+·\s+(\d+)\s+حركة معتمدة$/u, (_match, amount, count) => `${localizeEnglishCurrencyUnit(amount)} · ${count} posted entries`],
+  [/^بحث:\s*(.+)$/u, 'Search: $1'],
+  [/^(\d+)\s+اختيارات مناسبة\.\s+اضغط الاسم المطلوب\.$/u, '$1 matching choices. Choose the account.'],
+  [/^(\d+)\s+حسابات مناسبة\.\s+اختر الحساب\.$/u, '$1 matching accounts. Choose the account.'],
+  [/^(\d+)\s+اختيارات مناسبة\.$/u, '$1 matching choices.'],
+  [/^(\d+)\s+حسابات مناسبة\.$/u, '$1 matching accounts.'],
+  [/^تم اختيار:\s*(.+)\.$/u, (_match, choice) => `Selected: ${translateSystemSequence(choice)}.`],
+  [/^تصحيح:\s*(.+)$/u, 'Adjustment: $1'],
+  [/^دفتر:\s*(.+)$/u, 'Ledger: $1'],
+  [/^فعلي:\s*(.+)$/u, 'Actual: $1'],
+  [/^الفرق:\s*(.+)$/u, 'Difference: $1'],
+  [/^ملاحظة:\s*(.+)$/u, 'Note: $1'],
+  [/^الوقت:\s*(.+)\s+(م|ص)$/u, (_match, time, period) => `Time: ${time} ${period === 'م' ? 'PM' : 'AM'}`],
+  [/^الوقت:\s*(.+)$/u, 'Time: $1'],
+  [/^السعر:\s*(.+)$/u, 'Rate: $1'],
+  [/^قبل:\s*(.+)$/u, 'Before: $1'],
+  [/^التغيير:\s*(.+)$/u, 'Change: $1'],
+  [/^بعد:\s*(.+)$/u, 'After: $1'],
+  [/^سيتم إنشاء تعديل رصيد بقيمة\s+(.+)\.$/u, 'A balance adjustment of $1 will be created.'],
+  [/^هذا الحساب عليه رصيد:\s*(.+)\.\s+أصلحه من الويب بدل إخفائه\.$/u, 'This account has a balance: $1. Fix it on the web instead of hiding it.'],
+  [/^التحويل يجب أن يكون بين نفس النوع:\s*(.+)\s+إلى\s+(.+)\s+غير مسموح\.$/u, (_match, source, destination) => `Transfer must be between the same type: ${translateSystemSequence(source)} to ${translateSystemSequence(destination)} is not allowed.`],
+  [/^رصيد افتتاحي من Numbers:\s*(.+)$/u, 'Opening balance imported from Numbers: $1'],
+  [/^رصيد افتتاحي دولار من Numbers:\s*(.+)$/u, 'Opening USD balance imported from Numbers: $1'],
+  [/^(تحويل|إيداع في المصرف|سحب من المصرف|دخل|بعت دولار|اشتريت دولار|مصروف شاحنة|دخل شاحنة|تعديل رصيد)\s+([0-9][0-9,.]*)$/u, (_match, type, amount) => `${translateSystemSequence(type)} ${amount}`],
+  [/^(تحويل|إيداع في المصرف|سحب من المصرف|دخل|بعت دولار|اشتريت دولار|مصروف شاحنة|دخل شاحنة|تعديل رصيد)\s+([0-9][0-9,.]*\s+(?:د\.ل|\$))$/u, (_match, type, amount) => `${translateSystemSequence(type)} ${localizeEnglishCurrencyUnit(amount)}`],
+  [/^تكرار\s+(\d{4}-\d{2})$/u, 'Recurring $1'],
+  [/^الإلغاء المباشر متاح فقط خلال آخر\s+(\d+)\s+ساعة\.\s+للحركات القديمة استخدم (?:حركة )?تصحيح\.$/u, 'Direct cancellation is available only for the last $1 hours. Use an adjustment for older entries.'],
+  [/^لم يتم تأكيد الحفظ\. سيحاول النظام تلقائيًا خلال\s+(.+)\s+ث\.$/u, 'Save was not confirmed. The system will retry automatically in $1 sec.'],
+  [/^لم يتم حفظ التعديل\. أصلح الحركة أولًا حتى لا يتغير الرصيد:\s*(.+)$/u, (_match, error) => `Changes were not saved. Fix the entry first so the balance does not change: ${translateSystemSequence(error)}`],
+  [/^هذا التصنيف لا يناسب الحركات السابقة:\s*(.+)$/u, (_match, error) => `This classification does not fit earlier entries: ${translateSystemSequence(error)}`],
+  [/^لم يتم رفع المرفق:\s*(.+)$/u, (_match, error) => `Attachment upload failed: ${translateSystemSequence(error)}`],
+  [/^هل تريد إلغاء\s+(.+)؟\s+ستبقى الحركة ظاهرة في السجل\.$/u, (_match, entry) => {
+    const details = entry.match(/^(.+)\s+بقيمة\s+(.+)$/u)
+    const translatedEntry = details
+      ? `${translateKnownSegment(details[1])} worth ${localizeEnglishCurrencyUnit(details[2])}`
+      : translateSystemSequence(entry)
+    return `Cancel ${translatedEntry}? The entry will remain visible in history.`
+  }],
+  [/^هل تريد دمج حساب\s+(.+)\s+داخل\s+(.+)؟\s+ستُنقل الحركات ومرفقات الحساب إلى الحساب المختار\.$/u, (_match, source, target) => `Merge account ${source} into ${target}? Entries and account attachments will move to the selected account.`],
+  [/^تعديل الحركات القديمة غير مباشر\. استخدم حركة تصحيح بدل تعديل حركة أقدم من\s+(\d+)\s+ساعة\.$/u, 'Older entries cannot be edited directly. Use an adjustment for entries older than $1 hours.'],
+  [/^حذف دخول\s+(.+)؟\s+بيانات الدفتر لن تُحذف\.$/u, 'Remove login for $1? Ledger data will not be deleted.'],
+  [/^([+-]?[0-9][0-9,.]*)\s+د\.ل$/u, '$1 LYD'],
+  [/^(✓\s*)?دينار د\.ل$/u, '$1Dinar · LYD'],
+  [/^(✓\s*)?دولار \$$/u, '$1US dollar $'],
+  [/^(✓\s*)?دينار$/u, '$1Dinar'],
+  [/^(✓\s*)?دولار$/u, '$1US dollar'],
+  [/^تنفيذ #(\d+)$/u, 'Run #$1'],
+  [/^إيقاف #(\d+)$/u, 'Stop #$1'],
+  [/^إصلاح حركة #(\d+)$/u, 'Fix entry #$1'],
+  [/^إلغاء حركة #(\d+)$/u, 'Cancel entry #$1'],
+  [/^إلغاء #(\d+)$/u, 'Cancel #$1'],
+  [/^إصلاح حساب #(\d+)$/u, 'Fix account #$1'],
+  [/^إخفاء إذا صفر #(\d+)$/u, 'Hide if zero #$1'],
+  [/^موجود\s+([+-]?[0-9].+)$/u, 'Available $1'],
+  [/^ناقص\s+([+-]?[0-9].+)$/u, 'Short $1'],
+  [/^أقبض منه\s+([+-]?[0-9].+)$/u, 'They owe me $1'],
+  [/^أدفع له\s+([+-]?[0-9].+)$/u, 'I owe them $1'],
+  [/^أقبض\s+([+-]?[0-9].+)$/u, 'Collect $1'],
+  [/^أدفع\s+([+-]?[0-9].+)$/u, 'Pay $1'],
+  [/^قيمة\s+([+-]?[0-9].+)$/u, 'Value $1'],
+  [/^مصروف\s+([+-]?[0-9].+)$/u, 'Expense $1'],
   [/^تم إنشاء حساب\s+(.+)\.$/u, 'Account $1 created.'],
-  [/^تعديل\s+(.+)$/u, 'Edit $1'],
   [/^حذف دخول\s+(.+)؟$/u, 'Remove login for $1?'],
   [/^المستخدمون\s+·\s+(.+)$/u, 'Users · $1'],
   [/^ADREEM\s+·\s+إدخال$/u, 'ADREEM · Add'],
@@ -690,6 +940,26 @@ const ENGLISH_PATTERNS = [
   [/^ADREEM\s+·\s+إدارة المستخدمين$/u, 'ADREEM · User management'],
 ]
 
+function translateKnownSegment(content) {
+  const exact = ENGLISH_TEXT[content]
+  if (exact) return localizeEnglishCurrencyUnit(exact)
+  for (const [pattern, replacement] of ENGLISH_PATTERNS) {
+    if (pattern.test(content)) return localizeEnglishCurrencyUnit(content.replace(pattern, replacement))
+  }
+  return content
+}
+
+function localizeEnglishCurrencyUnit(value) {
+  return String(value).replaceAll('د.ل', 'LYD')
+}
+
+function translateSystemSequence(value) {
+  return String(value ?? '')
+    .split(/(?<=[.!؟])\s+/u)
+    .map((part) => translateKnownSegment(part))
+    .join(' ')
+}
+
 function translatePlainSegment(value) {
   const text = String(value ?? '')
   if (!text || !/[\u0600-\u06ff]/u.test(text)) return text
@@ -697,27 +967,43 @@ function translatePlainSegment(value) {
   const trailing = text.match(/\s*$/u)?.[0] || ''
   const content = text.slice(leading.length, text.length - trailing.length)
   if (!content) return text
-  const exact = ENGLISH_TEXT[content]
-  if (exact) return `${leading}${exact}${trailing}`
-  for (const [pattern, replacement] of ENGLISH_PATTERNS) {
-    if (pattern.test(content)) return `${leading}${content.replace(pattern, replacement)}${trailing}`
+  const marker = content.match(/^([^\p{L}\p{N}]+)(.+)$/u)
+  if (marker) {
+    const localizedRest = translatePlainSegment(marker[2])
+    if (localizedRest !== marker[2]) return `${leading}${marker[1]}${localizedRest}${trailing}`
   }
-  return text
+  const translated = translateKnownSegment(content)
+  if (translated !== content) return `${leading}${translated}${trailing}`
+
+  const translatedSequence = translateSystemSequence(content)
+  if (translatedSequence !== content) return `${leading}${translatedSequence}${trailing}`
+
+  const parts = content.split(/(\s+·\s+|:\s+|\s+←\s+|\s+→\s+|\s+\|\s+)/u)
+  const localizedParts = parts.map((part, index) => index % 2 === 0 ? translateKnownSegment(part) : part)
+  const localized = localizedParts.join('')
+  return localized === content ? text : `${leading}${localized}${trailing}`
 }
 
 function translateVisibleText(value) {
-  const exact = translatePlainSegment(value)
-  if (exact !== value) return exact
-  return String(value)
+  const protectedText = maskProtectedUiData(value)
+  const text = protectedText.text
+  const translated = !text.includes('<') && !text.includes('\n')
+    ? translatePlainSegment(text)
+    : text
     .split(/(<[^>]+>)/u)
     .map((part) => part.startsWith('<') && part.endsWith('>')
       ? part
       : part.split('\n').map(translatePlainSegment).join('\n'))
     .join('')
+  return protectedText.restore(translated)
 }
 
 export function setActiveUiLanguage(value) {
   activeUiLanguage = normalizeUiLanguage(value)
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = activeUiLanguage
+    document.documentElement.dir = activeUiLanguage === UI_LANGUAGES.ENGLISH ? 'ltr' : 'rtl'
+  }
   return activeUiLanguage
 }
 
@@ -726,7 +1012,8 @@ export function getActiveUiLanguage() {
 }
 
 export function translateUiText(value, language = activeUiLanguage) {
-  if (typeof value !== 'string' || normalizeUiLanguage(language) !== UI_LANGUAGES.ENGLISH) return value
+  if (typeof value !== 'string') return value
+  if (normalizeUiLanguage(language) !== UI_LANGUAGES.ENGLISH) return stripUiDataProtection(value)
   return translateVisibleText(value)
 }
 
@@ -753,22 +1040,32 @@ export function rememberUiLanguage(value) {
 }
 
 export function localizeTelegramPayload(payload, language) {
-  if (!payload || typeof payload !== 'object' || normalizeUiLanguage(language) !== UI_LANGUAGES.ENGLISH) return payload
+  if (!payload || typeof payload !== 'object') return payload
+  const isEnglish = normalizeUiLanguage(language) === UI_LANGUAGES.ENGLISH
+  const localizeValue = (value) => typeof value === 'string'
+    ? stripUiDataProtection(isEnglish ? translateUiText(value, language) : value)
+    : value
   const replyMarkup = payload.reply_markup && typeof payload.reply_markup === 'object'
     ? {
         ...payload.reply_markup,
         inline_keyboard: Array.isArray(payload.reply_markup.inline_keyboard)
           ? payload.reply_markup.inline_keyboard.map((row) => row.map((button) => ({
               ...button,
-              text: translateUiText(button.text, language),
+              text: localizeValue(button.text),
             })))
           : payload.reply_markup.inline_keyboard,
       }
     : payload.reply_markup
-  return {
+  const localized = {
     ...payload,
-    text: translateUiText(payload.text, language),
-    caption: translateUiText(payload.caption, language),
+    text: localizeValue(payload.text),
+    caption: localizeValue(payload.caption),
     reply_markup: replyMarkup,
   }
+  if (isEnglish) return localized
+  const keyboardUnchanged = replyMarkup === payload.reply_markup ||
+    localized.reply_markup?.inline_keyboard?.every((row, rowIndex) => row.every((button, buttonIndex) =>
+      button.text === payload.reply_markup?.inline_keyboard?.[rowIndex]?.[buttonIndex]?.text))
+  const unchanged = localized.text === payload.text && localized.caption === payload.caption && keyboardUnchanged
+  return unchanged ? payload : localized
 }

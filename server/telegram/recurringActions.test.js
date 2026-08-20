@@ -27,11 +27,27 @@ describe('telegram recurring actions', () => {
     }, dueDate)
 
     expect(session.flow).toBe('recurring')
+    expect(session).toMatchObject({ page: 0, pageCount: 1, total: 2 })
     expect(session.choices.rules).toEqual({
       [stableActionToken('due')]: 'due',
       [stableActionToken('done')]: 'done',
     })
     expect(session.dueRuleIds).toEqual(['due'])
+  })
+
+  it('paginates active rules without dropping the ninth item or losing total due counts', () => {
+    const rules = Array.from({ length: 9 }, (_, index) => rule(`rule-${index + 1}`, {
+      dayOfMonth: index === 0 || index === 8 ? 10 : 25,
+    }))
+
+    const session = buildRecurringSession({ recurringRules: rules }, dueDate, 8, 1)
+
+    expect(session).toMatchObject({ page: 1, pageCount: 2, pageSize: 8, total: 9 })
+    expect(session.items).toEqual([
+      expect.objectContaining({ id: 'rule-9', number: 9 }),
+    ])
+    expect(Object.values(session.choices.rules)).toEqual(['rule-9'])
+    expect(session.dueRuleIds).toEqual(['rule-1', 'rule-9'])
   })
 
   it('rotates the action session so an old recurring button cannot target a new list', () => {

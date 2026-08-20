@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -211,6 +211,17 @@ describe('ADREEM web API auth helpers', () => {
     expect(response.headers['cache-control']).toBe('no-store, private')
     expect(response.headers.pragma).toBe('no-cache')
     expect(response.headers['x-content-type-options']).toBe('nosniff')
+  })
+
+  it('ships a restrictive browser policy that allows the configured API connection', () => {
+    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
+
+    expect(html).toContain('http-equiv="Content-Security-Policy"')
+    expect(html).toContain("default-src 'self';")
+    expect(html).toContain("connect-src 'self' %VITE_ADREEM_API_URL% %VITE_ADREEM_API_URL%/;")
+    expect(html).toContain("object-src 'none';")
+    expect(html).not.toContain("'unsafe-eval'")
+    expect(html).not.toContain("'unsafe-inline'")
   })
 
   it('reports readiness only after the cloud repository is reachable', async () => {
@@ -528,6 +539,82 @@ describe('ADREEM web API auth helpers', () => {
     expect(payload.state.movements.map((movement) => movement.id).sort()).toEqual(['bot-movement', 'web-movement'])
   })
 
+  it('records committed movement changes with safe server-derived before and after values', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'main',
+        displayName: 'Main',
+        email: 'main@example.com',
+        password: 'main-pass-123',
+        ledgerId: 'main',
+      }),
+    ])
+    const auditFile = join(tempDir, 'audit.jsonl')
+    const api = createAdreemApiHandler({
+      ADREEM_AUDIT_LOG_FILE: auditFile,
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
+    const currentState = {
+      accounts: [],
+      movements: [{
+        id: 'movement-1',
+        type: 'transfer',
+        status: 'needs_review',
+        amount: 10,
+        currency: 'LYD',
+        note: 'private-before-note',
+        apiToken: 'before-secret-token',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        updatedAt: '2026-01-01T10:00:00.000Z',
+      }],
+      savedAt: '2026-01-01T10:00:00.000Z',
+      version: 2,
+    }
+    api.__setRepositoryForTest?.({
+      ledgerConfig: { identity: { ledgerId: 'main' } },
+      async update(callback) {
+        const result = await callback(currentState)
+        return { ...result, updatedAt: 'cloud-version-2' }
+      },
+    })
+    const request = createJsonRequest({
+      baseUpdatedAt: 'cloud-version-1',
+      state: {
+        ...currentState,
+        movements: [{
+          ...currentState.movements[0],
+          amount: 25,
+          note: 'private-after-note',
+          apiToken: 'after-secret-token',
+          updatedAt: '2026-01-01T10:01:00.000Z',
+        }],
+        savedAt: '2026-01-01T10:01:00.000Z',
+      },
+    }, { token })
+    const response = createMockResponse()
+
+    const promise = api(request, response)
+    request.emitBody()
+    await promise
+
+    const records = readFileSync(auditFile, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    const saveRecord = records.find((record) => record.action === 'ledger.saved')
+    expect(response.statusCode).toBe(200)
+    expect(saveRecord.movementUpdates).toEqual([expect.objectContaining({
+      movementId: 'movement-1',
+      changedFields: expect.arrayContaining(['amount', 'updatedAt']),
+      redactedFieldChanges: 2,
+      before: expect.objectContaining({ amount: 10 }),
+      after: expect.objectContaining({ amount: 25 }),
+    })])
+    expect(JSON.stringify(saveRecord)).not.toContain('private-before-note')
+    expect(JSON.stringify(saveRecord)).not.toContain('private-after-note')
+    expect(JSON.stringify(saveRecord)).not.toContain('secret-token')
+  })
+
   it('returns a conflict instead of silently overwriting a newer cloud version', async () => {
     const file = tempRegistry([
       registryPasswordUser({
@@ -809,6 +896,46 @@ describe('ADREEM web API auth helpers', () => {
     expect(listResponse.statusCode).toBe(200)
     expect(listPayload.owner).toMatchObject({ email: 'owner@example.com', ledgerId: 'owner-main' })
     expect(listPayload.users.map((user) => user.email).sort()).toEqual(['owner@example.com', 'saeed@example.com'])
+  })
+
+  it('rejects an owner identity edit that would remove administration and keeps the session active', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'owner-main',
+        displayName: 'Owner',
+        email: 'owner@example.com',
+        password: 'owner-pass-123',
+        ledgerId: 'owner-main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_OWNER_EMAILS: 'owner@example.com',
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const ownerToken = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
+    const updateRequest = createJsonRequest({ email: 'renamed@example.com' }, {
+      method: 'PATCH',
+      url: '/api/admin/users/owner-main',
+      token: ownerToken,
+    })
+    const updateResponse = createMockResponse()
+
+    const updatePromise = api(updateRequest, updateResponse)
+    updateRequest.emitBody()
+    await updatePromise
+
+    const listResponse = createMockResponse()
+    await api({
+      method: 'GET',
+      url: '/api/admin/users',
+      headers: { authorization: `Bearer ${ownerToken}` },
+    }, listResponse)
+    expect(updateResponse.statusCode).toBe(409)
+    expect(JSON.parse(updateResponse.body).error).toBe('owner-identity-required')
+    expect(listResponse.statusCode).toBe(200)
+    expect(JSON.parse(listResponse.body).owner.email).toBe('owner@example.com')
   })
 
   it('blocks non-owner web sessions from the users admin API', async () => {

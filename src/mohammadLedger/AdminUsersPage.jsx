@@ -6,7 +6,7 @@ import {
   ADREEM_API_TOKEN_SESSION_KEY,
 } from './mohammadPersistence'
 import { normalizeUiLanguage, uiLanguageDirection } from './uiLanguage'
-import { readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage } from './uiTranslation'
+import { preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
 
 const ADREEM_API_URL = String(import.meta.env.VITE_ADREEM_API_URL || '').replace(/\/+$/, '')
 
@@ -73,8 +73,8 @@ function UserRow({ user, owner, onEdit, onRemove }) {
   return (
     <article className="adreem-admin-user">
       <div data-i18n="off">
-        <strong>{user.displayName || user.userId || user.ledgerId}</strong>
-        <span>{user.email || user.ledgerId}</span>
+        <strong>{preserveUiData(user.displayName || user.userId || user.ledgerId)}</strong>
+        <span>{preserveUiData(user.email || user.ledgerId)}</span>
       </div>
       <div>
         <b>{isOwner ? 'مالك' : user.source === 'env' ? 'ثابت' : 'مستقل'}</b>
@@ -254,7 +254,8 @@ export default function AdminUsersPage() {
       setMessage('لا يمكن حذف المالك.')
       return
     }
-    const ok = window.confirm(`حذف دخول ${user.displayName || user.email || user.userId}؟ بيانات الدفتر لن تُحذف.`)
+    const protectedName = preserveUiData(user.displayName || user.email || user.userId)
+    const ok = window.confirm(translateUiText(`حذف دخول ${protectedName}؟ بيانات الدفتر لن تُحذف.`, normalizedLanguage))
     if (!ok) return
     try {
       await adminRequest(`/api/admin/users/${encodeURIComponent(user.userId)}`, {
@@ -361,7 +362,7 @@ export default function AdminUsersPage() {
 
             <section className="adreem-admin-card">
               <div className="adreem-admin-card-head">
-                <h2>{owner?.displayName ? `المستخدمون · ${owner.displayName}` : 'المستخدمون'}</h2>
+                <h2>{owner?.displayName ? `المستخدمون · ${preserveUiData(owner.displayName)}` : 'المستخدمون'}</h2>
                 <button type="button" onClick={() => loadUsers(token)}>تحديث</button>
               </div>
               <div className="adreem-admin-users">

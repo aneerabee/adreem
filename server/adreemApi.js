@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { isDeepStrictEqual } from 'node:util'
 import { createClient } from '@supabase/supabase-js'
 import { ConcurrentLedgerUpdateError, createLedgerRepository, LedgerIntegrityError } from './mohammadLedger/ledgerRepository.js'
 import { validateLedgerStateTransition } from './mohammadLedger/stateValidation.js'
@@ -27,6 +28,21 @@ const RATE_LIMITS = {
   ledgerWrite: { limit: 80, windowMs: 60 * 1000 },
   attachment: { limit: 30, windowMs: 60 * 1000 },
 }
+const MOVEMENT_AUDIT_FIELDS = [
+  'id',
+  'type',
+  'status',
+  'amount',
+  'currency',
+  'sourceAccountId',
+  'destinationAccountId',
+  'rate',
+  'dimensionId',
+  'expenseCategoryId',
+  'createdAt',
+  'updatedAt',
+]
+const MOVEMENT_AUDIT_FIELD_SET = new Set(MOVEMENT_AUDIT_FIELDS)
 
 class ApiRequestError extends Error {
   constructor(message, statusCode = 400) {
@@ -148,6 +164,40 @@ function audit(env, event) {
   } catch (error) {
     console.error('[adreem-audit]', error?.message || error)
   }
+}
+
+function movementAuditSnapshot(movement = {}) {
+  return Object.fromEntries(MOVEMENT_AUDIT_FIELDS.flatMap((field) => {
+    if (!Object.prototype.hasOwnProperty.call(movement, field)) return []
+    const value = movement[field]
+    if (value === null || typeof value === 'boolean') return [[field, value]]
+    if (typeof value === 'number' && Number.isFinite(value)) return [[field, value]]
+    if (typeof value === 'string') return [[field, value.slice(0, 160)]]
+    return []
+  }))
+}
+
+function movementUpdateAuditEntries(beforeState = {}, afterState = {}) {
+  const beforeMovements = Array.isArray(beforeState.movements) ? beforeState.movements : []
+  const afterMovements = Array.isArray(afterState.movements) ? afterState.movements : []
+  const beforeById = new Map(beforeMovements
+    .filter((movement) => movement?.id)
+    .map((movement) => [movement.id, movement]))
+
+  return afterMovements.flatMap((after) => {
+    const before = beforeById.get(after?.id)
+    if (!before || isDeepStrictEqual(before, after)) return []
+    const allChangedFields = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+      .filter((field) => !isDeepStrictEqual(before[field], after[field]))
+    const changedFields = allChangedFields.filter((field) => MOVEMENT_AUDIT_FIELD_SET.has(field))
+    return [{
+      movementId: String(after.id).slice(0, 160),
+      changedFields,
+      redactedFieldChanges: allChangedFields.length - changedFields.length,
+      before: movementAuditSnapshot(before),
+      after: movementAuditSnapshot(after),
+    }]
+  })
 }
 
 export function clientIp(req) {
@@ -514,7 +564,7 @@ export function createAdreemApiHandler(env = process.env) {
           if (!result.ok) {
             audit(env, { action: 'admin.user.update.failed', ownerUserId: ownerUser.userId, targetUserId, error: result.error })
             const status = result.error === 'not-found' ? 404
-              : result.error === 'ledger-used' || result.error === 'telegram-used' || result.error === 'email-used' || result.error === 'ledger-change-requires-migration' ? 409
+              : result.error === 'ledger-used' || result.error === 'telegram-used' || result.error === 'email-used' || result.error === 'ledger-change-requires-migration' || result.error === 'owner-identity-required' ? 409
                 : 400
             return sendJson(res, status, { error: result.error, existingUserId: result.existingUserId || '' }, allowedOrigin)
           }
@@ -614,6 +664,7 @@ export function createAdreemApiHandler(env = process.env) {
           throw new ApiRequestError('Reload the ledger before saving.', 428)
         }
         const updateOptions = { expectedUpdatedAt: body.baseUpdatedAt || null }
+        let movementUpdates = []
         const result = await repository.update((currentState) => {
           const state = body.state && typeof body.state === 'object'
             ? mergeLedgerStates(body.state, currentState, currentState)
@@ -624,9 +675,10 @@ export function createAdreemApiHandler(env = process.env) {
           if (!validation.ok) {
             throw new ApiRequestError(`Ledger integrity check failed: ${validation.errors[0]?.message || 'invalid state'}`, 422)
           }
+          movementUpdates = movementUpdateAuditEntries(currentState, state)
           return { state }
         }, updateOptions)
-        audit(env, { action: 'ledger.saved', ledgerId, source: 'web-api' })
+        audit(env, { action: 'ledger.saved', ledgerId, source: 'web-api', movementUpdates })
         return sendJson(res, 200, { state: result.state, source: 'api-save', updatedAt: result.updatedAt || null }, allowedOrigin)
       }
       return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)

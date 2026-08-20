@@ -41,6 +41,7 @@ import {
   recurringKeyboard,
 } from '../keyboards.js'
 import { escapeHtml, movementStepText, reviewMovementText, stepPromptText } from '../messages.js'
+import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
 
 const STEPS = {
   TYPE: 'type',
@@ -250,7 +251,7 @@ async function sendAccountChoices(ctx, session, state, role, query = '') {
   const expenseCategoryById = new Map(state.accounts.filter((account) => account.valueKind === VALUE_KINDS.EXPENSE).map((category) => [category.id, category]))
   const lines = [movementStepText(session, snapshot.accountById, dimensionById, expenseCategoryById), '']
   lines.push(stepPromptText(session))
-  if (query) lines.push(`<b>بحث:</b> ${escapeHtml(query)}`)
+  if (query) lines.push(`<b>بحث:</b> ${escapeHtml(preserveUiData(query))}`)
   lines.push(ranked.length ? `<b>${ranked.length} اختيارات مناسبة.</b> اضغط الاسم المطلوب.` : '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
   return upsertFlowMessage(ctx, session, {
     text: lines.join('\n'),
@@ -449,8 +450,10 @@ export async function handleMovementCallback(ctx, data) {
         ctx.sessions.set(ctx.chatId, ctx.userId, session)
       } catch (error) {
         console.error('[adreem-telegram-bot] attachment upload failed', error?.message || error)
+        const attachmentLabel = session.draft.attachmentPending?.fileName || session.draft.attachmentLabel
+        const attachmentLine = attachmentLabel ? `مرفق: ${preserveUiData(attachmentLabel)}\n` : ''
         return upsertFlowMessage(ctx, session, {
-          text: '<b>تعذر رفع المرفق.</b>\n<blockquote>لم تُحفظ الحركة. حاول مرة أخرى أو ارجع واحذف المرفق.</blockquote>',
+          text: `<b>تعذر رفع المرفق.</b>\n<blockquote>${escapeHtml(`${attachmentLine}لم تُحفظ الحركة. حاول مرة أخرى أو ارجع واحذف المرفق.`)}</blockquote>`,
           reply_markup: confirmKeyboard(),
         })
       }
