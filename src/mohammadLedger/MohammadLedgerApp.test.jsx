@@ -8,6 +8,7 @@ import {
   AccountRow,
   AccountClassificationEditorFields,
   ExternalAccountCard,
+  HistoryMovementRow,
   ReviewAccountCard,
   accountBalanceChip,
   accountProfileMovements,
@@ -15,6 +16,7 @@ import {
   accountClassificationMovementErrors,
   accountEditChanges,
   accountReviewSelection,
+  buildBalanceOverview,
   buildPeopleAccountViews,
   cancelMovementConfirmation,
   claimSubmission,
@@ -58,6 +60,53 @@ describe('MohammadLedgerApp movement account balances', () => {
     expect(accountBalanceChip(account, bucket, CURRENCIES.USD)).toEqual({ tone: 'positive', text: '500 $' })
     expect(accountBalanceChip(account, bucket, CURRENCIES.DINAR)).toEqual({ tone: 'positive', text: '50,000 د.ل' })
     expect(accountBalanceChip(account, { dinar: 50_000, usd: 0 }, CURRENCIES.USD)).toEqual({ tone: 'zero', text: '0 $' })
+  })
+})
+
+describe('MohammadLedgerApp compact history rows', () => {
+  it('keeps the exchange result and rate visible without restoring the full posting breakdown', () => {
+    const accountById = new Map([
+      ['usd', { id: 'usd', ownerName: 'أنا', subAccountName: 'دولار', valueKind: VALUE_KINDS.CASH }],
+      ['cash', { id: 'cash', ownerName: 'أنا', subAccountName: 'كاش', valueKind: VALUE_KINDS.CASH }],
+    ])
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <HistoryMovementRow
+        accountById={accountById}
+        movement={{
+          id: 'sale-1',
+          type: MOVEMENT_TYPES.USD_SALE,
+          status: MOVEMENT_STATUSES.POSTED,
+          amount: 100,
+          currency: CURRENCIES.USD,
+          rate: 7,
+          sourceAccountId: 'usd',
+          destinationAccountId: 'cash',
+        }}
+      />,
+    ))
+
+    expect(markup).toContain('100 $')
+    expect(markup).toContain('↔ 700 د.ل')
+    expect(markup).toContain('× 7')
+  })
+
+  it('keeps review errors visible on incomplete movements', () => {
+    const markup = renderToStaticMarkup(
+      <HistoryMovementRow
+        accountById={new Map()}
+        movement={{
+          id: 'review-1',
+          type: MOVEMENT_TYPES.TRANSFER,
+          status: MOVEMENT_STATUSES.NEEDS_REVIEW,
+          amount: 100,
+          currency: CURRENCIES.DINAR,
+          validation: { errors: [{ field: 'destinationAccountId', message: 'اختر المستلم' }] },
+        }}
+      />,
+    )
+
+    expect(markup).toContain('ناقص')
+    expect(markup).toContain('اختر المستلم')
   })
 })
 
@@ -310,6 +359,26 @@ describe('MohammadLedgerApp account review', () => {
 })
 
 describe('MohammadLedgerApp people account views', () => {
+  it('keeps own money, receivables, and payables separated in both currencies', () => {
+    const bucket = (id, valueKind, dinar, usd) => ({
+      account: { id, valueKind },
+      dinar,
+      usd,
+    })
+
+    expect(buildBalanceOverview([
+      bucket('cash', VALUE_KINDS.CASH, 1500, 0),
+      bucket('bank-usd', VALUE_KINDS.BANK, 0, 300),
+      bucket('person-dinar', VALUE_KINDS.RECEIVABLE, 700, 0),
+      bucket('person-usd', VALUE_KINDS.RECEIVABLE, 0, -80),
+      bucket('asset', VALUE_KINDS.ASSET, 9000, 0),
+    ])).toEqual({
+      money: { dinar: 1500, usd: 300 },
+      receivable: { dinar: 700, usd: 0 },
+      payable: { dinar: 0, usd: 80 },
+    })
+  })
+
   it('keeps zero-balance people out of current balances but available in the full directory', () => {
     const person = (id, currencyKind) => ({
       id,
@@ -354,6 +423,36 @@ describe('MohammadLedgerApp people account views', () => {
     expect(markup).toContain('is-negative')
     expect(markup).toContain('أدفع له')
     expect(markup).not.toContain('>صفر<')
+  })
+
+  it('keeps each currency direction visible in compact mixed-currency balances', () => {
+    const mixedBucket = {
+      account: {
+        id: 'mixed-person',
+        ownerName: 'سعيد',
+        subAccountName: 'كاش بيننا',
+        type: ACCOUNT_TYPES.PERSON,
+        valueKind: VALUE_KINDS.RECEIVABLE,
+        currencyKind: ACCOUNT_CURRENCY_KINDS.MULTI,
+        status: ACCOUNT_STATUSES.ACTIVE,
+      },
+      dinar: 500,
+      usd: -250,
+    }
+    const markup = renderToStaticMarkup(
+      <AccountRow
+        compactValue
+        bucket={mixedBucket}
+      />,
+    )
+    const views = buildPeopleAccountViews([mixedBucket])
+
+    expect(markup).toContain('class="is-positive">لي 500 د.ل')
+    expect(markup).toContain('class="is-negative">عليّ 250 $')
+    expect(views.positive).toEqual([expect.objectContaining({ dinar: 500, usd: 0 })])
+    expect(views.negative).toEqual([expect.objectContaining({ dinar: 0, usd: -250 })])
+    expect(views.withBalance).toHaveLength(1)
+    expect(views.all).toHaveLength(1)
   })
 
   it('describes account edits using clear before and after values', () => {

@@ -36,11 +36,19 @@ describe('ADREEM UI translation', () => {
     expect(translateUiText('اختر من أين تخرج الفلوس.')).toBe('Choose where the money comes from.')
     expect(translateUiText('تأكيد وحفظ الحركة')).toBe('Confirm and save entry')
     expect(translateUiText('الأرصدة')).toBe('Balances')
+    expect(translateUiText('لي عند الناس')).toBe('People owe me')
+    expect(translateUiText('عليّ للناس')).toBe('I owe people')
+    expect(translateUiText('ابحث عن حساب')).toBe('Search accounts')
   })
 
   it('translates formatted Telegram text without changing its markup', () => {
     expect(translateUiText('<b>ADREEM · مراجعة</b>\n<blockquote>لا شيء معلق.</blockquote>', 'en'))
       .toBe('<b>ADREEM · Review</b>\n<blockquote>Nothing is pending.</blockquote>')
+  })
+
+  it('translates compact balance directions without changing the amount', () => {
+    expect(translateUiText('لي 500 د.ل', 'en')).toBe('Owed to me 500 LYD')
+    expect(translateUiText('عليّ 250 $', 'en')).toBe('I owe 250 $')
   })
 
   it('preserves user-entered names and notes', () => {
@@ -137,6 +145,8 @@ describe('ADREEM UI translation', () => {
       '2 فعالة · 1 مستحقة · صفحة 1/2',
       '10 حركة · أحدث 5',
       '#1 · الحالة: معتمدة',
+      '#3 · 🔁 تحويل · 1,250 د.ل',
+      '#4 · 🔴 مصروف · 350 د.ل · ملغاة',
       'دخل 5,000 د.ل · مصروف 1,250 د.ل · صافي 3,750 د.ل · 4 حركة معتمدة',
     ]
 

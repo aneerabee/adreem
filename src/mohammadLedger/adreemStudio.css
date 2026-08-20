@@ -733,64 +733,86 @@
 }
 .ml3-panel-head p { margin-top: 2px; color: var(--muted); font-size: 0.67rem; }
 
-.ml3-balances-surface { position: relative; }
+.ml3-balances-surface {
+  position: relative;
+  display: grid;
+  gap: 10px;
+}
 .ml3-balance-ledger {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 9px;
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--accounts) 13%, var(--line));
+  border-radius: 8px;
+  background: #edf1f3;
 }
 .ml3-balance-ledger button {
-  min-height: 62px;
+  min-height: 58px;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 31px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 8px 10px;
-  background: #fff;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: transparent;
   color: var(--ink);
   text-align: start;
   box-shadow: none;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, transform 150ms ease-out;
 }
 .ml3-balance-ledger button i {
-  width: 35px;
-  height: 35px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--accounts-soft);
   color: var(--accounts);
   font-style: normal;
 }
-.ml3-balance-ledger button > span { min-width: 0; display: grid; gap: 2px; }
-.ml3-balance-ledger button small { color: var(--muted); font-size: 0.65rem; }
-.ml3-balance-ledger button strong { overflow: hidden; font-size: 0.83rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balance-ledger button > span { min-width: 0; display: grid; gap: 1px; }
+.ml3-balance-ledger button > span > b { overflow: hidden; color: var(--muted); font-size: 0.64rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balance-pair { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+.ml3-balance-pair strong,
+.ml3-balance-pair small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balance-pair strong { color: var(--ink); font-size: 0.79rem; }
+.ml3-balance-pair small { color: var(--muted); font-size: 0.62rem; font-weight: 750; }
 .ml3-balance-ledger button.is-positive i { background: var(--positive-soft); color: var(--positive); }
 .ml3-balance-ledger button.is-negative i { background: var(--negative-soft); color: var(--negative); }
-.ml3-balance-ledger button:hover { border-color: var(--section-line); transform: translateY(-1px); }
+.ml3-balance-ledger button.is-positive .ml3-balance-pair strong { color: var(--positive); }
+.ml3-balance-ledger button.is-negative .ml3-balance-pair strong { color: var(--negative); }
+.ml3-balance-ledger button:hover,
+.ml3-balance-ledger button.is-active { border-color: var(--line); background: #fff; transform: translateY(-1px); }
 
-.ml3-account-toolbar { grid-template-columns: minmax(0, 1fr); margin-bottom: 8px; }
-.ml3-account-toolbar label { gap: 4px; }
-.ml3-account-toolbar input { min-height: 40px; border-color: var(--line); border-radius: 6px; }
+.ml3-balances-workspace {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
 
 .ml3-account-switcher {
-  min-height: 51px;
-  grid-template-columns: repeat(5, minmax(86px, 1fr));
+  position: sticky;
+  top: 0;
+  min-height: 0;
+  grid-template-columns: 1fr;
   gap: 3px;
-  margin-bottom: 8px;
+  margin: 0;
   padding: 4px;
   border: 1px solid color-mix(in srgb, var(--accounts) 15%, var(--line));
   border-radius: 8px;
-  background: #e8eef3;
+  background: #edf1f3;
 }
 .ml3-account-switcher button {
   --group-tone: var(--accounts);
   --group-soft: var(--accounts-soft);
   min-width: 0;
-  min-height: 41px;
+  min-height: 42px;
   display: grid;
-  grid-template-columns: 21px minmax(0, 1fr) auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: 5px;
   border: 0;
@@ -811,46 +833,134 @@
 .ml3-account-switcher button.is-active {
   background: #fff;
   color: var(--group-tone);
-  box-shadow: inset 0 -3px 0 var(--group-tone), 0 3px 10px rgba(23, 43, 37, 0.08);
+  box-shadow: inset 3px 0 0 var(--group-tone), 0 2px 8px rgba(23, 43, 37, 0.06);
 }
+[dir='rtl'] .ml3-account-switcher button.is-active { box-shadow: inset -3px 0 0 var(--group-tone), 0 2px 8px rgba(23, 43, 37, 0.06); }
 .ml3-account-switcher button::after { content: none; }
 
+.ml3-balance-pane { min-width: 0; }
+.ml3-balance-pane-head {
+  min-width: 0;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 250px);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.ml3-balance-pane-title { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.ml3-balance-pane-title i {
+  width: 29px;
+  height: 29px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--accounts-soft);
+  color: var(--accounts);
+  font-style: normal;
+}
+.ml3-balance-pane-title h2 { overflow: hidden; margin: 0; font-size: 0.9rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balance-pane-title > span { flex: 0 0 auto; color: var(--accounts); font-size: 0.66rem; font-weight: 800; }
+.ml3-account-toolbar {
+  min-width: 0;
+  min-height: 37px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 5px;
+  align-items: center;
+  margin: 0;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--muted);
+}
+.ml3-account-toolbar:focus-within { border-color: var(--accounts); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accounts) 12%, transparent); }
+.ml3-account-toolbar input {
+  width: 100%;
+  min-width: 0;
+  min-height: 35px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+
 .ml3-people-view-switch {
-  width: min(340px, 100%);
+  width: min(280px, 100%);
   margin-bottom: 8px;
   border-color: color-mix(in srgb, var(--entry) 15%, var(--line));
   background: #e7eeeb;
 }
 .ml3-people-view-switch button.is-active { color: var(--entry); }
-.ml3-people-view-switch button::after { background: var(--entry); }
+.ml3-balances-surface .ml3-people-view-switch button::after { content: none; }
 
 .ml3-account-sections { gap: 10px; }
 .ml3-list-block {
-  padding: 8px 10px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #fff;
 }
-.ml3-list-block > .ml3-panel-head { min-height: 36px; margin-bottom: 2px; }
+.ml3-balances-surface .ml3-list-block { box-shadow: none; }
+.ml3-list-block > .ml3-panel-head {
+  min-height: 36px;
+  margin: 0;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line);
+}
+.ml3-list-block > .ml3-panel-head h2 { font-size: 0.75rem; }
+.ml3-list-block--positive > .ml3-panel-head { background: var(--positive-soft); color: var(--positive); }
+.ml3-list-block--negative > .ml3-panel-head { background: var(--negative-soft); color: var(--negative); }
+.ml3-list-block--money > .ml3-panel-head { background: var(--accounts-soft); color: var(--accounts); }
+.ml3-list-block--assets > .ml3-panel-head { background: #f0ecf8; color: #6d55a3; }
+.ml3-list-block--expenses > .ml3-panel-head { background: var(--history-soft); color: var(--history); }
+.ml3-list-block--review > .ml3-panel-head { background: var(--review-soft); color: var(--review); }
 .ml3-account-row {
-  min-height: 50px;
+  min-height: 48px;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, auto) auto;
+  gap: 7px;
   border: 0;
   border-top: 1px solid #e4ebe7;
   border-radius: 0;
-  padding: 6px 4px;
+  padding: 5px 9px;
   background: #fff;
 }
 .ml3-list > .ml3-account-row:first-of-type { border-top: 0; }
 .ml3-account-row:hover { background: var(--accounts-soft); }
-.ml3-account-row.is-positive { border-inline-start: 3px solid var(--positive); }
-.ml3-account-row.is-negative { border-inline-start: 3px solid var(--negative); }
+.ml3-account-row.is-positive,
+.ml3-account-row.is-negative,
 .ml3-account-row--cash,
-.ml3-account-row--bank { border-inline-start: 3px solid var(--accounts); }
-.ml3-account-row--expense { border-inline-start: 3px solid var(--history); }
-.ml3-account-row--review { border-inline-start: 3px solid var(--review); }
-.ml3-account-main > strong { font-size: 0.78rem; }
-.ml3-account-values.is-positive strong { color: var(--positive); }
-.ml3-account-values.is-negative strong { color: var(--negative); }
+.ml3-account-row--bank,
+.ml3-account-row--expense,
+.ml3-account-row--review { border-inline-start: 0; }
+.ml3-account-main { grid-template-columns: 28px minmax(0, 1fr); gap: 7px; align-items: center; }
+.ml3-account-row-icon {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--accounts-soft);
+  color: var(--accounts);
+  font-style: normal;
+}
+.ml3-account-row--person .ml3-account-row-icon,
+.ml3-account-row--person-bank .ml3-account-row-icon,
+.ml3-account-row--person-usd .ml3-account-row-icon { background: var(--entry-soft); color: var(--entry); }
+.ml3-account-row--asset .ml3-account-row-icon { background: #f0ecf8; color: #6d55a3; }
+.ml3-account-row--expense .ml3-account-row-icon { background: var(--history-soft); color: var(--history); }
+.ml3-account-row--review .ml3-account-row-icon { background: var(--review-soft); color: var(--review); }
+.ml3-account-copy { min-width: 0; display: grid; gap: 1px; }
+.ml3-account-copy > strong { overflow: hidden; font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-account-values strong.is-positive { color: var(--positive); }
+.ml3-account-values strong.is-negative { color: var(--negative); }
 
 .ml3-filter-disclosure { margin-bottom: 9px; }
 .ml3-filter-disclosure > summary { border-color: var(--section-line); color: var(--section-ink); }
@@ -896,21 +1006,81 @@
 .ml3-history-day-head strong { color: var(--section-ink); }
 .ml3-history-day-head span { color: var(--history); }
 .ml3-history-row {
-  grid-template-columns: minmax(165px, 0.85fr) minmax(180px, 1fr) minmax(165px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 5px 12px;
   margin: 0 9px;
-  min-height: 58px;
+  min-height: 54px;
   border-inline-start-width: 3px;
   border-bottom: 1px solid #e7ece9;
   border-radius: 0;
-  padding: 7px 5px;
+  padding: 7px 6px;
 }
-.ml3-history-row > button {
-  width: auto;
-  min-width: 62px;
-  justify-self: end;
+.ml3-history-route {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  white-space: normal;
 }
+.ml3-history-route b {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.64rem;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ml3-history-route span { flex: 0 0 auto; color: var(--movement-tone); font-size: 0.68rem; }
+[dir='ltr'] .ml3-history-arrow { transform: rotate(180deg); }
+.ml3-history-side {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 6px;
+}
+.ml3-history-side > strong { color: var(--ink); font-size: 0.76rem; white-space: nowrap; }
+.ml3-history-conversion,
+.ml3-history-rate { color: var(--muted); font-size: 0.59rem; font-weight: 750; white-space: nowrap; }
+.ml3-history-status { border-radius: 4px; padding: 1px 5px; background: var(--history-soft); color: var(--history); font-size: 0.58rem; font-weight: 800; }
+.ml3-history-status--voided { background: var(--review-soft); color: var(--review); }
+.ml3-history-side > button {
+  min-height: 25px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 7px;
+  background: var(--review-soft);
+  color: var(--review);
+  font: inherit;
+  font-size: 0.61rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ml3-history-details,
+.ml3-history-row > .ml3-attachment-list { grid-column: 1 / -1; margin-inline-start: 38px; }
+.ml3-history-details { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ml3-history-note {
+  min-width: min(100%, 220px);
+  flex: 1 1 220px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-block: 0;
+  border-radius: 5px;
+  padding: 5px 7px;
+  background: color-mix(in srgb, var(--movement-soft) 58%, white);
+  color: var(--ink-soft);
+  font-size: 0.65rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.ml3-history-note span { flex: 0 0 auto; color: var(--movement-tone); font-size: 0.45rem; line-height: 1.9; }
+.ml3-history-details > small { flex: 0 0 auto; border-radius: 4px; padding: 2px 5px; background: var(--history-soft); color: var(--history); font-size: 0.59rem; }
+.ml3-history-details > small.is-error { flex: 1 1 100%; background: var(--review-soft); color: var(--review); }
 .ml3-history-day > .ml3-history-row:last-child { border-bottom: 0; }
 
 .ml3-review-workspace {
@@ -1188,17 +1358,22 @@
   .ml3-picker-results { max-height: 210px; }
 
   .ml3-today-panel { position: static; max-height: none; box-shadow: none; }
-  .ml3-balance-ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .ml3-balance-ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; }
   .ml3-balance-ledger button {
-    min-height: 63px;
+    min-height: 61px;
     grid-template-columns: 1fr;
     justify-items: start;
-    gap: 4px;
-    padding: 6px;
+    gap: 2px;
+    padding: 5px 6px;
   }
-  .ml3-balance-ledger button i { width: 28px; height: 28px; }
-  .ml3-balance-ledger button strong { font-size: 0.68rem; }
+  .ml3-balance-ledger button i { display: none; }
+  .ml3-balance-ledger button > span > b { font-size: 0.61rem; white-space: normal; }
+  .ml3-balance-pair { display: grid; gap: 0; }
+  .ml3-balance-pair strong { font-size: 0.69rem; }
+  .ml3-balance-pair small { font-size: 0.58rem; }
+  .ml3-balances-workspace { grid-template-columns: 1fr; gap: 7px; }
   .ml3-account-switcher {
+    position: static;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     overflow: visible;
   }
@@ -1212,12 +1387,22 @@
   .ml3-account-switcher button svg { width: 16px; height: 16px; }
   .ml3-account-switcher button strong { font-size: 0.65rem; }
   .ml3-account-switcher button > span { font-size: 0.6rem; }
+  .ml3-account-switcher button.is-active,
+  [dir='rtl'] .ml3-account-switcher button.is-active { box-shadow: inset 0 -3px 0 var(--group-tone), 0 2px 8px rgba(23, 43, 37, 0.06); }
+  .ml3-balance-pane-head { grid-template-columns: 1fr; gap: 6px; margin-bottom: 7px; }
+  .ml3-balance-pane-title i { width: 27px; height: 27px; }
+  .ml3-account-toolbar { min-height: 35px; }
+  .ml3-account-toolbar input { min-height: 33px; }
   .adreem-nav strong { font-size: 0.65rem; }
   .ml3-account-sections { grid-template-columns: 1fr; }
+  .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(88px, auto); padding-inline: 7px; }
+  .ml3-account-row-icon { width: 25px; height: 25px; }
   .ml3-history-filters { grid-template-columns: 1fr 1fr; }
   .ml3-history-filters > input { grid-column: 1 / -1; }
   .ml3-history-filters > select:last-child { grid-column: 1 / -1; }
   .ml3-history-row { grid-template-columns: minmax(0, 1fr) auto; margin-inline: 6px; }
+  .ml3-history-details,
+  .ml3-history-row > .ml3-attachment-list { margin-inline-start: 32px; }
   .ml3-review-workspace { grid-template-columns: 1fr; }
   .ml3-review-queue { max-height: 150px; }
   .ml3-review-active { min-height: 0; }
@@ -1235,6 +1420,11 @@
   .ml3-history-filters > input,
   .ml3-history-filters > select:last-child { grid-column: 1; }
   .ml3-review-queue { grid-template-columns: 1fr; }
+  .ml3-balance-ledger button { min-height: 59px; padding-inline: 4px; }
+  .ml3-balance-ledger button > span > b { font-size: 0.58rem; }
+  .ml3-balance-pair strong { font-size: 0.64rem; }
+  .ml3-account-switcher button strong { font-size: 0.6rem; }
+  .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(80px, auto); gap: 5px; }
 }
 
 @media (max-width: 720px) and (max-height: 620px) {

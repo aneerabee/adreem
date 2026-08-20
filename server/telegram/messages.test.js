@@ -299,6 +299,39 @@ describe('telegram movement presentation', () => {
     }
   })
 
+  it('keeps history cards concise without dates or normal status', () => {
+    const accounts = new Map([
+      ['me-cash', { ownerName: 'أنا', subAccountName: 'كاش' }],
+      ['saeed-cash', { ownerName: 'سعيد', subAccountName: 'كاش' }],
+    ])
+    const card = stripUiDataProtection(movementBlockquote({
+      type: MOVEMENT_TYPES.TRANSFER,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 1250,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'me-cash',
+      destinationAccountId: 'saeed-cash',
+      createdAt: '2026-05-13T10:15:00.000Z',
+      note: 'دفعة أولى',
+    }, accounts, { number: 3, showTime: false, variant: 'history' }))
+
+    expect(card).toContain('#3 · 🔁 تحويل · 1,250 د.ل')
+    expect(card).toContain('📝 دفعة أولى')
+    expect(card).not.toContain('الوقت:')
+    expect(card).not.toContain('معتمدة')
+  })
+
+  it('keeps exceptional status visible in concise history cards', () => {
+    const card = movementBlockquote({
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.VOIDED,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+    }, new Map(), { number: 4, showTime: false, variant: 'history' })
+
+    expect(card).toContain('#4 · 🔴 مصروف · 10 د.ل · ملغاة')
+  })
+
   it('renders movement dates in the shared Tripoli timezone', () => {
     const createdAt = '2026-08-20T22:30:00.000Z'
     const expectedTime = new Date(createdAt).toLocaleTimeString('ar-LY', {

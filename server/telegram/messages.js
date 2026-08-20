@@ -472,9 +472,17 @@ export function movementBlockquote(movement, accountsById = new Map(), options =
   const config = movementConfigFor(movement?.type)
   const source = accountsById.get(movement?.sourceAccountId)
   const destination = accountsById.get(movement?.destinationAccountId)
-  const time = movementDateLabel(movement, options)
+  const compactHistory = options.variant === 'history'
+  const time = options.showTime === false ? '' : movementDateLabel(movement, options)
   const note = cleanMovementNote(movement?.note)
-  const header = `${movementIcon(movement?.type)} ${movementLabels[movement?.type] || movement?.type || 'حركة'} · ${formatMoney(movement?.amount, movement?.currency)} · ${movementStatusLabel(movement?.status)}`
+  const status = movementStatusLabel(movement?.status)
+  const headerParts = [
+    options.number ? `#${options.number}` : '',
+    `${movementIcon(movement?.type)} ${movementLabels[movement?.type] || movement?.type || 'حركة'}`,
+    formatMoney(movement?.amount, movement?.currency),
+  ].filter(Boolean)
+  if (!compactHistory || movement?.status !== MOVEMENT_STATUSES.POSTED) headerParts.push(status)
+  const header = headerParts.join(' · ')
   const lines = [header]
 
   if (time) lines.push(`الوقت: ${time}`)
@@ -488,7 +496,7 @@ export function movementBlockquote(movement, accountsById = new Map(), options =
     lines.push(`${config.destinationLabel || 'إلى'}: ${protectedAccountLabel(destination)}`)
   }
 
-  if (note) lines.push(`ملاحظة: ${preserveUiData(note)}`)
+  if (note) lines.push(compactHistory ? `📝 ${preserveUiData(note)}` : `ملاحظة: ${preserveUiData(note)}`)
   return `<blockquote>${escapeHtml(lines.join('\n'))}</blockquote>`
 }
 

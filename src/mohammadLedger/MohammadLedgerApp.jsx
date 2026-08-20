@@ -35,8 +35,8 @@ const MOVEMENT_REQUEST_KEYS = Object.freeze({
 })
 
 const accountGroupTabs = [
-  { key: 'people', label: 'الناس', title: 'الناس' },
   { key: 'money', label: 'فلوسي', title: 'فلوسي' },
+  { key: 'people', label: 'الناس', title: 'الناس' },
   { key: 'assets', label: 'متابعة', title: 'الأصول والمشاريع' },
   { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
   { key: 'review', label: 'ناقص', title: 'مراجعة' },
@@ -882,34 +882,90 @@ function accountPrimaryBalance(bucket = {}) {
 
 export function buildPeopleAccountViews(rows = []) {
   const sorted = [...rows].sort(compareBalanceBuckets)
-  const positive = sorted.filter((bucket) => accountPrimaryBalance(bucket).amount > 0)
-  const negative = sorted.filter((bucket) => accountPrimaryBalance(bucket).amount < 0)
+  const withBalance = sorted.filter(nonZero)
+  const signedView = (bucket, direction) => ({
+    ...bucket,
+    dinar: direction > 0 ? Math.max(0, Number(bucket.dinar || 0)) : Math.min(0, Number(bucket.dinar || 0)),
+    usd: direction > 0 ? Math.max(0, Number(bucket.usd || 0)) : Math.min(0, Number(bucket.usd || 0)),
+  })
+  const positive = withBalance.map((bucket) => signedView(bucket, 1)).filter(nonZero).sort(compareBalanceBuckets)
+  const negative = withBalance.map((bucket) => signedView(bucket, -1)).filter(nonZero).sort(compareBalanceBuckets)
   const zero = sorted.filter((bucket) => !nonZero(bucket))
   return {
     positive,
     negative,
     zero,
-    withBalance: [...positive, ...negative],
-    all: [...positive, ...negative, ...zero],
+    withBalance,
+    all: sorted,
   }
 }
 
-export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen }) {
+export function buildBalanceOverview(rows = []) {
+  let moneyDinar = 0
+  let moneyUsd = 0
+  let receivableDinar = 0
+  let receivableUsd = 0
+  let payableDinar = 0
+  let payableUsd = 0
+  for (const bucket of rows) {
+    const kind = bucket.account?.valueKind
+    const dinar = Number(bucket.dinar || 0)
+    const usd = Number(bucket.usd || 0)
+    if (kind === VALUE_KINDS.CASH || kind === VALUE_KINDS.BANK) {
+      moneyDinar += dinar
+      moneyUsd += usd
+    }
+    if (kind === VALUE_KINDS.RECEIVABLE) {
+      if (dinar > 0) receivableDinar += dinar
+      if (dinar < 0) payableDinar += Math.abs(dinar)
+      if (usd > 0) receivableUsd += usd
+      if (usd < 0) payableUsd += Math.abs(usd)
+    }
+  }
+  return {
+    money: { dinar: moneyDinar, usd: moneyUsd },
+    receivable: { dinar: receivableDinar, usd: receivableUsd },
+    payable: { dinar: payableDinar, usd: payableUsd },
+  }
+}
+
+function BalanceAmountPair({ value }) {
+  const hasDinar = hasMoneyValue(value.dinar)
+  const hasUsd = hasMoneyValue(value.usd)
+  return (
+    <span className="ml3-balance-pair">
+      {hasDinar || !hasUsd ? <strong>{money(value.dinar)}</strong> : null}
+      {hasUsd ? <small>{money(value.usd, CURRENCIES.USD)}</small> : null}
+    </span>
+  )
+}
+
+function compactDisplayValue(account, amount, currency) {
+  const value = Number(amount || 0)
+  if (account?.valueKind === VALUE_KINDS.RECEIVABLE) return value > 0 ? `لي ${money(value, currency)}` : `عليّ ${money(Math.abs(value), currency)}`
+  if (account?.valueKind === VALUE_KINDS.EXPENSE || account?.valueKind === VALUE_KINDS.ASSET) return money(Math.abs(value), currency)
+  return money(value, currency)
+}
+
+export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen, compactValue = false }) {
   const { account } = bucket
   const primaryBalance = accountPrimaryBalance(bucket)
   const balanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
   return (
     <article className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
-        <strong>{protectedAccountPrimaryName(account)}</strong>
-        <span className="ml3-account-meta">
-          <small className="ml3-account-context">{protectedAccountContext(account)}</small>
-          {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b>تأكيد</b> : null}
+        <i className="ml3-account-row-icon"><AccountChoiceIcon account={account} size={16} /></i>
+        <span className="ml3-account-copy">
+          <strong>{protectedAccountPrimaryName(account)}</strong>
+          <span className="ml3-account-meta">
+            <small className="ml3-account-context">{protectedAccountContext(account)}</small>
+            {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b>تأكيد</b> : null}
+          </span>
         </span>
       </button>
       <div className={`ml3-account-values ${balanceTone}`}>
-        {hasMoneyValue(primaryBalance.amount) ? <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong> : <span>صفر</span>}
-        {hasMoneyValue(primaryBalance.secondaryAmount) ? <strong>{money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency)}</strong> : null}
+        {hasMoneyValue(primaryBalance.amount) ? <strong className={primaryBalance.amount > 0 ? 'is-positive' : 'is-negative'}>{compactValue ? compactDisplayValue(account, primaryBalance.amount, primaryBalance.currency) : formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong> : <span>صفر</span>}
+        {hasMoneyValue(primaryBalance.secondaryAmount) ? <strong className={primaryBalance.secondaryAmount > 0 ? 'is-positive' : 'is-negative'}>{compactValue ? compactDisplayValue(account, primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency)}</strong> : null}
       </div>
       {(onConfirm || onDisable) && (
         <div className="ml3-row-actions">
@@ -981,18 +1037,20 @@ function AccountEditHistory({ accountId, auditEvents = [] }) {
   )
 }
 
-function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfirm, onDisable, onOpen, embedded = false }) {
+function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfirm, onDisable, onOpen, embedded = false, tone = 'neutral', compactValues = false, hideHeader = false }) {
   const Tag = embedded ? 'div' : 'section'
   return (
-    <Tag className={embedded ? 'ml3-list-block' : 'ml3-panel'}>
-      <div className="ml3-panel-head">
-        <div>
-          <h2>{title}</h2>
-          {subtitle ? <p>{subtitle}</p> : null}
+    <Tag className={`${embedded ? 'ml3-list-block' : 'ml3-panel'} ml3-list-block--${tone}`}>
+      {!hideHeader ? (
+        <div className="ml3-panel-head">
+          <div>
+            <h2>{title}</h2>
+            {subtitle ? <p>{subtitle}</p> : null}
+          </div>
+          <span>{formatCount(rows.length)}</span>
         </div>
-        <span>{formatCount(rows.length)}</span>
-      </div>
-      <div className="ml3-list">{rows.length === 0 ? <p className="ml3-empty">{emptyText}</p> : rows.map((bucket) => <AccountRow key={bucket.account.id} bucket={bucket} onConfirm={onConfirm} onDisable={onDisable} onOpen={onOpen} />)}</div>
+      ) : null}
+      <div className="ml3-list">{rows.length === 0 ? <p className="ml3-empty">{emptyText}</p> : rows.map((bucket) => <AccountRow key={bucket.account.id} bucket={bucket} onConfirm={onConfirm} onDisable={onDisable} onOpen={onOpen} compactValue={compactValues} />)}</div>
     </Tag>
   )
 }
@@ -1346,11 +1404,17 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
   )
 }
 
-function HistoryMovementRow({ movement, accountById, attachments = [], dimensions = [], onCancel, onDeleteAttachment }) {
+export function HistoryMovementRow({ movement, accountById, attachments = [], dimensions = [], onCancel, onDeleteAttachment }) {
   const source = accountById.get(movement.sourceAccountId)
   const destination = accountById.get(movement.destinationAccountId)
   const effects = movement.status === MOVEMENT_STATUSES.POSTED ? buildPostingEntries(movement) : []
-  const statusTone = movement.status === MOVEMENT_STATUSES.POSTED ? 'تم' : movementStatusLabel(movement.status)
+  const conversionEffect = movement.rate
+    ? effects.find((effect) => effect.currency !== movement.currency)
+    : null
+  const reviewErrors = movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW
+    ? (movement.validation?.errors || []).slice(0, 2)
+    : []
+  const statusLabel = movement.status === MOVEMENT_STATUSES.POSTED ? '' : movementStatusLabel(movement.status)
   const movementAttachments = attachmentsForRecord(attachments, {
     movementId: movement.id,
   })
@@ -1363,45 +1427,38 @@ function HistoryMovementRow({ movement, accountById, attachments = [], dimension
         <i className="ml3-movement-icon"><MovementTypeIcon type={movement.type} /></i>
         <span className="ml3-movement-copy">
           <strong>{movementLabels[movement.type] || movement.type}</strong>
-          <small>{movementDateTime(movement.createdAt || movement.updatedAt)} · {money(movement.amount, movement.currency)} · {statusTone}</small>
+          <small className="ml3-history-route">
+            {source ? <b>{protectedAccountLabel(source)}</b> : null}
+            {source && destination ? <span className="ml3-history-arrow" aria-hidden="true">←</span> : null}
+            {destination ? <b>{protectedAccountLabel(destination)}</b> : null}
+          </small>
         </span>
       </div>
-      <div className="ml3-history-route">
-        {source ? <b>{protectedAccountLabel(source)}</b> : <b>بدون مصدر</b>}
-        {destination ? <b>{protectedAccountLabel(destination)}</b> : null}
+      <div className="ml3-history-side">
+        <strong>{money(movement.amount, movement.currency)}</strong>
+        {conversionEffect ? <small className="ml3-history-conversion">↔ {money(Math.abs(conversionEffect.delta), conversionEffect.currency)}</small> : null}
+        {movement.rate ? <small className="ml3-history-rate">× {formatRate(movement.rate)}</small> : null}
+        {statusLabel ? <span className={`ml3-history-status ml3-history-status--${movement.status}`}>{statusLabel}</span> : null}
+        {canCancelMovement(movement) ? (
+          <button type="button" onClick={() => onCancel(movement.id)}>
+            إلغاء
+          </button>
+        ) : null}
       </div>
-      {effects.length ? (
-        <div className="ml3-history-effects">
-          {effects.map((effect) => {
-            const account = accountById.get(effect.accountId)
-            return (
-              <span key={`${movement.id}-${effect.accountId}-${effect.currency}`}>
-                {account ? protectedAccountPrimaryName(account) : preserveUiData(effect.accountId)}: {signedMoney(effect.delta, effect.currency)}
-              </span>
-            )
-          })}
-        </div>
-      ) : movement.validation?.errors?.length ? (
-        <div className="ml3-history-effects is-review">
-          {movement.validation.errors.slice(0, 2).map((error) => (
-            <span key={`${movement.id}-${error.field}`}>{error.message}</span>
-          ))}
+      {movement.note || dimension || expenseCategory || reviewErrors.length ? (
+        <div className="ml3-history-details">
+          {movement.note ? <p className="ml3-history-note"><span aria-hidden="true">●</span>{preserveUiData(movement.note)}</p> : null}
+          {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
+          {expenseCategory ? <small>نوع المصروف: {protectedAccountPrimaryName(expenseCategory)}</small> : null}
+          {reviewErrors.map((error) => <small className="is-error" key={`${movement.id}-${error.field}`}>{error.message}</small>)}
         </div>
       ) : null}
-      {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
-      {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
-      {expenseCategory ? <small>نوع المصروف: {protectedAccountPrimaryName(expenseCategory)}</small> : null}
       {movementAttachments.length ? (
         <div className="ml3-attachment-list">
           {movementAttachments.map((item) => (
             <AttachmentLink key={item.id} attachment={item} onDelete={onDeleteAttachment} />
           ))}
         </div>
-      ) : null}
-      {canCancelMovement(movement) ? (
-        <button type="button" onClick={() => onCancel(movement.id)}>
-          إلغاء
-        </button>
       ) : null}
     </article>
   )
@@ -1962,7 +2019,7 @@ export default function MohammadLedgerApp() {
   const [ledgerExtras, setLedgerExtras] = useState(() => ledgerExtrasFromState(initialState))
   const [activeSection, setActiveSection] = useState('entry')
   const [activeEntryMode, setActiveEntryMode] = useState('movement')
-  const [activeAccountGroup, setActiveAccountGroup] = useState('people')
+  const [activeAccountGroup, setActiveAccountGroup] = useState('money')
   const [activeAccountPresetGroup, setActiveAccountPresetGroup] = useState('')
   const [movementDraft, setMovementDraft] = useState(() => emptyMovementDraft())
   const [movementAttachmentFile, setMovementAttachmentFile] = useState(null)
@@ -2244,6 +2301,7 @@ export default function MohammadLedgerApp() {
       },
     )
   }, [balances])
+  const balanceOverview = useMemo(() => buildBalanceOverview(balances), [balances])
 
   const movementConfig = movementConfigFor(movementDraft.type)
   const movementSourceRequired = movementNeedsSource(movementDraft.type)
@@ -3609,93 +3667,93 @@ export default function MohammadLedgerApp() {
       review: filterRows(balancesByKind.review || []),
     }
     const rows = accountRowsByGroup[activeGroup.key] || []
-    const activeGroupCount = activeGroup.key === 'people' && peopleAccountView === 'all' ? peopleDirectory.length : accountRowsByGroup[activeGroup.key]?.length || 0
+    const visibleRows = activeGroup.key === 'people' && peopleAccountView === 'all' ? peopleDirectory : rows
+    const activeGroupCount = visibleRows.length
     return (
       <section className="ml3-panel ml3-balances-surface" key={`accounts-${activeAccountGroup}`}>
-        <div className="ml3-panel-head">
-          <div>
-            <h2>الأرصدة</h2>
-            <p>
-              {activeGroup.key === 'people' && peopleAccountView === 'all' ? 'كل الأشخاص' : activeGroup.title} · {formatCount(activeGroupCount)} عنصر
-            </p>
-          </div>
-          <span>{money(totals.cash + totals.bank)}</span>
-        </div>
-
         <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة">
-          <button type="button" className="is-money" onClick={() => setActiveAccountGroup('money')}>
+          <button type="button" className={`is-money ${activeAccountGroup === 'money' ? 'is-active' : ''}`} aria-current={activeAccountGroup === 'money' ? 'true' : undefined} onClick={() => setActiveAccountGroup('money')}>
             <i><WalletCards aria-hidden="true" size={18} /></i>
-            <span><small>فلوسي</small><strong>{money(totals.cash + totals.bank)}</strong></span>
+            <span><b>فلوسي</b><BalanceAmountPair value={balanceOverview.money} /></span>
           </button>
           <button type="button" className="is-positive" onClick={() => {
             setActiveAccountGroup('people')
             setPeopleAccountView('balances')
           }}>
             <i><ArrowDownToLine aria-hidden="true" size={18} /></i>
-            <span><small>أقبض</small><strong>{money(totals.peopleOweMe)}</strong></span>
+            <span><b>لي عند الناس</b><BalanceAmountPair value={balanceOverview.receivable} /></span>
           </button>
           <button type="button" className="is-negative" onClick={() => {
             setActiveAccountGroup('people')
             setPeopleAccountView('balances')
           }}>
             <i><ArrowUpFromLine aria-hidden="true" size={18} /></i>
-            <span><small>أدفع</small><strong>{money(totals.iOwePeople)}</strong></span>
+            <span><b>عليّ للناس</b><BalanceAmountPair value={balanceOverview.payable} /></span>
           </button>
         </div>
 
-        <div className="ml3-account-toolbar">
-          <label>
-            <span>
-              <Search aria-hidden="true" size={14} /> بحث
-            </span>
-            <input
-              aria-label="بحث في الأرصدة"
-              value={accountQuery}
-              onChange={(event) => {
-                const value = event.target.value
-                setAccountQuery(value)
-                if (activeGroup.key === 'people' && value.trim()) setPeopleAccountView('all')
-              }}
-              placeholder="اسم، كاش، شيك..."
-            />
-          </label>
-        </div>
+        <div className="ml3-balances-workspace">
+          <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
+            {accountGroupTabs.map((group) => {
+              const groupCount = group.key === 'people' ? peopleDirectory.length : accountRowsByGroup[group.key]?.length || 0
+              return (
+                <button type="button" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-current={activeAccountGroup === group.key ? 'true' : undefined} onClick={() => setActiveAccountGroup(group.key)}>
+                  <AccountGroupIcon groupKey={group.key} />
+                  <strong>{group.label}</strong>
+                  <span>{formatCount(groupCount)}</span>
+                </button>
+              )
+            })}
+          </div>
 
-        <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
-          {accountGroupTabs.map((group) => (
-            <button type="button" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-current={activeAccountGroup === group.key ? 'true' : undefined} onClick={() => setActiveAccountGroup(group.key)}>
-              <AccountGroupIcon groupKey={group.key} />
-              <strong>{group.label}</strong>
-              <span>{formatCount(accountRowsByGroup[group.key]?.length || 0)}</span>
-            </button>
-          ))}
-        </div>
-        {activeGroup.key === 'people' ? (
-          <>
-            <div className="ml3-people-view-switch" aria-label="عرض حسابات الناس">
-              <button type="button" className={peopleAccountView === 'balances' ? 'is-active' : ''} aria-current={peopleAccountView === 'balances' ? 'true' : undefined} onClick={() => setPeopleAccountView('balances')}>
-                <strong>بيننا رصيد</strong>
-                <span>{formatCount(peopleViews.withBalance.length)}</span>
-              </button>
-              <button type="button" className={peopleAccountView === 'all' ? 'is-active' : ''} aria-current={peopleAccountView === 'all' ? 'true' : undefined} onClick={() => setPeopleAccountView('all')}>
-                <strong>كل الأشخاص</strong>
-                <span>{formatCount(peopleViews.all.length)}</span>
-              </button>
-            </div>
-            {peopleAccountView === 'balances' ? (
-              <div className="ml3-account-sections">
-                <AccountList title="أقبض منهم" rows={peoplePositive} onOpen={setSelectedAccountId} embedded />
-                <AccountList title="أدفع لهم" rows={peopleNegative} onOpen={setSelectedAccountId} embedded />
+          <div className="ml3-balance-pane">
+            <div className="ml3-balance-pane-head">
+              <div className="ml3-balance-pane-title">
+                <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
+                <h2>{activeGroup.key === 'people' && peopleAccountView === 'all' ? 'كل الأشخاص' : activeGroup.title}</h2>
+                <span>{formatCount(activeGroupCount)}</span>
               </div>
+              <label className="ml3-account-toolbar">
+                <Search aria-hidden="true" size={15} />
+                <input
+                  aria-label="بحث في الأرصدة"
+                  value={accountQuery}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setAccountQuery(value)
+                    if (activeGroup.key === 'people' && value.trim()) setPeopleAccountView('all')
+                  }}
+                  placeholder="ابحث عن حساب"
+                />
+              </label>
+            </div>
+
+            {activeGroup.key === 'people' ? (
+              <>
+                <div className="ml3-people-view-switch" aria-label="عرض حسابات الناس">
+                  <button type="button" className={peopleAccountView === 'balances' ? 'is-active' : ''} aria-current={peopleAccountView === 'balances' ? 'true' : undefined} onClick={() => setPeopleAccountView('balances')}>
+                    <strong>بيننا رصيد</strong>
+                  </button>
+                  <button type="button" className={peopleAccountView === 'all' ? 'is-active' : ''} aria-current={peopleAccountView === 'all' ? 'true' : undefined} onClick={() => setPeopleAccountView('all')}>
+                    <strong>كل الأشخاص</strong>
+                  </button>
+                </div>
+                {peopleAccountView === 'balances' ? (
+                  <div className="ml3-account-sections">
+                    <AccountList title="لي عند الناس" rows={peoplePositive} onOpen={setSelectedAccountId} embedded tone="positive" compactValues />
+                    <AccountList title="عليّ للناس" rows={peopleNegative} onOpen={setSelectedAccountId} embedded tone="negative" compactValues />
+                  </div>
+                ) : (
+                  <AccountList title="كل الأشخاص" rows={peopleDirectory} onOpen={setSelectedAccountId} embedded tone="people" compactValues hideHeader />
+                )}
+              </>
+            ) : activeGroup.key === 'money' ? (
+              <AccountList title="فلوسي" rows={rows} onOpen={setSelectedAccountId} embedded tone="money" compactValues hideHeader />
             ) : (
-              <AccountList title="كل الأشخاص" rows={peopleDirectory} onOpen={setSelectedAccountId} embedded />
+              <AccountList title={activeGroup.title} rows={rows} onOpen={setSelectedAccountId} embedded tone={activeGroup.key} compactValues hideHeader />
             )}
-          </>
-        ) : activeGroup.key === 'money' ? (
-          <AccountList title="فلوسي عندي" rows={rows} onOpen={setSelectedAccountId} embedded />
-        ) : (
-          <AccountList title={activeGroup.title} rows={rows} onOpen={setSelectedAccountId} embedded />
-        )}
+          </div>
+        </div>
       </section>
     )
   }
@@ -3999,7 +4057,7 @@ export default function MohammadLedgerApp() {
     <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovementCount} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} profile={protectedUserProfile(userProfile)} language={normalizedUiLanguage} languageStatus={languageStatus} languageMessage={languageMessage} onLanguageChange={changeUiLanguage} onRetrySave={() => {
       if (!orphanCleanupInProgressRef.current) saveCoordinatorRef.current?.retryNow()
     }} onOpenAdmin={openAdminUsersPage} onLogout={requestCloudLogout} onSectionChange={switchSection}>
-      {activeSection !== 'entry' ? <AlertBoard reviewAccounts={balancesByKind.review} reviewMovements={reviewMovements} externalMissing={unresolvedExternalAccounts} balances={balances} movements={postedUserMovements} totals={totals} dueRecurringCount={dueRules.length} reconciliationDiffCount={reconciliationDiffCount} /> : null}
+      {activeSection !== 'entry' && activeSection !== 'accounts' ? <AlertBoard reviewAccounts={balancesByKind.review} reviewMovements={reviewMovements} externalMissing={unresolvedExternalAccounts} balances={balances} movements={postedUserMovements} totals={totals} dueRecurringCount={dueRules.length} reconciliationDiffCount={reconciliationDiffCount} /> : null}
 
       <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
         {activeSection === 'entry' ? (

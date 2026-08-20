@@ -49,7 +49,6 @@ import { buildReviewSession, cancelReviewMovementInState, hideZeroReviewAccountI
 import {
   buildHistorySession,
   HISTORY_ACTION_LIMIT,
-  historyMovementStatusLabel,
   movementsForDate,
   relatedReportMovements,
   voidRecentMovementInState,
@@ -341,7 +340,7 @@ async function showToday(ctx) {
     visibleMovements = todayMovements.slice(0, TODAY_PREVIEW_LIMIT)
     total = todayMovements.length
   }
-  const rows = visibleMovements.map((movement, index) => historyMovementCard(movement, snapshot.accountById, index + 1))
+  const rows = visibleMovements.map((movement, index) => historyMovementCard(movement, snapshot.accountById, index + 1, { showTime: false }))
   const previewLabel = total > visibleMovements.length ? ` · أحدث ${visibleMovements.length}` : ''
   return sendScreen(ctx, rows.length ? `<b>ADREEM · سجل اليوم</b>\n<code>${total} حركة${previewLabel}</code>\n\n${rows.join('\n')}` : '<b>ADREEM · سجل اليوم</b>\n<blockquote>لا توجد حركات اليوم.</blockquote>')
 }
@@ -390,7 +389,7 @@ async function showHistory(ctx, notice = '', requestedPage = 0) {
   const rows = historySession.items
     .map((item) => {
       const movement = movementById.get(item.id)
-      return movement ? historyMovementCard(movement, snapshot.accountById, item.number, { includeDate: true }) : ''
+      return movement ? historyMovementCard(movement, snapshot.accountById, item.number, { showTime: false }) : ''
     })
     .filter(Boolean)
   const noticeBlock = notice ? `\n\n<blockquote>${escapeHtml(notice)}</blockquote>` : ''
@@ -402,8 +401,7 @@ async function showHistory(ctx, notice = '', requestedPage = 0) {
 }
 
 function historyMovementCard(movement, accountsById, number, options = {}) {
-  const status = historyMovementStatusLabel(movement?.status)
-  return `<b>#${number} · الحالة: ${escapeHtml(status)}</b>\n${movementBlockquote(movement, accountsById, options)}`
+  return movementBlockquote(movement, accountsById, { ...options, number, variant: 'history' })
 }
 
 async function showAlerts(ctx) {
