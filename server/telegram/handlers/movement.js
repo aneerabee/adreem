@@ -25,7 +25,7 @@ import {
   getMovementAccounts,
   parseAmountText,
   previewDraft,
-  rankAccountsForTelegram,
+  rankMovementAccountsForTelegram,
   resolveTelegramReviewMovement,
 } from '../../mohammadLedger/ledgerService.js'
 import {
@@ -37,13 +37,16 @@ import {
   dimensionKeyboard,
   expenseCategoryKeyboard,
   mainMenuKeyboard,
-  movementTextStepKeyboard,
   movementTypeKeyboard,
   noteKeyboard,
+  numericKeypadKeyboard,
   recurringKeyboard,
 } from '../keyboards.js'
 import { escapeHtml, movementStepText, reviewMovementText } from '../messages.js'
 import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
+import { applyNumericKey, normalizeNumericBuffer, numericBufferDisplay, numericBufferValue } from '../numericKeypad.js'
+
+const ACCOUNT_PAGE_SIZE = 6
 
 const STEPS = {
   TYPE: 'type',
@@ -87,8 +90,27 @@ function createMovementSession(options = {}) {
       recurringEnabled: false,
     },
     choices: {},
+    accountPicker: null,
+    numericInput: null,
     uiMessageId: null,
   }
+}
+
+function prepareNumericInput(session) {
+  const field = session.step === STEPS.RATE ? 'rate' : 'amount'
+  const allowDecimal = session.step === STEPS.RATE
+  if (session.numericInput?.step !== session.step) {
+    session.numericInput = {
+      step: session.step,
+      value: normalizeNumericBuffer(session.draft[field] || '', { allowDecimal }),
+      header: '',
+    }
+  }
+  return session.numericInput
+}
+
+function numericStepText(header, value) {
+  return `${header}\n\n<blockquote><code>${escapeHtml(numericBufferDisplay(value))}</code></blockquote>`
 }
 
 function nextAfterAmount(type) {
@@ -140,16 +162,26 @@ async function sendStep(ctx, session, textPrefix = '') {
     return upsertFlowMessage(ctx, session, { text, reply_markup: movementTypeKeyboard(session.draft.type) })
   }
   if (session.step === STEPS.AMOUNT) {
-    return upsertFlowMessage(ctx, session, { text, reply_markup: movementTextStepKeyboard() })
+    const numericInput = prepareNumericInput(session)
+    numericInput.header = text
+    return upsertFlowMessage(ctx, session, {
+      text: numericStepText(text, numericInput.value),
+      reply_markup: numericKeypadKeyboard('mv'),
+    })
   }
   if (session.step === STEPS.CURRENCY) {
     return upsertFlowMessage(ctx, session, { text, reply_markup: currencyKeyboard(session.draft.currency) })
   }
   if (session.step === STEPS.RATE) {
-    return upsertFlowMessage(ctx, session, { text, reply_markup: movementTextStepKeyboard() })
+    const numericInput = prepareNumericInput(session)
+    numericInput.header = text
+    return upsertFlowMessage(ctx, session, {
+      text: numericStepText(text, numericInput.value),
+      reply_markup: numericKeypadKeyboard('mv', { allowDecimal: true }),
+    })
   }
   if (session.step === STEPS.SOURCE || session.step === STEPS.DESTINATION) {
-    return sendAccountChoices(ctx, session, state, session.step)
+    return sendAccountChoices(ctx, session, state, session.step, '', 0, textPrefix)
   }
   if (session.step === STEPS.NOTE) {
     return upsertFlowMessage(ctx, session, { text, reply_markup: noteKeyboard() })
@@ -244,15 +276,24 @@ async function upsertFlowMessage(ctx, session, payload) {
   return sent
 }
 
-async function sendAccountChoices(ctx, session, state, role, query = '') {
+async function sendAccountChoices(ctx, session, state, role, query = '', requestedPage = 0, feedback = '') {
   const accounts = getMovementAccounts(state, session.draft.type, role, session.draft)
   const displayCurrency = movementAccountCurrencyForRole(session.draft.type, role, session.draft.currency)
-  const rankedAll = rankAccountsForTelegram(accounts, state, query, displayCurrency)
-  const ranked = rankedAll.slice(0, 8)
+  const counterpartAccountId = role === STEPS.DESTINATION ? session.draft.sourceAccountId : session.draft.destinationAccountId
+  const counterpartAccount = state.accounts.find((account) => account.id === counterpartAccountId)
+  const rankedAll = rankMovementAccountsForTelegram(accounts, state, query, displayCurrency, {
+    movementType: session.draft.type,
+    role,
+    counterpartAccount,
+  })
+  const pageCount = Math.max(1, Math.ceil(rankedAll.length / ACCOUNT_PAGE_SIZE))
+  const page = Math.min(Math.max(0, Number(requestedPage) || 0), pageCount - 1)
+  const ranked = rankedAll.slice(page * ACCOUNT_PAGE_SIZE, (page + 1) * ACCOUNT_PAGE_SIZE)
   session.choices = {
     ...session.choices,
     [role]: Object.fromEntries(ranked.map((account) => [accountChoiceToken(account), account.id])),
   }
+  session.accountPicker = { role, query, page, pageCount }
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
 
   const snapshot = buildLedgerSnapshot(state)
@@ -260,11 +301,13 @@ async function sendAccountChoices(ctx, session, state, role, query = '') {
   const dimensionById = new Map(dimensions.map((dimension) => [dimension.id, dimension]))
   const expenseCategoryById = new Map(state.accounts.filter((account) => account.valueKind === VALUE_KINDS.EXPENSE).map((category) => [category.id, category]))
   const lines = [movementStepText(session, snapshot.accountById, dimensionById, expenseCategoryById)]
+  if (feedback) lines.push('', `<blockquote>${escapeHtml(feedback)}</blockquote>`)
   if (query) lines.push('', `<code>بحث: ${escapeHtml(preserveUiData(query))}</code>`)
+  if (pageCount > 1) lines.push('', `<code>${rankedAll.length} حساب · ${page + 1}/${pageCount}</code>`)
   if (!ranked.length) lines.push('', '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
   return upsertFlowMessage(ctx, session, {
     text: lines.join('\n'),
-    reply_markup: accountChoicesKeyboard(ranked, role, snapshot.balanceByAccountId, displayCurrency),
+    reply_markup: accountChoicesKeyboard(ranked, role, snapshot.balanceByAccountId, displayCurrency, { page, pageCount }),
   })
 }
 
@@ -343,6 +386,10 @@ export async function handleMovementCallback(ctx, data) {
     return sendStep(ctx, session)
   }
 
+  if (data.startsWith('mv:num:')) {
+    return handleMovementNumericCallback(ctx, session, data.slice('mv:num:'.length))
+  }
+
   if (data.startsWith('mv:type:')) {
     const type = data.slice('mv:type:'.length)
     if (!movementTypeOptions.some((option) => option.type === type)) {
@@ -367,6 +414,8 @@ export async function handleMovementCallback(ctx, data) {
       attachmentPending: session.draft.attachmentPending || null,
       recurringEnabled: Boolean(session.draft.recurringEnabled),
     }
+    session.numericInput = null
+    session.accountPicker = null
     session.step = STEPS.AMOUNT
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -388,6 +437,21 @@ export async function handleMovementCallback(ctx, data) {
     return sendStep(ctx, session, 'اكتب جزءًا من الاسم، وسأعرض أقرب الحسابات.')
   }
 
+  const accountPageMatch = data.match(/^mv:accounts:(source|destination):page:(\d+)$/)
+  if (accountPageMatch) {
+    let state
+    try {
+      const loaded = await ctx.repository.load()
+      state = loaded.state
+    } catch (error) {
+      console.error('[adreem-telegram-bot] ledger load failed', error?.message || error)
+      return sendStep(ctx, session, 'تعذر الاتصال بالدفتر الآن.')
+    }
+    const [, role, pageText] = accountPageMatch
+    const query = session.accountPicker?.role === role ? session.accountPicker.query : ''
+    return sendAccountChoices(ctx, session, state, role, query, Number(pageText))
+  }
+
   if (data.startsWith('mv:account:')) {
     const [, , role, token] = data.split(':')
     const accountId = session.choices?.[role]?.[token]
@@ -399,6 +463,7 @@ export async function handleMovementCallback(ctx, data) {
       session.draft.destinationAccountId = accountId
       session.step = STEPS.NOTE
     }
+    session.accountPicker = null
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
   }
@@ -532,11 +597,52 @@ export async function handleMovementCallback(ctx, data) {
   return sendStep(ctx, session, 'أمر غير معروف.')
 }
 
+async function handleMovementNumericCallback(ctx, session, key) {
+  const isRate = session.step === STEPS.RATE
+  const numericInput = prepareNumericInput(session)
+  if (key !== 'done') {
+    numericInput.value = applyNumericKey(numericInput.value, key, { allowDecimal: isRate })
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    if (!numericInput.header) return sendStep(ctx, session)
+    return upsertFlowMessage(ctx, session, {
+      text: numericStepText(numericInput.header, numericInput.value),
+      reply_markup: numericKeypadKeyboard('mv', { allowDecimal: isRate }),
+    })
+  }
+
+  const value = numericBufferValue(numericInput.value, { allowDecimal: isRate })
+  if (value === null) {
+    const message = isRate ? 'اكتب سعر صرف صحيحًا.' : 'اكتب مبلغًا صحيحًا أكبر من صفر.'
+    return upsertFlowMessage(ctx, session, {
+      text: `${numericStepText(numericInput.header, numericInput.value)}\n\n<b>${message}</b>`,
+      reply_markup: numericKeypadKeyboard('mv', { allowDecimal: isRate }),
+    })
+  }
+
+  if (isRate) {
+    session.draft.rate = value
+    session.step = firstAccountStep(session.draft.type)
+  } else {
+    session.draft.amount = value
+    if (movementConfigFor(session.draft.type).currencyLocked) {
+      session.draft.currency = movementCurrencyFor(session.draft.type, CURRENCIES.DINAR)
+      session.draft.currencyConfirmed = true
+    }
+    session.step = nextAfterAmount(session.draft.type)
+  }
+  session.numericInput = null
+  ctx.sessions.set(ctx.chatId, ctx.userId, session)
+  return sendStep(ctx, session)
+}
+
 function callbackMatchesCurrentStep(data, step) {
   if (data === 'mv:cancel' || data === 'mv:back') return true
+  if (data.startsWith('mv:num:')) return step === STEPS.AMOUNT || step === STEPS.RATE
   if (data.startsWith('mv:type:')) return step === STEPS.TYPE
   if (data.startsWith('mv:currency:')) return step === STEPS.CURRENCY
   if (data.startsWith('mv:searchhint:')) return step === STEPS.SOURCE || step === STEPS.DESTINATION
+  if (data.startsWith('mv:accounts:source:page:')) return step === STEPS.SOURCE
+  if (data.startsWith('mv:accounts:destination:page:')) return step === STEPS.DESTINATION
   if (data.startsWith('mv:account:source:')) return step === STEPS.SOURCE
   if (data.startsWith('mv:account:destination:')) return step === STEPS.DESTINATION
   if (data === 'mv:note:skip') return step === STEPS.NOTE
@@ -587,6 +693,7 @@ export async function handleMovementText(ctx, text) {
       return true
     }
     session.draft.amount = amount
+    session.numericInput = null
     if (movementConfigFor(session.draft.type).currencyLocked) {
       session.draft.currency = movementCurrencyFor(session.draft.type, CURRENCIES.DINAR)
       session.draft.currencyConfirmed = true
@@ -604,6 +711,7 @@ export async function handleMovementText(ctx, text) {
       return true
     }
     session.draft.rate = rate
+    session.numericInput = null
     session.step = firstAccountStep(session.draft.type)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     await sendStep(ctx, session)

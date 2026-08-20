@@ -726,6 +726,7 @@
 
 .ml3-number-entry { display: grid; grid-template-columns: minmax(145px, 0.7fr) minmax(280px, 1.3fr); gap: 8px; align-items: stretch; }
 .ml3-number-display {
+  position: relative;
   min-width: 0;
   min-height: 104px;
   display: grid;
@@ -738,7 +739,20 @@
 }
 .ml3-number-display span { color: var(--muted); font-size: 0.68rem; font-weight: 500; }
 .ml3-number-display strong { direction: ltr; overflow: hidden; font-size: 1.75rem; line-height: 1.15; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-number-pad { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.ml3-number-reset {
+  position: absolute;
+  inset-block-start: 7px;
+  inset-inline-end: 7px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #b8d8cc;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--green);
+  font-weight: 800;
+  cursor: pointer;
+}
+.ml3-number-pad { direction: ltr; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
 .ml3-number-key,
 .ml3-number-action {
   min-width: 0;
@@ -1447,7 +1461,7 @@
   .ml3-option-grid .ml3-action-choice:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .ml3-number-entry { grid-template-columns: 1fr; }
   .ml3-number-display { min-height: 70px; }
-  .ml3-number-pad { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .ml3-number-pad { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ml3-number-key,
   .ml3-number-action { min-height: 38px; }
   .ml3-extra-grid { grid-template-columns: 1fr; }
@@ -2145,7 +2159,7 @@
 
 .ml3-entry-card,
 .ml3-add-account {
-  height: clamp(405px, 50dvh, 470px);
+  height: clamp(390px, 44dvh, 420px);
   min-height: 0;
   max-height: calc(100dvh - 154px);
   contain: layout;
@@ -2262,7 +2276,7 @@
   }
   .ml3-entry-card,
   .ml3-add-account {
-    height: clamp(390px, 48dvh, 410px);
+    height: clamp(390px, 47dvh, 400px);
     min-height: 0;
     max-height: none;
   }
@@ -2700,7 +2714,7 @@
   .ml3-step.is-open { background: color-mix(in srgb, var(--section-soft) 34%, white); }
   .ml3-number-entry { gap: 5px; }
   .ml3-number-display { min-height: 50px; padding-block: 6px; }
-  .ml3-number-pad { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
+  .ml3-number-pad { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
   .ml3-number-key,
   .ml3-number-action { min-height: 32px; }
 }

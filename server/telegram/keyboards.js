@@ -62,6 +62,25 @@ export function reconciliationTextStepKeyboard() {
   }
 }
 
+export function numericKeypadKeyboard(prefix, { allowDecimal = false } = {}) {
+  const keyButton = (text, key) => ({ text, callback_data: `${prefix}:num:${key}` })
+  const bottomLeft = allowDecimal ? keyButton('٫', 'dot') : keyButton('مسح', 'clear')
+  return {
+    inline_keyboard: [
+      [keyButton('7', '7'), keyButton('8', '8'), keyButton('9', '9')],
+      [keyButton('4', '4'), keyButton('5', '5'), keyButton('6', '6')],
+      [keyButton('1', '1'), keyButton('2', '2'), keyButton('3', '3')],
+      [bottomLeft, keyButton('0', '0'), keyButton('⌫', 'delete')],
+      ...(allowDecimal ? [[keyButton('مسح', 'clear')]] : []),
+      [{ text: 'التالي', callback_data: `${prefix}:num:done`, style: 'success' }],
+      [
+        { text: '↩️ رجوع', callback_data: `${prefix}:back`, style: 'primary' },
+        { text: 'إلغاء', callback_data: `${prefix}:cancel`, style: 'danger' },
+      ],
+    ],
+  }
+}
+
 export function reconciliationConfirmKeyboard() {
   return {
     inline_keyboard: [
@@ -212,7 +231,7 @@ export function movementTextStepKeyboard() {
   }
 }
 
-export function accountChoicesKeyboard(accounts, role, balancesByAccountId = new Map(), currency = '') {
+export function accountChoicesKeyboard(accounts, role, balancesByAccountId = new Map(), currency = '', options = {}) {
   const rows = accounts.map((account) => {
     const bucket = balancesByAccountId.get(account.id)
     return [{
@@ -221,6 +240,7 @@ export function accountChoicesKeyboard(accounts, role, balancesByAccountId = new
       style: accountChoiceButtonStyle(account, bucket, currency),
     }]
   })
+  rows.push(...paginationRows(`mv:accounts:${role}`, options.page, options.pageCount))
   rows.push([{ text: '🔎 اكتب اسمًا للبحث', callback_data: `mv:searchhint:${role}`, style: 'primary' }])
   rows.push([{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
   return { inline_keyboard: rows }

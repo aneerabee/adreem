@@ -255,6 +255,74 @@ describe('telegram movement flow safety', () => {
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('نوع الحركة غير صالح')
   })
 
+  it('enters the movement amount from the inline calculator', async () => {
+    const ctx = createCtx()
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.TRANSFER}`)
+
+    for (const key of ['1', '2', '5', '0', '0']) await handleMovementCallback(ctx, `mv:num:${key}`)
+
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('12,500')
+    await handleMovementCallback(ctx, 'mv:num:done')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({
+      step: 'currency',
+      draft: { amount: 12500 },
+    })
+  })
+
+  it('enters a decimal exchange rate and supports delete and clear', async () => {
+    const ctx = createCtx()
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.USD_SALE}`)
+    await handleMovementCallback(ctx, 'mv:num:1')
+    await handleMovementCallback(ctx, 'mv:num:0')
+    await handleMovementCallback(ctx, 'mv:num:delete')
+    await handleMovementCallback(ctx, 'mv:num:clear')
+    await handleMovementCallback(ctx, 'mv:num:7')
+    await handleMovementCallback(ctx, 'mv:num:done')
+
+    for (const key of ['7', 'dot', '5', '5']) await handleMovementCallback(ctx, `mv:num:${key}`)
+    await handleMovementCallback(ctx, 'mv:num:done')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({
+      step: 'source',
+      draft: { amount: 7, rate: 7.55 },
+    })
+  })
+
+  it('shows all transfer accounts by pages and puts people first at the destination', async () => {
+    const base = createMohammadFallbackState()
+    const extraCashAccounts = Array.from({ length: 9 }, (_, index) => ({
+      ...base.accounts.find((account) => account.id === 'me-cash'),
+      id: `own-cash-${index}`,
+      ownerName: 'أنا',
+      subAccountName: `خزنة ${index + 1}`,
+      legacyName: `أنا / خزنة ${index + 1}`,
+      openingDinar: 0,
+      openingUsd: 0,
+      currencyKind: CURRENCIES.DINAR,
+    }))
+    const ctx = createCtx()
+    ctx.repository = memoryRepository({ ...base, accounts: [...base.accounts, ...extraCashAccounts] })
+
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.TRANSFER}`)
+    await handleMovementCallback(ctx, 'mv:num:1')
+    await handleMovementCallback(ctx, 'mv:num:done')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.DINAR}`)
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).accountPicker.pageCount).toBeGreaterThan(1)
+    const firstPageIds = Object.values(ctx.sessions.get(ctx.chatId, ctx.userId).choices.source)
+    await handleMovementCallback(ctx, 'mv:accounts:source:page:1')
+    expect(Object.values(ctx.sessions.get(ctx.chatId, ctx.userId).choices.source)).not.toEqual(firstPageIds)
+    await handleMovementCallback(ctx, 'mv:accounts:source:page:0')
+    await handleMovementCallback(ctx, `mv:account:source:${choiceTokenFor(ctx, 'source', 'me-cash')}`)
+
+    const destinationIds = Object.values(ctx.sessions.get(ctx.chatId, ctx.userId).choices.destination)
+    expect(new Set(destinationIds.slice(0, 3))).toEqual(new Set(['saeed-cash', 'omar-gold', 'rabee-cash']))
+    expect(destinationIds).not.toContain('saeed-bank')
+  })
+
   it('clears the chat flow and saves incomplete confirmed movements into review', async () => {
     const ctx = createCtx()
     ctx.sessions.set(ctx.chatId, ctx.userId, {

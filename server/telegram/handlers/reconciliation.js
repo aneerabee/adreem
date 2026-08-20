@@ -15,10 +15,12 @@ import {
   reconciliationAccountKeyboard,
   reconciliationConfirmKeyboard,
   reconciliationCurrencyKeyboard,
+  numericKeypadKeyboard,
   reconciliationTextStepKeyboard,
 } from '../keyboards.js'
 import { escapeHtml, reconciliationReviewText, reconciliationStepText } from '../messages.js'
 import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
+import { applyNumericKey, normalizeNumericBuffer, numericBufferDisplay, numericBufferValue } from '../numericKeypad.js'
 
 const STEPS = {
   ACCOUNT: 'account',
@@ -40,8 +42,24 @@ function createReconciliationSession() {
       note: '',
     },
     choices: {},
+    numericInput: null,
     uiMessageId: null,
   }
+}
+
+function prepareNumericInput(session) {
+  if (session.numericInput?.step !== STEPS.ACTUAL) {
+    session.numericInput = {
+      step: STEPS.ACTUAL,
+      value: normalizeNumericBuffer(session.draft.actualBalance ?? ''),
+      header: '',
+    }
+  }
+  return session.numericInput
+}
+
+function numericStepText(header, value) {
+  return `${header}\n\n<blockquote><code>${escapeHtml(numericBufferDisplay(value))}</code></blockquote>`
 }
 
 export async function startReconciliation(ctx) {
@@ -68,7 +86,7 @@ async function sendStep(ctx, session, textPrefix = '') {
   const text = textPrefix ? `${header}\n\n${textPrefix}` : header
 
   if (session.step === STEPS.ACCOUNT) {
-    return sendAccountChoices(ctx, session, state)
+    return sendAccountChoices(ctx, session, state, '', textPrefix)
   }
   if (session.step === STEPS.CURRENCY) {
     return upsertFlowMessage(ctx, session, {
@@ -76,7 +94,15 @@ async function sendStep(ctx, session, textPrefix = '') {
       reply_markup: reconciliationCurrencyKeyboard(session.draft.currency),
     })
   }
-  if (session.step === STEPS.ACTUAL || session.step === STEPS.NOTE) {
+  if (session.step === STEPS.ACTUAL) {
+    const numericInput = prepareNumericInput(session)
+    numericInput.header = text
+    return upsertFlowMessage(ctx, session, {
+      text: numericStepText(text, numericInput.value),
+      reply_markup: numericKeypadKeyboard('rec'),
+    })
+  }
+  if (session.step === STEPS.NOTE) {
     return upsertFlowMessage(ctx, session, {
       text,
       reply_markup: reconciliationTextStepKeyboard(),
@@ -94,7 +120,7 @@ async function sendStep(ctx, session, textPrefix = '') {
   return null
 }
 
-async function sendAccountChoices(ctx, session, state, query = '') {
+async function sendAccountChoices(ctx, session, state, query = '', feedback = '') {
   const snapshot = buildLedgerSnapshot(state)
   const accounts = snapshot.activeAccounts
     .filter((account) => account.status === ACCOUNT_STATUSES.ACTIVE)
@@ -107,6 +133,7 @@ async function sendAccountChoices(ctx, session, state, query = '') {
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
 
   const lines = [reconciliationStepText(session, snapshot.accountById, snapshot.balanceByAccountId)]
+  if (feedback) lines.push('', `<blockquote>${escapeHtml(feedback)}</blockquote>`)
   if (query) lines.push('', `<code>بحث: ${escapeHtml(preserveUiData(query))}</code>`)
   if (!ranked.length) lines.push('', '<b>لا توجد نتيجة.</b> اكتب جزءًا آخر من الاسم.')
   return upsertFlowMessage(ctx, session, {
@@ -150,6 +177,7 @@ export async function handleReconciliationCallback(ctx, data) {
   const session = ctx.sessions.get(ctx.chatId, ctx.userId)
   if (!session || session.flow !== 'reconciliation') return sendExpiredReconciliationMessage(ctx)
   if (isStaleReconciliationCallback(ctx, session)) return sendExpiredReconciliationMessage(ctx)
+  if (!callbackMatchesCurrentStep(data, session.step)) return sendStep(ctx, session, 'هذا زر من خطوة سابقة. أكمل من الخطوة الظاهرة الآن.')
 
   if (data === 'rec:cancel') {
     ctx.sessions.clear(ctx.chatId, ctx.userId)
@@ -159,6 +187,9 @@ export async function handleReconciliationCallback(ctx, data) {
     session.step = previousStep(session)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
+  }
+  if (data.startsWith('rec:num:')) {
+    return handleReconciliationNumericCallback(ctx, session, data.slice('rec:num:'.length))
   }
   if (data === 'rec:search') {
     return sendStep(ctx, session, 'اكتب جزءًا من اسم الحساب.')
@@ -181,6 +212,7 @@ export async function handleReconciliationCallback(ctx, data) {
       return sendStep(ctx, session, 'هذا الحساب لا يدعم هذه العملة.')
     }
     session.draft.currency = currency
+    session.numericInput = null
     session.step = STEPS.ACTUAL
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -217,6 +249,32 @@ export async function handleReconciliationCallback(ctx, data) {
   return sendStep(ctx, session, 'أمر غير معروف.')
 }
 
+async function handleReconciliationNumericCallback(ctx, session, key) {
+  const numericInput = prepareNumericInput(session)
+  if (key !== 'done') {
+    numericInput.value = applyNumericKey(numericInput.value, key)
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    if (!numericInput.header) return sendStep(ctx, session)
+    return upsertFlowMessage(ctx, session, {
+      text: numericStepText(numericInput.header, numericInput.value),
+      reply_markup: numericKeypadKeyboard('rec'),
+    })
+  }
+
+  const value = numericBufferValue(numericInput.value, { allowZero: true })
+  if (value === null) {
+    return upsertFlowMessage(ctx, session, {
+      text: `${numericStepText(numericInput.header, numericInput.value)}\n\n<b>اكتب رصيدًا صحيحًا، صفر أو أكبر.</b>`,
+      reply_markup: numericKeypadKeyboard('rec'),
+    })
+  }
+  session.draft.actualBalance = value
+  session.numericInput = null
+  session.step = STEPS.NOTE
+  ctx.sessions.set(ctx.chatId, ctx.userId, session)
+  return sendStep(ctx, session)
+}
+
 export async function handleReconciliationText(ctx, text) {
   const session = ctx.sessions.get(ctx.chatId, ctx.userId)
   if (!session || session.flow !== 'reconciliation') return false
@@ -233,6 +291,7 @@ export async function handleReconciliationText(ctx, text) {
       return true
     }
     session.draft.actualBalance = actual
+    session.numericInput = null
     session.step = STEPS.NOTE
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     await sendStep(ctx, session)
@@ -252,6 +311,16 @@ export async function handleReconciliationText(ctx, text) {
   }
   await sendStep(ctx, session, 'اختر من الأزرار.')
   return true
+}
+
+function callbackMatchesCurrentStep(data, step) {
+  if (data === 'rec:cancel' || data === 'rec:back') return true
+  if (data === 'rec:search') return step === STEPS.ACCOUNT
+  if (data.startsWith('rec:account:')) return step === STEPS.ACCOUNT
+  if (data.startsWith('rec:currency:')) return step === STEPS.CURRENCY
+  if (data.startsWith('rec:num:')) return step === STEPS.ACTUAL
+  if (data === 'rec:confirm') return step === STEPS.REVIEW
+  return false
 }
 
 function previousStep(session) {

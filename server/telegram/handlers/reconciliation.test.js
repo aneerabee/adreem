@@ -117,6 +117,36 @@ describe('telegram reconciliation flow', () => {
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم حفظ المطابقة')
   })
 
+  it('enters the actual balance from the inline calculator including zero', async () => {
+    const ctx = createCtx()
+
+    await startReconciliation(ctx)
+    await handleReconciliationCallback(ctx, `rec:account:${choiceTokenFor(ctx, 'me-cash')}`)
+    await handleReconciliationCallback(ctx, `rec:currency:${CURRENCIES.DINAR}`)
+    await handleReconciliationCallback(ctx, 'rec:num:4')
+    await handleReconciliationCallback(ctx, 'rec:num:7')
+    await handleReconciliationCallback(ctx, 'rec:num:0')
+    await handleReconciliationCallback(ctx, 'rec:num:delete')
+    await handleReconciliationCallback(ctx, 'rec:num:clear')
+    await handleReconciliationCallback(ctx, 'rec:num:0')
+    await handleReconciliationCallback(ctx, 'rec:num:done')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({
+      step: 'note',
+      draft: { actualBalance: 0 },
+    })
+  })
+
+  it('rejects a calculator button from an earlier reconciliation step', async () => {
+    const ctx = createCtx()
+    await startReconciliation(ctx)
+
+    await handleReconciliationCallback(ctx, 'rec:num:1')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('account')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('زر من خطوة سابقة')
+  })
+
   it('stores a zero-diff reconciliation without a correction movement', async () => {
     const ctx = createCtx()
     const expected = Math.round(ctx.repository.state.movements

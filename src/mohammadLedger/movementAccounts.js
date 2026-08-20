@@ -92,3 +92,15 @@ export function rankMovementAccounts(accounts = [], balancesByAccountId = new Ma
       return ownRank(a) - ownRank(b) || magnitude(b) - magnitude(a) || searchableText(a).localeCompare(searchableText(b), 'ar')
     })
 }
+
+export function rankMovementAccountsForRole(accounts = [], balancesByAccountId = new Map(), query = '', currency = '', options = {}) {
+  const ranked = rankMovementAccounts(accounts, balancesByAccountId, query, currency)
+  if (normalizeAccountSearchText(query) || options.movementType !== MOVEMENT_TYPES.TRANSFER || options.role !== 'destination' || !options.counterpartAccount) return ranked
+
+  const counterpartIsOwnMoney = options.counterpartAccount.valueKind === VALUE_KINDS.CASH || options.counterpartAccount.valueKind === VALUE_KINDS.BANK
+  const isPreferred = counterpartIsOwnMoney
+    ? (account) => account.valueKind === VALUE_KINDS.RECEIVABLE
+    : (account) => account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK
+
+  return [...ranked.filter(isPreferred), ...ranked.filter((account) => !isPreferred(account))]
+}

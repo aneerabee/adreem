@@ -7,6 +7,7 @@ import {
   dimensionKeyboard,
   expenseCategoryKeyboard,
   historyKeyboard,
+  numericKeypadKeyboard,
   reportDetailKeyboard,
   reportKeyboard,
   reportListKeyboard,
@@ -29,6 +30,20 @@ function bucket(id, value = 0) {
 }
 
 describe('telegram browsing keyboards', () => {
+  it('uses a real calculator layout for integer and decimal input', () => {
+    const integer = numericKeypadKeyboard('mv').inline_keyboard
+    const decimal = numericKeypadKeyboard('mv', { allowDecimal: true }).inline_keyboard
+
+    expect(integer.slice(0, 4).map((row) => row.map((button) => button.text))).toEqual([
+      ['7', '8', '9'],
+      ['4', '5', '6'],
+      ['1', '2', '3'],
+      ['مسح', '0', '⌫'],
+    ])
+    expect(decimal[3].map((button) => button.text)).toEqual(['٫', '0', '⌫'])
+    expect(decimal.flat().some((button) => button.callback_data === 'mv:num:done')).toBe(true)
+  })
+
   it('uses the same stable account token for display and selection', () => {
     const first = bucket('cash-main', 1200)
     const second = bucket('bank-main', -50)

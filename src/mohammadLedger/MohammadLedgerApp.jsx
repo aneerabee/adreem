@@ -14,7 +14,7 @@ import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, getMohammad
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
-import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccounts, sameLogicalAccount } from './movementAccounts'
+import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccountsForRole, sameLogicalAccount } from './movementAccounts'
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, buildReconciliationCorrectionDrafts, createAttachment, createAuditEvent, createReconciliation, createRecurringRuleFromMovement, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, lastReconciliationForAccount, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
@@ -104,7 +104,6 @@ function MovementChoiceButton({ option, active, onChoose }) {
       <MovementTypeIcon type={option.type} />
       <span>
         <strong>{option.label}</strong>
-        <small>{option.detail}</small>
       </span>
       <ChevronLeft aria-hidden="true" size={16} />
     </button>
@@ -129,9 +128,7 @@ function FlowProgress({ current, total, items = [], onEdit }) {
               </button>
             ))}
           </div>
-        ) : (
-          <small>ابدأ باختيار واحد</small>
-        )}
+        ) : null}
       </div>
     </div>
   )
@@ -466,30 +463,30 @@ function movementVisibleSteps(config, needsSource) {
 }
 
 function movementStepCopy(step, config = {}) {
-  if (step === MOVEMENT_ENTRY_STEPS.TYPE) return { title: 'نوع الحركة', summary: 'اختر العملية التي تريد تسجيلها.' }
-  if (step === MOVEMENT_ENTRY_STEPS.AMOUNT) return { title: 'المبلغ', summary: 'اكتب الرقم فقط، بدون فواصل.' }
-  if (step === MOVEMENT_ENTRY_STEPS.CURRENCY) return { title: 'العملة', summary: 'اختر العملة قبل اختيار الحسابات.' }
+  if (step === MOVEMENT_ENTRY_STEPS.TYPE) return { title: 'نوع الحركة', summary: '' }
+  if (step === MOVEMENT_ENTRY_STEPS.AMOUNT) return { title: config.amountLabel || 'المبلغ', summary: '' }
+  if (step === MOVEMENT_ENTRY_STEPS.CURRENCY) return { title: 'العملة', summary: '' }
   if (step === MOVEMENT_ENTRY_STEPS.RATE)
     return {
       title: 'سعر الصرف',
-      summary: config.rateLabel || 'اكتب سعر البيع أو الشراء.',
+      summary: '',
     }
   if (step === MOVEMENT_ENTRY_STEPS.SOURCE)
     return {
-      title: config.sourceLabel || 'من',
-      summary: config.sourceQuestion || 'اختر من أين تخرج الفلوس.',
+      title: config.sourceQuestion || config.sourceLabel || 'من',
+      summary: '',
     }
   if (step === MOVEMENT_ENTRY_STEPS.DESTINATION)
     return {
-      title: config.destinationLabel || 'إلى',
-      summary: config.destinationQuestion || 'اختر أين تدخل الفلوس.',
+      title: config.destinationQuestion || config.destinationLabel || 'إلى',
+      summary: '',
     }
   if (step === MOVEMENT_ENTRY_STEPS.NOTE)
     return {
-      title: 'ملاحظة ومرفق',
-      summary: 'اختياري: ملاحظة، ملف، أو ربط بمشروع.',
+      title: 'تفاصيل',
+      summary: 'اختياري',
     }
-  return { title: 'المراجعة', summary: 'راجع التأثير قبل الحفظ.' }
+  return { title: 'المراجعة', summary: '' }
 }
 
 function nonZero(bucket) {
@@ -928,6 +925,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
     { key: '', label: 'الكل' },
     { key: 'active', label: 'رصيد' },
     { key: 'owner:أنا', label: 'أنا' },
+    { key: 'people', label: 'الناس' },
     { key: 'kind:cash', label: 'كاش' },
     { key: 'kind:bank', label: 'مصرف' },
   ]
@@ -935,6 +933,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
     if (!quickFilter) return true
     if (quickFilter === 'active') return hasVisibleBalance(account)
     if (quickFilter === 'owner:أنا') return account.ownerName === normalizedPreferredOwner
+    if (quickFilter === 'people') return account.valueKind === VALUE_KINDS.RECEIVABLE
     if (quickFilter === 'kind:cash') return account.valueKind === VALUE_KINDS.CASH || account.subAccountName === 'كاش'
     if (quickFilter === 'kind:bank') return account.valueKind === VALUE_KINDS.BANK || /مصرف|بنك|شيك|حساب/i.test(account.subAccountName || '')
     return true
@@ -1010,7 +1009,6 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
             <div className="ml3-picker-lane">
               <div className="ml3-picker-lane-head">
                 <strong>الأقرب</strong>
-                <span>اختيارات سريعة</span>
               </div>
               <div className="ml3-picker-favorites" aria-label="اختيارات سريعة">
                 {preferredAccounts.map((account) => (
@@ -1025,7 +1023,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
           <div className="ml3-picker-lane is-filter">
             <div className="ml3-picker-lane-head">
               <strong>فلترة</strong>
-              <span>{formatCount(resultAccounts.length)} نتيجة</span>
+              <span>{formatCount(resultAccounts.length)}</span>
             </div>
             <div className="ml3-picker-chips" aria-label="تصفية سريعة">
               {quickFilters.map((filter) => (
@@ -1073,15 +1071,15 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
   )
 }
 
-function preferredAccountIdsFor(accounts, balanceByAccountId, currency = '') {
-  return rankMovementAccounts(accounts, balanceByAccountId, '', currency)
+function preferredAccountIdsFor(accounts, balanceByAccountId, currency = '', options = {}) {
+  return rankMovementAccountsForRole(accounts, balanceByAccountId, '', currency, options)
     .slice(0, 4)
     .map((account) => account.id)
 }
 
 function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDecimal = false, compact = false }) {
   const textValue = String(value || '')
-  const keys = allowDecimal ? ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '000'] : ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '000']
+  const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3']
 
   function pushKey(key) {
     if (!allowDecimal && key === '.') return
@@ -1115,6 +1113,7 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDe
       <div className="ml3-number-display">
         <span>{label}</span>
         <strong>{textValue ? formatNumericEntryValue(textValue, allowDecimal) : placeholder}</strong>
+        <button type="button" className="ml3-number-reset" aria-label="مسح" title="مسح" onClick={() => onChange('')}>C</button>
       </div>
       <div className="ml3-number-pad" aria-label={label}>
         {keys.map((key) => (
@@ -1122,11 +1121,14 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDe
             {key}
           </button>
         ))}
-        <button type="button" className="ml3-number-action is-delete" onClick={() => onChange(textValue.slice(0, -1))}>
-          حذف
+        <button type="button" className="ml3-number-key" onClick={() => pushKey(allowDecimal ? '.' : '00')}>
+          {allowDecimal ? '.' : '00'}
         </button>
-        <button type="button" className="ml3-number-action is-clear" onClick={() => onChange('')}>
-          مسح
+        <button type="button" className="ml3-number-key" onClick={() => pushKey('0')}>
+          0
+        </button>
+        <button type="button" className="ml3-number-action is-delete" aria-label="حذف" title="حذف" onClick={() => onChange(textValue.slice(0, -1))}>
+          ⌫
         </button>
       </div>
     </div>
@@ -1619,6 +1621,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
   const reviewDestinationAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'destination', reviewDraft)
   const reviewSourceCurrency = movementAccountCurrencyForRole(reviewDraft.type, 'source', reviewDraft.currency)
   const reviewDestinationCurrency = movementAccountCurrencyForRole(reviewDraft.type, 'destination', reviewDraft.currency)
+  const reviewSourceAccount = activeAccounts.find((account) => account.id === reviewDraft.sourceAccountId)
 
   function updateReviewDraft(field, value) {
     setReviewDraft((current) => {
@@ -1687,7 +1690,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
         ) : null}
         {reviewConfig.needsDestination ? (
           <div className="ml3-decision-wide">
-            <AccountSearchSelect label={reviewConfig.destinationLabel || 'إلى'} value={reviewDraft.destinationAccountId || ''} accounts={reviewDestinationAccounts} onChange={(value) => updateReviewDraft('destinationAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewDestinationAccounts, balanceByAccountId, reviewDestinationCurrency)} balanceByAccountId={balanceByAccountId} balanceCurrency={reviewDestinationCurrency} />
+            <AccountSearchSelect label={reviewConfig.destinationLabel || 'إلى'} value={reviewDraft.destinationAccountId || ''} accounts={reviewDestinationAccounts} onChange={(value) => updateReviewDraft('destinationAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewDestinationAccounts, balanceByAccountId, reviewDestinationCurrency, { movementType: reviewDraft.type, role: 'destination', counterpartAccount: reviewSourceAccount })} balanceByAccountId={balanceByAccountId} balanceCurrency={reviewDestinationCurrency} />
           </div>
         ) : null}
         <label className="ml3-decision-wide">
@@ -2423,7 +2426,8 @@ export default function MohammadLedgerApp() {
 
   function preferredMovementAccountIds(role) {
     const currency = movementAccountCurrencyForRole(movementDraft.type, role, movementDraft.currency)
-    return preferredAccountIdsFor(movementAccountsFor(role), balanceByAccountId, currency)
+    const counterpartAccount = role === 'destination' ? draftSourceAccount : draftDestinationAccount
+    return preferredAccountIdsFor(movementAccountsFor(role), balanceByAccountId, currency, { movementType: movementDraft.type, role, counterpartAccount })
   }
 
   const visibleMovementSteps = movementVisibleSteps(movementConfig, movementSourceRequired)
@@ -3134,7 +3138,7 @@ export default function MohammadLedgerApp() {
                 <AccountList title="أدفع لهم" rows={peopleNegative} onOpen={setSelectedAccountId} embedded />
               </div>
             ) : (
-              <AccountList title="دليل الأشخاص" subtitle="كل الحسابات المحفوظة" rows={peopleDirectory} onOpen={setSelectedAccountId} embedded />
+              <AccountList title="كل الأشخاص" rows={peopleDirectory} onOpen={setSelectedAccountId} embedded />
             )}
           </>
         ) : activeGroup.key === 'money' ? (
@@ -3157,7 +3161,6 @@ export default function MohammadLedgerApp() {
           <div className="ml3-panel-head">
             <div>
               <h2>مراجعة</h2>
-              <p>راجع أو ألغ</p>
             </div>
             <span>{formatCount(reviewItems.length)}</span>
           </div>
@@ -3193,7 +3196,6 @@ export default function MohammadLedgerApp() {
           <div className="ml3-panel-head">
             <div>
               <h2>السجل</h2>
-              <p>كل الحركات والبحث</p>
             </div>
             <span>{formatCount(filteredHistoryMovements.length)}</span>
           </div>
@@ -3270,7 +3272,6 @@ export default function MohammadLedgerApp() {
           <div>
             <span>الأهم الآن</span>
             <h2>{reviewMovements.length || balancesByKind.review.length ? 'يوجد شيء يحتاج مراجعة' : 'الدفتر مرتب الآن'}</h2>
-            <p>{reviewMovements.length || balancesByKind.review.length ? 'ابدأ من قسم المراجعة قبل إدخال حركات جديدة كثيرة.' : 'افتح قسم الإدخال للحركة الجديدة، واترك الأرصدة للعرض والمراجعة فقط.'}</p>
           </div>
           <button type="button" onClick={() => switchSection(reviewMovements.length || balancesByKind.review.length ? 'review' : 'entry')}>
             {reviewMovements.length || balancesByKind.review.length ? 'فتح المراجعة' : 'إضافة حركة'}
@@ -3323,7 +3324,6 @@ export default function MohammadLedgerApp() {
           <div className="ml3-panel-head">
             <div>
               <h2>أكبر أرصدة الناس</h2>
-              <p>للتفاصيل الكاملة افتح قسم الأرصدة.</p>
             </div>
             <span>{formatCount(balancesByKind.people.filter(nonZero).length)}</span>
           </div>
@@ -3476,7 +3476,7 @@ export default function MohammadLedgerApp() {
                   <div>
                     <span>{movementProgressText}</span>
                     <h2>{currentMovementStepCopy.title}</h2>
-                    <p>{currentMovementStepCopy.summary}</p>
+                    {currentMovementStepCopy.summary ? <p>{currentMovementStepCopy.summary}</p> : null}
                   </div>
                   <b className={preview.validation.ok ? 'is-ready' : ''}>{preview.validation.ok ? 'جاهزة' : 'قيد الإدخال'}</b>
                 </header>
@@ -3488,7 +3488,6 @@ export default function MohammadLedgerApp() {
                       <section className="ml3-action-lane ml3-action-lane--daily">
                         <div className="ml3-action-lane-head">
                           <strong>{movementOptionGroups[0].title}</strong>
-                          <span>{movementOptionGroups[0].hint}</span>
                         </div>
                         <div className="ml3-option-grid">
                           {movementOptionGroups[0].types
@@ -3504,14 +3503,12 @@ export default function MohammadLedgerApp() {
                           <span>
                             <CircleDollarSign aria-hidden="true" size={17} /> عمليات أخرى
                           </span>
-                          <small>المصرف والدولار</small>
                         </summary>
                         <div className="ml3-more-actions-grid">
                           {movementOptionGroups.slice(1).map((group) => (
                             <section className={`ml3-action-lane ml3-action-lane--${group.key}`} key={group.key}>
                               <div className="ml3-action-lane-head">
                                 <strong>{group.title}</strong>
-                                <span>{group.hint}</span>
                               </div>
                               <div className="ml3-option-grid">
                                 {group.types
@@ -3605,7 +3602,7 @@ export default function MohammadLedgerApp() {
                 {movementConfig.needsDestination && movementStep === MOVEMENT_ENTRY_STEPS.DESTINATION ? (
                   <section className="ml3-step ml3-step--destination is-open">
                     <div className="ml3-route-picker is-single">
-                      <AccountSearchSelect label={movementConfig.destinationLabel} value={movementDraft.destinationAccountId || ''} accounts={movementAccountsFor('destination')} onChange={(value) => updateMovementDraft('destinationAccountId', value)} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'destination', movementDraft.currency)} />
+                      <AccountSearchSelect label={movementConfig.destinationLabel} value={movementDraft.destinationAccountId || ''} accounts={movementAccountsFor('destination')} onChange={(value) => updateMovementDraft('destinationAccountId', value)} preferredAccountIds={preferredMovementAccountIds('destination')} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'destination', movementDraft.currency)} />
                     </div>
                     <div className="ml3-step-controls">
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>

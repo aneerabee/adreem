@@ -20,6 +20,7 @@ import {
 import {
   getMovementAccounts as getSharedMovementAccounts,
   rankMovementAccounts,
+  rankMovementAccountsForRole,
 } from '../../src/mohammadLedger/movementAccounts.js'
 
 const MONEY_FORMAT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
@@ -98,6 +99,11 @@ export function getMovementAccounts(state, movementType, role, selected = {}) {
 export function rankAccountsForTelegram(accounts, state, query = '', currency = '') {
   const snapshot = buildLedgerSnapshot(state)
   return rankMovementAccounts(accounts, snapshot.balanceByAccountId, query, currency)
+}
+
+export function rankMovementAccountsForTelegram(accounts, state, query = '', currency = '', options = {}) {
+  const snapshot = buildLedgerSnapshot(state)
+  return rankMovementAccountsForRole(accounts, snapshot.balanceByAccountId, query, currency, options)
 }
 
 export function previewDraft(state, draft) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from './accountCatalog.js'
 import { CURRENCIES, MOVEMENT_TYPES } from './ledgerCore.js'
-import { getMovementAccounts, rankMovementAccounts } from './movementAccounts.js'
+import { getMovementAccounts, rankMovementAccounts, rankMovementAccountsForRole } from './movementAccounts.js'
 
 function account(id, valueKind, overrides = {}) {
   return {
@@ -98,5 +98,48 @@ describe('shared movement account choices', () => {
 
     expect(rankMovementAccounts(accounts, balances, '', CURRENCIES.USD).map((item) => item.id)).toEqual(['large-usd', 'large-dinar'])
     expect(rankMovementAccounts(accounts, balances, '', CURRENCIES.DINAR).map((item) => item.id)).toEqual(['large-dinar', 'large-usd'])
+  })
+
+  it('puts matching people first when money leaves an own account', () => {
+    const ownCash = account('own-cash', VALUE_KINDS.CASH, { ownerName: 'أنا' })
+    const accounts = [
+      account('other-own-cash', VALUE_KINDS.CASH, { ownerName: 'أنا', subAccountName: 'خزنة ثانية' }),
+      account('person-a', VALUE_KINDS.RECEIVABLE, { ownerName: 'أحمد', subAccountName: 'كاش بيننا' }),
+      account('person-b', VALUE_KINDS.RECEIVABLE, { ownerName: 'سالم', subAccountName: 'كاش بيننا' }),
+    ]
+
+    expect(rankMovementAccountsForRole(accounts, new Map(), '', CURRENCIES.DINAR, {
+      movementType: MOVEMENT_TYPES.TRANSFER,
+      role: 'destination',
+      counterpartAccount: ownCash,
+    }).map((item) => item.id)).toEqual(['person-a', 'person-b', 'other-own-cash'])
+  })
+
+  it('keeps direct search results exact even when destination preferences differ', () => {
+    const ownCash = account('own-cash', VALUE_KINDS.CASH, { ownerName: 'أنا' })
+    const accounts = [
+      account('other-own-cash', VALUE_KINDS.CASH, { ownerName: 'أنا', subAccountName: 'خزنة ثانية' }),
+      account('person-a', VALUE_KINDS.RECEIVABLE, { ownerName: 'أحمد', subAccountName: 'كاش بيننا' }),
+    ]
+
+    expect(rankMovementAccountsForRole(accounts, new Map(), 'خزنة', CURRENCIES.DINAR, {
+      movementType: MOVEMENT_TYPES.TRANSFER,
+      role: 'destination',
+      counterpartAccount: ownCash,
+    }).map((item) => item.id)).toEqual(['other-own-cash'])
+  })
+
+  it('does not apply transfer destination preferences to exchange movements', () => {
+    const ownCash = account('own-cash', VALUE_KINDS.CASH, { ownerName: 'أنا' })
+    const accounts = [
+      account('other-own-cash', VALUE_KINDS.CASH, { ownerName: 'أنا', subAccountName: 'خزنة ثانية' }),
+      account('person-a', VALUE_KINDS.RECEIVABLE, { ownerName: 'أحمد', subAccountName: 'كاش بيننا' }),
+    ]
+
+    expect(rankMovementAccountsForRole(accounts, new Map(), '', CURRENCIES.DINAR, {
+      movementType: MOVEMENT_TYPES.USD_SALE,
+      role: 'destination',
+      counterpartAccount: ownCash,
+    }).map((item) => item.id)).toEqual(['other-own-cash', 'person-a'])
   })
 })

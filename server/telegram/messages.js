@@ -120,9 +120,9 @@ function currentStepTitle(session) {
 
 function currentStepHelp(session) {
   if (session?.step === 'type') return ''
-  if (session?.step === 'amount') return 'اكتب الرقم فقط.'
+  if (session?.step === 'amount') return ''
   if (session?.step === 'currency') return ''
-  if (session?.step === 'rate') return 'مثال: 7.45'
+  if (session?.step === 'rate') return ''
   if (session?.step === 'source') return ''
   if (session?.step === 'destination') return ''
   if (session?.step === 'note') return 'اختياري.'
@@ -317,10 +317,9 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   return lines.join('\n')
 }
 
-export function reconciliationStepText(session, accountsById = new Map(), balancesByAccountId = new Map()) {
+export function reconciliationStepText(session, accountsById = new Map()) {
   const draft = session?.draft || {}
   const account = accountsById.get(draft.accountId)
-  const bucket = balancesByAccountId.get(draft.accountId)
   const steps = ['account', 'currency', 'actual', 'note', 'review']
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = `${currentIndex + 1}/${steps.length}`
@@ -334,16 +333,16 @@ export function reconciliationStepText(session, accountsById = new Map(), balanc
     `<b>ADREEM · مطابقة رصيد</b> · <code>${progress}</code>`,
     '',
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
-    `<b>${escapeHtml(reconciliationStepTitle(session, account, bucket))}</b>`,
+    `<b>${escapeHtml(reconciliationStepTitle(session))}</b>`,
     ...(reconciliationStepHelp(session) ? [`<code>${escapeHtml(reconciliationStepHelp(session))}</code>`] : []),
   ]
   return lines.join('\n')
 }
 
-function reconciliationStepTitle(session, account, bucket) {
+function reconciliationStepTitle(session) {
   if (session?.step === 'account') return 'اختر الحساب الذي عدّدت رصيده'
   if (session?.step === 'currency') return 'اختر عملة المطابقة'
-  if (session?.step === 'actual') return `كم الرصيد الفعلي الآن؟${account ? `\nدفتره: ${formatAccountBalance(account, bucket)}` : ''}`
+  if (session?.step === 'actual') return 'الرصيد الفعلي؟'
   if (session?.step === 'note') return 'اكتب سبب المطابقة'
   if (session?.step === 'review') return 'راجع الفرق قبل الحفظ'
   return 'مطابقة رصيد'
@@ -352,7 +351,7 @@ function reconciliationStepTitle(session, account, bucket) {
 function reconciliationStepHelp(session) {
   if (session?.step === 'account') return 'تظهر حسابات فلوسك فقط.'
   if (session?.step === 'currency') return 'اختر العملة التي عدّدتَها.'
-  if (session?.step === 'actual') return 'اكتب رقمًا صحيحًا، ويمكن أن يكون صفر.'
+  if (session?.step === 'actual') return ''
   if (session?.step === 'note') return 'الملاحظة إلزامية حتى نعرف سبب التصحيح.'
   if (session?.step === 'review') return 'الحفظ سيضيف مطابقة، وقد ينشئ تصحيحًا.'
   return ''
