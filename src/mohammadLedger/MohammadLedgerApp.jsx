@@ -1877,7 +1877,10 @@ export default function MohammadLedgerApp() {
   const accountAttachmentLockRef = useRef(false)
   const accountCreationLockRef = useRef('')
   const reconciliationLockRef = useRef('')
+  const activeEntryModeRef = useRef(activeEntryMode)
   const motionTimerRef = useRef(null)
+  const viewTransitionRef = useRef(null)
+  const motionSequenceRef = useRef(0)
   const normalizedUiLanguage = normalizeUiLanguage(uiLanguage)
   const uiDirection = uiLanguageDirection(normalizedUiLanguage)
   setActiveUiLanguage(normalizedUiLanguage)
@@ -2231,6 +2234,8 @@ export default function MohammadLedgerApp() {
       saveCoordinatorRef.current?.stop()
       saveCoordinatorRef.current = null
       if (motionTimerRef.current) window.clearTimeout(motionTimerRef.current)
+      viewTransitionRef.current?.skipTransition?.()
+      viewTransitionRef.current = null
     },
     [],
   )
@@ -2274,6 +2279,8 @@ export default function MohammadLedgerApp() {
       return
     }
     const root = document.documentElement
+    const motionSequence = motionSequenceRef.current + 1
+    motionSequenceRef.current = motionSequence
     const motionClasses = [
       'adreem-flow-forward',
       'adreem-flow-back',
@@ -2285,11 +2292,15 @@ export default function MohammadLedgerApp() {
     ]
     const directionClass = `adreem-${scope}-${direction === 'back' ? 'back' : 'forward'}`
     const clearMotion = () => {
+      if (motionSequenceRef.current !== motionSequence) return
       root.classList.remove(...motionClasses)
       motionTimerRef.current = null
+      viewTransitionRef.current = null
     }
 
     if (motionTimerRef.current) window.clearTimeout(motionTimerRef.current)
+    viewTransitionRef.current?.skipTransition?.()
+    viewTransitionRef.current = null
     root.classList.remove(...motionClasses)
     root.classList.add(directionClass)
 
@@ -2303,7 +2314,8 @@ export default function MohammadLedgerApp() {
       const transition = document.startViewTransition(() => {
         flushSync(update)
       })
-      transition.finished.finally(clearMotion)
+      viewTransitionRef.current = transition
+      transition.finished.catch(() => {}).finally(clearMotion)
     } catch {
       clearMotion()
       update()
@@ -2390,7 +2402,8 @@ export default function MohammadLedgerApp() {
   }
 
   function switchEntryMode(mode) {
-    if (mode === activeEntryMode) return
+    if (mode === activeEntryModeRef.current) return
+    activeEntryModeRef.current = mode
     commitFlowChange(
       () => {
         setActiveEntryMode(mode)
@@ -2398,6 +2411,20 @@ export default function MohammadLedgerApp() {
       mode === 'account' ? 'forward' : 'back',
       'mode',
     )
+  }
+
+  function handleEntryModeKeyDown(event) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const nextMode = event.key === 'Home'
+      ? 'movement'
+      : event.key === 'End'
+        ? 'account'
+        : activeEntryModeRef.current === 'movement' ? 'account' : 'movement'
+    switchEntryMode(nextMode)
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-entry-mode="${nextMode}"]`)?.focus()
+    })
   }
 
   function resetSectionScroll(behavior = 'auto') {
@@ -3003,6 +3030,7 @@ export default function MohammadLedgerApp() {
     setEditingMovementId(movement.id)
     setSelectedAccountId('')
     switchSection('entry')
+    activeEntryModeRef.current = 'movement'
     setActiveEntryMode('movement')
     setMovementStep(MOVEMENT_ENTRY_STEPS.AMOUNT)
     setMovementDraft({
@@ -3447,12 +3475,12 @@ export default function MohammadLedgerApp() {
       <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
         {activeSection === 'entry' ? (
           <aside className={`adreem-entry adreem-desk-entry adreem-entry--${activeEntryMode}`}>
-            <div className="ml3-entry-mode" aria-label="نوع الإضافة">
-              <button type="button" className={activeEntryMode === 'movement' ? 'is-active' : ''} onClick={() => switchEntryMode('movement')}>
+            <div className={`ml3-entry-mode is-${activeEntryMode}`} role="tablist" aria-label="نوع الإضافة" onKeyDown={handleEntryModeKeyDown}>
+              <button id="adreem-entry-movement-tab" data-entry-mode="movement" type="button" role="tab" aria-selected={activeEntryMode === 'movement'} aria-controls="adreem-entry-movement-panel" tabIndex={activeEntryMode === 'movement' ? 0 : -1} className={activeEntryMode === 'movement' ? 'is-active' : ''} onClick={() => switchEntryMode('movement')}>
                 <ArrowRightLeft aria-hidden="true" size={17} />
                 حركة جديدة
               </button>
-              <button type="button" className={activeEntryMode === 'account' ? 'is-active' : ''} onClick={() => switchEntryMode('account')}>
+              <button id="adreem-entry-account-tab" data-entry-mode="account" type="button" role="tab" aria-selected={activeEntryMode === 'account'} aria-controls="adreem-entry-account-panel" tabIndex={activeEntryMode === 'account' ? 0 : -1} className={activeEntryMode === 'account' ? 'is-active' : ''} onClick={() => switchEntryMode('account')}>
                 <WalletCards aria-hidden="true" size={17} />
                 حساب جديد
               </button>
@@ -3484,8 +3512,7 @@ export default function MohammadLedgerApp() {
                 ) : null}
               </div>
             ) : null}
-            {activeEntryMode === 'movement' ? (
-              <form className={`ml3-entry-card ml3-entry-card--movement ml3-entry-card--${movementTone(movementDraft.type)}`} aria-busy={isSavingMovement} onSubmit={saveMovement}>
+            <form id="adreem-entry-movement-panel" role="tabpanel" aria-labelledby="adreem-entry-movement-tab" hidden={activeEntryMode !== 'movement'} className={`ml3-entry-card ml3-entry-card--movement ml3-entry-card--${movementTone(movementDraft.type)}`} aria-busy={isSavingMovement} onSubmit={saveMovement}>
                 <header className="adreem-flow-head" aria-live="polite">
                   <div>
                     <span>{movementProgressText}</span>
@@ -3716,11 +3743,9 @@ export default function MohammadLedgerApp() {
                     </div>
                   </section>
                 ) : null}
-              </form>
-            ) : null}
+            </form>
 
-            {activeEntryMode === 'movement' ? (
-              <section className="ml3-today-panel">
+            <section className="ml3-today-panel">
                 <div className="ml3-today-head">
                   <h2>آخر حركات اليوم</h2>
                   <button type="button" onClick={() => switchSection('history')}>
@@ -3733,10 +3758,8 @@ export default function MohammadLedgerApp() {
                     <MovementMiniRow key={movement.id} movement={movement} accountById={accountById} attachments={ledgerExtras.attachments || []} dimensions={activeDimensions} onCancel={cancelMovement} onDeleteAttachment={deleteAttachment} />
                   ))}
                 </div>
-              </section>
-            ) : null}
-            {activeEntryMode === 'account' ? (
-              <form className="ml3-add-account ml3-account-wizard" onSubmit={addAccount}>
+            </section>
+            <form id="adreem-entry-account-panel" role="tabpanel" aria-labelledby="adreem-entry-account-tab" hidden={activeEntryMode !== 'account'} className="ml3-add-account ml3-account-wizard" onSubmit={addAccount}>
                 <header className="adreem-flow-head" aria-live="polite">
                   <div>
                     <span>
@@ -3881,8 +3904,7 @@ export default function MohammadLedgerApp() {
                     )}
                   </div>
                 </section>
-              </form>
-            ) : null}
+            </form>
           </aside>
         ) : null}
 

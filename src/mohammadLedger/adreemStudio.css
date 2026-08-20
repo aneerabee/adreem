@@ -283,10 +283,6 @@
   align-items: start;
   gap: 9px 14px;
 }
-.adreem-entry--account {
-  grid-template-columns: minmax(0, 770px);
-  grid-template-areas: "mode" "notice" "form";
-}
 .adreem-receipt { display: none; }
 
 .ml3-entry-mode {
@@ -301,8 +297,28 @@
   border: 1px solid color-mix(in srgb, var(--entry) 16%, var(--line));
   border-radius: 8px;
   background: #e7eeeb;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
 }
+.ml3-entry-mode::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset-block: 4px;
+  inset-inline-start: 4px;
+  width: calc((100% - 12px) / 2);
+  border-radius: 6px;
+  background: var(--paper-strong);
+  box-shadow: 0 3px 10px rgba(23, 43, 37, 0.09);
+  transform: translateX(0);
+  transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+[dir="rtl"] .ml3-entry-mode.is-account::before { transform: translateX(calc(-100% - 4px)); }
+[dir="ltr"] .ml3-entry-mode.is-account::before { transform: translateX(calc(100% + 4px)); }
 .ml3-entry-mode button {
+  position: relative;
+  z-index: 1;
   min-height: 34px;
   display: inline-flex;
   align-items: center;
@@ -316,10 +332,12 @@
   font-weight: 750;
 }
 .ml3-entry-mode button.is-active {
-  background: var(--paper-strong);
+  background: transparent;
   color: var(--entry);
-  box-shadow: 0 3px 10px rgba(23, 43, 37, 0.09);
+  box-shadow: none;
 }
+
+.adreem-entry [hidden] { display: none !important; }
 
 .adreem-notice-stack { grid-area: notice; width: min(770px, 100%); justify-self: start; }
 .ml3-feedback,
@@ -1228,7 +1246,36 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   overscroll-behavior: none;
 }
 
+.adreem-mode-forward .adreem-entry,
+.adreem-mode-back .adreem-entry { view-transition-name: none; }
+.adreem-mode-forward .ml3-entry-card:not([hidden]),
+.adreem-mode-forward .ml3-add-account:not([hidden]),
+.adreem-mode-back .ml3-entry-card:not([hidden]),
+.adreem-mode-back .ml3-add-account:not([hidden]) { view-transition-name: adreem-entry-surface; }
+
+::view-transition-group(adreem-entry-surface) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
+}
+::view-transition-old(adreem-entry-surface) { animation: adreem-mode-surface-out 75ms ease-out both; }
+.adreem-mode-forward::view-transition-new(adreem-entry-surface) { animation: adreem-view-next 165ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.adreem-mode-back::view-transition-new(adreem-entry-surface) { animation: adreem-view-back 165ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+
+.adreem-motion-fallback.adreem-mode-forward .adreem-entry,
+.adreem-motion-fallback.adreem-mode-back .adreem-entry { animation: none; }
+.adreem-motion-fallback.adreem-mode-forward .ml3-entry-card:not([hidden]),
+.adreem-motion-fallback.adreem-mode-forward .ml3-add-account:not([hidden]) { animation: adreem-view-next 170ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.adreem-motion-fallback.adreem-mode-back .ml3-entry-card:not([hidden]),
+.adreem-motion-fallback.adreem-mode-back .ml3-add-account:not([hidden]) { animation: adreem-view-back 170ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+
+@keyframes adreem-mode-surface-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.992); }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(adreem-entry-surface),
+  ::view-transition-new(adreem-entry-surface) { animation: none !important; }
   .adreem-app *,
   .adreem-app *::before,
   .adreem-app *::after {
