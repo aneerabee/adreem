@@ -21,10 +21,16 @@ describe('mobile form sizing', () => {
 
   it('uses a consistent control size scale on desktop and touch screens', () => {
     expect(financeStylesheet).toContain('--finance-control-compact: 32px;')
-    expect(financeStylesheet).toContain('--finance-control: 38px;')
+    expect(financeStylesheet).toContain('--finance-control: 40px;')
     expect(financeStylesheet).toContain('--finance-control-touch: 44px;')
+    expect(financeStylesheet).toContain('--finance-key: 38px;')
+    expect(financeStylesheet).toContain('--finance-choice: 52px;')
+    expect(financeStylesheet).toContain('--finance-tab: 44px;')
     expect(financeStylesheet).toContain('min-height: var(--finance-control-compact);')
     expect(financeStylesheet).toContain('min-height: var(--finance-control);')
     expect(financeStylesheet).toContain('min-height: var(--finance-control-touch);')
+    expect(financeStylesheet).toContain('min-height: var(--finance-key);')
+    expect(financeStylesheet).toContain('min-height: var(--finance-choice);')
+    expect(financeStylesheet).toContain('.ml3-action-choice:last-child:nth-child(odd) { grid-column: auto; }')
   })
 })
