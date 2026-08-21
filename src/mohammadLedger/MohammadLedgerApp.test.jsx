@@ -592,9 +592,9 @@ describe('MohammadLedgerApp people account views', () => {
     expect(markup).toContain('is-cash-dinar is-positive')
     expect(markup).toContain('is-cheque-dinar is-negative')
     expect(markup).toContain('is-cash-usd is-positive')
-    expect(markup).toContain('لي 1,200 د.ل')
-    expect(markup).toContain('عليّ 450 د.ل')
-    expect(markup).toContain('لي 80 $')
+    expect(markup.match(/لي 1,200 د\.ل/g)).toHaveLength(1)
+    expect(markup.match(/عليّ 450 د\.ل/g)).toHaveLength(1)
+    expect(markup.match(/لي 80 \$/g)).toHaveLength(1)
   })
 
   it('uses a compact directory card for all people instead of repeating the balances view', () => {

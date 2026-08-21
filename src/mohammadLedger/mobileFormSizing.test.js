@@ -18,4 +18,13 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('max-height: calc(100dvh - 180px - env(safe-area-inset-bottom));')
     expect(financeStylesheet).toContain('contain: layout;')
   })
+
+  it('uses a consistent control size scale on desktop and touch screens', () => {
+    expect(financeStylesheet).toContain('--finance-control-compact: 32px;')
+    expect(financeStylesheet).toContain('--finance-control: 38px;')
+    expect(financeStylesheet).toContain('--finance-control-touch: 44px;')
+    expect(financeStylesheet).toContain('min-height: var(--finance-control-compact);')
+    expect(financeStylesheet).toContain('min-height: var(--finance-control);')
+    expect(financeStylesheet).toContain('min-height: var(--finance-control-touch);')
+  })
 })

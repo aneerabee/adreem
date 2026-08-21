@@ -16,6 +16,9 @@
   --finance-coral-soft: oklch(0.965 0.035 25);
   --finance-gold: oklch(0.58 0.13 72);
   --finance-gold-soft: oklch(0.97 0.035 85);
+  --finance-control-compact: 32px;
+  --finance-control: 38px;
+  --finance-control-touch: 44px;
   --finance-shadow: 0 12px 34px color-mix(in srgb, var(--finance-ink) 8%, transparent);
   --finance-shadow-small: 0 5px 16px color-mix(in srgb, var(--finance-ink) 7%, transparent);
 }
@@ -298,7 +301,7 @@
 
 .ml3-balances-surface .ml3-people-view-switch {
   width: min(300px, 100%);
-  min-height: 35px;
+  min-height: var(--finance-control);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px;
@@ -308,7 +311,7 @@
   border-radius: 7px;
   background: var(--finance-surface);
 }
-.ml3-balances-surface .ml3-people-view-switch button { min-height: 27px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 5px; background: transparent; color: var(--finance-muted); font-size: 0.68rem; }
+.ml3-balances-surface .ml3-people-view-switch button { min-height: var(--finance-control-compact); display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 5px; background: transparent; color: var(--finance-muted); font-size: 0.68rem; }
 .ml3-balances-surface .ml3-people-view-switch button > span { min-width: 19px; padding: 1px 4px; border-radius: 999px; background: var(--finance-line); color: var(--finance-muted); font-size: 0.53rem; font-weight: 820; font-variant-numeric: tabular-nums; }
 .ml3-balances-surface .ml3-people-view-switch button:first-child.is-active { background: var(--finance-green-soft); color: var(--finance-green-dark); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--finance-green) 18%, transparent); }
 .ml3-balances-surface .ml3-people-view-switch button:last-child.is-active { background: var(--finance-blue-soft); color: var(--finance-blue-dark); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--finance-blue) 18%, transparent); }
@@ -432,7 +435,7 @@
   position: relative;
   isolation: isolate;
   min-width: 0;
-  min-height: 29px;
+  min-height: var(--finance-control-compact);
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
@@ -503,12 +506,10 @@
 .adreem-counterparty-focus {
   width: 100%;
   min-width: 0;
-  min-height: 77px;
+  min-height: 49px;
   display: grid;
   grid-template-columns: 29px minmax(0, 1fr) 18px;
-  grid-template-areas:
-    "avatar identity chevron"
-    "totals totals totals";
+  grid-template-areas: "avatar identity chevron";
   align-items: center;
   gap: 5px 7px;
   padding: 7px 8px;
@@ -518,6 +519,12 @@
   color: var(--finance-ink);
   text-align: start;
 }
+.adreem-counterparty-card.is-directory-view .adreem-counterparty-focus {
+  min-height: 73px;
+  grid-template-areas:
+    "avatar identity chevron"
+    "summary summary summary";
+}
 .adreem-counterparty-focus:hover { background: color-mix(in srgb, var(--counterparty-soft) 42%, transparent); }
 .adreem-counterparty-focus:focus-visible { outline: 2px solid var(--counterparty-tone); outline-offset: -2px; }
 .adreem-counterparty-avatar { grid-area: avatar; width: 29px; height: 29px; display: grid; place-items: center; border-radius: 7px; background: var(--counterparty-soft); color: var(--counterparty-tone); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--counterparty-tone) 12%, transparent); }
@@ -526,25 +533,8 @@
 .adreem-counterparty-identity small { flex: 0 0 auto; padding: 2px 5px; border-radius: 999px; background: var(--counterparty-soft); color: var(--counterparty-ink); font-size: 0.53rem; font-weight: 790; }
 .adreem-counterparty-chevron { grid-area: chevron; color: var(--counterparty-tone); transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1); }
 .adreem-counterparty-focus[aria-expanded="true"] .adreem-counterparty-chevron { transform: rotate(180deg); }
-.adreem-counterparty-totals { grid-area: totals; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
-.adreem-counterparty-total {
-  min-width: 0;
-  min-height: 27px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
-  border-radius: 5px;
-  background: var(--finance-surface);
-}
-.adreem-counterparty-total small { font-size: 0.54rem; font-weight: 790; }
-.adreem-counterparty-total b { min-width: 0; overflow: hidden; font-size: 0.62rem; font-variant-numeric: tabular-nums; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-counterparty-total.is-receivable.has-value { background: var(--finance-green-soft); color: var(--finance-green-dark); }
-.adreem-counterparty-total.is-payable.has-value { background: var(--finance-coral-soft); color: var(--finance-coral-dark); }
-.adreem-counterparty-total.is-zero { color: var(--finance-muted); opacity: 0.68; }
 .adreem-counterparty-directory-summary {
-  grid-area: totals;
+  grid-area: summary;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -570,8 +560,9 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   padding: 0 7px 7px;
+  transform-origin: top center;
+  will-change: opacity, transform;
 }
-.adreem-counterparty-card.is-focused .adreem-counterparty-channel-preview { display: none; }
 .adreem-counterparty-channel {
   --channel-tone: var(--finance-blue);
   --channel-soft: var(--finance-blue-soft);
@@ -597,10 +588,10 @@
 .adreem-counterparty-channel > b { grid-area: value; min-width: 0; overflow: hidden; color: var(--channel-tone); font-size: 0.59rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-counterparty-channel.is-negative > b { color: var(--finance-coral-dark); }
 .adreem-counterparty-channel.is-zero { opacity: 0.66; }
-.adreem-counterparty-channels { min-width: 0; display: grid; }
+.adreem-counterparty-channels { min-width: 0; display: grid; transform-origin: top center; will-change: opacity, transform; }
 .adreem-counterparty-channels button {
   min-width: 0;
-  min-height: 35px;
+  min-height: var(--finance-control);
   display: grid;
   grid-template-columns: 23px minmax(70px, 0.6fr) minmax(90px, 1fr) 14px;
   align-items: center;
@@ -655,7 +646,7 @@
   position: relative;
   isolation: isolate;
   min-width: 0;
-  min-height: 36px;
+  min-height: var(--finance-control);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -729,7 +720,7 @@
 .adreem-flow-progress-meta { min-height: 34px; gap: 7px; }
 .adreem-flow-progress-meta > span { color: var(--flow-ink); font-size: 0.62rem; }
 .adreem-flow-trail { gap: 4px; }
-.adreem-flow-trail button { max-width: 150px; height: 25px; border: 1px solid transparent; border-radius: 5px; background: var(--finance-surface); color: var(--finance-muted); }
+.adreem-flow-trail button { max-width: 150px; height: var(--finance-control-compact); border: 1px solid transparent; border-radius: 5px; background: var(--finance-surface); color: var(--finance-muted); }
 .adreem-flow-trail button:hover { border-color: color-mix(in srgb, var(--flow-tone) 24%, var(--finance-line)); background: var(--flow-soft); color: var(--flow-ink); }
 
 .adreem-flow-stage-motion {
@@ -791,7 +782,7 @@
 .ml3-number-display.is-label-hidden { grid-template-rows: minmax(0, 1fr) auto; }
 .ml3-number-display span { color: var(--flow-ink); font-size: 0.67rem; font-weight: 780; }
 .ml3-number-display strong { min-width: 0; overflow: hidden; color: var(--finance-ink); font-size: 1.65rem; font-weight: 820; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-number-reset { justify-self: end; min-width: 34px; height: 27px; border: 0; border-radius: 5px; background: color-mix(in srgb, var(--flow-tone) 12%, white); color: var(--flow-ink); font-size: 0.68rem; font-weight: 850; }
+.ml3-number-reset { justify-self: end; min-width: var(--finance-control-compact); height: var(--finance-control-compact); border: 0; border-radius: 5px; background: color-mix(in srgb, var(--flow-tone) 12%, white); color: var(--flow-ink); font-size: 0.68rem; font-weight: 850; }
 .ml3-number-pad { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
 .ml3-number-key,
 .ml3-number-action {
@@ -820,7 +811,7 @@
 .ml3-step-back,
 .ml3-step-next,
 .ml3-save,
-.ml3-account-stage-actions button { min-height: 39px; border-radius: 7px; font-size: 0.73rem; font-weight: 820; }
+.ml3-account-stage-actions button { min-height: var(--finance-control); border-radius: 7px; font-size: 0.73rem; font-weight: 820; }
 .ml3-step-back { border-color: var(--finance-line); background: var(--finance-paper); color: var(--finance-muted); }
 .ml3-step-back:hover { border-color: var(--flow-tone); background: var(--flow-soft); color: var(--flow-ink); }
 .ml3-step-next,
@@ -881,10 +872,23 @@
 .adreem-counterparty-opening .ml3-number-compact { gap: 3px; font-size: 0.6rem; }
 .adreem-counterparty-opening .ml3-number-compact input { min-width: 0; height: 35px; border-color: var(--finance-line); background: var(--finance-paper); font-size: 0.86rem; }
 .ml3-opening-direction.is-compact { gap: 4px; }
-.ml3-opening-direction.is-compact button { min-height: 31px; padding: 4px; font-size: 0.6rem; font-weight: 790; }
+.ml3-opening-direction.is-compact button { min-height: var(--finance-control-compact); padding: 4px; font-size: 0.6rem; font-weight: 790; }
 .adreem-opening-zero { min-height: 31px; display: grid; place-items: center; color: var(--finance-muted); font-size: 0.59rem; }
 .adreem-counterparty-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 6px; }
 .adreem-counterparty-summary > span { min-width: 0; display: grid; gap: 2px; padding: 6px; border: 1px solid color-mix(in srgb, var(--finance-green) 18%, var(--finance-line)); border-radius: 6px; background: var(--finance-paper); }
+
+/* Keep command controls on a small, predictable size scale across every workspace. */
+.ml3-history-more,
+.ml3-profile-reconcile > button,
+.ml3-profile-editor > button { min-height: var(--finance-control); }
+.ml3-history-side > button,
+.ml3-attachment-action button,
+.ml3-feedback button,
+.ml3-undo-banner button,
+.ml3-edit-banner button,
+.ml3-mini-action,
+.ml3-row-actions button,
+.ml3-ops-actions button { min-height: var(--finance-control-compact); }
 .adreem-counterparty-summary b { overflow: hidden; color: var(--finance-ink); font-size: 0.63rem; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-counterparty-summary small { overflow: hidden; color: var(--finance-muted); font-size: 0.56rem; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -914,6 +918,11 @@
 }
 
 @media (max-width: 720px) {
+  .adreem-app {
+    --finance-control: 40px;
+    --finance-control-touch: 44px;
+  }
+
   .ml3-balances-surface { gap: 8px; }
   .ml3-balance-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
   .ml3-balance-ledger button { min-height: 76px; grid-template-columns: 31px minmax(0, 1fr); gap: 6px; padding: 7px; box-shadow: 0 4px 12px color-mix(in srgb, var(--finance-ink) 5%, transparent); }
@@ -949,11 +958,11 @@
   .adreem-counterparty-filters { gap: 2px; padding: 2px; }
   .adreem-counterparty-filters.is-balances { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .adreem-counterparty-filters.is-directory { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .adreem-counterparty-filters button { min-height: 28px; grid-template-columns: 1fr; justify-items: center; gap: 0; padding: 3px 2px; }
+  .adreem-counterparty-filters button { min-height: var(--finance-control-compact); grid-template-columns: 1fr; justify-items: center; gap: 0; padding: 3px 2px; }
   .adreem-counterparty-filters button > svg { display: none; }
   .adreem-counterparty-filters button > b { position: absolute; inset-block-start: 1px; inset-inline-end: 3px; font-size: 0.48rem; }
   .adreem-counterparty-grid { grid-template-columns: 1fr; gap: 6px; }
-  .adreem-counterparty-focus { min-height: 72px; }
+  .adreem-counterparty-focus { min-height: 49px; }
   .adreem-counterparty-card.is-directory-view .adreem-counterparty-focus { min-height: 66px; }
   .adreem-counterparty-channel-preview { gap: 3px; padding-inline: 6px; }
   .adreem-counterparty-channel { min-height: 36px; padding-inline: 4px; }
@@ -966,7 +975,7 @@
 
   .adreem-entry { gap: 7px; }
   .ml3-entry-mode { width: 100%; min-height: 42px; }
-  .ml3-entry-mode button { min-height: 32px; font-size: 0.71rem; }
+  .ml3-entry-mode button { min-height: var(--finance-control); font-size: 0.71rem; }
   .ml3-entry-card,
   .ml3-add-account { height: min(515px, calc(100dvh - 178px)); min-height: 390px; max-height: none; border-radius: 8px; }
   .adreem-flow-head { min-height: 59px; padding: 7px 9px; }
@@ -989,6 +998,10 @@
   .ml3-number-action { min-height: 31px; border-radius: 6px; }
   .ml3-step-controls,
   .ml3-account-stage-actions { grid-template-columns: 82px minmax(0, 1fr); margin-inline: -9px; padding: 7px 9px; }
+  .ml3-step-back,
+  .ml3-step-next,
+  .ml3-save,
+  .ml3-account-stage-actions button { min-height: var(--finance-control-touch); }
   .ml3-account-stage-head { padding: 7px 9px 6px; }
   .ml3-account-choice-list { grid-template-columns: 1fr; gap: 5px; padding: 7px 9px; }
   .ml3-account-choice-list.is-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1014,8 +1027,6 @@
   .ml3-account-toolbar { width: 100%; }
   .adreem-counterparty-focus { grid-template-columns: 27px minmax(0, 1fr) 16px; padding-inline: 6px; }
   .adreem-counterparty-avatar { width: 27px; height: 27px; }
-  .adreem-counterparty-total { padding-inline: 5px; }
-  .adreem-counterparty-total b { font-size: 0.59rem; }
   .adreem-counterparty-channels button { grid-template-columns: 21px minmax(62px, 0.55fr) minmax(86px, 1fr) 12px; padding-inline: 6px; }
   .adreem-counterparty-opening { grid-template-columns: minmax(62px, 0.55fr) minmax(88px, 0.9fr) minmax(118px, 1.2fr); gap: 4px; }
   .ml3-opening-direction.is-compact button { font-size: 0.56rem; }

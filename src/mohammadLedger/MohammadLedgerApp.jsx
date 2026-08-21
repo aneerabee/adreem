@@ -1152,23 +1152,6 @@ export function filterCounterpartyGroupsByQuery(groups = [], query = '') {
   }))
 }
 
-function counterpartyTotalsText(value = {}) {
-  const amounts = []
-  if (Number(value.dinar || 0) > 0) amounts.push(money(value.dinar, CURRENCIES.DINAR))
-  if (Number(value.usd || 0) > 0) amounts.push(money(value.usd, CURRENCIES.USD))
-  return amounts.join(' · ') || 'صفر'
-}
-
-function CounterpartyTotal({ label, value, tone }) {
-  const active = counterpartyHasDirection({ [tone]: value }, tone)
-  return (
-    <span className={`adreem-counterparty-total is-${tone} ${active ? 'has-value' : 'is-zero'}`}>
-      <small>{label}</small>
-      <b>{counterpartyTotalsText(value)}</b>
-    </span>
-  )
-}
-
 function CounterpartyChannel({ bucket }) {
   const { amount, currency } = counterpartyBucketAmount(bucket)
   const rowTone = amount > 0 ? 'is-positive' : amount < 0 ? 'is-negative' : 'is-zero'
@@ -1192,9 +1175,10 @@ export function CounterpartyCard({ group, mode = 'balances', isFocused = false, 
   const previewRows = group.rows.filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
   return (
     <Motion.article
-      layout="position"
+      layout
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: isDimmed ? 0.32 : 1, y: 0, scale: isDimmed ? 0.992 : 1 }}
+      exit={{ opacity: 0, y: -3, scale: 0.99 }}
       transition={UI_MOTION_TRANSITION}
       className={['adreem-counterparty-card', `is-${tone}`, `is-${mode}-view`, isFocused && 'is-focused', isDimmed && 'is-dimmed'].filter(Boolean).join(' ')}
       data-counterparty-id={group.id}
@@ -1206,12 +1190,7 @@ export function CounterpartyCard({ group, mode = 'balances', isFocused = false, 
           <small>{status}</small>
         </span>
         <ChevronDown className="adreem-counterparty-chevron" aria-hidden="true" size={16} />
-        {mode === 'balances' ? (
-          <span className="adreem-counterparty-totals">
-            <CounterpartyTotal label="لي" value={group.receivable} tone="receivable" />
-            <CounterpartyTotal label="عليّ" value={group.payable} tone="payable" />
-          </span>
-        ) : (
+        {mode === 'directory' ? (
           <span className="adreem-counterparty-directory-summary">
             {group.rows.map((bucket) => (
               <span key={bucket.account.id} title={accountChoiceKindLabel(bucket.account)}>
@@ -1220,13 +1199,24 @@ export function CounterpartyCard({ group, mode = 'balances', isFocused = false, 
               </span>
             ))}
           </span>
-        )}
+        ) : null}
       </button>
-      {mode === 'balances' && previewRows.length ? (
-        <div className="adreem-counterparty-channel-preview" aria-label="تفصيل الرصيد">
-          {previewRows.map((bucket) => <CounterpartyChannel key={bucket.account.id} bucket={bucket} />)}
-        </div>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {mode === 'balances' && previewRows.length && !isFocused ? (
+          <Motion.div
+            key="channel-preview"
+            layout
+            className="adreem-counterparty-channel-preview"
+            aria-label="تفصيل الرصيد"
+            initial={{ opacity: 0, y: -3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -3 }}
+            transition={UI_MOTION_TRANSITION}
+          >
+            {previewRows.map((bucket) => <CounterpartyChannel key={bucket.account.id} bucket={bucket} />)}
+          </Motion.div>
+        ) : null}
+      </AnimatePresence>
       <AnimatePresence initial={false}>
         {isFocused ? (
           <Motion.div className="adreem-counterparty-channels" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }} transition={UI_MOTION_TRANSITION}>
