@@ -33,4 +33,17 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('min-height: var(--finance-choice);')
     expect(financeStylesheet).toContain('.ml3-action-choice:last-child:nth-child(odd) { grid-column: auto; }')
   })
+
+  it('uses a dedicated natural red palette for every debt state', () => {
+    expect(financeStylesheet).toContain('--finance-debt: #dc2626;')
+    expect(financeStylesheet).toContain('--finance-debt-dark: #b91c1c;')
+    expect(financeStylesheet).toContain('--finance-debt-soft: #fef2f2;')
+    expect(financeStylesheet).toContain('--finance-debt-border: #fca5a5;')
+    expect(financeStylesheet).toContain('.ml3-balance-ledger button.is-negative { --summary-tone: var(--finance-debt);')
+    expect(financeStylesheet).toContain('.ml3-balance-ledger button.is-negative .ml3-balance-pair strong,')
+    expect(financeStylesheet).toContain('.adreem-counterparty-card.is-payable { --counterparty-tone: var(--finance-debt);')
+    expect(financeStylesheet).toContain('.adreem-counterparty-channel.is-negative { --channel-tone: var(--finance-debt);')
+    expect(financeStylesheet).toContain('.adreem-counterparty-channel.is-negative > b { color: var(--finance-debt-dark); }')
+    expect(financeStylesheet).toContain('.ml3-opening-direction button.is-negative.is-active { border-color: var(--finance-debt);')
+  })
 })

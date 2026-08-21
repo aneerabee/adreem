@@ -1,7 +1,7 @@
 .adreem-app {
   --ink: #172622;
   --green: #0b7a5a;
-  --red: #d9564a;
+  --red: #dc2626;
   --canvas: #f3f6f4;
   --paper: #ffffff;
   --soft: #edf3f0;
@@ -850,7 +850,7 @@
 .ml3-picked-actions button { min-height: 29px; border: 1px solid var(--line); border-radius: 5px; padding: 0 8px; background: #fff; color: var(--green); font-size: 0.66rem; font-weight: 700; cursor: pointer; }
 .ml3-balance-chip { max-width: 150px; overflow: hidden; border-radius: 5px; padding: 4px 7px; background: #edf1ef; color: var(--ink); font-size: 0.66rem; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-balance-chip.is-positive { background: #e7f5ef; color: var(--green); }
-.ml3-balance-chip.is-negative { background: #fff0ee; color: var(--red); }
+.ml3-balance-chip.is-negative { background: #fef2f2; color: var(--red); }
 
 .ml3-search-box {
   min-width: 0;
@@ -1562,7 +1562,7 @@
   --ink: #17332d;
   --green: #087f68;
   --blue: #2f72b7;
-  --red: #df574c;
+  --red: #dc2626;
   --amber: #d18a18;
   --canvas: #f3f7f5;
   --paper: #ffffff;
@@ -2608,7 +2608,7 @@
 .ml3-balance-ledger button:hover { transform: translateY(-1px); }
 .ml3-balance-ledger .is-money { background: #edf3f8; border-inline-start-color: var(--blue); }
 .ml3-balance-ledger .is-positive { background: #eaf7f2; }
-.ml3-balance-ledger .is-negative { background: #fff1ef; }
+.ml3-balance-ledger .is-negative { background: #fef2f2; }
 
 .ml3-account-switcher button { position: relative; overflow: hidden; }
 .ml3-account-switcher button::after,

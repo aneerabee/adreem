@@ -18,8 +18,8 @@
   --review-soft: #fff0ee;
   --positive: #08785f;
   --positive-soft: #e7f6ef;
-  --negative: #b8443d;
-  --negative-soft: #fff0ee;
+  --negative: #dc2626;
+  --negative-soft: #fef2f2;
   --warning: #a86709;
   --warning-soft: #fff4dd;
   --section-accent: var(--entry);
@@ -683,7 +683,7 @@
 .ml3-opening-direction button span { font-weight: 800; }
 .ml3-opening-direction button small { color: var(--muted); }
 .ml3-opening-direction button.is-positive.is-active { border-color: #2d9b6d; background: #eaf8f1; color: #13734e; box-shadow: inset 0 -3px 0 #2d9b6d; }
-.ml3-opening-direction button.is-negative.is-active { border-color: #d95b62; background: #fff0f1; color: #aa2f39; box-shadow: inset 0 -3px 0 #d95b62; }
+.ml3-opening-direction button.is-negative.is-active { border-color: var(--negative); background: var(--negative-soft); color: #b91c1c; box-shadow: inset 0 -3px 0 var(--negative); }
 .ml3-account-stage-actions { position: static; margin: 0; }
 
 .ml3-account-picker { gap: 7px; }
@@ -1304,7 +1304,7 @@
 .adreem-language-options button.is-active { border-color: var(--section-accent); background: var(--section-soft); }
 .adreem-language-options button.is-active > span { background: var(--section-accent); }
 .ml3-profile-balance.is-positive { border-inline-start-color: var(--positive); background: var(--positive-soft); }
-.ml3-profile-balance.is-negative { border-inline-start-color: var(--negative); background: var(--negative-soft); }
+.ml3-profile-balance.is-negative { border-inline-start-color: var(--negative); background: var(--negative-soft); color: #b91c1c; }
 
 .adreem-cloud-gate { background: color-mix(in srgb, var(--entry-soft) 28%, var(--canvas)); }
 .adreem-cloud-gate > section {
