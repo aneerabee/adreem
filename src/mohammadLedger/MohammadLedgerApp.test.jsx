@@ -12,6 +12,7 @@ import {
   ExternalAccountCard,
   HistoryMovementRow,
   ReviewAccountCard,
+  CounterpartyCard,
   CounterpartyList,
   accountBalanceChip,
   accountProfileMovements,
@@ -25,6 +26,7 @@ import {
   claimSubmission,
   filterMovementHistory,
   filterCounterpartyGroups,
+  filterCounterpartyGroupsByQuery,
   mergeAccountsConfirmation,
   mergeAccountReferenceErrors,
   mergeLedgerAccountState,
@@ -522,14 +524,108 @@ describe('MohammadLedgerApp people account views', () => {
       row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -300),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, ACCOUNT_CURRENCY_KINDS.USD),
     ], { dinar: 0, usd: 0 }, { dinar: 300, usd: 0 })
-    const groups = [mixed, chequeOnly]
+    const zero = group('zero', [
+      row(COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 0),
+      row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 0),
+      row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, ACCOUNT_CURRENCY_KINDS.USD),
+    ], { dinar: 0, usd: 0 }, { dinar: 0, usd: 0 })
+    const groups = [mixed, chequeOnly, zero]
 
     expect(filterCounterpartyGroups(groups, 'receivable').map((item) => item.id)).toEqual(['mixed'])
     expect(filterCounterpartyGroups(groups, 'payable').map((item) => item.id)).toEqual(['mixed', 'cheque'])
     expect(filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR).map((item) => item.id)).toEqual(['mixed'])
     expect(filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR).map((item) => item.id)).toEqual(['mixed', 'cheque'])
     expect(filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CASH_USD).map((item) => item.id)).toEqual(['mixed'])
+    expect(filterCounterpartyGroups(groups, 'zero').map((item) => item.id)).toEqual(['zero'])
     expect(filterCounterpartyGroups(groups, 'all')).toBe(groups)
+  })
+
+  it('searches by one account while preserving every balance channel for the matched person', () => {
+    const group = {
+      id: 'person:mohammad',
+      ownerName: 'محمد',
+      receivable: { dinar: 700, usd: 0 },
+      payable: { dinar: 0, usd: 0 },
+      rows: [
+        { account: { ownerName: 'محمد', subAccountName: 'كاش بيننا', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR } },
+        { account: { ownerName: 'محمد', subAccountName: 'شيك بيننا', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR } },
+        { account: { ownerName: 'محمد', subAccountName: 'دولار بيننا', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD } },
+      ],
+    }
+
+    const byName = filterCounterpartyGroupsByQuery([group], 'محمد')
+    const byChannel = filterCounterpartyGroupsByQuery([group], 'شيك')
+
+    expect(byName).toEqual([group])
+    expect(byName[0].rows).toHaveLength(3)
+    expect(byChannel).toEqual([group])
+    expect(byChannel[0].rows).toHaveLength(3)
+  })
+
+  it('separates cash, cheque, and dollar balances before opening a person', () => {
+    const account = (id, counterpartyKind, subAccountName, currencyKind) => ({
+      id,
+      ownerName: 'سعيد',
+      subAccountName,
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind,
+      counterpartyKind,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    })
+    const group = {
+      id: 'person:saeed',
+      ownerName: 'سعيد',
+      receivable: { dinar: 1_200, usd: 80 },
+      payable: { dinar: 450, usd: 0 },
+      rows: [
+        { account: account('cash', COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 'كاش بيننا', ACCOUNT_CURRENCY_KINDS.DINAR), dinar: 1_200, usd: 0 },
+        { account: account('cheque', COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 'شيك بيننا', ACCOUNT_CURRENCY_KINDS.DINAR), dinar: -450, usd: 0 },
+        { account: account('usd', COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 'دولار بيننا', ACCOUNT_CURRENCY_KINDS.USD), dinar: 0, usd: 80 },
+      ],
+    }
+
+    const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} />))
+
+    expect(markup).toContain('is-balances-view')
+    expect(markup).toContain('adreem-counterparty-channel-preview')
+    expect(markup).toContain('is-cash-dinar is-positive')
+    expect(markup).toContain('is-cheque-dinar is-negative')
+    expect(markup).toContain('is-cash-usd is-positive')
+    expect(markup).toContain('لي 1,200 د.ل')
+    expect(markup).toContain('عليّ 450 د.ل')
+    expect(markup).toContain('لي 80 $')
+  })
+
+  it('uses a compact directory card for all people instead of repeating the balances view', () => {
+    const group = {
+      id: 'person:zero',
+      ownerName: 'شخص جديد',
+      receivable: { dinar: 0, usd: 0 },
+      payable: { dinar: 0, usd: 0 },
+      rows: [{
+        account: {
+          id: 'zero-cash',
+          ownerName: 'شخص جديد',
+          subAccountName: 'كاش بيننا',
+          type: ACCOUNT_TYPES.PERSON,
+          valueKind: VALUE_KINDS.RECEIVABLE,
+          currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+          counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR,
+          status: ACCOUNT_STATUSES.ACTIVE,
+        },
+        dinar: 0,
+        usd: 0,
+      }],
+    }
+
+    const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} mode="directory" />))
+
+    expect(markup).toContain('is-directory-view')
+    expect(markup).toContain('adreem-counterparty-directory-summary')
+    expect(markup).toContain('مسكر')
+    expect(markup).not.toContain('adreem-counterparty-channel-preview')
+    expect(markup).not.toContain('adreem-counterparty-totals')
   })
 
   it('spotlights one person and reveals all three balances while dimming the rest', () => {
@@ -566,8 +662,8 @@ describe('MohammadLedgerApp people account views', () => {
     ))
 
     expect(markup).toContain('adreem-counterparty-list has-focus')
-    expect(markup).toContain('is-mixed is-focused')
-    expect(markup).toContain('is-receivable is-dimmed')
+    expect(markup).toContain('is-mixed is-balances-view is-focused')
+    expect(markup).toContain('is-receivable is-balances-view is-dimmed')
     expect(markup).toContain('aria-expanded="true"')
     expect(markup).toContain('كاش بيننا')
     expect(markup).toContain('شيك بيننا')

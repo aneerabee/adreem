@@ -44,11 +44,17 @@ const BALANCE_PANE_MOTION = Object.freeze({
 })
 const COUNTERPARTY_BALANCE_FILTERS = Object.freeze([
   { key: 'all', label: 'الكل', icon: SlidersHorizontal },
-  { key: 'receivable', label: 'لي', icon: ArrowDownToLine },
-  { key: 'payable', label: 'عليّ', icon: ArrowUpFromLine },
+  { key: 'receivable', label: 'أقبض', icon: ArrowDownToLine },
+  { key: 'payable', label: 'أدفع', icon: ArrowUpFromLine },
   { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, label: 'كاش', icon: Banknote },
   { key: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, label: 'شيك', icon: Landmark },
   { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, label: 'دولار', icon: CircleDollarSign },
+])
+const COUNTERPARTY_DIRECTORY_FILTERS = Object.freeze([
+  { key: 'all', label: 'الكل', icon: SlidersHorizontal },
+  { key: 'receivable', label: 'أقبض', icon: ArrowDownToLine },
+  { key: 'payable', label: 'أدفع', icon: ArrowUpFromLine },
+  { key: 'zero', label: 'صفر', icon: Check },
 ])
 const MOVEMENT_REQUEST_KEYS = Object.freeze({
   accountProfile: 'account-profile',
@@ -57,6 +63,12 @@ const MOVEMENT_REQUEST_KEYS = Object.freeze({
   review: 'review',
   todaySummary: 'today-summary',
 })
+
+function scrollLedgerToTop(behavior = 'auto') {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  document.querySelector('.adreem-view')?.scrollTo({ top: 0, left: 0, behavior })
+  window.scrollTo({ top: 0, left: 0, behavior })
+}
 
 const accountGroupTabs = [
   { key: 'money', label: 'فلوسي', title: 'فلوسي' },
@@ -1118,12 +1130,25 @@ function counterpartyHasDirection(group = {}, direction) {
 
 export function filterCounterpartyGroups(groups = [], filterKey = 'all') {
   if (filterKey === 'all') return groups
+  if (filterKey === 'zero') {
+    return groups.filter((group) => !counterpartyHasDirection(group, 'receivable') && !counterpartyHasDirection(group, 'payable'))
+  }
   if (filterKey === 'receivable' || filterKey === 'payable') {
     return groups.filter((group) => counterpartyHasDirection(group, filterKey))
   }
   return groups.filter((group) => group.rows.some((bucket) => {
     if (bucket.account?.counterpartyKind !== filterKey) return false
     return hasMoneyValue(counterpartyBucketAmount(bucket).amount)
+  }))
+}
+
+export function filterCounterpartyGroupsByQuery(groups = [], query = '') {
+  const normalizedQuery = normalizeAccountSearchText(query)
+  if (!normalizedQuery) return groups
+  return groups.filter((group) => group.rows.some((bucket) => {
+    const account = bucket.account || {}
+    const haystack = normalizeAccountSearchText(`${account.ownerName || ''} ${account.subAccountName || ''} ${accountDetailName(account)} ${account.legacyName || ''}`)
+    return haystack.includes(normalizedQuery)
   }))
 }
 
@@ -1144,18 +1169,34 @@ function CounterpartyTotal({ label, value, tone }) {
   )
 }
 
-export function CounterpartyCard({ group, isFocused = false, isDimmed = false, onFocus, onOpen }) {
+function CounterpartyChannel({ bucket }) {
+  const { amount, currency } = counterpartyBucketAmount(bucket)
+  const rowTone = amount > 0 ? 'is-positive' : amount < 0 ? 'is-negative' : 'is-zero'
+  const channelKind = bucket.account?.counterpartyKind || 'other'
+  return (
+    <span className={`adreem-counterparty-channel is-${channelKind} ${rowTone}`}>
+      <i><AccountChoiceIcon account={bucket.account} size={14} /></i>
+      <small>{accountChoiceKindLabel(bucket.account)}</small>
+      <b>{amount === 0 ? 'صفر' : `${amount > 0 ? 'لي' : 'عليّ'} ${money(Math.abs(amount), currency)}`}</b>
+    </span>
+  )
+}
+
+export function CounterpartyCard({ group, mode = 'balances', isFocused = false, isDimmed = false, onFocus, onOpen }) {
   const hasReceivable = group.receivable.dinar > 0 || group.receivable.usd > 0
   const hasPayable = group.payable.dinar > 0 || group.payable.usd > 0
-  const status = hasReceivable && hasPayable ? 'لي وعليّ' : hasReceivable ? 'لي عنده' : hasPayable ? 'عليّ له' : 'مسكر'
+  const hasBalance = hasReceivable || hasPayable
+  const balanceStatus = hasReceivable && hasPayable ? 'لي وعليّ' : hasReceivable ? 'لي عنده' : hasPayable ? 'عليّ له' : 'مسكر'
+  const status = mode === 'directory' ? hasBalance ? 'بيننا رصيد' : 'مسكر' : balanceStatus
   const tone = hasReceivable && hasPayable ? 'mixed' : hasReceivable ? 'receivable' : hasPayable ? 'payable' : 'zero'
+  const previewRows = group.rows.filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
   return (
     <Motion.article
       layout="position"
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: isDimmed ? 0.32 : 1, y: 0, scale: isDimmed ? 0.992 : 1 }}
       transition={UI_MOTION_TRANSITION}
-      className={['adreem-counterparty-card', `is-${tone}`, isFocused && 'is-focused', isDimmed && 'is-dimmed'].filter(Boolean).join(' ')}
+      className={['adreem-counterparty-card', `is-${tone}`, `is-${mode}-view`, isFocused && 'is-focused', isDimmed && 'is-dimmed'].filter(Boolean).join(' ')}
       data-counterparty-id={group.id}
     >
       <button type="button" className="adreem-counterparty-focus" aria-expanded={isFocused} onClick={() => onFocus?.(group.id)}>
@@ -1165,11 +1206,27 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
           <small>{status}</small>
         </span>
         <ChevronDown className="adreem-counterparty-chevron" aria-hidden="true" size={16} />
-        <span className="adreem-counterparty-totals">
-          <CounterpartyTotal label="لي" value={group.receivable} tone="receivable" />
-          <CounterpartyTotal label="عليّ" value={group.payable} tone="payable" />
-        </span>
+        {mode === 'balances' ? (
+          <span className="adreem-counterparty-totals">
+            <CounterpartyTotal label="لي" value={group.receivable} tone="receivable" />
+            <CounterpartyTotal label="عليّ" value={group.payable} tone="payable" />
+          </span>
+        ) : (
+          <span className="adreem-counterparty-directory-summary">
+            {group.rows.map((bucket) => (
+              <span key={bucket.account.id} title={accountChoiceKindLabel(bucket.account)}>
+                <AccountChoiceIcon account={bucket.account} size={13} />
+                <small>{accountChoiceKindLabel(bucket.account)}</small>
+              </span>
+            ))}
+          </span>
+        )}
       </button>
+      {mode === 'balances' && previewRows.length ? (
+        <div className="adreem-counterparty-channel-preview" aria-label="تفصيل الرصيد">
+          {previewRows.map((bucket) => <CounterpartyChannel key={bucket.account.id} bucket={bucket} />)}
+        </div>
+      ) : null}
       <AnimatePresence initial={false}>
         {isFocused ? (
           <Motion.div className="adreem-counterparty-channels" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }} transition={UI_MOTION_TRANSITION}>
@@ -1192,7 +1249,7 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
   )
 }
 
-export function CounterpartyList({ title, groups = [], focusedId = '', onFocus, onOpen, hideHeader = false }) {
+export function CounterpartyList({ title, groups = [], mode = 'balances', focusedId = '', onFocus, onOpen, hideHeader = false }) {
   const hasFocus = groups.some((group) => group.id === focusedId)
   return (
     <section className={`adreem-counterparty-list ${hasFocus ? 'has-focus' : ''}`}>
@@ -1205,17 +1262,17 @@ export function CounterpartyList({ title, groups = [], focusedId = '', onFocus, 
       {groups.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
       <div className="adreem-counterparty-grid">
         <AnimatePresence initial={false}>
-          {groups.map((group) => <CounterpartyCard key={group.id} group={group} isFocused={group.id === focusedId} isDimmed={hasFocus && group.id !== focusedId} onFocus={onFocus} onOpen={onOpen} />)}
+          {groups.map((group) => <CounterpartyCard key={group.id} group={group} mode={mode} isFocused={group.id === focusedId} isDimmed={hasFocus && group.id !== focusedId} onFocus={onFocus} onOpen={onOpen} />)}
         </AnimatePresence>
       </div>
     </section>
   )
 }
 
-function CounterpartyFilters({ groups = [], value = 'all', onChange }) {
+function CounterpartyFilters({ groups = [], options = COUNTERPARTY_BALANCE_FILTERS, variant = 'balances', value = 'all', onChange }) {
   return (
-    <div className="adreem-counterparty-filters" aria-label="فلترة الأشخاص">
-      {COUNTERPARTY_BALANCE_FILTERS.map((option) => {
+    <div className={`adreem-counterparty-filters is-${variant}`} aria-label="فلترة الأشخاص">
+      {options.map((option) => {
         const Icon = option.icon
         const count = filterCounterpartyGroups(groups, option.key).length
         const selected = value === option.key
@@ -2276,6 +2333,7 @@ export default function MohammadLedgerApp() {
   const [accountQuery, setAccountQuery] = useState('')
   const [peopleAccountView, setPeopleAccountView] = useState(initialNavigation.peopleView)
   const [counterpartyBalanceFilter, setCounterpartyBalanceFilter] = useState('all')
+  const [counterpartyDirectoryFilter, setCounterpartyDirectoryFilter] = useState('all')
   const [focusedCounterpartyId, setFocusedCounterpartyId] = useState('')
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
@@ -2292,6 +2350,7 @@ export default function MohammadLedgerApp() {
   const motionTimerRef = useRef(null)
   const viewTransitionRef = useRef(null)
   const motionSequenceRef = useRef(0)
+  const entryFlowLocationRef = useRef(`${activeEntryMode}:${movementStep}:${accountWizardStep}`)
   const historyRequestSequenceRef = useRef(0)
   const accountProfileRequestSequenceRef = useRef(0)
   const reviewRequestSequenceRef = useRef(0)
@@ -2334,9 +2393,19 @@ export default function MohammadLedgerApp() {
 
   useEffect(() => {
     if (typeof document === 'undefined') return
-    const viewport = document.querySelector('.adreem-view')
-    viewport?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    scrollLedgerToTop('auto')
   }, [activeSection])
+
+  useLayoutEffect(() => {
+    const location = `${activeEntryMode}:${movementStep}:${accountWizardStep}`
+    if (entryFlowLocationRef.current === location) return
+    entryFlowLocationRef.current = location
+    if (activeSection !== 'entry' || !window.matchMedia?.('(max-width: 720px)').matches) return
+    const card = document.querySelector(activeEntryMode === 'account' ? '.ml3-add-account:not([hidden])' : '.ml3-entry-card:not([hidden])')
+    const flowHead = card?.querySelector('.adreem-flow-head, .ml3-entry-head, .ml3-account-stage-head')
+    if (!card || !flowHead || flowHead.getBoundingClientRect().top >= 4) return
+    card.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'auto' })
+  }, [accountWizardStep, activeEntryMode, activeSection, movementStep])
 
   const activeAccounts = useMemo(() => getActivePostingAccounts(accounts), [accounts])
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts])
@@ -3238,10 +3307,8 @@ export default function MohammadLedgerApp() {
   }
 
   function resetSectionScroll(behavior = 'auto') {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return
-    window.requestAnimationFrame(() => {
-      document.querySelector('.adreem-view')?.scrollTo({ top: 0, left: 0, behavior })
-    })
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => scrollLedgerToTop(behavior))
   }
 
   function switchSection(section) {
@@ -3974,13 +4041,15 @@ export default function MohammadLedgerApp() {
       return haystack.includes(normalizedAccountQuery)
     }
     const filterRows = (rows) => rows.filter(accountMatchesQuery)
-    const peopleViews = buildCounterpartyBalanceViews(filterRows(peopleRows))
-    const peopleDirectory = peopleViews.all
-    const filteredPeopleBalances = filterCounterpartyGroups(peopleViews.withBalance, counterpartyBalanceFilter)
-    const visiblePeopleGroups = peopleAccountView === 'all' ? peopleDirectory : filteredPeopleBalances
+    const peopleViews = buildCounterpartyBalanceViews(peopleRows)
+    const peopleDirectory = filterCounterpartyGroupsByQuery(peopleViews.all, accountQuery)
+    const peopleBalances = filterCounterpartyGroupsByQuery(peopleViews.withBalance, accountQuery)
+    const filteredPeopleBalances = filterCounterpartyGroups(peopleBalances, counterpartyBalanceFilter)
+    const filteredPeopleDirectory = filterCounterpartyGroups(peopleDirectory, counterpartyDirectoryFilter)
+    const visiblePeopleGroups = peopleAccountView === 'all' ? filteredPeopleDirectory : filteredPeopleBalances
     const activeFocusedCounterpartyId = visiblePeopleGroups.some((group) => group.id === focusedCounterpartyId) ? focusedCounterpartyId : ''
     const accountRowsByGroup = {
-      people: peopleViews.withBalance,
+      people: peopleBalances,
       money: filterRows(moneyRows),
       assets: filterRows(balancesByKind.assets || []),
       expenses: filterRows(balancesByKind.expenses || []),
@@ -4036,7 +4105,7 @@ export default function MohammadLedgerApp() {
                 <div className="ml3-balance-pane-head">
                   <div className="ml3-balance-pane-title">
                     <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
-                    <h2>{activeGroup.key === 'people' && peopleAccountView === 'all' ? 'كل الأشخاص' : activeGroup.title}</h2>
+                    <h2>{activeGroup.key === 'people' ? peopleAccountView === 'all' ? 'كل الأشخاص' : 'بيننا رصيد' : activeGroup.title}</h2>
                     <span>{formatCount(activeGroupCount)}</span>
                   </div>
                   <label className="ml3-account-toolbar">
@@ -4062,24 +4131,32 @@ export default function MohammadLedgerApp() {
                           setFocusedCounterpartyId('')
                         }}>
                           <strong>بيننا رصيد</strong>
+                          <span>{formatCount(peopleBalances.length)}</span>
                         </button>
                         <button type="button" className={peopleAccountView === 'all' ? 'is-active' : ''} aria-current={peopleAccountView === 'all' ? 'true' : undefined} onClick={() => {
                           setPeopleAccountView('all')
                           setFocusedCounterpartyId('')
                         }}>
                           <strong>كل الأشخاص</strong>
+                          <span>{formatCount(peopleDirectory.length)}</span>
                         </button>
                       </div>
                       {peopleAccountView === 'balances' ? (
-                        <CounterpartyFilters groups={peopleViews.withBalance} value={counterpartyBalanceFilter} onChange={(nextFilter) => {
+                        <CounterpartyFilters groups={peopleBalances} value={counterpartyBalanceFilter} onChange={(nextFilter) => {
                           setCounterpartyBalanceFilter(nextFilter)
                           setFocusedCounterpartyId('')
                         }} />
-                      ) : null}
+                      ) : (
+                        <CounterpartyFilters groups={peopleDirectory} options={COUNTERPARTY_DIRECTORY_FILTERS} variant="directory" value={counterpartyDirectoryFilter} onChange={(nextFilter) => {
+                          setCounterpartyDirectoryFilter(nextFilter)
+                          setFocusedCounterpartyId('')
+                        }} />
+                      )}
                     </div>
                     <CounterpartyList
                       title={peopleAccountView === 'balances' ? 'بيننا رصيد' : 'كل الأشخاص'}
                       groups={visiblePeopleGroups}
+                      mode={peopleAccountView === 'balances' ? 'balances' : 'directory'}
                       focusedId={activeFocusedCounterpartyId}
                       onFocus={(groupId) => setFocusedCounterpartyId((current) => current === groupId ? '' : groupId)}
                       onOpen={setSelectedAccountId}

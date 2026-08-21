@@ -61,6 +61,7 @@ const ENGLISH_TEXT = Object.freeze({
   'اختيارات سريعة': 'Quick choices',
   'اختياري': 'Optional',
   'تفاصيل': 'Details',
+  'تفصيل الرصيد': 'Balance breakdown',
   'اختياري.': 'Optional.',
   'اختياري: ملاحظة، ملف، أو ربط بمشروع.': 'Optional: note, file, or project.',
   'إدارة المستخدمين': 'Manage users',
