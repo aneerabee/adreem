@@ -77,6 +77,9 @@ describe('telegram account service', () => {
       subAccountName: 'كاش',
       type: ACCOUNT_TYPES.PERSON,
       valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+      openingBalanceAmount: '750',
+      openingBalanceDirection: 'owed_to_me',
     }
 
     const first = await appendTelegramAccount(repository, draft, { idempotencyKey: 'account-session-1' })
@@ -89,6 +92,69 @@ describe('telegram account service', () => {
     expect(duplicateName.validation.errors.map((error) => error.field)).toContain('id')
     expect(duplicateName.validation.errors.map((error) => error.field)).toContain('subAccountName')
     expect(repository.state.accounts).toHaveLength(1)
+    expect(repository.state.movements).toHaveLength(1)
+    expect(repository.state.movements[0]).toMatchObject({
+      type: MOVEMENT_TYPES.OPENING_BALANCE,
+      amount: 750,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: first.account.id,
+    })
+  })
+
+  it('creates a negative opening movement when I owe a person', async () => {
+    const repository = memoryRepository()
+    const result = await appendTelegramAccount(repository, {
+      ownerName: 'سيف',
+      subAccountName: 'شيك بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+      openingBalanceAmount: '1,500',
+      openingBalanceDirection: 'i_owe',
+    }, { idempotencyKey: 'account-opening-payable' })
+
+    expect(result.rejected).toBeFalsy()
+    expect(result.openingMovements).toHaveLength(1)
+    expect(repository.state.accounts[0]).toMatchObject({ openingDinar: 0, openingUsd: -1_500 })
+    expect(repository.state.movements[0]).toMatchObject({
+      type: MOVEMENT_TYPES.OPENING_BALANCE,
+      amount: -1_500,
+      currency: CURRENCIES.USD,
+    })
+  })
+
+  it('keeps a zero opening balance without creating a fake movement', async () => {
+    const repository = memoryRepository()
+    const result = await appendTelegramAccount(repository, {
+      ownerName: 'أنا',
+      subAccountName: 'الخزنة',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+      openingBalanceAmount: '',
+    }, { idempotencyKey: 'account-opening-zero' })
+
+    expect(result.rejected).toBeFalsy()
+    expect(result.openingMovements).toEqual([])
+    expect(repository.state.movements).toEqual([])
+  })
+
+  it('rejects an ambiguous person opening balance without a chosen direction', async () => {
+    const repository = memoryRepository()
+    const result = await appendTelegramAccount(repository, {
+      ownerName: 'سعيد',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+      openingBalanceAmount: '500',
+      openingBalanceDirection: '',
+    }, { idempotencyKey: 'account-opening-missing-direction' })
+
+    expect(result.rejected).toBe(true)
+    expect(result.validation.errors).toContainEqual(expect.objectContaining({ field: 'openingBalanceDirection' }))
+    expect(repository.state.accounts).toEqual([])
+    expect(repository.state.movements).toEqual([])
   })
 
   it('validates missing names before saving', () => {

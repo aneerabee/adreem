@@ -1,6 +1,18 @@
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, normalizeAccountCurrencyKind } from './accountCatalog.js'
 import { accountCurrencyLabel, normalizeAccountText } from './accountCompatibility.js'
 
+export const ACCOUNT_OPENING_DIRECTIONS = {
+  OWED_TO_ME: 'owed_to_me',
+  I_OWE: 'i_owe',
+}
+
+const OPENING_BALANCE_VALUE_KINDS = new Set([
+  VALUE_KINDS.RECEIVABLE,
+  VALUE_KINDS.CASH,
+  VALUE_KINDS.BANK,
+  VALUE_KINDS.ASSET,
+])
+
 export const accountPresets = [
   {
     key: 'person-cash',
@@ -132,8 +144,56 @@ export function emptyAccountDraft() {
     type: ACCOUNT_TYPES.PERSON,
     valueKind: VALUE_KINDS.RECEIVABLE,
     currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+    openingBalanceAmount: '',
+    openingBalanceDirection: '',
     notes: '',
   }
+}
+
+function openingInputNumber(value) {
+  const normalized = String(value ?? '')
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[,،\s]/g, '')
+  const number = Number(normalized)
+  return Number.isFinite(number) ? Math.round(number) : 0
+}
+
+export function accountSupportsOpeningBalance(draftOrAccount = {}) {
+  return OPENING_BALANCE_VALUE_KINDS.has(draftOrAccount.valueKind)
+}
+
+export function accountOpeningAmounts(draft = {}) {
+  if (!accountSupportsOpeningBalance(draft)) return { openingDinar: 0, openingUsd: 0 }
+
+  const hasWizardAmount = Object.hasOwn(draft, 'openingBalanceAmount')
+  if (!hasWizardAmount) {
+    return {
+      openingDinar: openingInputNumber(draft.openingDinar),
+      openingUsd: openingInputNumber(draft.openingUsd),
+    }
+  }
+
+  const unsignedAmount = Math.max(0, openingInputNumber(draft.openingBalanceAmount))
+  const direction = draft.valueKind === VALUE_KINDS.RECEIVABLE && draft.openingBalanceDirection === ACCOUNT_OPENING_DIRECTIONS.I_OWE
+    ? -1
+    : 1
+  const signedAmount = unsignedAmount * direction
+  return accountCurrencyKindFor(draft) === ACCOUNT_CURRENCY_KINDS.USD
+    ? { openingDinar: 0, openingUsd: signedAmount }
+    : { openingDinar: signedAmount, openingUsd: 0 }
+}
+
+export function accountOpeningDraftErrors(draft = {}) {
+  if (!Object.hasOwn(draft, 'openingBalanceAmount')) return []
+  const amount = Math.max(0, openingInputNumber(draft.openingBalanceAmount))
+  if (
+    draft.valueKind === VALUE_KINDS.RECEIVABLE &&
+    amount > 0 &&
+    !Object.values(ACCOUNT_OPENING_DIRECTIONS).includes(draft.openingBalanceDirection)
+  ) {
+    return [{ field: 'openingBalanceDirection', message: 'حدد هل الرصيد لك عنده أو عليك له.' }]
+  }
+  return []
 }
 
 export function accountPresetFor(type, valueKind) {

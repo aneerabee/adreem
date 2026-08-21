@@ -468,6 +468,15 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
     if (!changedRecord(account, previousAccounts)) continue
     const previousAccount = previousAccounts.get(cleanId(account.id))
     if (previousAccount) {
+      for (const field of ['openingDinar', 'openingUsd']) {
+        if (Number(account?.[field] || 0) === Number(previousAccount?.[field] || 0)) continue
+        errors.push({
+          code: 'account-opening-immutable',
+          id: account.id,
+          field,
+          message: 'الرصيد الافتتاحي يحدد عند إنشاء الحساب فقط ولا يمكن تغييره لاحقًا.',
+        })
+      }
       accountStructureLockErrors(previousAccount, account, {
         movements: currentState.movements || [],
         reconciliations: currentState.reconciliations || [],
@@ -487,10 +496,69 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
       field: error.field,
       message: error.message,
     }))
+
+    if (!previousAccount) {
+      for (const [field, currency, suffix] of [
+        ['openingDinar', CURRENCIES.DINAR, 'dinar'],
+        ['openingUsd', CURRENCIES.USD, 'usd'],
+      ]) {
+        const amount = Number(account?.[field] || 0)
+        if (!amount) continue
+        const expectedId = `opening-${account.id}-${suffix}`
+        const matchingMovement = movements.find((movement) => movement.id === expectedId)
+        if (
+          matchingMovement?.type === MOVEMENT_TYPES.OPENING_BALANCE &&
+          matchingMovement?.status === MOVEMENT_STATUSES.POSTED &&
+          matchingMovement?.destinationAccountId === account.id &&
+          !matchingMovement?.sourceAccountId &&
+          matchingMovement?.currency === currency &&
+          Number(matchingMovement?.amount) === amount
+        ) continue
+        errors.push({
+          code: 'account-opening-movement-missing',
+          id: account.id,
+          field,
+          message: 'الرصيد الافتتاحي يحتاج حركة افتتاحية مطابقة عند إنشاء الحساب.',
+        })
+      }
+    }
   }
 
   for (const movement of movements) {
     const previousMovement = previousMovements.get(cleanId(movement.id))
+    if (previousMovement?.type === MOVEMENT_TYPES.OPENING_BALANCE && changedRecord(movement, previousMovements)) {
+      errors.push({
+        code: 'opening-movement-immutable',
+        id: movement.id,
+        message: 'حركة الرصيد الافتتاحي ثابتة بعد إنشاء الحساب. استخدم مطابقة أو تصحيحًا بدل تغييرها.',
+      })
+    }
+    if (!previousMovement && movement?.type === MOVEMENT_TYPES.OPENING_BALANCE) {
+      const destinationAccountId = cleanId(movement.destinationAccountId)
+      const destinationAccount = accountById.get(destinationAccountId)
+      const suffix = movement.currency === CURRENCIES.USD ? 'usd' : 'dinar'
+      const openingField = movement.currency === CURRENCIES.USD ? 'openingUsd' : 'openingDinar'
+      if (previousAccounts.has(destinationAccountId)) {
+        errors.push({
+          code: 'opening-account-not-new',
+          id: movement.id,
+          field: 'destinationAccountId',
+          message: 'الرصيد الافتتاحي يمكن إضافته عند إنشاء الحساب فقط.',
+        })
+      }
+      if (
+        !destinationAccount ||
+        movement.id !== `opening-${destinationAccountId}-${suffix}` ||
+        Number(movement.amount) !== Number(destinationAccount?.[openingField] || 0)
+      ) {
+        errors.push({
+          code: 'opening-movement-mismatch',
+          id: movement.id,
+          field: 'amount',
+          message: 'حركة الرصيد الافتتاحي لا تطابق الحساب الجديد.',
+        })
+      }
+    }
     if (
       Number.isFinite(movement?.amount) &&
       !Number.isInteger(movement.amount) &&

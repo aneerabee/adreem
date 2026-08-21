@@ -1,15 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import {
+  ACCOUNT_OPENING_DIRECTIONS,
   accountDetailOptionsFor,
   accountNeedsCurrency,
   accountPresetFor,
   accountPresetGroupFor,
   accountPresets,
+  accountSupportsOpeningBalance,
   applyAccountName,
   emptyAccountDraft,
 } from '../../../src/mohammadLedger/accountConfig.js'
 import { accountStructureUsage } from '../../../src/mohammadLedger/accountEditing.js'
-import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES } from '../../../src/mohammadLedger/accountCatalog.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
 import {
   appendTelegramAccount,
   resolveTelegramReviewAccount,
@@ -23,11 +25,14 @@ import {
   accountConfirmKeyboard,
   accountCurrencyKeyboard,
   accountDetailKeyboard,
+  accountOpeningDirectionKeyboard,
   accountTextStepKeyboard,
   accountTypeKeyboard,
   mainMenuKeyboard,
+  numericKeypadKeyboard,
 } from '../keyboards.js'
 import { accountCreatedText, accountReviewText, accountStepText } from '../messages.js'
+import { applyNumericKey, normalizeNumericBuffer, numericBufferValue } from '../numericKeypad.js'
 
 const STEPS = {
   GROUP: 'group',
@@ -35,6 +40,8 @@ const STEPS = {
   OWNER: 'owner',
   DETAIL: 'detail',
   CURRENCY: 'currency',
+  OPENING: 'opening',
+  DIRECTION: 'direction',
   REVIEW: 'review',
 }
 
@@ -53,6 +60,7 @@ function createAccountSession(options = {}) {
     editAccountId: options.editAccountId || '',
     reviewOriginalLabel: options.reviewOriginalLabel || '',
     selectedDetail: hasExistingDraft ? options.draft?.subAccountName || '' : '',
+    openingBuffer: '',
     structureLocked: Boolean(options.structureLocked),
     uiMessageId: null,
   }
@@ -66,8 +74,30 @@ function applyPresetToSession(session, preset) {
     valueKind: preset.valueKind,
     subAccountName: preset.subAccountName,
     currencyKind: session.draft.currencyKind,
+    openingBalanceAmount: '',
+    openingBalanceDirection: '',
   }
   session.selectedDetail = ''
+  session.openingBuffer = ''
+}
+
+function needsOpeningStep(session) {
+  return session?.mode === 'create' && accountSupportsOpeningBalance(session?.draft)
+}
+
+function nextStepAfterDefinition(session) {
+  if (accountNeedsCurrency(session.draft)) return STEPS.CURRENCY
+  return needsOpeningStep(session) ? STEPS.OPENING : STEPS.REVIEW
+}
+
+async function sendReviewStep(ctx, session) {
+  try {
+    const current = await ctx.repository.load()
+    return sendStep(ctx, session, validateSessionDraft(session, current.state))
+  } catch (error) {
+    console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
+    return sendAccountConnectionError(ctx, session)
+  }
 }
 
 function groupNeedsTypeStep(groupOrKey) {
@@ -148,6 +178,18 @@ async function sendStep(ctx, session, result = null) {
     return upsertAccountMessage(ctx, session, {
       text: accountStepText(session),
       reply_markup: accountCurrencyKeyboard(session.draft.currencyKind),
+    })
+  }
+  if (session.step === STEPS.OPENING) {
+    return upsertAccountMessage(ctx, session, {
+      text: accountStepText(session),
+      reply_markup: numericKeypadKeyboard('acct'),
+    })
+  }
+  if (session.step === STEPS.DIRECTION) {
+    return upsertAccountMessage(ctx, session, {
+      text: accountStepText(session),
+      reply_markup: accountOpeningDirectionKeyboard(session.draft.openingBalanceDirection),
     })
   }
   if (session.step === STEPS.REVIEW) {
@@ -326,7 +368,7 @@ export async function handleAccountCallback(ctx, data) {
     if (!detail) return sendStep(ctx, session)
     session.draft.subAccountName = detail
     session.selectedDetail = detail
-    session.step = accountNeedsCurrency(session.draft) ? STEPS.CURRENCY : STEPS.REVIEW
+    session.step = nextStepAfterDefinition(session)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     if (session.step === STEPS.CURRENCY) return sendStep(ctx, session)
     try {
@@ -342,15 +384,37 @@ export async function handleAccountCallback(ctx, data) {
     const currency = data.slice('acct:currency:'.length)
     if (![ACCOUNT_CURRENCY_KINDS.DINAR, ACCOUNT_CURRENCY_KINDS.USD].includes(currency)) return sendStep(ctx, session)
     session.draft.currencyKind = currency
+    session.step = needsOpeningStep(session) ? STEPS.OPENING : STEPS.REVIEW
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return session.step === STEPS.REVIEW ? sendReviewStep(ctx, session) : sendStep(ctx, session)
+  }
+
+  if (data.startsWith('acct:num:')) {
+    if (session.step !== STEPS.OPENING) return sendStep(ctx, session)
+    const key = data.slice('acct:num:'.length)
+    if (key !== 'done') {
+      session.openingBuffer = applyNumericKey(session.openingBuffer, key)
+      ctx.sessions.set(ctx.chatId, ctx.userId, session)
+      return sendStep(ctx, session)
+    }
+    const value = session.openingBuffer ? numericBufferValue(session.openingBuffer, { allowZero: true }) : 0
+    if (value === null) return sendStep(ctx, session)
+    session.openingBuffer = normalizeNumericBuffer(String(value))
+    session.draft.openingBalanceAmount = String(value)
+    if (session.draft.valueKind === VALUE_KINDS.RECEIVABLE && value > 0) session.draft.openingBalanceDirection = ''
+    session.step = session.draft.valueKind === VALUE_KINDS.RECEIVABLE && value > 0 ? STEPS.DIRECTION : STEPS.REVIEW
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return session.step === STEPS.REVIEW ? sendReviewStep(ctx, session) : sendStep(ctx, session)
+  }
+
+  if (data.startsWith('acct:opening-direction:')) {
+    if (session.step !== STEPS.DIRECTION) return sendStep(ctx, session)
+    const direction = data.slice('acct:opening-direction:'.length)
+    if (!Object.values(ACCOUNT_OPENING_DIRECTIONS).includes(direction)) return sendStep(ctx, session)
+    session.draft.openingBalanceDirection = direction
     session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
-    try {
-      const current = await ctx.repository.load()
-      return sendStep(ctx, session, validateSessionDraft(session, current.state))
-    } catch (error) {
-      console.error('[adreem-telegram-bot] account validation load failed', error?.message || error)
-      return sendAccountConnectionError(ctx, session)
-    }
+    return sendReviewStep(ctx, session)
   }
 
   if (data === 'acct:confirm') {
@@ -447,7 +511,7 @@ export async function handleAccountText(ctx, text) {
     session.step = session.mode === 'edit' && session.structureLocked
       ? STEPS.REVIEW
       : preset.skipDetail
-      ? (accountNeedsCurrency(session.draft) ? STEPS.CURRENCY : STEPS.REVIEW)
+      ? nextStepAfterDefinition(session)
       : STEPS.DETAIL
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     if (session.step === STEPS.REVIEW) {
@@ -473,7 +537,7 @@ export async function handleAccountText(ctx, text) {
     }
     session.draft.subAccountName = subAccountName
     session.selectedDetail = subAccountName
-    session.step = accountNeedsCurrency(session.draft) ? STEPS.CURRENCY : STEPS.REVIEW
+    session.step = nextStepAfterDefinition(session)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     if (session.step === STEPS.CURRENCY) {
       await sendStep(ctx, session)
@@ -501,7 +565,16 @@ function previousStep(session) {
   if (step === STEPS.OWNER) return groupNeedsTypeStep(session?.presetGroup) ? STEPS.TYPE : STEPS.GROUP
   if (step === STEPS.DETAIL) return STEPS.OWNER
   if (step === STEPS.CURRENCY) return preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL
-  if (step === STEPS.REVIEW) return accountNeedsCurrency(session?.draft) ? STEPS.CURRENCY : (preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL)
+  if (step === STEPS.OPENING) return accountNeedsCurrency(session?.draft) ? STEPS.CURRENCY : (preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL)
+  if (step === STEPS.DIRECTION) return STEPS.OPENING
+  if (step === STEPS.REVIEW) {
+    if (needsOpeningStep(session)) {
+      return session?.draft?.valueKind === VALUE_KINDS.RECEIVABLE && Number(session?.draft?.openingBalanceAmount || 0) > 0
+        ? STEPS.DIRECTION
+        : STEPS.OPENING
+    }
+    return accountNeedsCurrency(session?.draft) ? STEPS.CURRENCY : (preset.skipDetail ? STEPS.OWNER : STEPS.DETAIL)
+  }
   return STEPS.GROUP
 }
 
@@ -510,6 +583,8 @@ function callbackMatchesCurrentAccountStep(data, step) {
   if (data.startsWith('acct:type:')) return step === STEPS.TYPE
   if (data.startsWith('acct:detail:')) return step === STEPS.DETAIL
   if (data.startsWith('acct:currency:')) return step === STEPS.CURRENCY
+  if (data.startsWith('acct:num:')) return step === STEPS.OPENING
+  if (data.startsWith('acct:opening-direction:')) return step === STEPS.DIRECTION
   if (data === 'acct:confirm') return step === STEPS.REVIEW
   return true
 }

@@ -4,10 +4,15 @@ import {
   MOVEMENT_STATUSES,
   MOVEMENT_TYPES,
   buildPostingEntries,
+  createAccount,
+  createOpeningMovements,
   postMovement,
 } from '../../src/mohammadLedger/ledgerCore.js'
-import { createMohammadFallbackState } from '../../src/mohammadLedger/ledgerState.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { accountOpeningAmounts } from '../../src/mohammadLedger/accountConfig.js'
+import { createEmptyAdreemState, createMohammadFallbackState } from '../../src/mohammadLedger/ledgerState.js'
 import { voidRecentMovementInState } from '../telegram/historyActions.js'
+import { appendTelegramAccount } from './accountService.js'
 import { appendTelegramMovement, resolveTelegramReviewMovement, telegramUpdateIdempotencyKey } from './ledgerService.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
@@ -49,6 +54,30 @@ async function telegramMovementFor(draft, initialState = createMohammadFallbackS
 }
 
 describe('telegram and web movement parity', () => {
+  it('creates the same opening account and balance from web and Telegram inputs', async () => {
+    const draft = {
+      ownerName: 'مو إدريس',
+      subAccountName: 'شيك بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+      openingBalanceAmount: '1,250',
+      openingBalanceDirection: 'i_owe',
+    }
+    const webAccount = createAccount({ ...draft, ...accountOpeningAmounts(draft) })
+    const webOpening = createOpeningMovements([webAccount], webAccount.createdAt)
+    const repository = memoryRepository(createEmptyAdreemState())
+    const telegram = await appendTelegramAccount(repository, draft, { idempotencyKey: 'opening-parity' })
+
+    expect(telegram.account).toMatchObject({
+      ownerName: webAccount.ownerName,
+      subAccountName: webAccount.subAccountName,
+      currencyKind: webAccount.currencyKind,
+      openingDinar: webAccount.openingDinar,
+      openingUsd: webAccount.openingUsd,
+    })
+    expect(telegram.openingMovements.map(comparableMovement)).toEqual(webOpening.map(comparableMovement))
+  })
   it('posts a dinar transfer with the same accounting effect as core/web', async () => {
     const state = createMohammadFallbackState()
     const draft = {

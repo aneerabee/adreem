@@ -97,6 +97,64 @@ describe('server ledger state validation', () => {
     expect(validateLedgerStateTransition(state, state, { ledgerId: 'main' })).toEqual({ ok: true, errors: [] })
   })
 
+  it('accepts one matching opening movement only while its account is first created', () => {
+    const current = createEmptyAdreemState(at)
+    const account = {
+      id: 'person-opening',
+      ownerName: 'سيف',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: CURRENCIES.DINAR,
+      openingDinar: -500,
+      openingUsd: 0,
+      status: ACCOUNT_STATUSES.ACTIVE,
+      createdAt: at,
+    }
+    const movement = {
+      id: 'opening-person-opening-dinar',
+      type: MOVEMENT_TYPES.OPENING_BALANCE,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: -500,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: null,
+      destinationAccountId: account.id,
+      createdAt: at,
+      updatedAt: at,
+    }
+
+    expect(validateLedgerStateTransition({ ...current, accounts: [account], movements: [movement] }, current)).toEqual({ ok: true, errors: [] })
+  })
+
+  it('rejects adding or changing an opening balance after account creation', () => {
+    const account = cashAccount({ openingDinar: 0, openingUsd: 0 })
+    const current = { ...createEmptyAdreemState(at), accounts: [account] }
+    const injectedOpening = opening(500)
+    const changedAccount = { ...account, openingDinar: 500, updatedAt: validationNow }
+
+    const injected = validateLedgerStateTransition({ ...current, movements: [injectedOpening] }, current)
+    expect(injected.errors).toContainEqual(expect.objectContaining({ code: 'opening-account-not-new' }))
+
+    const changed = validateLedgerStateTransition({ ...current, accounts: [changedAccount] }, current)
+    expect(changed.errors).toContainEqual(expect.objectContaining({ code: 'account-opening-immutable', field: 'openingDinar' }))
+  })
+
+  it('keeps the opening movement immutable after the account is created', () => {
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount({ openingDinar: 100 })], movements: [opening(100)] }
+    const changedOpening = { ...opening(100), amount: 200, updatedAt: validationNow }
+    const result = validateLedgerStateTransition({ ...current, movements: [changedOpening] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'opening-movement-immutable', id: 'opening-1' }))
+  })
+
+  it('rejects a nonzero opening field without its matching movement', () => {
+    const current = createEmptyAdreemState(at)
+    const account = cashAccount({ openingDinar: 500, openingUsd: 0 })
+    const result = validateLedgerStateTransition({ ...current, accounts: [account] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'account-opening-movement-missing' }))
+  })
+
   it('allows an account merged into its active logical duplicate to become inactive', () => {
     const target = cashAccount({ id: 'cash-target' })
     const source = cashAccount({ id: 'cash-source', status: ACCOUNT_STATUSES.NEEDS_REVIEW })

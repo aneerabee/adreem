@@ -70,7 +70,7 @@ describe('telegram account flow', () => {
 
     const selectedGroupSession = ctx.sessions.get(ctx.chatId, ctx.userId)
     expect(selectedGroupSession.step).toBe('owner')
-    expect(ctx.telegram.calls.at(-1).payload.text).toContain('<code>2/5</code>')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('<code>2/6</code>')
     expect(ctx.telegram.calls.at(-1).payload.text).not.toContain('النوع: شخص أو جهة')
 
     await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'شركة النور')
@@ -82,6 +82,8 @@ describe('telegram account flow', () => {
 
     await handleAccountCallback(ctx, 'acct:detail:0')
     await handleAccountCallback(ctx, 'acct:currency:USD')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('opening')
+    await handleAccountCallback(ctx, 'acct:num:done')
     await handleAccountCallback(ctx, 'acct:confirm')
 
     expect(ctx.repository.state.accounts).toHaveLength(1)
@@ -150,6 +152,7 @@ describe('telegram account flow', () => {
     await handleAccountCallback(ctx, 'acct:type:own-bank')
     await handleAccountText({ ...ctx, isCallback: false, messageId: 57 }, 'الجمهورية')
     await handleAccountCallback(ctx, 'acct:currency:LYD')
+    await handleAccountCallback(ctx, 'acct:num:done')
     await handleAccountCallback(ctx, 'acct:confirm')
 
     expect(ctx.repository.state.accounts).toHaveLength(1)
@@ -160,6 +163,57 @@ describe('telegram account flow', () => {
       valueKind: VALUE_KINDS.BANK,
       currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
     })
+  })
+
+  it('creates a person opening debt through the calculator and explicit direction', async () => {
+    const ctx = createCtx()
+
+    await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:group:people')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'مو إدريس')
+    await handleAccountCallback(ctx, 'acct:detail:1')
+    await handleAccountCallback(ctx, 'acct:currency:USD')
+    for (const key of ['1', '2', '5', '0']) await handleAccountCallback(ctx, `acct:num:${key}`)
+    await handleAccountCallback(ctx, 'acct:num:done')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({ step: 'direction', openingBuffer: '1250' })
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('لمن الرصيد')
+
+    await handleAccountCallback(ctx, 'acct:opening-direction:i_owe')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('عليّ له')
+    await handleAccountCallback(ctx, 'acct:confirm')
+
+    expect(ctx.repository.state.accounts[0]).toMatchObject({ openingDinar: 0, openingUsd: -1_250 })
+    expect(ctx.repository.state.movements).toHaveLength(1)
+    expect(ctx.repository.state.movements[0]).toMatchObject({
+      type: MOVEMENT_TYPES.OPENING_BALANCE,
+      amount: -1_250,
+      currency: CURRENCIES.USD,
+    })
+  })
+
+  it('returns safely through the opening balance steps without losing the amount', async () => {
+    const ctx = createCtx()
+
+    await startAccount(ctx)
+    await handleAccountCallback(ctx, 'acct:group:people')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'سيف')
+    await handleAccountCallback(ctx, 'acct:detail:0')
+    await handleAccountCallback(ctx, 'acct:currency:LYD')
+    for (const key of ['5', '0', '0']) await handleAccountCallback(ctx, `acct:num:${key}`)
+    await handleAccountCallback(ctx, 'acct:num:done')
+
+    const directionButtons = ctx.telegram.calls.at(-1).payload.reply_markup.inline_keyboard.flat()
+    expect(directionButtons.filter((button) => button.callback_data?.startsWith('acct:opening-direction:')).every((button) => !button.text.startsWith('✓'))).toBe(true)
+
+    await handleAccountCallback(ctx, 'acct:back')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({ step: 'opening', openingBuffer: '500' })
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('500 د.ل')
+
+    await handleAccountCallback(ctx, 'acct:cancel')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+    expect(ctx.repository.state.accounts).toEqual([])
+    expect(ctx.repository.state.movements).toEqual([])
   })
 
   it('creates a project tracking account without treating it as a posting party yet', async () => {

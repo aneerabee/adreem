@@ -146,6 +146,18 @@ export function accountCurrencyKeyboard(selectedCurrency = CURRENCIES.DINAR) {
   }
 }
 
+export function accountOpeningDirectionKeyboard(selectedDirection = '') {
+  return {
+    inline_keyboard: [
+      [
+        { text: `${selectedDirection === 'owed_to_me' ? '✓ ' : ''}لي عنده`, callback_data: 'acct:opening-direction:owed_to_me', style: 'success' },
+        { text: `${selectedDirection === 'i_owe' ? '✓ ' : ''}عليّ له`, callback_data: 'acct:opening-direction:i_owe', style: 'danger' },
+      ],
+      [{ text: '↩️ رجوع', callback_data: 'acct:back', style: 'primary' }, { text: 'إلغاء', callback_data: 'acct:cancel', style: 'danger' }],
+    ],
+  }
+}
+
 export function accountConfirmKeyboard(mode = 'create') {
   const isReview = mode === true || mode === 'review'
   const isEdit = mode === 'edit'

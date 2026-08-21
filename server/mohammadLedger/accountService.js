@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
-import { accountPresetFor, emptyAccountDraft } from '../../src/mohammadLedger/accountConfig.js'
+import { accountOpeningAmounts, accountOpeningDraftErrors, accountPresetFor, emptyAccountDraft } from '../../src/mohammadLedger/accountConfig.js'
 import { accountEditSnapshot, accountUpdateMovementErrors, prepareAccountUpdate } from '../../src/mohammadLedger/accountEditing.js'
 import { normalizeAccountText } from '../../src/mohammadLedger/accountCompatibility.js'
 import { ACCOUNT_STATUSES } from '../../src/mohammadLedger/accountCatalog.js'
-import { createAccount, validateAccount } from '../../src/mohammadLedger/ledgerCore.js'
+import { createAccount, createOpeningMovements, validateAccount, validateMovement } from '../../src/mohammadLedger/ledgerCore.js'
 import { createAuditEvent } from '../../src/mohammadLedger/ledgerOperations.js'
 import { findTelegramUpdateAuditEvent } from './ledgerService.js'
 
@@ -15,14 +15,14 @@ function telegramAuditDetails(metadata = {}) {
 export function normalizeAccountDraft(draft = {}) {
   const preset = accountPresetFor(draft.type, draft.valueKind)
   const fallback = emptyAccountDraft()
+  const openingAmounts = accountOpeningAmounts(draft)
   return {
     ownerName: normalizeAccountText(draft.ownerName || fallback.ownerName),
     subAccountName: normalizeAccountText(draft.subAccountName || preset.subAccountName || fallback.subAccountName),
     type: preset.type,
     valueKind: preset.valueKind,
     currencyKind: draft.currencyKind || fallback.currencyKind,
-    openingDinar: 0,
-    openingUsd: 0,
+    ...openingAmounts,
     notes: String(draft.notes || '').trim(),
   }
 }
@@ -41,9 +41,10 @@ export function buildAccountCandidate(draft = {}, metadata = {}) {
 
 export function validateAccountDraft(draft, existingAccounts = []) {
   const account = buildAccountCandidate(draft)
+  const errors = [...accountOpeningDraftErrors(draft), ...validateAccount(account, existingAccounts).errors]
   return {
     account,
-    validation: validateAccount(account, existingAccounts),
+    validation: { ok: errors.length === 0, errors },
   }
 }
 
@@ -107,9 +108,11 @@ export async function appendTelegramAccount(repository, draft, metadata = {}) {
   return repository.update((state) => {
     const existing = state.accounts.find((account) => account.source === 'telegram' && account.idempotencyKey === idempotencyKey)
     if (existing) {
+      const openingMovements = (state.movements || []).filter((movement) => movement.id === `opening-${existing.id}-dinar` || movement.id === `opening-${existing.id}-usd`)
       return {
         state,
         account: existing,
+        openingMovements,
         duplicate: true,
         validation: { ok: true, errors: [] },
       }
@@ -121,18 +124,33 @@ export async function appendTelegramAccount(repository, draft, metadata = {}) {
       telegramUserId: metadata.telegramUserId,
       telegramChatId: metadata.telegramChatId,
     })
-    const validation = validateAccount(account, state.accounts)
+    const draftErrors = accountOpeningDraftErrors(draft)
+    const validationErrors = [...draftErrors, ...validateAccount(account, state.accounts).errors]
+    const validation = { ok: validationErrors.length === 0, errors: validationErrors }
     if (!validation.ok) {
       return { state, account, validation, rejected: true }
+    }
+    const openingMovements = createOpeningMovements([account], account.createdAt)
+    const openingErrors = openingMovements.flatMap((movement) => validateMovement(movement, [...state.accounts, account], state.movements || []).errors)
+    if (openingErrors.length) {
+      return {
+        state,
+        account,
+        openingMovements: [],
+        validation: { ok: false, errors: openingErrors },
+        rejected: true,
+      }
     }
     return {
       state: {
         ...state,
         accounts: [...state.accounts, account],
+        movements: [...(state.movements || []), ...openingMovements],
         auditEvents: [
           ...(state.auditEvents || []),
           createAuditEvent('account.created', {
             accountId: account.id,
+            openingMovementIds: openingMovements.map((movement) => movement.id),
             source: 'telegram',
             telegramUserId: metadata.telegramUserId,
             ...telegramAuditDetails(metadata),
@@ -140,6 +158,7 @@ export async function appendTelegramAccount(repository, draft, metadata = {}) {
         ],
       },
       account,
+      openingMovements,
       validation,
       duplicate: false,
     }

@@ -7,10 +7,12 @@ import {
   accountDetailOptionsFor,
   accountNeedsCurrency,
   accountNameValue,
+  accountOpeningAmounts,
   accountPresetFor,
   accountPresetGroupFor,
   accountPresetStepCopy,
   accountPrimaryName,
+  accountSupportsOpeningBalance,
 } from '../../src/mohammadLedger/accountConfig.js'
 import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { accountEditChanges } from '../../src/mohammadLedger/accountEditing.js'
@@ -27,6 +29,7 @@ import {
 import { formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
 import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
 import { formatZonedDate, formatZonedTime } from './dateRange.js'
+import { numericBufferDisplay } from './numericKeypad.js'
 
 export { movementLabels }
 
@@ -185,6 +188,8 @@ function accountStepTitle(session) {
   if (session?.step === 'owner') return preset.nameLabel || 'اكتب الاسم'
   if (session?.step === 'detail') return preset.detailLabel || 'اختر التفصيل'
   if (session?.step === 'currency') return 'اختر العملة'
+  if (session?.step === 'opening') return 'أدخل الرصيد عند البداية'
+  if (session?.step === 'direction') return 'لمن الرصيد؟'
   if (session?.step === 'review') return 'راجع الحساب'
   return 'حساب جديد'
 }
@@ -197,6 +202,8 @@ function accountStepHelp(session) {
   if (session?.step === 'owner') return preset.namePlaceholder || 'اكتب الاسم فقط.'
   if (session?.step === 'detail') return 'كاش أو شيك بيننا.'
   if (session?.step === 'currency') return 'دينار أو دولار.'
+  if (session?.step === 'opening') return 'اكتب صفرًا إذا لا يوجد رصيد سابق.'
+  if (session?.step === 'direction') return 'اختر المعنى الصحيح للمبلغ.'
   if (session?.step === 'review') return 'تأكد ثم احفظ.'
   return ''
 }
@@ -207,9 +214,12 @@ export function accountStepText(session) {
   const group = accountPresetGroupFor(session?.presetGroup || preset)
   const hasTypeStep = group.keys.length > 1
   const structureLocked = session?.mode === 'edit' && session?.structureLocked
+  const hasOpeningStep = session?.mode === 'create' && accountSupportsOpeningBalance(draft)
+  const openingAmount = Number(session?.openingBuffer || draft.openingBalanceAmount || 0)
+  const hasDirectionStep = hasOpeningStep && draft.valueKind === VALUE_KINDS.RECEIVABLE && openingAmount > 0
   const steps = structureLocked
     ? ['owner', 'review']
-    : ['group', ...(hasTypeStep ? ['type'] : []), 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), 'review']
+    : ['group', ...(hasTypeStep ? ['type'] : []), 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), ...(hasOpeningStep ? ['opening'] : []), ...(hasDirectionStep ? ['direction'] : []), 'review']
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = `${currentIndex + 1}/${steps.length}`
   const summary = []
@@ -222,6 +232,13 @@ export function accountStepText(session) {
   }
   if (accountNeedsCurrency(draft) && currentIndex > steps.indexOf('currency') && draft.currencyKind) {
     summary.push(htmlLine('العملة', draft.currencyKind === CURRENCIES.USD ? 'دولار' : 'دينار'))
+  }
+  if (hasOpeningStep && currentIndex > steps.indexOf('opening')) {
+    const currency = draft.currencyKind === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+    const openingText = session?.step === 'direction' && !draft.openingBalanceDirection
+      ? formatMoney(Math.abs(openingAmount), currency)
+      : accountOpeningText(draft)
+    summary.push(htmlLine('الرصيد الأول', openingText))
   }
 
   const title = session?.mode === 'review' ? 'ADREEM · إصلاح حساب' : session?.mode === 'edit' ? 'ADREEM · تعديل حساب' : 'ADREEM · حساب جديد'
@@ -238,6 +255,9 @@ export function accountStepText(session) {
     ...(summary.length ? [`<blockquote>${summary.map((item) => `✓ ${item}`).join('\n')}</blockquote>`, ''] : []),
     `<b>${escapeHtml(accountStepTitle(session))}</b>`,
     ...(help ? [`<code>${escapeHtml(help)}</code>`] : []),
+    ...(session?.step === 'opening'
+      ? ['', `<blockquote>${escapeHtml(`${numericBufferDisplay(session.openingBuffer)} ${draft.currencyKind === CURRENCIES.USD ? '$' : 'د.ل'}`)}</blockquote>`]
+      : []),
   ]
   return lines.join('\n')
 }
@@ -253,7 +273,7 @@ export function accountReviewText(session, result = null) {
     '\n',
     escapeHtml(protectedAccountContext(draft)),
     '\n',
-    escapeHtml('الرصيد الافتتاحي: صفر'),
+    escapeHtml(`الرصيد الأول: ${accountOpeningText(draft)}`),
     '</blockquote>',
   ]
   const errors = result?.validation?.errors || []
@@ -275,9 +295,21 @@ export function accountCreatedText(account, { duplicate = false, reviewed = fals
     '\n',
     escapeHtml(protectedAccountContext(account)),
     '\n',
-    escapeHtml('الرصيد: صفر'),
+    escapeHtml(`الرصيد: ${accountOpeningText(account)}`),
     '</blockquote>',
   ].join('')
+}
+
+function accountOpeningText(account = {}) {
+  const opening = accountOpeningAmounts(account)
+  const currency = account.currencyKind === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+  const amount = currency === CURRENCIES.USD ? opening.openingUsd : opening.openingDinar
+  if (!amount) return 'صفر'
+  if (account.valueKind === VALUE_KINDS.RECEIVABLE) {
+    return `${amount > 0 ? 'لي عنده' : 'عليّ له'} ${formatMoney(Math.abs(amount), currency)}`
+  }
+  if (account.valueKind === VALUE_KINDS.ASSET) return `القيمة ${formatMoney(amount, currency)}`
+  return `الموجود ${formatMoney(amount, currency)}`
 }
 
 export function movementStepText(session, accountsById = new Map(), dimensionsById = new Map(), expenseCategoriesById = new Map()) {

@@ -2,14 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import { normalizeAccountText } from './accountCompatibility.js'
 import {
+  ACCOUNT_OPENING_DIRECTIONS,
   accountChoiceKind,
   accountChoiceKindLabel,
   accountDetailName,
   accountContextLabel,
   accountDisplayName,
   accountNameValue,
+  accountOpeningAmounts,
+  accountOpeningDraftErrors,
   accountPresets,
   accountPrimaryName,
+  accountSupportsOpeningBalance,
   applyAccountClassification,
   applyAccountName,
   emptyAccountDraft,
@@ -77,5 +81,46 @@ describe('account display wording', () => {
     expect(cash).toMatchObject({ ownerName: 'أنا', subAccountName: 'سعيد', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH })
     expect(restoredPerson).toMatchObject({ ownerName: 'سعيد', subAccountName: 'كاش بيننا', type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE })
     expect(person).toMatchObject({ ownerName: 'سعيد', subAccountName: 'شيك بيننا' })
+  })
+
+  it('maps a new account opening balance to its currency and direction', () => {
+    const person = {
+      ...emptyAccountDraft(),
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+      openingBalanceAmount: '1,250',
+      openingBalanceDirection: ACCOUNT_OPENING_DIRECTIONS.I_OWE,
+    }
+    const cash = {
+      ...emptyAccountDraft(),
+      valueKind: VALUE_KINDS.CASH,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+      openingBalanceAmount: '800',
+    }
+
+    expect(accountOpeningAmounts(person)).toEqual({ openingDinar: 0, openingUsd: -1_250 })
+    expect(accountOpeningAmounts(cash)).toEqual({ openingDinar: 800, openingUsd: 0 })
+  })
+
+  it('offers opening balances only for real balance accounts', () => {
+    expect(accountSupportsOpeningBalance({ valueKind: VALUE_KINDS.RECEIVABLE })).toBe(true)
+    expect(accountSupportsOpeningBalance({ valueKind: VALUE_KINDS.CASH })).toBe(true)
+    expect(accountSupportsOpeningBalance({ valueKind: VALUE_KINDS.BANK })).toBe(true)
+    expect(accountSupportsOpeningBalance({ valueKind: VALUE_KINDS.ASSET })).toBe(true)
+    expect(accountSupportsOpeningBalance({ valueKind: VALUE_KINDS.PROJECT })).toBe(false)
+    expect(accountSupportsOpeningBalance({ valueKind: VALUE_KINDS.EXPENSE })).toBe(false)
+  })
+
+  it('requires an explicit direction only for a nonzero person opening balance', () => {
+    const person = {
+      ...emptyAccountDraft(),
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      openingBalanceAmount: '500',
+      openingBalanceDirection: '',
+    }
+
+    expect(accountOpeningDraftErrors(person)).toContainEqual(expect.objectContaining({ field: 'openingBalanceDirection' }))
+    expect(accountOpeningDraftErrors({ ...person, openingBalanceAmount: '0' })).toEqual([])
+    expect(accountOpeningDraftErrors({ ...person, valueKind: VALUE_KINDS.CASH })).toEqual([])
   })
 })

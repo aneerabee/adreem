@@ -8,11 +8,11 @@ import './adreemDesk.css'
 import './adreemStudio.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
-import { accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
+import { ACCOUNT_OPENING_DIRECTIONS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
 import { accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { formatZonedDate, formatZonedDateTime, formatZonedTime, isZonedToday, isZonedYesterday, zonedDayKey, zonedDayRange } from './dateRange'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, validateMovementBalanceTransition, voidMovement } from './ledgerCore'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, createOpeningMovements, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, validateMovementBalanceTransition, voidMovement } from './ledgerCore'
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUploadedAttachment, getMohammadPersistenceMode, loadAdreemMovementPage, loadMohammadPersistedState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
@@ -48,6 +48,7 @@ const ACCOUNT_WIZARD_STEPS = {
   NAME: 'name',
   DETAIL: 'detail',
   CURRENCY: 'currency',
+  OPENING: 'opening',
   SAVE: 'save',
 }
 
@@ -2129,7 +2130,19 @@ export default function MohammadLedgerApp() {
   const hasAccountDraftName = Boolean(accountDraftNameValue.trim())
   const accountNeedsDetailChoice = !selectedAccountPreset.skipDetail && selectedAccountDetails.length > 0
   const accountNeedsCurrencyChoice = accountNeedsCurrency(accountDraft)
+  const accountNeedsOpeningBalance = accountSupportsOpeningBalance(accountDraft)
   const accountNeedsPresetChoice = selectedAccountPresetGroup.keys.length > 1
+  const accountOpening = accountOpeningAmounts(accountDraft)
+  const accountOpeningCurrency = accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+  const accountOpeningValue = accountOpeningCurrency === CURRENCIES.USD ? accountOpening.openingUsd : accountOpening.openingDinar
+  const accountOpeningDirectionReady = accountOpeningDraftErrors(accountDraft).length === 0
+  const accountOpeningSummary = accountOpeningValue === 0
+    ? 'بدون رصيد سابق'
+    : accountDraft.valueKind === VALUE_KINDS.RECEIVABLE
+      ? accountOpeningDirectionReady
+        ? `${accountOpeningValue > 0 ? 'لي عنده' : 'عليّ له'} ${money(Math.abs(accountOpeningValue), accountOpeningCurrency)}`
+        : `حدد الاتجاه · ${money(Math.abs(accountOpeningValue), accountOpeningCurrency)}`
+      : `${accountDraft.valueKind === VALUE_KINDS.ASSET ? 'القيمة' : 'الموجود'} ${money(accountOpeningValue, accountOpeningCurrency)}`
   const accountWizardStages = [
     {
       key: ACCOUNT_WIZARD_STEPS.GROUP,
@@ -2168,6 +2181,15 @@ export default function MohammadLedgerApp() {
           },
         ]
       : []),
+    ...(accountNeedsOpeningBalance
+      ? [
+          {
+            key: ACCOUNT_WIZARD_STEPS.OPENING,
+            title: 'الرصيد عند البداية',
+            summary: accountOpeningSummary,
+          },
+        ]
+      : []),
     {
       key: ACCOUNT_WIZARD_STEPS.SAVE,
       title: 'تأكيد الحساب',
@@ -2179,7 +2201,9 @@ export default function MohammadLedgerApp() {
   const currentAccountWizardIndex = Math.max(0, accountWizardStageKeys.indexOf(currentAccountWizardStep))
   const accountWizardPreviousStep = accountWizardStages[Math.max(0, currentAccountWizardIndex - 1)]?.key || ACCOUNT_WIZARD_STEPS.GROUP
   const accountWizardNextStep = accountWizardStages[Math.min(accountWizardStages.length - 1, currentAccountWizardIndex + 1)]?.key || ACCOUNT_WIZARD_STEPS.SAVE
-  const canAdvanceAccountWizard = currentAccountWizardStep !== ACCOUNT_WIZARD_STEPS.NAME || hasAccountDraftName
+  const canAdvanceAccountWizard = currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME
+    ? hasAccountDraftName
+    : currentAccountWizardStep !== ACCOUNT_WIZARD_STEPS.OPENING || accountOpeningDirectionReady
   const balancesByKind = useMemo(() => {
     const groups = {
       people: [],
@@ -2921,7 +2945,7 @@ export default function MohammadLedgerApp() {
   }
 
   function goToAccountWizardStep(step) {
-    const targetStep = [ACCOUNT_WIZARD_STEPS.DETAIL, ACCOUNT_WIZARD_STEPS.CURRENCY, ACCOUNT_WIZARD_STEPS.SAVE].includes(step) && !hasAccountDraftName ? ACCOUNT_WIZARD_STEPS.NAME : step
+    const targetStep = [ACCOUNT_WIZARD_STEPS.DETAIL, ACCOUNT_WIZARD_STEPS.CURRENCY, ACCOUNT_WIZARD_STEPS.OPENING, ACCOUNT_WIZARD_STEPS.SAVE].includes(step) && !hasAccountDraftName ? ACCOUNT_WIZARD_STEPS.NAME : step
     const currentIndex = accountWizardStageKeys.indexOf(currentAccountWizardStep)
     const targetIndex = accountWizardStageKeys.indexOf(targetStep)
     commitFlowChange(
@@ -3030,6 +3054,8 @@ export default function MohammadLedgerApp() {
           valueKind: preset.valueKind,
           subAccountName: preset.nameTarget === 'subAccountName' ? '' : preset.subAccountName,
           currencyKind: accountNeedsCurrency(preset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
+          openingBalanceAmount: '',
+          openingBalanceDirection: '',
         }))
       },
       nextStep === ACCOUNT_WIZARD_STEPS.PRESET ? 'back' : 'forward',
@@ -3056,6 +3082,8 @@ export default function MohammadLedgerApp() {
         valueKind: firstPreset.valueKind,
         subAccountName: firstPreset.nameTarget === 'subAccountName' ? '' : firstPreset.subAccountName,
         currencyKind: accountNeedsCurrency(firstPreset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
+        openingBalanceAmount: '',
+        openingBalanceDirection: '',
       }))
     }, 'forward')
   }
@@ -3202,19 +3230,38 @@ export default function MohammadLedgerApp() {
     }
     const submissionKey = JSON.stringify(['account', accountDraft])
     if (!claimSubmission(accountCreationLockRef, submissionKey)) return
-    const account = createAccount(accountDraft)
+    const openingDraftErrors = accountOpeningDraftErrors(accountDraft)
+    if (openingDraftErrors.length) {
+      releaseSubmission(accountCreationLockRef, submissionKey)
+      setAccountWizardStep(ACCOUNT_WIZARD_STEPS.OPENING)
+      setFeedback(openingDraftErrors.map((error) => error.message).join(' '))
+      return
+    }
+    const openingAmounts = accountOpeningAmounts(accountDraft)
+    const account = createAccount({ ...accountDraft, ...openingAmounts })
     const validation = validateAccount(account, accounts)
     if (!validation.ok) {
       releaseSubmission(accountCreationLockRef, submissionKey)
       setFeedback(validation.errors.map((error) => error.message).join(' '))
       return
     }
+    const openingMovements = createOpeningMovements([account], account.createdAt)
+    const openingErrors = openingMovements.flatMap((movement) => validateMovement(movement, [...accounts, account], movements).errors)
+    if (openingErrors.length) {
+      releaseSubmission(accountCreationLockRef, submissionKey)
+      setFeedback(openingErrors.map((error) => error.message).join(' '))
+      return
+    }
     setAccounts((current) => [...current, account])
+    setMovements((current) => [...current, ...openingMovements])
     setLedgerExtras((current) => ({
       ...current,
-      auditEvents: [...(current.auditEvents || []), createAuditEvent('account.created', { accountId: account.id })],
+      auditEvents: [...(current.auditEvents || []), createAuditEvent('account.created', {
+        accountId: account.id,
+        openingMovementIds: openingMovements.map((movement) => movement.id),
+      })],
     }))
-    setFeedback('تم إنشاء الحساب.')
+    setFeedback(openingMovements.length ? 'تم إنشاء الحساب وتسجيل رصيده الأول.' : 'تم إنشاء الحساب.')
     setAccountDraft(emptyAccountDraft())
     setActiveAccountPresetGroup('')
     setActiveAccountPresetKey('')
@@ -4363,8 +4410,8 @@ export default function MohammadLedgerApp() {
 
                 <section key={currentAccountWizardStep} className={`ml3-account-stage ml3-account-stage--${currentAccountWizardStep}`}>
                   <div className="ml3-account-stage-head">
-                    <h3>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'الحساب يخص ماذا؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.question : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.nameLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? selectedAccountPreset.detailLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'بأي عملة؟' : 'راجع الحساب'}</h3>
-                    <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر الأقرب فقط.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.hint : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.namePlaceholder : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'اختر كاش بينكما أو شيك بينكما.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'اختر دينارًا أو دولارًا.' : 'تأكد من الاسم والنوع والعملة.'}</p>
+                    <h3>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'الحساب يخص ماذا؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.question : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.nameLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? selectedAccountPreset.detailLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'بأي عملة؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? 'هل يوجد رصيد سابق؟' : 'راجع الحساب'}</h3>
+                    <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر الأقرب فقط.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.hint : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.namePlaceholder : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'اختر كاش بينكما أو شيك بينكما.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'اختر دينارًا أو دولارًا.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? (accountDraft.valueKind === VALUE_KINDS.RECEIVABLE ? 'أدخل المبلغ وحدد اتجاهه، أو اتركه صفرًا.' : 'أدخل الموجود الآن، أو اتركه صفرًا.') : 'تأكد من الاسم والرصيد.'}</p>
                   </div>
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? (
@@ -4429,7 +4476,7 @@ export default function MohammadLedgerApp() {
                               subAccountName: option,
                             }))
                             setActiveAccountDetail(option)
-                            goToAccountWizardStep(accountNeedsCurrencyChoice ? ACCOUNT_WIZARD_STEPS.CURRENCY : ACCOUNT_WIZARD_STEPS.SAVE)
+                            goToAccountWizardStep(accountNeedsCurrencyChoice ? ACCOUNT_WIZARD_STEPS.CURRENCY : accountNeedsOpeningBalance ? ACCOUNT_WIZARD_STEPS.OPENING : ACCOUNT_WIZARD_STEPS.SAVE)
                           }}
                         >
                           <strong>{option}</strong>
@@ -4448,7 +4495,7 @@ export default function MohammadLedgerApp() {
                             ...current,
                             currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
                           }))
-                          goToAccountWizardStep(ACCOUNT_WIZARD_STEPS.SAVE)
+                          goToAccountWizardStep(accountNeedsOpeningBalance ? ACCOUNT_WIZARD_STEPS.OPENING : ACCOUNT_WIZARD_STEPS.SAVE)
                         }}
                       >
                         <strong>دينار</strong>
@@ -4461,7 +4508,7 @@ export default function MohammadLedgerApp() {
                             ...current,
                             currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
                           }))
-                          goToAccountWizardStep(ACCOUNT_WIZARD_STEPS.SAVE)
+                          goToAccountWizardStep(accountNeedsOpeningBalance ? ACCOUNT_WIZARD_STEPS.OPENING : ACCOUNT_WIZARD_STEPS.SAVE)
                         }}
                       >
                         <strong>دولار</strong>
@@ -4469,10 +4516,43 @@ export default function MohammadLedgerApp() {
                     </div>
                   ) : null}
 
+                  {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? (
+                    <div className="ml3-account-opening">
+                      <NumericEntry
+                        label={`الرصيد الأول · ${accountOpeningCurrency === CURRENCIES.USD ? 'دولار' : 'دينار'}`}
+                        value={accountDraft.openingBalanceAmount}
+                        onChange={(value) => setAccountDraft((current) => ({ ...current, openingBalanceAmount: value }))}
+                      />
+                      {accountDraft.valueKind === VALUE_KINDS.RECEIVABLE ? (
+                        <div className="ml3-opening-direction" aria-label="اتجاه الرصيد">
+                          <button
+                            type="button"
+                            className={accountDraft.openingBalanceDirection === ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME ? 'is-active is-positive' : 'is-positive'}
+                            onClick={() => setAccountDraft((current) => ({ ...current, openingBalanceDirection: ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME }))}
+                            aria-pressed={accountDraft.openingBalanceDirection === ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME}
+                          >
+                            <span>لي عنده</span>
+                            <small>هو يدفع لي</small>
+                          </button>
+                          <button
+                            type="button"
+                            className={accountDraft.openingBalanceDirection === ACCOUNT_OPENING_DIRECTIONS.I_OWE ? 'is-active is-negative' : 'is-negative'}
+                            onClick={() => setAccountDraft((current) => ({ ...current, openingBalanceDirection: ACCOUNT_OPENING_DIRECTIONS.I_OWE }))}
+                            aria-pressed={accountDraft.openingBalanceDirection === ACCOUNT_OPENING_DIRECTIONS.I_OWE}
+                          >
+                            <span>عليّ له</span>
+                            <small>أنا أدفع له</small>
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
                     <div className="ml3-account-summary">
                       <span>الحساب بعد الحفظ</span>
                       <strong>{protectedAccountDraftSummary(accountDraft)}</strong>
+                      {accountNeedsOpeningBalance ? <small>{accountOpeningSummary}</small> : null}
                     </div>
                   ) : null}
 
@@ -4484,7 +4564,7 @@ export default function MohammadLedgerApp() {
                       <button type="submit" className="ml3-step-next" disabled={!hasAccountDraftName}>
                         حفظ الحساب <Check aria-hidden="true" size={17} />
                       </button>
-                    ) : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? (
+                    ) : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME || currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? (
                       <button type="button" className="ml3-step-next" disabled={!canAdvanceAccountWizard} onClick={advanceAccountWizard}>
                         التالي <ChevronLeft aria-hidden="true" size={17} />
                       </button>

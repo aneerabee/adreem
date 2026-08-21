@@ -14,12 +14,37 @@ import {
   postMovement,
   previewMovement,
   summarizeBalances,
+  validateMovement,
   validateMovementBalanceTransition,
   voidMovement,
   validateAccount,
 } from './ledgerCore'
 
 describe('mohammad ledger core', () => {
+  it('allows a person opening debt but rejects a negative owned-money opening', () => {
+    const person = createAccount({
+      id: 'person-opening-debt',
+      ownerName: 'سيف',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: CURRENCIES.DINAR,
+      openingDinar: -500,
+    })
+    const cash = createAccount({
+      id: 'cash-opening-negative',
+      ownerName: 'أنا',
+      subAccountName: 'الخزنة',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      currencyKind: CURRENCIES.DINAR,
+      openingDinar: -500,
+    })
+
+    expect(validateAccount(person, [])).toEqual({ ok: true, errors: [] })
+    expect(validateAccount(cash, []).errors).toContainEqual(expect.objectContaining({ field: 'openingDinar' }))
+    expect(validateMovement(createOpeningMovements([person])[0], [person], []).ok).toBe(true)
+  })
   it('rejects values that cannot fit exactly in the relational database', () => {
     const account = createAccount({
       id: 'cash-limit',

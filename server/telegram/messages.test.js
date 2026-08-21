@@ -8,6 +8,7 @@ import {
   accountChoiceButtonStyle,
   accountChoiceButtonText,
   accountEditHistoryText,
+  accountReviewText,
   accountStepText,
   alertsText,
   formatAccountBalance,
@@ -211,6 +212,7 @@ describe('telegram movement presentation', () => {
       },
     })
     const accountText = accountStepText({
+      mode: 'create',
       step: 'owner',
       draft: {
         type: 'person',
@@ -221,9 +223,35 @@ describe('telegram movement presentation', () => {
     expect(movementText).toContain('<code>4/9</code>')
     expect(movementText).not.toContain('●')
     expect(movementText).not.toContain('الخطوة الحالية')
-    expect(accountText).toContain('<code>2/5</code>')
+    expect(accountText).toContain('<code>2/6</code>')
     expect(accountText).not.toContain('○')
     expect(accountText).not.toContain('الخطوة الحالية')
+  })
+
+  it('localizes the opening balance steps without changing the entered account name', () => {
+    const session = {
+      mode: 'create',
+      step: 'direction',
+      presetGroup: 'people',
+      openingBuffer: '1250',
+      draft: {
+        ownerName: 'مو إدريس',
+        subAccountName: 'شيك بيننا',
+        type: ACCOUNT_TYPES.PERSON,
+        valueKind: VALUE_KINDS.RECEIVABLE,
+        currencyKind: CURRENCIES.USD,
+        openingBalanceAmount: '1250',
+        openingBalanceDirection: 'i_owe',
+      },
+    }
+    const localized = localizeTelegramPayload({
+      text: `${accountStepText(session)}\n${accountReviewText({ ...session, step: 'review' })}`,
+    }, 'en')
+    const visible = stripUiDataProtection(localized.text)
+
+    expect(visible).toContain('Who owes this balance?')
+    expect(visible).toContain('Opening balance: I owe them 1,250 $')
+    expect(visible).toContain('مو إدريس')
   })
 
   it('keeps account and movement review summaries in their correct flows', () => {

@@ -56,6 +56,7 @@ const SOURCE_REQUIRED_TYPES = new Set([
 ])
 
 const DESTINATION_REQUIRED_TYPES = new Set([
+  MOVEMENT_TYPES.OPENING_BALANCE,
   MOVEMENT_TYPES.TRANSFER,
   MOVEMENT_TYPES.CASH_DEPOSIT,
   MOVEMENT_TYPES.CASH_WITHDRAWAL,
@@ -90,7 +91,9 @@ export function createOpeningMovements(accounts = [], createdAt = isoNow()) {
         amount: roundMoney(account.openingDinar),
         destinationAccountId: account.id,
         sourceAccountId: null,
-        note: `رصيد افتتاحي من Numbers: ${account.legacyName}`,
+        note: account.createdFrom === 'synthetic_fixture'
+          ? `رصيد افتتاحي من Numbers: ${account.legacyName}`
+          : `رصيد افتتاحي: ${account.legacyName}`,
         createdAt,
         updatedAt: createdAt,
       })
@@ -104,7 +107,9 @@ export function createOpeningMovements(accounts = [], createdAt = isoNow()) {
         amount: roundMoney(account.openingUsd),
         destinationAccountId: account.id,
         sourceAccountId: null,
-        note: `رصيد افتتاحي دولار من Numbers: ${account.legacyName}`,
+        note: account.createdFrom === 'synthetic_fixture'
+          ? `رصيد افتتاحي دولار من Numbers: ${account.legacyName}`
+          : `رصيد افتتاحي: ${account.legacyName}`,
         createdAt,
         updatedAt: createdAt,
       })
@@ -193,7 +198,7 @@ export function validateMovement(movement, accounts = [], movements = [], option
   if (typeof amount === 'number' && Number.isFinite(amount) && (!Number.isInteger(amount) || Math.abs(amount) > MAX_MONEY_AMOUNT)) {
     errors.push({ field: 'amount', message: 'القيمة يجب أن تكون عددًا صحيحًا ضمن الحد المسموح.' })
   }
-  if (type !== MOVEMENT_TYPES.CORRECTION && typeof amount === 'number' && Number.isFinite(amount) && amount <= 0) {
+  if (![MOVEMENT_TYPES.CORRECTION, MOVEMENT_TYPES.OPENING_BALANCE].includes(type) && typeof amount === 'number' && Number.isFinite(amount) && amount <= 0) {
     errors.push({ field: 'amount', message: 'القيمة يجب أن تكون أكبر من صفر.' })
   }
   if (!currency || !Object.values(CURRENCIES).includes(currency)) {
@@ -226,6 +231,12 @@ export function validateMovement(movement, accounts = [], movements = [], option
   }
   const sourceAccount = sourceId ? accountMap.get(sourceId) : null
   const destinationAccount = destinationId ? accountMap.get(destinationId) : null
+  if (type === MOVEMENT_TYPES.OPENING_BALANCE) {
+    if (sourceId) errors.push({ field: 'sourceAccountId', message: 'الرصيد الافتتاحي لا يحتاج حساب مصدر.' })
+    if (destinationAccount && !accountSupportsTransferCurrency(destinationAccount, currency)) {
+      errors.push({ field: 'destinationAccountId', message: 'عملة الرصيد الافتتاحي لا تطابق عملة الحساب.' })
+    }
+  }
   if (type === MOVEMENT_TYPES.CASH_DEPOSIT || type === MOVEMENT_TYPES.CASH_WITHDRAWAL) {
     const expectedSourceKind = type === MOVEMENT_TYPES.CASH_DEPOSIT ? VALUE_KINDS.CASH : VALUE_KINDS.BANK
     const expectedDestinationKind = type === MOVEMENT_TYPES.CASH_DEPOSIT ? VALUE_KINDS.BANK : VALUE_KINDS.CASH
@@ -516,6 +527,31 @@ export function validateAccount(account, existingAccounts = []) {
   }
   if (!Object.values(ACCOUNT_TYPES).includes(account?.type)) {
     errors.push({ field: 'type', message: 'نوع الحساب غير معروف.' })
+  }
+  const openingDinar = Number(account?.openingDinar || 0)
+  const openingUsd = Number(account?.openingUsd || 0)
+  for (const [field, amount] of [['openingDinar', openingDinar], ['openingUsd', openingUsd]]) {
+    if (!Number.isSafeInteger(amount) || Math.abs(amount) > MAX_MONEY_AMOUNT) {
+      errors.push({ field, message: 'الرصيد الافتتاحي يجب أن يكون عددًا صحيحًا ضمن الحد المسموح.' })
+    }
+  }
+  const hasOpeningBalance = openingDinar !== 0 || openingUsd !== 0
+  const supportsOpeningBalance = [VALUE_KINDS.RECEIVABLE, VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET].includes(account?.valueKind)
+  if (hasOpeningBalance && !supportsOpeningBalance) {
+    errors.push({ field: 'openingDinar', message: 'هذا النوع لا يحمل رصيدًا افتتاحيًا.' })
+  }
+  if (cannotGoNegative(account) && openingDinar < 0) {
+    errors.push({ field: 'openingDinar', message: 'فلوسك أو قيمة الأصل لا يمكن أن تبدأ بالسالب.' })
+  }
+  if (cannotGoNegative(account) && openingUsd < 0) {
+    errors.push({ field: 'openingUsd', message: 'فلوسك أو قيمة الأصل لا يمكن أن تبدأ بالسالب.' })
+  }
+  const currencyKind = normalizeAccountCurrencyKind(account?.currencyKind, inferAccountCurrencyKind(account))
+  if (currencyKind === CURRENCIES.DINAR && openingUsd !== 0) {
+    errors.push({ field: 'openingUsd', message: 'الرصيد الافتتاحي يجب أن يطابق عملة الحساب.' })
+  }
+  if (currencyKind === CURRENCIES.USD && openingDinar !== 0) {
+    errors.push({ field: 'openingDinar', message: 'الرصيد الافتتاحي يجب أن يطابق عملة الحساب.' })
   }
   if (existingAccounts.some((item) => item.id === account?.id)) {
     errors.push({ field: 'id', message: 'معرف الحساب مستخدم مسبقًا.' })
