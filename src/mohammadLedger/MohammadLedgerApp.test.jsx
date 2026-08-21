@@ -2,6 +2,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
+import { COUNTERPARTY_ACCOUNT_KINDS } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement, previewMovement } from './ledgerCore.js'
 import {
   AccountProfile,
@@ -10,6 +11,7 @@ import {
   ExternalAccountCard,
   HistoryMovementRow,
   ReviewAccountCard,
+  CounterpartyList,
   accountBalanceChip,
   accountProfileMovements,
   areMergeAccountsCompatible,
@@ -21,6 +23,7 @@ import {
   cancelMovementConfirmation,
   claimSubmission,
   filterMovementHistory,
+  filterCounterpartyGroups,
   mergeAccountsConfirmation,
   mergeAccountReferenceErrors,
   mergeLedgerAccountState,
@@ -455,6 +458,78 @@ describe('MohammadLedgerApp people account views', () => {
     expect(views.negative).toEqual([expect.objectContaining({ dinar: 0, usd: -250 })])
     expect(views.withBalance).toHaveLength(1)
     expect(views.all).toHaveLength(1)
+  })
+
+  it('filters whole people without hiding the rest of a matched person balances', () => {
+    const group = (id, rows, receivable, payable) => ({ id, ownerName: id, rows, receivable, payable })
+    const row = (counterpartyKind, amount, currencyKind = ACCOUNT_CURRENCY_KINDS.DINAR) => ({
+      account: { counterpartyKind, currencyKind },
+      dinar: currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 0 : amount,
+      usd: currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? amount : 0,
+    })
+    const mixed = group('mixed', [
+      row(COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 1_200),
+      row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -450),
+      row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 80, ACCOUNT_CURRENCY_KINDS.USD),
+    ], { dinar: 1_200, usd: 80 }, { dinar: 450, usd: 0 })
+    const chequeOnly = group('cheque', [
+      row(COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 0),
+      row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -300),
+      row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, ACCOUNT_CURRENCY_KINDS.USD),
+    ], { dinar: 0, usd: 0 }, { dinar: 300, usd: 0 })
+    const groups = [mixed, chequeOnly]
+
+    expect(filterCounterpartyGroups(groups, 'receivable').map((item) => item.id)).toEqual(['mixed'])
+    expect(filterCounterpartyGroups(groups, 'payable').map((item) => item.id)).toEqual(['mixed', 'cheque'])
+    expect(filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR).map((item) => item.id)).toEqual(['mixed'])
+    expect(filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR).map((item) => item.id)).toEqual(['mixed', 'cheque'])
+    expect(filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CASH_USD).map((item) => item.id)).toEqual(['mixed'])
+    expect(filterCounterpartyGroups(groups, 'all')).toBe(groups)
+  })
+
+  it('spotlights one person and reveals all three balances while dimming the rest', () => {
+    const account = (id, counterpartyKind, subAccountName, currencyKind) => ({
+      id,
+      ownerName: id.startsWith('first') ? 'سعيد' : 'إدريس',
+      subAccountName,
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind,
+      counterpartyKind,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    })
+    const first = {
+      id: 'person:first',
+      ownerName: 'سعيد',
+      receivable: { dinar: 1_200, usd: 80 },
+      payable: { dinar: 450, usd: 0 },
+      rows: [
+        { account: account('first-cash', COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 'كاش بيننا', ACCOUNT_CURRENCY_KINDS.DINAR), dinar: 1_200, usd: 0 },
+        { account: account('first-cheque', COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 'شيك بيننا', ACCOUNT_CURRENCY_KINDS.DINAR), dinar: -450, usd: 0 },
+        { account: account('first-usd', COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 'دولار بيننا', ACCOUNT_CURRENCY_KINDS.USD), dinar: 0, usd: 80 },
+      ],
+    }
+    const second = {
+      id: 'person:second',
+      ownerName: 'إدريس',
+      receivable: { dinar: 300, usd: 0 },
+      payable: { dinar: 0, usd: 0 },
+      rows: [{ account: account('second-cash', COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 'كاش بيننا', ACCOUNT_CURRENCY_KINDS.DINAR), dinar: 300, usd: 0 }],
+    }
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <CounterpartyList groups={[first, second]} focusedId={first.id} hideHeader />,
+    ))
+
+    expect(markup).toContain('adreem-counterparty-list has-focus')
+    expect(markup).toContain('is-mixed is-focused')
+    expect(markup).toContain('is-receivable is-dimmed')
+    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('كاش بيننا')
+    expect(markup).toContain('شيك بيننا')
+    expect(markup).toContain('دولار')
+    expect(markup).toContain('لي 1,200 د.ل')
+    expect(markup).toContain('عليّ 450 د.ل')
+    expect(markup).toContain('لي 80 $')
   })
 
   it('describes account edits using clear before and after values', () => {
