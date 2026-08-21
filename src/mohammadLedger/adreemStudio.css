@@ -1968,8 +1968,21 @@ html.adreem-overlay-open .adreem-app .adreem-view {
 }
 .ml3-picker-kind svg,
 .ml3-picker-type-icon { color: var(--section-accent); }
-.ml3-picker-kind--person-bank svg,
-.ml3-picker-type-icon--person-bank { color: var(--history); }
+.ml3-picker-kind--person-cash svg { color: var(--entry); }
+.ml3-picker-kind--person-bank svg { color: var(--accounts); }
+.ml3-picker-kind--person-usd svg { color: var(--history); }
+.ml3-picker-type-icon--person-cash {
+  color: var(--entry);
+  background: var(--entry-soft);
+}
+.ml3-picker-type-icon--person-bank {
+  color: var(--accounts);
+  background: var(--accounts-soft);
+}
+.ml3-picker-type-icon--person-usd {
+  color: var(--history);
+  background: var(--history-soft);
+}
 .ml3-picker-kind--expense svg,
 .ml3-picker-type-icon--expense { color: var(--review); }
 .ml3-picker-type-icon {
@@ -1982,25 +1995,43 @@ html.adreem-overlay-open .adreem-app .adreem-view {
 }
 .ml3-picker-favorites {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(148px, 100%), 1fr));
   gap: 5px;
 }
 .ml3-picker-favorites button {
   min-width: 0;
-  min-height: 38px;
+  min-height: 58px;
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-  gap: 6px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-areas:
+    "icon identity"
+    "balance balance";
+  gap: 4px 6px;
   align-items: center;
-  padding: 4px 6px;
+  align-content: center;
+  padding: 5px 6px;
 }
-.ml3-picker-favorites button > strong {
+.ml3-picker-favorites button > .ml3-picker-type-icon { grid-area: icon; }
+.ml3-picker-favorite-copy {
+  grid-area: identity;
   min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+.ml3-picker-favorite-copy strong {
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ml3-picker-favorites .ml3-balance-chip { max-width: 105px; }
+.ml3-picker-favorites .ml3-balance-chip {
+  grid-area: balance;
+  width: 100%;
+  max-width: none;
+  justify-content: center;
+  text-align: center;
+}
 .ml3-picker-results {
   max-height: none;
   overflow: visible;
@@ -2008,17 +2039,50 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   padding-bottom: 3px;
 }
 .ml3-picker-results > button:not(.ml3-picker-more) {
-  min-height: 42px;
+  min-height: 48px;
   grid-template-columns: 28px minmax(0, 1fr) auto auto;
   gap: 7px;
   padding: 5px 7px;
 }
-.ml3-picker-option-copy { display: block; }
+.ml3-picker-option-copy {
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
 .ml3-picker-option-copy strong {
+  width: 100%;
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ml3-picker-channel-tag {
+  width: max-content;
+  max-width: 100%;
+  min-height: 15px;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: var(--section-ink);
+  background: var(--section-soft);
+  font-size: 0.52rem;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.ml3-picker-channel-tag.is-person-cash {
+  color: #075c4a;
+  background: var(--entry-soft);
+}
+.ml3-picker-channel-tag.is-person-bank {
+  color: #204f89;
+  background: var(--accounts-soft);
+}
+.ml3-picker-channel-tag.is-person-usd {
+  color: #825108;
+  background: var(--history-soft);
 }
 
 .ml3-step--source.is-open,
@@ -2040,10 +2104,6 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   margin-top: 0;
 }
 
-@media (min-width: 760px) {
-  .ml3-picker-favorites { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-
 @media (max-width: 430px) {
   .adreem-flow-head { min-height: 58px; padding-block: 6px; }
   .adreem-flow-progress { padding-top: 5px; }
@@ -2059,11 +2119,16 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   .ml3-picker-context > div { gap: 3px 7px; }
   .ml3-picker-favorites .ml3-balance-chip,
   .ml3-picker-results .ml3-balance-chip {
-    max-width: 112px;
     font-size: 0.61rem;
   }
+  .ml3-picker-results .ml3-balance-chip { max-width: 112px; }
   .ml3-picker-results > button:not(.ml3-picker-more) { grid-template-columns: 28px minmax(0, 1fr) auto; }
   .ml3-picker-results > button em { display: none; }
+  .ml3-picker-favorites button:last-child:nth-child(odd):not(:only-child) {
+    grid-column: 1 / -1;
+    width: calc(50% - 2.5px);
+    justify-self: center;
+  }
 }
 
 @media (max-width: 720px) {

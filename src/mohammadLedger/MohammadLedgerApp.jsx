@@ -130,13 +130,21 @@ function AccountPresetIcon({ presetKey }) {
 function AccountChoiceIcon({ account, size = 16 }) {
   const props = { 'aria-hidden': true, size, strokeWidth: 2.1 }
   const kind = accountChoiceKind(account)
+  if (kind === 'person-cash') return <Banknote {...props} />
+  if (kind === 'person-bank') return <Landmark {...props} />
+  if (kind === 'person-usd') return <CircleDollarSign {...props} />
   if (kind === VALUE_KINDS.CASH) return <Banknote {...props} />
   if (kind === VALUE_KINDS.BANK) return <Landmark {...props} />
-  if (kind === 'person-bank') return <WalletCards {...props} />
   if (kind === VALUE_KINDS.ASSET) return <Boxes {...props} />
   if (kind === VALUE_KINDS.PROJECT) return <BriefcaseBusiness {...props} />
   if (kind === VALUE_KINDS.EXPENSE) return <ReceiptText {...props} />
   return <UserRound {...props} />
+}
+
+function accountChoiceClasses(prefix, account) {
+  return [...new Set([visualKind(account), accountChoiceKind(account)])]
+    .map((kind) => `${prefix}--${kind}`)
+    .join(' ')
 }
 
 function AccountGroupIcon({ groupKey }) {
@@ -1224,7 +1232,7 @@ function CounterpartyFilters({ groups = [], value = 'all', onChange }) {
   )
 }
 
-function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = true, preferredAccountIds = [], balanceByAccountId = new Map(), balanceCurrency = '' }) {
+export function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = true, preferredAccountIds = [], balanceByAccountId = new Map(), balanceCurrency = '' }) {
   const [query, setQuery] = useState('')
   const [isChanging, setIsChanging] = useState(false)
   const [quickFilter, setQuickFilter] = useState('')
@@ -1336,7 +1344,7 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
             <span>{formatCount(resultAccounts.length)} حساب</span>
             <div>
               {kindLegendAccounts.map((account) => (
-                <span className={`ml3-picker-kind ml3-picker-kind--${visualKind(account)}`} key={accountChoiceKind(account)}>
+                <span className={`ml3-picker-kind ${accountChoiceClasses('ml3-picker-kind', account)}`} key={accountChoiceKind(account)}>
                   <AccountChoiceIcon account={account} size={14} />
                   {accountChoiceKindLabel(account)}
                 </span>
@@ -1351,10 +1359,14 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
               <div className="ml3-picker-favorites" aria-label="اختيارات سريعة">
                 {preferredAccounts.map((account) => {
                   const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id), balanceCurrency)
+                  const choiceKind = accountChoiceKind(account)
                   return (
-                    <button type="button" key={account.id} className={`ml3-picker-favorite--${visualKind(account)} ${account.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => chooseAccount(account.id)}>
-                      <span className={`ml3-picker-type-icon ml3-picker-type-icon--${visualKind(account)}`}><AccountChoiceIcon account={account} size={15} /></span>
-                      <strong>{protectedAccountPrimaryName(account)}</strong>
+                    <button type="button" key={account.id} className={`${accountChoiceClasses('ml3-picker-favorite', account)} ${account.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => chooseAccount(account.id)}>
+                      <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', account)}`}><AccountChoiceIcon account={account} size={15} /></span>
+                      <span className="ml3-picker-favorite-copy">
+                        <strong>{protectedAccountPrimaryName(account)}</strong>
+                        <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(account)}</small>
+                      </span>
                       <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
                     </button>
                   )
@@ -1386,11 +1398,13 @@ function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = tr
             {shownResultAccounts.map((account) => {
               const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id), balanceCurrency)
               const hasBalance = hasVisibleBalance(account)
+              const choiceKind = accountChoiceKind(account)
               return (
                 <button type="button" key={account.id} className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => chooseAccount(account.id)}>
-                  <span className={`ml3-picker-type-icon ml3-picker-type-icon--${visualKind(account)}`}><AccountChoiceIcon account={account} size={16} /></span>
+                  <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', account)}`}><AccountChoiceIcon account={account} size={16} /></span>
                   <span className="ml3-picker-option-copy">
                     <strong>{protectedAccountPrimaryName(account)}</strong>
+                    <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(account)}</small>
                   </span>
                   <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
                   {account.id === value ? <em>مختار</em> : null}

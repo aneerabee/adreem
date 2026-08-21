@@ -7,6 +7,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpe
 import {
   AccountProfile,
   AccountRow,
+  AccountSearchSelect,
   AccountClassificationEditorFields,
   ExternalAccountCard,
   HistoryMovementRow,
@@ -63,6 +64,50 @@ describe('MohammadLedgerApp movement account balances', () => {
     expect(accountBalanceChip(account, bucket, CURRENCIES.USD)).toEqual({ tone: 'positive', text: '500 $' })
     expect(accountBalanceChip(account, bucket, CURRENCIES.DINAR)).toEqual({ tone: 'positive', text: '50,000 د.ل' })
     expect(accountBalanceChip(account, { dinar: 50_000, usd: 0 }, CURRENCIES.USD)).toEqual({ tone: 'zero', text: '0 $' })
+  })
+})
+
+describe('MohammadLedgerApp movement account picker', () => {
+  it('distinguishes the same counterparty cash, cheque, and dollar accounts in quick and search results', () => {
+    const sharedAccount = {
+      ownerName: 'سعيد',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    }
+    const accounts = [
+      { ...sharedAccount, id: 'saeed-cash', subAccountName: 'كاش بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR, counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR },
+      { ...sharedAccount, id: 'saeed-cheque', subAccountName: 'شيك بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR, counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR },
+      { ...sharedAccount, id: 'saeed-usd', subAccountName: 'دولار بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.USD, counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD },
+    ]
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <AccountSearchSelect
+        label="اختر الطرف"
+        value={null}
+        accounts={accounts}
+        onChange={() => {}}
+        allowEmpty={false}
+        preferredAccountIds={['saeed-cash', 'saeed-cheque']}
+        balanceByAccountId={new Map([
+          ['saeed-cash', { dinar: 12_000, usd: 0 }],
+          ['saeed-cheque', { dinar: -4_500, usd: 0 }],
+          ['saeed-usd', { dinar: 0, usd: 700 }],
+        ])}
+      />,
+    ))
+
+    expect(markup).toContain('ml3-picker-channel-tag is-person-cash')
+    expect(markup).toContain('ml3-picker-channel-tag is-person-bank')
+    expect(markup).toContain('ml3-picker-channel-tag is-person-usd')
+    expect(markup).toContain('lucide-banknote')
+    expect(markup).toContain('lucide-landmark')
+    expect(markup).toContain('lucide-circle-dollar-sign')
+    expect(markup).toContain('كاش بيننا')
+    expect(markup).toContain('شيك بيننا')
+    expect(markup).toContain('دولار')
+    expect(markup).toContain('12,000 د.ل')
+    expect(markup).toContain('أدفع 4,500 د.ل')
+    expect(markup).toContain('700 $')
   })
 })
 
