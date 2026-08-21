@@ -1,0 +1,770 @@
+/* ADREEM Finance workspaces: compact, state-led balances and guided entry. */
+.adreem-app {
+  --finance-ink: oklch(0.25 0.025 174);
+  --finance-muted: oklch(0.51 0.025 174);
+  --finance-line: oklch(0.89 0.018 174);
+  --finance-surface: oklch(0.985 0.006 174);
+  --finance-paper: oklch(1 0 0);
+  --finance-green: oklch(0.55 0.13 161);
+  --finance-green-dark: oklch(0.39 0.1 161);
+  --finance-green-soft: oklch(0.96 0.035 161);
+  --finance-blue: oklch(0.56 0.15 250);
+  --finance-blue-dark: oklch(0.4 0.12 250);
+  --finance-blue-soft: oklch(0.96 0.03 250);
+  --finance-coral: oklch(0.61 0.18 25);
+  --finance-coral-dark: oklch(0.44 0.15 25);
+  --finance-coral-soft: oklch(0.965 0.035 25);
+  --finance-shadow: 0 12px 34px color-mix(in srgb, var(--finance-ink) 8%, transparent);
+  --finance-shadow-small: 0 5px 16px color-mix(in srgb, var(--finance-ink) 7%, transparent);
+}
+
+.adreem-motion-selection {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Balance signal strip */
+.ml3-balances-surface {
+  --balance-focus: var(--finance-blue);
+  --balance-focus-dark: var(--finance-blue-dark);
+  --balance-focus-soft: var(--finance-blue-soft);
+  gap: 12px;
+  color: var(--finance-ink);
+}
+
+.ml3-balances-surface--money {
+  --balance-focus: var(--finance-green);
+  --balance-focus-dark: var(--finance-green-dark);
+  --balance-focus-soft: var(--finance-green-soft);
+}
+
+.ml3-balances-surface--assets {
+  --balance-focus: var(--finance-blue);
+  --balance-focus-dark: var(--finance-blue-dark);
+  --balance-focus-soft: var(--finance-blue-soft);
+}
+
+.ml3-balances-surface--expenses,
+.ml3-balances-surface--review {
+  --balance-focus: var(--finance-coral);
+  --balance-focus-dark: var(--finance-coral-dark);
+  --balance-focus-soft: var(--finance-coral-soft);
+}
+
+.ml3-balance-ledger {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ml3-balance-ledger button {
+  --summary-tone: var(--finance-blue);
+  --summary-ink: var(--finance-blue-dark);
+  --summary-soft: var(--finance-blue-soft);
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  overflow: hidden;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--summary-tone) 20%, var(--finance-line));
+  border-radius: 8px;
+  background: var(--finance-paper);
+  color: var(--finance-ink);
+  text-align: start;
+  box-shadow: var(--finance-shadow-small);
+  animation: none;
+  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.ml3-balance-ledger button::before {
+  content: "";
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--summary-tone);
+  opacity: 0.88;
+}
+
+[dir="rtl"] .ml3-balance-ledger button::before { border-radius: 999px 0 0 999px; }
+.ml3-balance-ledger button::after { content: none; }
+.ml3-balance-ledger button.is-cash { --summary-tone: var(--finance-green); --summary-ink: var(--finance-green-dark); --summary-soft: var(--finance-green-soft); }
+.ml3-balance-ledger button.is-bank { --summary-tone: var(--finance-blue); --summary-ink: var(--finance-blue-dark); --summary-soft: var(--finance-blue-soft); }
+.ml3-balance-ledger button.is-positive { --summary-tone: var(--finance-green); --summary-ink: var(--finance-green-dark); --summary-soft: var(--finance-green-soft); }
+.ml3-balance-ledger button.is-negative { --summary-tone: var(--finance-coral); --summary-ink: var(--finance-coral-dark); --summary-soft: var(--finance-coral-soft); }
+
+.ml3-balance-ledger button:hover,
+.ml3-balance-ledger button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--summary-tone) 52%, var(--finance-line));
+  background: color-mix(in srgb, var(--summary-soft) 44%, white);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--summary-tone) 12%, transparent);
+  transform: translateY(-1px);
+}
+
+.ml3-balance-ledger button:active { transform: translateY(0); }
+
+.ml3-balance-ledger button > i {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: var(--summary-soft);
+  color: var(--summary-tone);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--summary-tone) 14%, transparent);
+  transition: transform 180ms ease, background-color 180ms ease;
+}
+
+.ml3-balance-ledger button:hover > i { transform: translateY(-1px); }
+.ml3-balance-ledger button > span { min-width: 0; display: grid; gap: 5px; }
+.ml3-balance-ledger button > span > b {
+  overflow: hidden;
+  color: var(--summary-ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ml3-balance-pair {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.82fr);
+  align-items: baseline;
+  gap: 6px;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+
+.ml3-balance-pair strong,
+.ml3-balance-pair small {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  overflow: hidden;
+  color: var(--finance-ink);
+  font-size: 0.72rem;
+  font-weight: 820;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ml3-balance-pair small {
+  color: var(--summary-ink);
+  font-size: 0.66rem;
+}
+
+.ml3-balance-pair strong > span,
+.ml3-balance-pair small > span { color: var(--finance-muted); font-size: 0.54rem; font-weight: 750; }
+
+/* Balance navigation and ledger sheet */
+.ml3-balances-workspace {
+  min-width: 0;
+  min-height: 310px;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--finance-line);
+  border-radius: 8px;
+  background: var(--finance-paper);
+  box-shadow: var(--finance-shadow);
+}
+
+.ml3-account-switcher {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 4px;
+  overflow: visible;
+  padding: 8px;
+  border: 0;
+  border-inline-end: 1px solid var(--finance-line);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--balance-focus-soft) 30%, var(--finance-surface));
+}
+
+.ml3-account-switcher button {
+  --group-tone: var(--finance-blue);
+  --group-soft: var(--finance-blue-soft);
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  min-height: 45px;
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  padding: 6px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--finance-muted);
+  text-align: start;
+  box-shadow: none;
+}
+
+.ml3-account-switcher--money { --group-tone: var(--finance-green); --group-soft: var(--finance-green-soft); }
+.ml3-account-switcher--people,
+.ml3-account-switcher--assets { --group-tone: var(--finance-blue); --group-soft: var(--finance-blue-soft); }
+.ml3-account-switcher--expenses,
+.ml3-account-switcher--review { --group-tone: var(--finance-coral); --group-soft: var(--finance-coral-soft); }
+
+.ml3-account-switcher button .adreem-motion-selection {
+  inset: 0;
+  border-radius: 7px;
+  background: var(--finance-paper);
+  box-shadow: inset 3px 0 0 var(--group-tone), 0 4px 12px color-mix(in srgb, var(--group-tone) 10%, transparent);
+}
+
+[dir="rtl"] .ml3-account-switcher button .adreem-motion-selection { box-shadow: inset -3px 0 0 var(--group-tone), 0 4px 12px color-mix(in srgb, var(--group-tone) 10%, transparent); }
+.ml3-account-switcher button::after { content: none; }
+.ml3-account-switcher button > svg,
+.ml3-account-switcher button > strong,
+.ml3-account-switcher button > span { position: relative; z-index: 1; min-width: 0; }
+.ml3-account-switcher button > svg { color: var(--group-tone); }
+.ml3-account-switcher button > strong { overflow: hidden; font-size: 0.7rem; font-weight: 790; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-account-switcher button > span { color: var(--group-tone); font-size: 0.62rem; font-weight: 820; }
+.ml3-account-switcher button.is-active { background: transparent; color: var(--group-tone); box-shadow: none; }
+.ml3-account-switcher button:hover { background: color-mix(in srgb, var(--group-soft) 55%, transparent); color: var(--group-tone); }
+
+.ml3-balance-pane {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--finance-paper);
+}
+
+.adreem-balance-pane-motion { min-width: 0; min-height: 100%; padding: 12px; }
+.ml3-balance-pane-head {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--finance-line);
+}
+
+.ml3-balance-pane-title { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.ml3-balance-pane-title > i {
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: var(--balance-focus-soft);
+  color: var(--balance-focus);
+}
+.ml3-balance-pane-title h2 { min-width: 0; overflow: hidden; margin: 0; color: var(--finance-ink); font-size: 0.96rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balance-pane-title > span { flex: 0 0 auto; color: var(--balance-focus); font-size: 0.66rem; font-weight: 820; }
+
+.ml3-account-toolbar {
+  min-width: 0;
+  height: 38px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding-inline: 9px;
+  border: 1px solid var(--finance-line);
+  border-radius: 7px;
+  background: var(--finance-surface);
+  color: var(--balance-focus);
+}
+.ml3-account-toolbar:focus-within { border-color: var(--balance-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--balance-focus) 12%, transparent); }
+.ml3-account-toolbar input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--finance-ink); font-size: 0.75rem; outline: 0; box-shadow: none; }
+
+.ml3-balances-surface .ml3-people-view-switch {
+  width: min(300px, 100%);
+  min-height: 35px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin: 0 0 9px;
+  padding: 3px;
+  border: 1px solid var(--finance-line);
+  border-radius: 7px;
+  background: var(--finance-surface);
+}
+.ml3-balances-surface .ml3-people-view-switch button { min-height: 27px; border: 0; border-radius: 5px; background: transparent; color: var(--finance-muted); font-size: 0.68rem; }
+.ml3-balances-surface .ml3-people-view-switch button.is-active { background: var(--finance-blue-soft); color: var(--finance-blue-dark); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--finance-blue) 18%, transparent); }
+.ml3-balances-surface .ml3-people-view-switch button::after { content: none; }
+
+.ml3-account-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ml3-balances-surface .ml3-list-block {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--finance-line);
+  border-radius: 8px;
+  background: var(--finance-paper);
+  box-shadow: none;
+}
+.ml3-balances-surface .ml3-list-block--positive { border-color: color-mix(in srgb, var(--finance-green) 24%, var(--finance-line)); }
+.ml3-balances-surface .ml3-list-block--negative { border-color: color-mix(in srgb, var(--finance-coral) 24%, var(--finance-line)); }
+.ml3-balances-surface .ml3-list-block > .ml3-panel-head {
+  min-height: 38px;
+  margin: 0;
+  padding: 7px 9px;
+  border: 0;
+  border-bottom: 1px solid var(--finance-line);
+  background: var(--finance-surface);
+}
+.ml3-balances-surface .ml3-list-block--positive > .ml3-panel-head { background: var(--finance-green-soft); color: var(--finance-green-dark); }
+.ml3-balances-surface .ml3-list-block--negative > .ml3-panel-head { background: var(--finance-coral-soft); color: var(--finance-coral-dark); }
+.ml3-balances-surface .ml3-list-block > .ml3-panel-head::before { content: none; }
+.ml3-balances-surface .ml3-list-block > .ml3-panel-head h2 { font-size: 0.75rem; }
+.ml3-balances-surface .ml3-list { gap: 0; }
+
+.ml3-balances-surface .ml3-account-row {
+  --row-tone: var(--finance-blue);
+  --row-soft: var(--finance-blue-soft);
+  position: relative;
+  min-width: 0;
+  min-height: 51px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(108px, auto);
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--finance-line);
+  border-radius: 0;
+  background: var(--finance-paper);
+  box-shadow: none;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+.ml3-balances-surface .ml3-account-row:last-child { border-bottom: 0; }
+.ml3-balances-surface .ml3-account-row::before {
+  content: "";
+  position: absolute;
+  inset-block: 9px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--row-tone);
+  opacity: 0.78;
+}
+.ml3-balances-surface .ml3-account-row--cash { --row-tone: var(--finance-green); --row-soft: var(--finance-green-soft); }
+.ml3-balances-surface .ml3-account-row--bank,
+.ml3-balances-surface .ml3-account-row--asset,
+.ml3-balances-surface .ml3-account-row--project { --row-tone: var(--finance-blue); --row-soft: var(--finance-blue-soft); }
+.ml3-balances-surface .ml3-account-row--expense,
+.ml3-balances-surface .ml3-account-row--review { --row-tone: var(--finance-coral); --row-soft: var(--finance-coral-soft); }
+.ml3-balances-surface .ml3-account-row--person.is-positive,
+.ml3-balances-surface .ml3-account-row--person-bank.is-positive,
+.ml3-balances-surface .ml3-account-row--person-usd.is-positive { --row-tone: var(--finance-green); --row-soft: var(--finance-green-soft); }
+.ml3-balances-surface .ml3-account-row--person.is-negative,
+.ml3-balances-surface .ml3-account-row--person-bank.is-negative,
+.ml3-balances-surface .ml3-account-row--person-usd.is-negative { --row-tone: var(--finance-coral); --row-soft: var(--finance-coral-soft); }
+.ml3-balances-surface .ml3-account-row.is-zero { --row-tone: var(--finance-muted); --row-soft: var(--finance-surface); }
+.ml3-balances-surface .ml3-account-row:hover { background: color-mix(in srgb, var(--row-soft) 52%, white); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--row-tone) 12%, transparent); }
+
+.ml3-balances-surface .ml3-account-main { min-width: 0; display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 7px; }
+.ml3-balances-surface .ml3-account-row-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--row-soft);
+  color: var(--row-tone);
+}
+.ml3-balances-surface .ml3-account-copy { min-width: 0; display: grid; gap: 2px; }
+.ml3-balances-surface .ml3-account-copy > strong { overflow: hidden; color: var(--finance-ink); font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balances-surface .ml3-account-meta { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.ml3-balances-surface .ml3-account-context { min-width: 0; overflow: hidden; color: var(--finance-muted); font-size: 0.61rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balances-surface .ml3-account-values { min-width: 0; display: grid; justify-items: end; gap: 2px; font-variant-numeric: tabular-nums; }
+.ml3-balances-surface .ml3-account-values strong,
+.ml3-balances-surface .ml3-account-values > span { max-width: 100%; overflow: hidden; color: var(--row-tone); font-size: 0.68rem; font-weight: 820; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balances-surface .ml3-account-values strong.is-positive { color: var(--finance-green-dark); }
+.ml3-balances-surface .ml3-account-values strong.is-negative { color: var(--finance-coral-dark); }
+.ml3-balances-surface .ml3-empty { min-height: 92px; display: grid; place-items: center; color: var(--finance-muted); }
+
+/* Entry mode and guided flow */
+.adreem-entry {
+  --flow-tone: var(--finance-green);
+  --flow-ink: var(--finance-green-dark);
+  --flow-soft: var(--finance-green-soft);
+  grid-template-columns: minmax(0, 760px) minmax(255px, 315px);
+  grid-template-areas:
+    "mode mode"
+    "notice notice"
+    "form today";
+  gap: 10px 12px;
+}
+.adreem-entry--account { --flow-tone: var(--finance-blue); --flow-ink: var(--finance-blue-dark); --flow-soft: var(--finance-blue-soft); }
+
+.ml3-entry-mode {
+  width: min(370px, 100%);
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  overflow: hidden;
+  border: 1px solid var(--finance-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--finance-line) 46%, var(--finance-surface));
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--finance-ink) 4%, transparent);
+}
+.ml3-entry-mode::before { display: none; }
+.ml3-entry-mode button {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--finance-muted);
+  font-size: 0.75rem;
+  font-weight: 790;
+  box-shadow: none;
+}
+.ml3-entry-mode button .adreem-motion-selection { inset: 0; border-radius: 6px; background: var(--finance-paper); box-shadow: var(--finance-shadow-small); }
+.ml3-entry-mode button > svg,
+.ml3-entry-mode button > span { position: relative; z-index: 1; }
+.ml3-entry-mode button.is-active { background: transparent; color: var(--flow-ink); box-shadow: none; }
+.ml3-entry-mode button:first-of-type.is-active > svg { color: var(--finance-green); }
+.ml3-entry-mode button:last-of-type.is-active > svg { color: var(--finance-blue); }
+
+.ml3-entry-card,
+.ml3-add-account {
+  width: 100%;
+  height: clamp(430px, 55dvh, 520px);
+  min-height: 430px;
+  max-height: calc(100dvh - 142px);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--flow-tone) 24%, var(--finance-line));
+  border-top: 0;
+  border-radius: 8px;
+  background: var(--finance-paper);
+  box-shadow: var(--finance-shadow);
+  contain: layout paint;
+}
+.ml3-entry-card { --flow-tone: var(--finance-blue); --flow-ink: var(--finance-blue-dark); --flow-soft: var(--finance-blue-soft); }
+.ml3-entry-card--expense,
+.ml3-entry-card--sale,
+.ml3-entry-card--withdrawal { --flow-tone: var(--finance-coral); --flow-ink: var(--finance-coral-dark); --flow-soft: var(--finance-coral-soft); }
+.ml3-entry-card--income { --flow-tone: var(--finance-green); --flow-ink: var(--finance-green-dark); --flow-soft: var(--finance-green-soft); }
+.ml3-entry-card--purchase,
+.ml3-entry-card--transfer,
+.ml3-entry-card--deposit { --flow-tone: var(--finance-blue); --flow-ink: var(--finance-blue-dark); --flow-soft: var(--finance-blue-soft); }
+.ml3-add-account { --flow-tone: var(--finance-blue); --flow-ink: var(--finance-blue-dark); --flow-soft: var(--finance-blue-soft); }
+
+.ml3-entry-card::before,
+.ml3-add-account::before {
+  content: "";
+  flex: 0 0 4px;
+  width: 100%;
+  background: var(--flow-tone);
+}
+
+.adreem-flow-head {
+  min-height: 67px;
+  padding: 9px 13px;
+  border-bottom: 1px solid color-mix(in srgb, var(--flow-tone) 18%, var(--finance-line));
+  background: color-mix(in srgb, var(--flow-soft) 56%, white);
+}
+.adreem-flow-head > div { min-width: 0; }
+.adreem-flow-head span { color: var(--flow-tone); font-size: 0.63rem; font-weight: 830; }
+.adreem-flow-head h2 { overflow: hidden; margin-top: 1px; color: var(--finance-ink); font-size: 1.02rem; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-flow-head p { overflow: hidden; margin-top: 2px; color: var(--finance-muted); font-size: 0.66rem; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-flow-head > b { border: 1px solid color-mix(in srgb, var(--flow-tone) 20%, transparent); background: var(--flow-soft); color: var(--flow-ink); }
+.adreem-flow-head > b.is-ready { border-color: color-mix(in srgb, var(--finance-green) 24%, transparent); background: var(--finance-green-soft); color: var(--finance-green-dark); }
+
+.adreem-flow-progress { padding: 7px 13px 0; }
+.adreem-flow-progress-line { height: 4px; background: var(--finance-line); }
+.adreem-flow-progress-line::-webkit-progress-bar { background: var(--finance-line); }
+.adreem-flow-progress-line::-webkit-progress-value,
+.adreem-flow-progress-line::-moz-progress-bar { background: var(--flow-tone); }
+.adreem-flow-progress-meta { min-height: 34px; gap: 7px; }
+.adreem-flow-progress-meta > span { color: var(--flow-ink); font-size: 0.62rem; }
+.adreem-flow-trail { gap: 4px; }
+.adreem-flow-trail button { max-width: 150px; height: 25px; border: 1px solid transparent; border-radius: 5px; background: var(--finance-surface); color: var(--finance-muted); }
+.adreem-flow-trail button:hover { border-color: color-mix(in srgb, var(--flow-tone) 24%, var(--finance-line)); background: var(--flow-soft); color: var(--flow-ink); }
+
+.adreem-flow-stage-motion {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.adreem-flow-stage-motion > .ml3-step { flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; }
+.ml3-step,
+.ml3-account-stage { animation: none !important; }
+.ml3-step.is-open {
+  padding: 10px 13px 0;
+  border: 0;
+  background: var(--finance-paper);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--flow-tone) 72%, transparent);
+}
+[dir="rtl"] .ml3-step.is-open { box-shadow: inset -3px 0 0 color-mix(in srgb, var(--flow-tone) 72%, transparent); }
+
+.ml3-action-catalog { gap: 8px; }
+.ml3-action-lane { padding: 8px; border-color: var(--finance-line); border-radius: 7px; background: var(--finance-surface); }
+.ml3-action-lane-head { margin-bottom: 6px; }
+.ml3-action-lane-head strong { color: var(--finance-ink); font-size: 0.71rem; }
+.ml3-option-grid { gap: 5px; }
+.ml3-action-choice {
+  min-height: 52px;
+  border-color: var(--finance-line);
+  border-radius: 7px;
+  background: var(--finance-paper);
+  color: var(--finance-ink);
+  box-shadow: none;
+  animation: none !important;
+}
+.ml3-action-choice:hover { border-color: color-mix(in srgb, var(--action-tone) 42%, var(--finance-line)); background: color-mix(in srgb, var(--action-soft) 44%, white); }
+.ml3-action-choice.is-active { border-color: var(--action-tone); background: var(--action-soft); box-shadow: inset 0 -3px 0 var(--action-tone); }
+.ml3-more-actions > summary { min-height: 38px; border-color: var(--finance-line); border-radius: 7px; background: var(--finance-paper); color: var(--finance-muted); }
+
+.ml3-number-entry {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(155px, 0.58fr) minmax(280px, 1.42fr);
+  align-items: stretch;
+  gap: 8px;
+}
+.ml3-number-display {
+  min-width: 0;
+  min-height: 143px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 11px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--flow-tone) 26%, var(--finance-line));
+  border-radius: 8px;
+  background: var(--flow-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--flow-tone) 4%, transparent);
+}
+.ml3-number-display span { color: var(--flow-ink); font-size: 0.67rem; font-weight: 780; }
+.ml3-number-display strong { min-width: 0; overflow: hidden; color: var(--finance-ink); font-size: 1.65rem; font-weight: 820; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-number-reset { justify-self: end; min-width: 34px; height: 27px; border: 0; border-radius: 5px; background: color-mix(in srgb, var(--flow-tone) 12%, white); color: var(--flow-ink); font-size: 0.68rem; font-weight: 850; }
+.ml3-number-pad { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.ml3-number-key,
+.ml3-number-action {
+  min-width: 0;
+  min-height: 33px;
+  border: 1px solid var(--finance-line);
+  border-radius: 7px;
+  background: var(--finance-paper);
+  color: var(--finance-ink);
+  font-size: 0.84rem;
+  font-weight: 820;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--finance-ink) 4%, transparent);
+}
+.ml3-number-key:hover { border-color: var(--flow-tone); background: var(--flow-soft); color: var(--flow-ink); }
+.ml3-number-action.is-delete { border-color: color-mix(in srgb, var(--finance-coral) 22%, var(--finance-line)); background: var(--finance-coral-soft); color: var(--finance-coral-dark); }
+
+.ml3-step-controls,
+.ml3-account-stage-actions {
+  grid-template-columns: minmax(86px, 0.32fr) minmax(145px, 1fr);
+  margin: auto -13px 0;
+  padding: 8px 13px;
+  border-top: 1px solid var(--finance-line);
+  background: color-mix(in srgb, var(--finance-surface) 92%, transparent);
+  box-shadow: 0 -7px 18px color-mix(in srgb, var(--finance-ink) 4%, transparent);
+}
+.ml3-step-back,
+.ml3-step-next,
+.ml3-save,
+.ml3-account-stage-actions button { min-height: 39px; border-radius: 7px; font-size: 0.73rem; font-weight: 820; }
+.ml3-step-back { border-color: var(--finance-line); background: var(--finance-paper); color: var(--finance-muted); }
+.ml3-step-back:hover { border-color: var(--flow-tone); background: var(--flow-soft); color: var(--flow-ink); }
+.ml3-step-next,
+.ml3-save,
+.ml3-account-stage-actions .ml3-step-next { border-color: var(--flow-tone); background: var(--flow-tone); color: white; box-shadow: 0 6px 15px color-mix(in srgb, var(--flow-tone) 22%, transparent); }
+
+.ml3-account-stage {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 0;
+  background: var(--finance-paper);
+}
+.ml3-account-stage-head { padding: 8px 13px 7px; border-bottom: 1px solid var(--finance-line); background: var(--finance-surface); }
+.ml3-account-stage-head h3 { color: var(--finance-ink); font-size: 0.9rem; }
+.ml3-account-stage-head p { margin-top: 2px; color: var(--finance-muted); font-size: 0.65rem; line-height: 1.4; }
+.ml3-account-choice-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; padding: 9px 13px; }
+.ml3-account-choice-list button {
+  --choice-tone: var(--finance-blue);
+  --choice-soft: var(--finance-blue-soft);
+  min-width: 0;
+  min-height: 66px;
+  border: 1px solid var(--finance-line);
+  border-radius: 8px;
+  background: var(--finance-paper);
+  color: var(--finance-ink);
+  box-shadow: none;
+  animation: none !important;
+}
+.ml3-account-choice-list button.ml3-account-choice--people,
+.ml3-account-choice-list button.ml3-account-choice--person-cash { --choice-tone: var(--finance-green); --choice-soft: var(--finance-green-soft); }
+.ml3-account-choice-list button.ml3-account-choice--money,
+.ml3-account-choice-list button.ml3-account-choice--own-bank,
+.ml3-account-choice-list button.ml3-account-choice--own-cash { --choice-tone: var(--finance-blue); --choice-soft: var(--finance-blue-soft); }
+.ml3-account-choice-list button.ml3-account-choice--tracking,
+.ml3-account-choice-list button.ml3-account-choice--asset,
+.ml3-account-choice-list button.ml3-account-choice--project,
+.ml3-account-choice-list button.ml3-account-choice--expense { --choice-tone: var(--finance-coral); --choice-soft: var(--finance-coral-soft); }
+.ml3-account-choice-list button i { background: var(--choice-soft); color: var(--choice-tone); }
+.ml3-account-choice-list button:hover,
+.ml3-account-choice-list button.is-active { border-color: var(--choice-tone); background: color-mix(in srgb, var(--choice-soft) 64%, white); }
+.ml3-account-choice-list button.is-active { box-shadow: inset 0 -3px 0 var(--choice-tone); }
+.ml3-account-choice-list button span { min-width: 0; }
+.ml3-account-choice-list button strong,
+.ml3-account-choice-list button small { overflow: hidden; text-overflow: ellipsis; }
+.ml3-account-choice-list button strong { font-size: 0.75rem; }
+.ml3-account-choice-list button small { color: var(--finance-muted); font-size: 0.61rem; }
+.ml3-account-stage-actions { position: static; margin: 0; }
+.ml3-account-field,
+.ml3-account-summary { margin: 12px 13px; }
+.ml3-account-opening { padding: 9px 13px; }
+.ml3-opening-direction button { border-color: var(--finance-line); border-radius: 8px; background: var(--finance-paper); }
+.ml3-opening-direction button.is-positive.is-active { border-color: var(--finance-green); background: var(--finance-green-soft); color: var(--finance-green-dark); box-shadow: inset 0 -3px 0 var(--finance-green); }
+.ml3-opening-direction button.is-negative.is-active { border-color: var(--finance-coral); background: var(--finance-coral-soft); color: var(--finance-coral-dark); box-shadow: inset 0 -3px 0 var(--finance-coral); }
+
+.ml3-today-panel {
+  max-height: calc(100dvh - 172px);
+  padding: 9px;
+  border: 1px solid var(--finance-line);
+  border-radius: 8px;
+  background: var(--finance-surface);
+  box-shadow: none;
+}
+.ml3-today-head { min-height: 37px; }
+.ml3-today-head::before { background: var(--flow-tone); }
+.ml3-today-head h2 { color: var(--finance-ink); font-size: 0.84rem; }
+.ml3-today-head button { color: var(--flow-ink); }
+.ml3-today-list { gap: 4px; }
+
+@media (max-width: 980px) {
+  .adreem-entry,
+  .adreem-entry--account {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "mode" "notice" "form" "today";
+  }
+  .ml3-entry-card,
+  .ml3-add-account { width: min(780px, 100%); justify-self: center; }
+  .ml3-today-panel { position: static; width: min(780px, 100%); max-height: none; justify-self: center; }
+}
+
+@media (max-width: 720px) {
+  .ml3-balances-surface { gap: 8px; }
+  .ml3-balance-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+  .ml3-balance-ledger button { min-height: 76px; grid-template-columns: 31px minmax(0, 1fr); gap: 6px; padding: 7px; box-shadow: 0 4px 12px color-mix(in srgb, var(--finance-ink) 5%, transparent); }
+  .ml3-balance-ledger button > i { width: 31px; height: 31px; }
+  .ml3-balance-ledger button > span { gap: 3px; }
+  .ml3-balance-ledger button > span > b { font-size: 0.65rem; }
+  .ml3-balance-pair { grid-template-columns: minmax(0, 1fr); gap: 1px; }
+  .ml3-balance-pair strong,
+  .ml3-balance-pair small { font-size: 0.62rem; }
+
+  .ml3-balances-workspace { min-height: 0; grid-template-columns: 1fr; border-radius: 8px; }
+  .ml3-account-switcher {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    padding: 4px;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--finance-line);
+  }
+  .ml3-account-switcher button { min-height: 49px; grid-template-columns: 1fr; grid-template-rows: 17px auto; justify-items: center; gap: 2px; padding: 4px 2px; text-align: center; }
+  .ml3-account-switcher button .adreem-motion-selection,
+  [dir="rtl"] .ml3-account-switcher button .adreem-motion-selection { box-shadow: inset 0 -3px 0 var(--group-tone), 0 3px 9px color-mix(in srgb, var(--group-tone) 8%, transparent); }
+  .ml3-account-switcher button > svg { width: 16px; height: 16px; }
+  .ml3-account-switcher button > strong { max-width: 100%; font-size: 0.59rem; }
+  .ml3-account-switcher button > span { position: absolute; z-index: 2; inset-block-start: 3px; inset-inline-end: 4px; font-size: 0.53rem; }
+  .adreem-balance-pane-motion { padding: 8px; }
+  .ml3-balance-pane-head { grid-template-columns: minmax(0, 1fr) minmax(132px, 45%); gap: 6px; margin-bottom: 7px; padding-bottom: 7px; }
+  .ml3-balance-pane-title { gap: 6px; }
+  .ml3-balance-pane-title > i { width: 28px; height: 28px; flex-basis: 28px; }
+  .ml3-balance-pane-title h2 { font-size: 0.82rem; }
+  .ml3-account-toolbar { height: 36px; padding-inline: 7px; }
+  .ml3-account-sections { grid-template-columns: 1fr; gap: 7px; }
+  .ml3-balances-surface .ml3-account-row { min-height: 49px; grid-template-columns: minmax(0, 1fr) minmax(96px, auto); gap: 5px; padding-inline: 7px; }
+  .ml3-balances-surface .ml3-account-row-icon { width: 28px; height: 28px; }
+  .ml3-balances-surface .ml3-account-main { grid-template-columns: 28px minmax(0, 1fr); gap: 6px; }
+  .ml3-balances-surface .ml3-account-copy > strong { font-size: 0.72rem; }
+  .ml3-balances-surface .ml3-account-values strong,
+  .ml3-balances-surface .ml3-account-values > span { font-size: 0.63rem; }
+
+  .adreem-entry { gap: 7px; }
+  .ml3-entry-mode { width: 100%; min-height: 42px; }
+  .ml3-entry-mode button { min-height: 32px; font-size: 0.71rem; }
+  .ml3-entry-card,
+  .ml3-add-account { height: min(515px, calc(100dvh - 178px)); min-height: 390px; max-height: none; border-radius: 8px; }
+  .adreem-flow-head { min-height: 59px; padding: 7px 9px; }
+  .adreem-flow-head h2 { font-size: 0.91rem; }
+  .adreem-flow-head p { font-size: 0.62rem; }
+  .adreem-flow-progress { padding: 5px 9px 0; }
+  .adreem-flow-progress-meta { min-height: 31px; }
+  .ml3-step.is-open { padding: 7px 9px 0; }
+  .ml3-action-catalog { grid-template-columns: 1fr; }
+  .ml3-action-lane--daily { grid-column: auto; }
+  .ml3-action-lane--daily .ml3-option-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ml3-action-choice { min-height: 56px; grid-template-columns: 28px minmax(0, 1fr); gap: 5px; padding: 6px; }
+  .ml3-action-choice > svg:last-child { display: none; }
+  .ml3-action-choice > svg:first-child { width: 28px; height: 28px; }
+  .ml3-action-choice strong { font-size: 0.68rem; }
+  .ml3-number-entry { grid-template-columns: minmax(104px, 0.54fr) minmax(0, 1.46fr); gap: 5px; }
+  .ml3-number-display { min-height: 135px; padding: 8px; }
+  .ml3-number-display strong { font-size: 1.3rem; }
+  .ml3-number-key,
+  .ml3-number-action { min-height: 31px; border-radius: 6px; }
+  .ml3-step-controls,
+  .ml3-account-stage-actions { grid-template-columns: 82px minmax(0, 1fr); margin-inline: -9px; padding: 7px 9px; }
+  .ml3-account-stage-head { padding: 7px 9px 6px; }
+  .ml3-account-choice-list { grid-template-columns: 1fr; gap: 5px; padding: 7px 9px; }
+  .ml3-account-choice-list.is-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ml3-account-choice-list button { min-height: 55px; }
+  .ml3-account-field,
+  .ml3-account-summary { margin: 9px; }
+  .ml3-account-opening { padding: 7px 9px; }
+  .ml3-today-panel { padding: 7px; }
+}
+
+@media (max-width: 390px) {
+  .ml3-balance-ledger button { min-height: 74px; }
+  .ml3-balance-pair strong,
+  .ml3-balance-pair small { font-size: 0.58rem; }
+  .ml3-account-switcher button > strong { font-size: 0.56rem; }
+  .ml3-balance-pane-head { grid-template-columns: 1fr; }
+  .ml3-account-toolbar { width: 100%; }
+  .ml3-balances-surface .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(88px, auto); }
+  .ml3-number-entry { grid-template-columns: minmax(96px, 0.5fr) minmax(0, 1.5fr); }
+  .ml3-number-display { min-height: 131px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ml3-balance-ledger button,
+  .ml3-account-row,
+  .ml3-number-key,
+  .ml3-number-action { transform: none !important; }
+}

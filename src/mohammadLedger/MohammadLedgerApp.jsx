@@ -4,8 +4,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, Landmark, ReceiptText, Search, SlidersHorizontal, UserRound, WalletCards, Wrench, X } from 'lucide-react'
+import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
+import './adreemFinance.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { ACCOUNT_OPENING_DIRECTIONS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
@@ -27,6 +29,18 @@ const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
 const USD_MAXIMUM_FRACTION_DIGITS = 6
 const REVIEW_MOVEMENT_PAGE_SIZE = 50
+const UI_MOTION_TRANSITION = Object.freeze({ duration: 0.2, ease: [0.22, 1, 0.36, 1] })
+const FLOW_STAGE_MOTION = Object.freeze({
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  transition: UI_MOTION_TRANSITION,
+})
+const BALANCE_PANE_MOTION = Object.freeze({
+  initial: { opacity: 0, y: 7 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -5 },
+  transition: UI_MOTION_TRANSITION,
+})
 const MOVEMENT_REQUEST_KEYS = Object.freeze({
   accountProfile: 'account-profile',
   history: 'history',
@@ -127,13 +141,13 @@ function AccountGroupIcon({ groupKey }) {
 
 function MovementChoiceButton({ option, active, onChoose }) {
   return (
-    <button type="button" className={`ml3-action-choice ml3-action-choice--${option.tone} ${active ? 'is-active' : ''}`} onClick={() => onChoose(option.type)}>
+    <Motion.button type="button" className={`ml3-action-choice ml3-action-choice--${option.tone} ${active ? 'is-active' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} onClick={() => onChoose(option.type)}>
       <MovementTypeIcon type={option.type} />
       <span>
         <strong>{option.label}</strong>
       </span>
       <ChevronLeft aria-hidden="true" size={16} />
-    </button>
+    </Motion.button>
   )
 }
 
@@ -151,11 +165,11 @@ function FlowProgress({ current, total, items = [], onEdit }) {
         {items.length ? (
           <div className="adreem-flow-trail" aria-label="الاختيارات السابقة">
             {items.map((item) => (
-              <button type="button" key={item.key} onClick={() => onEdit?.(item.step)} title={getActiveUiLanguage() === 'en' ? `Edit ${translateUiText(item.label, 'en')}` : `تعديل ${item.label}`}>
+              <Motion.button type="button" key={item.key} whileTap={{ scale: 0.97 }} transition={UI_MOTION_TRANSITION} onClick={() => onEdit?.(item.step)} title={getActiveUiLanguage() === 'en' ? `Edit ${translateUiText(item.label, 'en')}` : `تعديل ${item.label}`}>
                 <Check aria-hidden="true" size={13} strokeWidth={2.7} />
                 <span>{item.label}</span>
                 <strong>{item.value}</strong>
-              </button>
+              </Motion.button>
             ))}
           </div>
         ) : null}
@@ -960,7 +974,7 @@ export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen
   const primaryBalance = accountPrimaryBalance(bucket)
   const balanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
   return (
-    <article className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
+    <Motion.article layout="position" initial={{ y: 4 }} animate={{ y: 0 }} exit={{ opacity: 0, y: -3 }} transition={UI_MOTION_TRANSITION} className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
         <i className="ml3-account-row-icon"><AccountChoiceIcon account={account} size={16} /></i>
         <span className="ml3-account-copy">
@@ -989,7 +1003,7 @@ export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen
           ) : null}
         </div>
       )}
-    </article>
+    </Motion.article>
   )
 }
 
@@ -1060,7 +1074,12 @@ function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfi
           <span>{formatCount(rows.length)}</span>
         </div>
       ) : null}
-      <div className="ml3-list">{rows.length === 0 ? <p className="ml3-empty">{emptyText}</p> : rows.map((bucket) => <AccountRow key={bucket.account.id} bucket={bucket} onConfirm={onConfirm} onDisable={onDisable} onOpen={onOpen} compactValue={compactValues} />)}</div>
+      <div className="ml3-list">
+        {rows.length === 0 ? <p className="ml3-empty">{emptyText}</p> : null}
+        <AnimatePresence initial={false}>
+          {rows.map((bucket) => <AccountRow key={bucket.account.id} bucket={bucket} onConfirm={onConfirm} onDisable={onDisable} onOpen={onOpen} compactValue={compactValues} />)}
+        </AnimatePresence>
+      </div>
     </Tag>
   )
 }
@@ -1297,19 +1316,19 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDe
       </div>
       <div className="ml3-number-pad" aria-label={label}>
         {keys.map((key) => (
-          <button type="button" className="ml3-number-key" key={key} onClick={() => pushKey(key)}>
+          <Motion.button type="button" className="ml3-number-key" key={key} whileTap={{ scale: 0.94 }} transition={UI_MOTION_TRANSITION} onClick={() => pushKey(key)}>
             {key}
-          </button>
+          </Motion.button>
         ))}
-        <button type="button" className="ml3-number-key" onClick={() => pushKey(allowDecimal ? '.' : '00')}>
+        <Motion.button type="button" className="ml3-number-key" whileTap={{ scale: 0.94 }} transition={UI_MOTION_TRANSITION} onClick={() => pushKey(allowDecimal ? '.' : '00')}>
           {allowDecimal ? '.' : '00'}
-        </button>
-        <button type="button" className="ml3-number-key" onClick={() => pushKey('0')}>
+        </Motion.button>
+        <Motion.button type="button" className="ml3-number-key" whileTap={{ scale: 0.94 }} transition={UI_MOTION_TRANSITION} onClick={() => pushKey('0')}>
           0
-        </button>
-        <button type="button" className="ml3-number-action is-delete" aria-label="حذف" title="حذف" onClick={() => onChange(textValue.slice(0, -1))}>
+        </Motion.button>
+        <Motion.button type="button" className="ml3-number-action is-delete" whileTap={{ scale: 0.94 }} transition={UI_MOTION_TRANSITION} aria-label="حذف" title="حذف" onClick={() => onChange(textValue.slice(0, -1))}>
           ⌫
-        </button>
+        </Motion.button>
       </div>
     </div>
   )
@@ -3767,30 +3786,30 @@ export default function MohammadLedgerApp() {
     const visibleRows = activeGroup.key === 'people' && peopleAccountView === 'all' ? peopleDirectory : rows
     const activeGroupCount = visibleRows.length
     return (
-      <section className="ml3-panel ml3-balances-surface" key={`accounts-${activeAccountGroup}`}>
+      <section className={`ml3-panel ml3-balances-surface ml3-balances-surface--${activeGroup.key}`}>
         <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة بالدينار والدولار">
-          <button type="button" className="is-cash" onClick={() => setActiveAccountGroup('money')}>
+          <Motion.button type="button" className="is-cash" whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeGroup.key === 'money'} onClick={() => setActiveAccountGroup('money')}>
             <i><Banknote aria-hidden="true" size={18} /></i>
             <span><b>كاش عندي</b><BalanceAmountPair value={balanceOverview.cash} /></span>
-          </button>
-          <button type="button" className="is-bank" onClick={() => setActiveAccountGroup('money')}>
+          </Motion.button>
+          <Motion.button type="button" className="is-bank" whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeGroup.key === 'money'} onClick={() => setActiveAccountGroup('money')}>
             <i><Landmark aria-hidden="true" size={18} /></i>
             <span><b>في المصرف</b><BalanceAmountPair value={balanceOverview.bank} /></span>
-          </button>
-          <button type="button" className="is-positive" onClick={() => {
+          </Motion.button>
+          <Motion.button type="button" className="is-positive" whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeGroup.key === 'people' && peopleAccountView === 'balances'} onClick={() => {
             setActiveAccountGroup('people')
             setPeopleAccountView('balances')
           }}>
             <i><ArrowDownToLine aria-hidden="true" size={18} /></i>
             <span><b>لي عند الناس</b><BalanceAmountPair value={balanceOverview.receivable} /></span>
-          </button>
-          <button type="button" className="is-negative" onClick={() => {
+          </Motion.button>
+          <Motion.button type="button" className="is-negative" whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeGroup.key === 'people' && peopleAccountView === 'balances'} onClick={() => {
             setActiveAccountGroup('people')
             setPeopleAccountView('balances')
           }}>
             <i><ArrowUpFromLine aria-hidden="true" size={18} /></i>
             <span><b>عليّ للناس</b><BalanceAmountPair value={balanceOverview.payable} /></span>
-          </button>
+          </Motion.button>
         </div>
 
         <div className="ml3-balances-workspace">
@@ -3799,6 +3818,7 @@ export default function MohammadLedgerApp() {
               const groupCount = group.key === 'people' ? peopleDirectory.length : accountRowsByGroup[group.key]?.length || 0
               return (
                 <button type="button" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-current={activeAccountGroup === group.key ? 'true' : undefined} onClick={() => setActiveAccountGroup(group.key)}>
+                  {activeAccountGroup === group.key ? <Motion.i className="adreem-motion-selection" layoutId="adreem-balance-group" transition={UI_MOTION_TRANSITION} /> : null}
                   <AccountGroupIcon groupKey={group.key} />
                   <strong>{group.label}</strong>
                   <span>{formatCount(groupCount)}</span>
@@ -3806,53 +3826,56 @@ export default function MohammadLedgerApp() {
               )
             })}
           </div>
-
           <div className="ml3-balance-pane">
-            <div className="ml3-balance-pane-head">
-              <div className="ml3-balance-pane-title">
-                <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
-                <h2>{activeGroup.key === 'people' && peopleAccountView === 'all' ? 'كل الأشخاص' : activeGroup.title}</h2>
-                <span>{formatCount(activeGroupCount)}</span>
-              </div>
-              <label className="ml3-account-toolbar">
-                <Search aria-hidden="true" size={15} />
-                <input
-                  aria-label="بحث في الأرصدة"
-                  value={accountQuery}
-                  onChange={(event) => {
-                    const value = event.target.value
-                    setAccountQuery(value)
-                    if (activeGroup.key === 'people' && value.trim()) setPeopleAccountView('all')
-                  }}
-                  placeholder="ابحث عن حساب"
-                />
-              </label>
-            </div>
-
-            {activeGroup.key === 'people' ? (
-              <>
-                <div className="ml3-people-view-switch" aria-label="عرض حسابات الناس">
-                  <button type="button" className={peopleAccountView === 'balances' ? 'is-active' : ''} aria-current={peopleAccountView === 'balances' ? 'true' : undefined} onClick={() => setPeopleAccountView('balances')}>
-                    <strong>بيننا رصيد</strong>
-                  </button>
-                  <button type="button" className={peopleAccountView === 'all' ? 'is-active' : ''} aria-current={peopleAccountView === 'all' ? 'true' : undefined} onClick={() => setPeopleAccountView('all')}>
-                    <strong>كل الأشخاص</strong>
-                  </button>
-                </div>
-                {peopleAccountView === 'balances' ? (
-                  <div className="ml3-account-sections">
-                    <AccountList title="لي عند الناس" rows={peoplePositive} onOpen={setSelectedAccountId} embedded tone="positive" compactValues />
-                    <AccountList title="عليّ للناس" rows={peopleNegative} onOpen={setSelectedAccountId} embedded tone="negative" compactValues />
+            <AnimatePresence mode="wait" initial={false}>
+              <Motion.div key={`${activeGroup.key}-${activeGroup.key === 'people' ? peopleAccountView : 'default'}`} className="adreem-balance-pane-motion" {...BALANCE_PANE_MOTION}>
+                <div className="ml3-balance-pane-head">
+                  <div className="ml3-balance-pane-title">
+                    <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
+                    <h2>{activeGroup.key === 'people' && peopleAccountView === 'all' ? 'كل الأشخاص' : activeGroup.title}</h2>
+                    <span>{formatCount(activeGroupCount)}</span>
                   </div>
+                  <label className="ml3-account-toolbar">
+                    <Search aria-hidden="true" size={15} />
+                    <input
+                      aria-label="بحث في الأرصدة"
+                      value={accountQuery}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setAccountQuery(value)
+                        if (activeGroup.key === 'people' && value.trim()) setPeopleAccountView('all')
+                      }}
+                      placeholder="ابحث عن حساب"
+                    />
+                  </label>
+                </div>
+
+                {activeGroup.key === 'people' ? (
+                  <>
+                    <div className="ml3-people-view-switch" aria-label="عرض حسابات الناس">
+                      <button type="button" className={peopleAccountView === 'balances' ? 'is-active' : ''} aria-current={peopleAccountView === 'balances' ? 'true' : undefined} onClick={() => setPeopleAccountView('balances')}>
+                        <strong>بيننا رصيد</strong>
+                      </button>
+                      <button type="button" className={peopleAccountView === 'all' ? 'is-active' : ''} aria-current={peopleAccountView === 'all' ? 'true' : undefined} onClick={() => setPeopleAccountView('all')}>
+                        <strong>كل الأشخاص</strong>
+                      </button>
+                    </div>
+                    {peopleAccountView === 'balances' ? (
+                      <div className="ml3-account-sections">
+                        <AccountList title="لي عند الناس" rows={peoplePositive} onOpen={setSelectedAccountId} embedded tone="positive" compactValues />
+                        <AccountList title="عليّ للناس" rows={peopleNegative} onOpen={setSelectedAccountId} embedded tone="negative" compactValues />
+                      </div>
+                    ) : (
+                      <AccountList title="كل الأشخاص" rows={peopleDirectory} onOpen={setSelectedAccountId} embedded tone="people" compactValues hideHeader />
+                    )}
+                  </>
+                ) : activeGroup.key === 'money' ? (
+                  <AccountList title="فلوسي" rows={rows} onOpen={setSelectedAccountId} embedded tone="money" compactValues hideHeader />
                 ) : (
-                  <AccountList title="كل الأشخاص" rows={peopleDirectory} onOpen={setSelectedAccountId} embedded tone="people" compactValues hideHeader />
+                  <AccountList title={activeGroup.title} rows={rows} onOpen={setSelectedAccountId} embedded tone={activeGroup.key} compactValues hideHeader />
                 )}
-              </>
-            ) : activeGroup.key === 'money' ? (
-              <AccountList title="فلوسي" rows={rows} onOpen={setSelectedAccountId} embedded tone="money" compactValues hideHeader />
-            ) : (
-              <AccountList title={activeGroup.title} rows={rows} onOpen={setSelectedAccountId} embedded tone={activeGroup.key} compactValues hideHeader />
-            )}
+              </Motion.div>
+            </AnimatePresence>
           </div>
         </div>
       </section>
@@ -4155,7 +4178,8 @@ export default function MohammadLedgerApp() {
   }
 
   return (
-    <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovementCount} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} profile={protectedUserProfile(userProfile)} language={normalizedUiLanguage} languageStatus={languageStatus} languageMessage={languageMessage} onLanguageChange={changeUiLanguage} onRetrySave={() => {
+    <MotionConfig reducedMotion="user" transition={UI_MOTION_TRANSITION}>
+      <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovementCount} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} profile={protectedUserProfile(userProfile)} language={normalizedUiLanguage} languageStatus={languageStatus} languageMessage={languageMessage} onLanguageChange={changeUiLanguage} onRetrySave={() => {
       if (!orphanCleanupInProgressRef.current) saveCoordinatorRef.current?.retryNow()
     }} onReloadConfirmed={() => {
       if (typeof window === 'undefined') return
@@ -4168,12 +4192,14 @@ export default function MohammadLedgerApp() {
           <aside className={`adreem-entry adreem-desk-entry adreem-entry--${activeEntryMode}`}>
             <div className={`ml3-entry-mode is-${activeEntryMode}`} role="tablist" aria-label="نوع الإضافة" onKeyDown={handleEntryModeKeyDown}>
               <button id="adreem-entry-movement-tab" data-entry-mode="movement" type="button" role="tab" aria-selected={activeEntryMode === 'movement'} aria-controls="adreem-entry-movement-panel" tabIndex={activeEntryMode === 'movement' ? 0 : -1} className={activeEntryMode === 'movement' ? 'is-active' : ''} onClick={() => switchEntryMode('movement')}>
+                {activeEntryMode === 'movement' ? <Motion.i className="adreem-motion-selection" layoutId="adreem-entry-mode" transition={UI_MOTION_TRANSITION} /> : null}
                 <ArrowRightLeft aria-hidden="true" size={17} />
-                حركة جديدة
+                <span>حركة جديدة</span>
               </button>
               <button id="adreem-entry-account-tab" data-entry-mode="account" type="button" role="tab" aria-selected={activeEntryMode === 'account'} aria-controls="adreem-entry-account-panel" tabIndex={activeEntryMode === 'account' ? 0 : -1} className={activeEntryMode === 'account' ? 'is-active' : ''} onClick={() => switchEntryMode('account')}>
+                {activeEntryMode === 'account' ? <Motion.i className="adreem-motion-selection" layoutId="adreem-entry-mode" transition={UI_MOTION_TRANSITION} /> : null}
                 <WalletCards aria-hidden="true" size={17} />
-                حساب جديد
+                <span>حساب جديد</span>
               </button>
             </div>
             {feedback || pendingUndo || editingMovementId ? (
@@ -4213,6 +4239,7 @@ export default function MohammadLedgerApp() {
                   <b className={preview.validation.ok ? 'is-ready' : ''}>{preview.validation.ok ? 'جاهزة' : 'قيد الإدخال'}</b>
                 </header>
                 <FlowProgress current={currentMovementStepIndex + 1} total={visibleMovementSteps.length} items={completedMovementReceipt} onEdit={editMovementStep} />
+                <Motion.div key={movementStep} className="adreem-flow-stage-motion" {...FLOW_STAGE_MOTION}>
 
                 {movementStep === MOVEMENT_ENTRY_STEPS.TYPE ? (
                   <section className="ml3-step ml3-step--type is-open">
@@ -4434,6 +4461,7 @@ export default function MohammadLedgerApp() {
                     </div>
                   </section>
                 ) : null}
+                </Motion.div>
             </form>
 
             <section className="ml3-today-panel">
@@ -4463,7 +4491,7 @@ export default function MohammadLedgerApp() {
                 </header>
                 <FlowProgress current={currentAccountWizardIndex + 1} total={accountWizardStages.length} items={completedAccountStages} onEdit={goToAccountWizardStep} />
 
-                <section key={currentAccountWizardStep} className={`ml3-account-stage ml3-account-stage--${currentAccountWizardStep}`}>
+                <Motion.section key={currentAccountWizardStep} className={`ml3-account-stage ml3-account-stage--${currentAccountWizardStep}`} {...FLOW_STAGE_MOTION}>
                   <div className="ml3-account-stage-head">
                     <h3>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'الحساب يخص ماذا؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.question : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.nameLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? selectedAccountPreset.detailLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'بأي عملة؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? 'هل يوجد رصيد سابق؟' : 'راجع الحساب'}</h3>
                     <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر الأقرب فقط.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.hint : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.namePlaceholder : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'اختر كاش بينكما أو شيك بينكما.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'اختر دينارًا أو دولارًا.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? (accountDraft.valueKind === VALUE_KINDS.RECEIVABLE ? 'أدخل المبلغ وحدد اتجاهه، أو اتركه صفرًا.' : 'أدخل الموجود الآن، أو اتركه صفرًا.') : 'تأكد من الاسم والرصيد.'}</p>
@@ -4473,7 +4501,7 @@ export default function MohammadLedgerApp() {
                     <div className="ml3-account-choice-list" aria-label="نوع الحساب">
                       {accountPresetGroups.map((group) => {
                         return (
-                          <button type="button" className={activeAccountPresetGroup === group.key ? 'is-active' : ''} key={group.key} onClick={() => chooseAccountPresetGroup(group.key)} aria-current={activeAccountPresetGroup === group.key ? 'true' : undefined}>
+                          <button type="button" className={`ml3-account-choice--${group.key} ${activeAccountPresetGroup === group.key ? 'is-active' : ''}`} key={group.key} onClick={() => chooseAccountPresetGroup(group.key)} aria-current={activeAccountPresetGroup === group.key ? 'true' : undefined}>
                             <i>
                               <AccountGroupIcon groupKey={group.key} />
                             </i>
@@ -4495,7 +4523,7 @@ export default function MohammadLedgerApp() {
                         .filter(Boolean)
                         .map((preset) => {
                           return (
-                            <button type="button" key={preset.key} className={activeAccountPresetKey === preset.key ? 'is-active' : ''} onClick={() => chooseAccountPreset(preset)} aria-current={activeAccountPresetKey === preset.key ? 'true' : undefined}>
+                            <button type="button" key={preset.key} className={`ml3-account-choice--${preset.key} ${activeAccountPresetKey === preset.key ? 'is-active' : ''}`} onClick={() => chooseAccountPreset(preset)} aria-current={activeAccountPresetKey === preset.key ? 'true' : undefined}>
                               <i>
                                 <AccountPresetIcon presetKey={preset.key} />
                               </i>
@@ -4627,7 +4655,7 @@ export default function MohammadLedgerApp() {
                       <span className="adreem-choice-hint">اختر للمتابعة</span>
                     )}
                   </div>
-                </section>
+                </Motion.section>
             </form>
           </aside>
         ) : null}
@@ -4648,6 +4676,7 @@ export default function MohammadLedgerApp() {
         ) : null}
       </section>
       <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
-    </AdreemChrome>
+      </AdreemChrome>
+    </MotionConfig>
   )
 }
