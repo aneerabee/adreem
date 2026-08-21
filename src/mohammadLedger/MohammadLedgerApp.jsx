@@ -541,7 +541,7 @@ function movementStepCopy(step, config = {}) {
   if (step === MOVEMENT_ENTRY_STEPS.NOTE)
     return {
       title: 'تفاصيل',
-      summary: 'اختياري',
+      summary: '',
     }
   return { title: 'المراجعة', summary: '' }
 }
@@ -1339,7 +1339,7 @@ function preferredAccountIdsFor(accounts, balanceByAccountId, currency = '', opt
     .map((account) => account.id)
 }
 
-function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDecimal = false, compact = false }) {
+function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDecimal = false, compact = false, hideLabel = false }) {
   const textValue = String(value || '')
   const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3']
 
@@ -1352,10 +1352,11 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDe
 
   if (compact) {
     return (
-      <label className="ml3-number-compact">
-        <span>{label}</span>
+      <label className={`ml3-number-compact ${hideLabel ? 'is-label-hidden' : ''}`}>
+        {hideLabel ? null : <span>{label}</span>}
         {name ? <input type="hidden" name={name} value={textValue} /> : null}
         <input
+          aria-label={label}
           type="text"
           inputMode={allowDecimal ? 'decimal' : 'numeric'}
           value={textValue}
@@ -1372,8 +1373,8 @@ function NumericEntry({ label, value, onChange, name, placeholder = '0', allowDe
   return (
     <div className="ml3-number-entry">
       {name ? <input type="hidden" name={name} value={textValue} /> : null}
-      <div className="ml3-number-display">
-        <span>{label}</span>
+      <div className={`ml3-number-display ${hideLabel ? 'is-label-hidden' : ''}`} aria-label={label}>
+        {hideLabel ? null : <span>{label}</span>}
         <strong>{textValue ? formatNumericEntryValue(textValue, allowDecimal) : placeholder}</strong>
         <button type="button" className="ml3-number-reset" aria-label="مسح" title="مسح" onClick={() => onChange('')}>C</button>
       </div>
@@ -2339,6 +2340,22 @@ export default function MohammadLedgerApp() {
   const canAdvanceAccountWizard = currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME
     ? hasAccountDraftName
     : currentAccountWizardStep !== ACCOUNT_WIZARD_STEPS.OPENING || accountOpeningDirectionReady
+  const accountWizardPrompt = currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP
+    ? 'ماذا تريد أن تضيف؟'
+    : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET
+      ? selectedAccountPresetCopy.question
+      : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME
+        ? selectedAccountPreset.nameLabel
+        : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL
+          ? selectedAccountPreset.detailLabel
+          : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY
+            ? 'اختر العملة'
+            : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING
+              ? 'الرصيد عند البداية'
+              : 'راجع الحساب'
+  const accountWizardHint = currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING
+    ? 'اكتب صفرًا إذا لا يوجد رصيد سابق.'
+    : ''
   const balancesByKind = useMemo(() => {
     const groups = {
       people: [],
@@ -3172,7 +3189,6 @@ export default function MohammadLedgerApp() {
 
   const visibleMovementSteps = movementVisibleSteps(movementConfig, movementSourceRequired)
   const currentMovementStepIndex = Math.max(0, visibleMovementSteps.indexOf(movementStep))
-  const movementProgressText = `${formatCount(currentMovementStepIndex + 1)}/${formatCount(visibleMovementSteps.length)}`
   const currentMovementStepCopy = movementStepCopy(movementStep, movementConfig)
 
   function chooseAccountPreset(preset, nextStep = ACCOUNT_WIZARD_STEPS.NAME) {
@@ -4326,7 +4342,6 @@ export default function MohammadLedgerApp() {
             <form id="adreem-entry-movement-panel" role="tabpanel" aria-labelledby="adreem-entry-movement-tab" hidden={activeEntryMode !== 'movement'} className={`ml3-entry-card ml3-entry-card--movement ml3-entry-card--${movementTone(movementDraft.type)}`} aria-busy={isSavingMovement} onSubmit={saveMovement}>
                 <header className="adreem-flow-head" aria-live="polite">
                   <div>
-                    <span>{movementProgressText}</span>
                     <h2>{currentMovementStepCopy.title}</h2>
                     {currentMovementStepCopy.summary ? <p>{currentMovementStepCopy.summary}</p> : null}
                   </div>
@@ -4382,7 +4397,7 @@ export default function MohammadLedgerApp() {
                 {movementStep === MOVEMENT_ENTRY_STEPS.AMOUNT ? (
                   <section className="ml3-step ml3-step--amount is-open">
                     <div className="ml3-field-pair is-single">
-                      <NumericEntry label={movementConfig.amountLabel} value={movementDraft.amount} onChange={(value) => updateMovementDraft('amount', value)} />
+                      <NumericEntry hideLabel label={movementConfig.amountLabel} value={movementDraft.amount} onChange={(value) => updateMovementDraft('amount', value)} />
                     </div>
                     <div className="ml3-step-controls">
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
@@ -4403,8 +4418,7 @@ export default function MohammadLedgerApp() {
                         <strong>{movementConfig.currencyText}</strong>
                       </div>
                     ) : (
-                      <label>
-                        العملة
+                      <label aria-label="العملة">
                         <select value={movementDraft.currency} onChange={(event) => updateMovementDraft('currency', event.target.value)}>
                           <option value={CURRENCIES.DINAR}>دينار</option>
                           <option value={CURRENCIES.USD}>دولار</option>
@@ -4424,7 +4438,7 @@ export default function MohammadLedgerApp() {
 
                 {movementConfig.needsRate && movementStep === MOVEMENT_ENTRY_STEPS.RATE ? (
                   <section className="ml3-step ml3-step--rate is-open">
-                    <NumericEntry label={movementConfig.rateLabel} value={movementDraft.rate} onChange={(value) => updateMovementDraft('rate', value)} placeholder="7.5" allowDecimal />
+                    <NumericEntry hideLabel label={movementConfig.rateLabel} value={movementDraft.rate} onChange={(value) => updateMovementDraft('rate', value)} placeholder="7.5" allowDecimal />
                     <div className="ml3-step-controls">
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
                         <ChevronRight aria-hidden="true" size={17} /> رجوع
@@ -4573,22 +4587,12 @@ export default function MohammadLedgerApp() {
                 </div>
             </section>
             <form id="adreem-entry-account-panel" role="tabpanel" aria-labelledby="adreem-entry-account-tab" hidden={activeEntryMode !== 'account'} className="ml3-add-account ml3-account-wizard" onSubmit={addAccount}>
-                <header className="adreem-flow-head" aria-live="polite">
-                  <div>
-                    <span>
-                      {formatCount(currentAccountWizardIndex + 1)}/{formatCount(accountWizardStages.length)}
-                    </span>
-                    <h2>{accountWizardStages[currentAccountWizardIndex]?.title}</h2>
-                    <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME && hasAccountDraftName ? preserveUiData(accountWizardStages[currentAccountWizardIndex]?.summary) : accountWizardStages[currentAccountWizardIndex]?.summary}</p>
-                  </div>
-                  <b>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'حساب جديد' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetGroup.title : selectedAccountPreset.title}</b>
-                </header>
                 <FlowProgress current={currentAccountWizardIndex + 1} total={accountWizardStages.length} items={completedAccountStages} onEdit={goToAccountWizardStep} />
 
                 <Motion.section key={currentAccountWizardStep} className={`ml3-account-stage ml3-account-stage--${currentAccountWizardStep}`} {...FLOW_STAGE_MOTION}>
                   <div className="ml3-account-stage-head">
-                    <h3>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'الحساب يخص ماذا؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.question : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.nameLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? selectedAccountPreset.detailLabel : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'بأي عملة؟' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? 'هل يوجد رصيد سابق؟' : 'راجع الحساب'}</h3>
-                    <p>{currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? 'اختر الأقرب فقط.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.PRESET ? selectedAccountPresetCopy.hint : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? selectedAccountPreset.namePlaceholder : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL ? 'اختر كاش بينكما أو شيك بينكما.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? 'اختر دينارًا أو دولارًا.' : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? (accountDraft.valueKind === VALUE_KINDS.RECEIVABLE ? 'أدخل المبلغ وحدد اتجاهه، أو اتركه صفرًا.' : 'أدخل الموجود الآن، أو اتركه صفرًا.') : 'تأكد من الاسم والرصيد.'}</p>
+                    <h3>{accountWizardPrompt}</h3>
+                    {accountWizardHint ? <p>{accountWizardHint}</p> : null}
                   </div>
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP ? (
@@ -4634,9 +4638,7 @@ export default function MohammadLedgerApp() {
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME ? (
                     <label className="ml3-account-field">
-                      <span>{selectedAccountPreset.nameLabel || 'الاسم'}</span>
-                      <input value={accountDraftNameValue} onChange={(event) => setAccountDraft((current) => applyAccountName(current, event.target.value))} placeholder={selectedAccountPreset.namePlaceholder || 'اكتب الاسم'} />
-                      <small>هذا هو الاسم الذي سيظهر في الأرصدة والبحث.</small>
+                      <input aria-label={selectedAccountPreset.nameLabel || 'الاسم'} value={accountDraftNameValue} onChange={(event) => setAccountDraft((current) => applyAccountName(current, event.target.value))} placeholder={selectedAccountPreset.namePlaceholder || 'اكتب الاسم'} />
                     </label>
                   ) : null}
 
@@ -4707,7 +4709,8 @@ export default function MohammadLedgerApp() {
                                 </header>
                                 <NumericEntry
                                   compact
-                                  label="الرصيد السابق"
+                                  hideLabel
+                                  label="المبلغ"
                                   value={accountDraft.counterpartyOpenings?.[channel.key]?.amount || ''}
                                   onChange={(value) => setAccountDraft((current) => ({
                                     ...current,
@@ -4752,14 +4755,15 @@ export default function MohammadLedgerApp() {
                                       عليّ له
                                     </button>
                                   </div>
-                                ) : <small className="adreem-opening-zero">يبدأ من صفر</small>}
+                                ) : null}
                               </section>
                             )
                           })}
                         </div>
                       ) : (
                         <NumericEntry
-                          label={`الرصيد الأول · ${accountOpeningCurrency === CURRENCIES.USD ? 'دولار' : 'دينار'}`}
+                          hideLabel
+                          label="المبلغ"
                           value={accountDraft.openingBalanceAmount}
                           onChange={(value) => setAccountDraft((current) => ({ ...current, openingBalanceAmount: value }))}
                         />
@@ -4791,7 +4795,6 @@ export default function MohammadLedgerApp() {
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
                     <div className="ml3-account-summary">
-                      <span>{accountIsCounterpartyBundle ? 'الشخص بعد الحفظ' : 'الحساب بعد الحفظ'}</span>
                       <strong>{protectedAccountDraftSummary(accountDraft)}</strong>
                       {accountIsCounterpartyBundle ? (
                         <div className="adreem-counterparty-summary">
@@ -4824,7 +4827,7 @@ export default function MohammadLedgerApp() {
                         التالي <ChevronLeft aria-hidden="true" size={17} />
                       </button>
                     ) : (
-                      <span className="adreem-choice-hint">اختر للمتابعة</span>
+                      <span aria-hidden="true" />
                     )}
                   </div>
                 </Motion.section>

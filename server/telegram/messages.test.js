@@ -15,6 +15,7 @@ import {
   mainMenuText,
   movementBlockquote,
   movementStepText,
+  reconciliationReviewText,
   reviewMovementText,
 } from './messages.js'
 import {
@@ -226,6 +227,51 @@ describe('telegram movement presentation', () => {
     expect(accountText).toContain('<code>2/6</code>')
     expect(accountText).not.toContain('○')
     expect(accountText).not.toContain('الخطوة الحالية')
+  })
+
+  it('asks each account question once without repeating instructions', () => {
+    const groupText = accountStepText({
+      mode: 'create',
+      step: 'group',
+      draft: {},
+    })
+    const currencyText = accountStepText({
+      mode: 'create',
+      step: 'currency',
+      presetGroup: 'money',
+      draft: {
+        ownerName: 'أنا',
+        subAccountName: 'الخزنة',
+        type: ACCOUNT_TYPES.CASH,
+        valueKind: VALUE_KINDS.CASH,
+      },
+    })
+    const reviewText = accountReviewText({
+      mode: 'create',
+      step: 'review',
+      presetGroup: 'money',
+      draft: {
+        ownerName: 'أنا',
+        subAccountName: 'الخزنة',
+        type: ACCOUNT_TYPES.CASH,
+        valueKind: VALUE_KINDS.CASH,
+        currencyKind: CURRENCIES.DINAR,
+      },
+    })
+
+    expect(groupText.match(/ماذا تريد أن تضيف؟/g)).toHaveLength(1)
+    expect(groupText).not.toContain('اختر قسمًا واحدًا')
+    expect(currencyText.match(/اختر العملة/g)).toHaveLength(1)
+    expect(currencyText).not.toContain('دينار أو دولار')
+    expect(reviewText).not.toContain('راجع قبل الحفظ')
+
+    const reconciliationText = reconciliationReviewText({
+      draft: { currency: CURRENCIES.DINAR, actualBalance: 100, note: 'عد يدوي' },
+    }, {
+      account: cash,
+      expected: 90,
+    })
+    expect(reconciliationText).not.toContain('راجع قبل الحفظ')
   })
 
   it('localizes the opening balance steps without changing the entered account name', () => {

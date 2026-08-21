@@ -200,15 +200,14 @@ function accountStepTitle(session) {
 
 function accountStepHelp(session) {
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
-  const group = accountPresetGroupFor(session?.presetGroup || preset)
-  if (session?.step === 'group') return 'اختر قسمًا واحدًا.'
-  if (session?.step === 'type') return accountPresetStepCopy[group.key]?.hint || 'اختر النوع المناسب.'
+  if (session?.step === 'group') return ''
+  if (session?.step === 'type') return ''
   if (session?.step === 'owner') return preset.namePlaceholder || 'اكتب الاسم فقط.'
-  if (session?.step === 'detail') return 'كاش أو شيك بيننا.'
-  if (session?.step === 'currency') return 'دينار أو دولار.'
+  if (session?.step === 'detail') return ''
+  if (session?.step === 'currency') return ''
   if (session?.step === 'opening') return isCounterpartyBundleDraft(session?.draft) ? 'صفر إذا لا يوجد رصيد سابق.' : 'اكتب صفرًا إذا لا يوجد رصيد سابق.'
-  if (session?.step === 'direction') return 'اختر المعنى الصحيح للمبلغ.'
-  if (session?.step === 'review') return 'تأكد ثم احفظ.'
+  if (session?.step === 'direction') return ''
+  if (session?.step === 'review') return ''
   return ''
 }
 
@@ -283,8 +282,6 @@ export function accountReviewText(session, result = null) {
   const isBundle = session?.mode === 'create' && isCounterpartyBundleDraft(draft)
   const lines = [
     `<b>${session?.mode === 'edit' ? 'تأكيد تعديل الحساب' : session?.mode === 'review' ? 'تأكيد إصلاح الحساب' : 'تأكيد الحساب'}</b>`,
-    '<code>راجع قبل الحفظ</code>',
-    '',
     '<blockquote>',
     escapeHtml(protectedAccountPrimaryName(draft)),
     '\n',
@@ -422,7 +419,7 @@ function reconciliationStepTitle(session) {
 
 function reconciliationStepHelp(session) {
   if (session?.step === 'account') return 'تظهر حسابات فلوسك فقط.'
-  if (session?.step === 'currency') return 'اختر العملة التي عدّدتَها.'
+  if (session?.step === 'currency') return ''
   if (session?.step === 'actual') return ''
   if (session?.step === 'note') return 'الملاحظة إلزامية حتى نعرف سبب التصحيح.'
   if (session?.step === 'review') return 'الحفظ سيضيف مطابقة، وقد ينشئ تصحيحًا.'
@@ -438,8 +435,6 @@ export function reconciliationReviewText(session, preview = {}) {
   const sign = diff > 0 ? '+' : ''
   const lines = [
     '<b>تأكيد المطابقة</b>',
-    '<code>راجع قبل الحفظ</code>',
-    '',
     `<blockquote>${escapeHtml(protectedAccountLabel(account))}\n${escapeHtml(`دفتر: ${formatMoney(expected, draft.currency)}`)}\n${escapeHtml(`فعلي: ${formatMoney(actual, draft.currency)}`)}\n${escapeHtml(`الفرق: ${sign}${formatMoney(diff, draft.currency)}`)}\n${escapeHtml(`ملاحظة: ${preserveUiData(draft.note || '')}`)}</blockquote>`,
   ]
   if (!diff) {
