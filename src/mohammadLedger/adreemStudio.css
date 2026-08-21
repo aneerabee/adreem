@@ -665,9 +665,11 @@
   position: sticky;
   top: 14px;
   width: 100%;
-  max-height: calc(100dvh - 96px);
+  max-height: calc(100dvh - 168px);
+  display: flex;
+  flex-direction: column;
   padding: 10px;
-  overflow-y: auto;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--entry) 22%, var(--line));
   border-radius: 8px;
   background: #f8fbf9;
@@ -693,6 +695,12 @@
 .ml3-today-list,
 .ml3-history-list,
 .ml3-list { gap: 5px; }
+.ml3-today-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
 .ml3-today-row,
 .ml3-history-row {
   --movement-tone: var(--accounts);
@@ -1050,7 +1058,29 @@
   border-radius: 7px;
   background: var(--history-soft);
 }
-.ml3-history-list { gap: 10px; }
+.ml3-layout--history .ml3-panel {
+  height: calc(100dvh - 154px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ml3-layout--history .ml3-panel-head,
+.ml3-layout--history .ml3-filter-disclosure { flex: 0 0 auto; }
+.ml3-history-list {
+  min-height: 0;
+  gap: 10px;
+}
+.ml3-layout--history .ml3-history-list {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+.ml3-layout--history .ml3-history-day,
+.ml3-layout--history .ml3-history-more { flex: 0 0 auto; }
 .ml3-history-more {
   width: min(100%, 320px);
   min-height: 40px;
@@ -1307,7 +1337,11 @@
   }
   .ml3-entry-card,
   .ml3-add-account { max-height: none; }
-  .ml3-today-panel { position: static; max-height: none; }
+  .ml3-today-panel {
+    position: static;
+    height: clamp(176px, calc(100dvh - 628px), 260px);
+    max-height: none;
+  }
   .ml3-number-entry { grid-template-columns: 1fr; }
 }
 
@@ -1485,6 +1519,7 @@
   .ml3-ops-grid,
   .ml3-decision-grid { grid-template-columns: 1fr; }
   .ml3-profile { width: 100%; }
+  .ml3-layout--history .ml3-panel { height: calc(100dvh - 211px); }
 }
 
 @media (max-width: 390px) {
@@ -1527,6 +1562,292 @@
 html.adreem-overlay-open .adreem-app .adreem-view {
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+/* Account workspace: use the available desktop width and disclose secondary tools on demand. */
+.ml3-profile-layer {
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.ml3-profile {
+  width: min(1080px, calc(100vw - 32px));
+  height: min(780px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 10px;
+}
+.ml3-profile-head {
+  position: relative;
+  min-height: 58px;
+  justify-content: space-between;
+  padding: 7px 10px;
+}
+.ml3-profile-head > button {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+}
+.ml3-profile-identity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.ml3-profile-identity > i {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--section-accent) 12%, white);
+  color: var(--section-accent);
+  font-style: normal;
+}
+.ml3-profile-identity > div { min-width: 0; }
+.ml3-profile-body {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 0.92fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "overview overview"
+    "activity tools"
+    "activity account";
+  gap: 8px;
+  padding: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--canvas) 76%, white);
+}
+.ml3-profile-overview {
+  grid-area: overview;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(230px, 0.82fr) minmax(300px, 1.18fr);
+  gap: 7px;
+}
+.ml3-profile-tools,
+.ml3-profile-account,
+.ml3-profile-activity { min-width: 0; min-height: 0; }
+.ml3-profile-tools {
+  grid-area: tools;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  overflow-y: auto;
+}
+.ml3-profile-account {
+  grid-area: account;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  overflow-y: auto;
+}
+.ml3-profile-activity { grid-area: activity; }
+.ml3-profile-balance,
+.ml3-profile-facts,
+.ml3-profile-reconcile,
+.ml3-profile-editor,
+.ml3-account-edit-history,
+.ml3-profile-movements { margin: 0; }
+.ml3-profile-balance {
+  min-height: 54px;
+  border-radius: 7px;
+  padding: 8px 10px;
+}
+.ml3-profile-balance strong { font-size: 0.82rem; }
+.ml3-profile-balance span { font-size: 0.68rem; }
+.ml3-profile-facts {
+  min-height: 54px;
+  gap: 5px;
+}
+.ml3-profile-facts > div {
+  align-content: center;
+  padding: 6px 7px;
+  background: #fff;
+}
+.ml3-profile-facts span { font-size: 0.59rem; }
+.ml3-profile-facts strong { overflow: hidden; font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-profile-reconcile,
+.ml3-profile-editor,
+.ml3-profile-movements {
+  border-radius: 7px;
+  padding: 8px;
+  background: #fff;
+}
+.ml3-profile h3 { margin-bottom: 5px; font-size: 0.76rem; }
+.ml3-profile-note { margin-bottom: 5px; font-size: 0.62rem; }
+.ml3-profile-editor-grid { gap: 5px; }
+.ml3-profile label { gap: 3px; font-size: 0.65rem; }
+.ml3-profile input:not([type="checkbox"]):not([type="file"]),
+.ml3-profile select,
+.ml3-profile textarea { min-height: 34px; padding-block: 5px; }
+.ml3-profile-reconcile > button,
+.ml3-profile-editor > button { min-height: 33px; margin-top: 6px; }
+.ml3-profile-disclosure {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+}
+.ml3-profile-disclosure > summary {
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+.ml3-profile-disclosure > summary::-webkit-details-marker { display: none; }
+.ml3-profile-disclosure > summary > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ml3-profile-disclosure > summary strong { font-size: 0.72rem; }
+.ml3-profile-disclosure > summary small {
+  min-width: 21px;
+  border-radius: 4px;
+  padding: 2px 5px;
+  background: var(--section-soft);
+  color: var(--section-accent);
+  font-size: 0.59rem;
+  font-weight: 800;
+  text-align: center;
+}
+.ml3-profile-disclosure > summary svg {
+  flex: 0 0 auto;
+  color: var(--section-accent);
+  transition: transform 160ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+.ml3-profile-disclosure[open] > summary {
+  border-bottom: 1px solid var(--line);
+  background: var(--section-soft);
+}
+.ml3-profile-disclosure[open] > summary svg { transform: rotate(180deg); }
+.ml3-profile-disclosure-body {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 8px;
+  background: #fff;
+  animation: ml3-profile-disclosure-in 170ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+.ml3-account-edit-history > .ml3-profile-disclosure-body { display: grid; gap: 3px; }
+.ml3-account-edit-history > .ml3-profile-disclosure-body > article { padding-inline: 1px; }
+.ml3-profile-activity .ml3-profile-movements {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.ml3-profile-section-head { min-height: 27px; }
+.ml3-profile-section-head h3 { margin: 0; }
+.ml3-profile-movement { min-height: 45px; padding-block: 5px; }
+.ml3-profile-movement strong { font-size: 0.7rem; }
+.ml3-profile-movement span,
+.ml3-profile-movement small { font-size: 0.6rem; }
+.ml3-profile-impact b { font-size: 0.66rem; }
+
+@keyframes ml3-profile-disclosure-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (min-width: 1100px) {
+  .ml3-profile { width: min(1180px, calc(100vw - 40px)); }
+  .ml3-profile-body {
+    grid-template-columns: minmax(270px, 0.82fr) minmax(300px, 0.9fr) minmax(340px, 1.08fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "overview overview activity"
+      "account tools activity";
+  }
+}
+
+@media (max-width: 759px) {
+  .ml3-profile-layer { align-items: stretch; padding: 0; }
+  .ml3-profile {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+  .ml3-profile-head {
+    min-height: 54px;
+    padding: 6px 8px;
+  }
+  .ml3-profile-identity { grid-template-columns: 31px minmax(0, 1fr); gap: 7px; }
+  .ml3-profile-identity > i { width: 31px; height: 31px; }
+  .ml3-profile-head h2 { font-size: 0.9rem; }
+  .ml3-profile-head p { font-size: 0.59rem; }
+  .ml3-profile-head > button { width: 33px; height: 33px; min-height: 33px; }
+  .ml3-profile-body {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(4, max-content);
+    grid-template-areas: "overview" "activity" "tools" "account";
+    align-content: start;
+    gap: 6px;
+    padding: 6px 6px calc(10px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .ml3-profile-overview { grid-template-columns: 1fr; gap: 4px; }
+  .ml3-profile-balance { min-height: 45px; padding: 6px 8px; }
+  .ml3-profile-balance strong { font-size: 0.76rem; }
+  .ml3-profile-balance span { font-size: 0.63rem; }
+  .ml3-profile-facts { min-height: 43px; gap: 3px; }
+  .ml3-profile-facts > div { min-height: 43px; padding: 4px 5px; }
+  .ml3-profile-facts span { font-size: 0.55rem; }
+  .ml3-profile-facts strong { font-size: 0.63rem; }
+  .ml3-profile-tools,
+  .ml3-profile-account,
+  .ml3-profile-activity { min-height: auto; }
+  .ml3-profile-tools,
+  .ml3-profile-account { gap: 6px; overflow: visible; }
+  .ml3-profile-reconcile,
+  .ml3-profile-editor,
+  .ml3-profile-movements { padding: 7px; }
+  .ml3-profile-reconcile--balance .ml3-profile-editor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ml3-profile-reconcile--balance .ml3-profile-editor-grid label:last-child { grid-column: 1 / -1; }
+  .ml3-profile label { font-size: 0.61rem; }
+  .ml3-profile-activity .ml3-profile-movements {
+    height: auto;
+    max-height: min(30dvh, 250px);
+    min-height: 82px;
+  }
+  .ml3-profile-movement {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 43px;
+    padding-block: 4px;
+  }
+  .ml3-profile-movement span,
+  .ml3-profile-movement small {
+    overflow: hidden;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ml3-profile-impact { display: grid; justify-items: end; gap: 2px; }
+  .ml3-profile-impact b { margin-inline-end: 0; }
+  .ml3-profile-disclosure > summary { min-height: 38px; padding-block: 5px; }
+  .ml3-profile-disclosure-body { padding: 7px; }
 }
 
 .adreem-mode-forward .adreem-entry,

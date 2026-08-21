@@ -3,7 +3,7 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Check, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, Landmark, ReceiptText, Search, SlidersHorizontal, UserRound, WalletCards, Wrench } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, Landmark, ReceiptText, Search, SlidersHorizontal, UserRound, WalletCards, Wrench, X } from 'lucide-react'
 import './adreemDesk.css'
 import './adreemStudio.css'
 import AdreemChrome from './AdreemChrome'
@@ -1015,33 +1015,35 @@ function AccountEditHistory({ accountId, auditEvents = [] }) {
     .sort((left, right) => String(right.createdAt || '').localeCompare(String(left.createdAt || '')))
 
   return (
-    <section className="ml3-account-edit-history">
-      <div className="ml3-profile-section-head">
-        <h3>سجل التعديلات</h3>
-        <span>{formatCount(edits.length)}</span>
+    <details className="ml3-account-edit-history ml3-profile-disclosure">
+      <summary>
+        <span><strong>سجل التعديلات</strong><small>{formatCount(edits.length)}</small></span>
+        <ChevronDown aria-hidden="true" size={16} />
+      </summary>
+      <div className="ml3-profile-disclosure-body">
+        {edits.length === 0 ? <p className="ml3-empty">لم يُعدّل هذا الحساب بعد.</p> : null}
+        {edits.map((edit) => (
+          <article key={edit.id}>
+            <time>{movementDateTime(edit.createdAt)}</time>
+            {edit.changes.map((change) => (
+              <div key={`${edit.id}-${change.key}`}>
+                <strong>{change.label}</strong>
+                <span className="ml3-account-edit-values">
+                  <span>
+                    <small>كان</small>
+                    <b>{change.protectsUserData ? preserveUiData(change.before) : change.before}</b>
+                  </span>
+                  <span>
+                    <small>أصبح</small>
+                    <em>{change.protectsUserData ? preserveUiData(change.after) : change.after}</em>
+                  </span>
+                </span>
+              </div>
+            ))}
+          </article>
+        ))}
       </div>
-      {edits.length === 0 ? <p className="ml3-empty">لم يُعدّل هذا الحساب بعد.</p> : null}
-      {edits.map((edit) => (
-        <article key={edit.id}>
-          <time>{movementDateTime(edit.createdAt)}</time>
-          {edit.changes.map((change) => (
-            <div key={`${edit.id}-${change.key}`}>
-              <strong>{change.label}</strong>
-              <span className="ml3-account-edit-values">
-                <span>
-                  <small>كان</small>
-                  <b>{change.protectsUserData ? preserveUiData(change.before) : change.before}</b>
-                </span>
-                <span>
-                  <small>أصبح</small>
-                  <em>{change.protectsUserData ? preserveUiData(change.after) : change.after}</em>
-                </span>
-              </span>
-            </div>
-          ))}
-        </article>
-      ))}
-    </section>
+    </details>
   )
 }
 
@@ -1586,140 +1588,164 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
     <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
       <aside className="ml3-profile" onClick={(event) => event.stopPropagation()}>
         <div className="ml3-profile-head">
-          <button type="button" onClick={onClose}>
-            إغلاق
-          </button>
-          <div>
-            <span>{protectedAccountContext(account)}</span>
-            <h2>{protectedAccountPrimaryName(account)}</h2>
-            <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'ما لك وما عليك معه' : account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK ? 'مكان من أماكن فلوسك' : 'حساب للمتابعة'}</p>
+          <div className="ml3-profile-identity">
+            <i><AccountChoiceIcon account={account} size={18} /></i>
+            <div>
+              <span>{protectedAccountContext(account)}</span>
+              <h2>{protectedAccountPrimaryName(account)}</h2>
+              <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'ما لك وما عليك معه' : account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK ? 'مكان من أماكن فلوسك' : 'حساب للمتابعة'}</p>
+            </div>
           </div>
+          <button type="button" aria-label="إغلاق" title="إغلاق" onClick={onClose}><X aria-hidden="true" size={18} /></button>
         </div>
 
-        <div className={`ml3-profile-balance ${profileBalanceTone}`}>
-          <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong>
-          <span>{hasMoneyValue(primaryBalance.secondaryAmount) ? money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : primaryBalance.secondaryCurrency === CURRENCIES.USD ? 'لا يوجد دولار' : 'لا يوجد دينار'}</span>
-        </div>
+        <div className="ml3-profile-body">
+          <section className="ml3-profile-overview">
+            <div className={`ml3-profile-balance ${profileBalanceTone}`}>
+              <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong>
+              <span>{hasMoneyValue(primaryBalance.secondaryAmount) ? money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : primaryBalance.secondaryCurrency === CURRENCIES.USD ? 'لا يوجد دولار' : 'لا يوجد دينار'}</span>
+            </div>
 
-        <div className="ml3-profile-facts">
-          <div>
-            <span>نوع الحساب</span>
-            <strong>{accountKindText(account)}</strong>
-          </div>
-          <div>
-            <span>الحركات</span>
-            <strong>{formatCount(postedCount)}</strong>
-          </div>
-          <div>
-            <span>الحالة</span>
-            <strong>{account.status === ACCOUNT_STATUSES.ACTIVE ? 'فعال' : account.status}</strong>
-          </div>
-        </div>
+            <div className="ml3-profile-facts">
+              <div>
+                <span>نوع الحساب</span>
+                <strong>{accountKindText(account)}</strong>
+              </div>
+              <div>
+                <span>الحركات</span>
+                <strong>{formatCount(postedCount)}</strong>
+              </div>
+              <div>
+                <span>الحالة</span>
+                <strong>{account.status === ACCOUNT_STATUSES.ACTIVE ? 'فعال' : account.status}</strong>
+              </div>
+            </div>
+          </section>
 
-        {canReconcileBalance ? (
-          <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
-            <h3>مطابقة الرصيد</h3>
-            {lastReconciliation ? (
-              <p className="ml3-profile-note">
-                آخر مطابقة: {movementDateTime(lastReconciliation.createdAt)} · {preserveUiData(lastReconciliation.note)}
-              </p>
+          <section className="ml3-profile-tools">
+            {canReconcileBalance ? (
+              <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
+                <h3>مطابقة الرصيد</h3>
+                {lastReconciliation ? (
+                  <p className="ml3-profile-note">
+                    آخر مطابقة: {movementDateTime(lastReconciliation.createdAt)} · {preserveUiData(lastReconciliation.note)}
+                  </p>
+                ) : null}
+                <div className="ml3-profile-editor-grid">
+                  <label>
+                    الرصيد الفعلي بالدينار
+                    <input name="actualDinar" inputMode="numeric" defaultValue={formatInteger(dinar)} />
+                  </label>
+                  <label>
+                    الرصيد الفعلي بالدولار
+                    <input name="actualUsd" inputMode="numeric" defaultValue={formatMoneyNumber(usd)} />
+                  </label>
+                  <label>
+                    ملاحظة
+                    <input name="note" placeholder="الملاحظة مطلوبة" />
+                  </label>
+                </div>
+                <button type="submit">إنشاء تصحيح</button>
+              </form>
             ) : null}
-            <div className="ml3-profile-editor-grid">
-              <label>
-                الرصيد الفعلي بالدينار
-                <input name="actualDinar" inputMode="numeric" defaultValue={formatInteger(dinar)} />
-              </label>
-              <label>
-                الرصيد الفعلي بالدولار
-                <input name="actualUsd" inputMode="numeric" defaultValue={formatMoneyNumber(usd)} />
-              </label>
-              <label>
-                ملاحظة
-                <input name="note" placeholder="الملاحظة مطلوبة" />
-              </label>
-            </div>
-            <button type="submit">إنشاء تصحيح</button>
-          </form>
-        ) : null}
 
-        <form className="ml3-profile-reconcile ml3-profile-reconcile--attachment" aria-busy={isAddingAttachment} onSubmit={(event) => onAddAttachment(event, account.id)}>
-          <h3>مرفقات</h3>
-          <div className="ml3-profile-editor-grid">
-            <label>
-              اسم المرفق
-              <input name="attachmentLabel" placeholder="مثال: صورة إيصال أو عقد" />
-            </label>
-            <label>
-              الرابط
-              <input name="attachmentUrl" placeholder="اختياري" />
-            </label>
-            <AttachmentFileField />
-          </div>
-          <button type="submit" disabled={isAddingAttachment}>
-            {isAddingAttachment ? 'جاري رفع المرفق' : 'ربط مرفق'}
-          </button>
-          {accountAttachments.length ? (
-            <div className="ml3-attachment-list">
-              {accountAttachments.slice(0, 5).map((attachment) => (
-                <AttachmentLink key={attachment.id} attachment={attachment} onDelete={onDeleteAttachment} />
-              ))}
-            </div>
-          ) : null}
-        </form>
+            <details className="ml3-profile-disclosure">
+              <summary>
+                <span><strong>مرفقات</strong><small>{formatCount(accountAttachments.length)}</small></span>
+                <ChevronDown aria-hidden="true" size={16} />
+              </summary>
+              <form className="ml3-profile-reconcile ml3-profile-reconcile--attachment ml3-profile-disclosure-body" aria-busy={isAddingAttachment} onSubmit={(event) => onAddAttachment(event, account.id)}>
+                <div className="ml3-profile-editor-grid">
+                  <label>
+                    اسم المرفق
+                    <input name="attachmentLabel" placeholder="مثال: صورة إيصال أو عقد" />
+                  </label>
+                  <label>
+                    الرابط
+                    <input name="attachmentUrl" placeholder="اختياري" />
+                  </label>
+                  <AttachmentFileField />
+                </div>
+                <button type="submit" disabled={isAddingAttachment}>
+                  {isAddingAttachment ? 'جاري رفع المرفق' : 'ربط مرفق'}
+                </button>
+                {accountAttachments.length ? (
+                  <div className="ml3-attachment-list">
+                    {accountAttachments.slice(0, 5).map((attachment) => (
+                      <AttachmentLink key={attachment.id} attachment={attachment} onDelete={onDeleteAttachment} />
+                    ))}
+                  </div>
+                ) : null}
+              </form>
+            </details>
+          </section>
 
-        <form className={`ml3-profile-editor${accountLocked ? ' is-locked' : ''}`} onSubmit={(event) => onUpdateAccount(event, account.id)}>
-          <h3>بيانات الحساب</h3>
-          <AccountClassificationEditorFields account={account} structureLocked={structureLocked} accountLocked={accountLocked} />
-          {accountLocked ? null : <button type="submit">حفظ التعديل</button>}
-        </form>
+          <section className="ml3-profile-account">
+            <details className="ml3-profile-disclosure">
+              <summary>
+                <span><strong>بيانات الحساب</strong></span>
+                <ChevronDown aria-hidden="true" size={16} />
+              </summary>
+              <form className={`ml3-profile-editor ml3-profile-disclosure-body${accountLocked ? ' is-locked' : ''}`} onSubmit={(event) => onUpdateAccount(event, account.id)}>
+                <AccountClassificationEditorFields account={account} structureLocked={structureLocked} accountLocked={accountLocked} />
+                {accountLocked ? null : <button type="submit">حفظ التعديل</button>}
+              </form>
+            </details>
 
-        <AccountEditHistory accountId={account.id} auditEvents={auditEvents} />
+            <AccountEditHistory accountId={account.id} auditEvents={auditEvents} />
+          </section>
 
-        <div className="ml3-profile-movements">
-          <h3>الحركات</h3>
-          {relatedMovements.length === 0 ? <p className="ml3-empty">لا توجد حركات لهذا الحساب.</p> : null}
-          {relatedMovements.map((movement) => {
-            const impacts = movement.status === MOVEMENT_STATUSES.POSTED ? movementAccountImpact(movement, account.id) : []
-            const source = accountMap.get(movement.sourceAccountId)
-            const destination = accountMap.get(movement.destinationAccountId)
-            const movementAttachments = attachmentsForRecord(attachments, {
-              movementId: movement.id,
-            })
-            return (
-              <article className="ml3-profile-movement" key={movement.id}>
-                <div>
-                  <strong>{movementLabels[movement.type] || movement.type}</strong>
-                  <span>
-                    {source ? protectedAccountLabel(source) : 'بدون مصدر'} ← {destination ? protectedAccountLabel(destination) : 'بدون وجهة'}
-                  </span>
-                  <small>{movementDateTime(movement.createdAt || movement.updatedAt)} · {movementStatusLabel(movement.status)}</small>
-                  {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
-                  {movementAttachments.length ? (
-                    <div className="ml3-attachment-list">
-                      {movementAttachments.map((item) => (
-                        <AttachmentLink key={item.id} attachment={item} onDelete={onDeleteAttachment} />
-                      ))}
+          <section className="ml3-profile-activity">
+            <div className="ml3-profile-movements">
+              <div className="ml3-profile-section-head">
+                <h3>الحركات</h3>
+                <span>{formatCount(relatedMovements.length)}</span>
+              </div>
+              {relatedMovements.length === 0 ? <p className="ml3-empty">لا توجد حركات لهذا الحساب.</p> : null}
+              {relatedMovements.map((movement) => {
+                const impacts = movement.status === MOVEMENT_STATUSES.POSTED ? movementAccountImpact(movement, account.id) : []
+                const source = accountMap.get(movement.sourceAccountId)
+                const destination = accountMap.get(movement.destinationAccountId)
+                const movementAttachments = attachmentsForRecord(attachments, {
+                  movementId: movement.id,
+                })
+                return (
+                  <article className="ml3-profile-movement" key={movement.id}>
+                    <div>
+                      <strong>{movementLabels[movement.type] || movement.type}</strong>
+                      <span>
+                        {source ? protectedAccountLabel(source) : 'بدون مصدر'} ← {destination ? protectedAccountLabel(destination) : 'بدون وجهة'}
+                      </span>
+                      <small>{movementDateTime(movement.createdAt || movement.updatedAt)} · {movementStatusLabel(movement.status)}</small>
+                      {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
+                      {movementAttachments.length ? (
+                        <div className="ml3-attachment-list">
+                          {movementAttachments.map((item) => (
+                            <AttachmentLink key={item.id} attachment={item} onDelete={onDeleteAttachment} />
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-                <div className="ml3-profile-impact">
-                  {impacts.map((impact) => (
-                    <b key={`${movement.id}-${impact.currency}`}>{signedMoney(impact.delta, impact.currency)}</b>
-                  ))}
-                  {!movement.id?.startsWith('opening-') && canCancelMovement(movement) ? (
-                    <button type="button" onClick={() => onEditMovement(movement)}>
-                      تعديل
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            )
-          })}
-          {movementPage?.hasMore ? (
-            <button type="button" className="ml3-history-more" disabled={isLoadingMovements} onClick={onLoadMoreMovements}>
-              {isLoadingMovements ? 'جاري التحميل' : 'حركات أقدم'}
-            </button>
-          ) : null}
+                    <div className="ml3-profile-impact">
+                      {impacts.map((impact) => (
+                        <b key={`${movement.id}-${impact.currency}`}>{signedMoney(impact.delta, impact.currency)}</b>
+                      ))}
+                      {!movement.id?.startsWith('opening-') && canCancelMovement(movement) ? (
+                        <button type="button" onClick={() => onEditMovement(movement)}>
+                          تعديل
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              })}
+              {movementPage?.hasMore ? (
+                <button type="button" className="ml3-history-more" disabled={isLoadingMovements} onClick={onLoadMoreMovements}>
+                  {isLoadingMovements ? 'جاري التحميل' : 'حركات أقدم'}
+                </button>
+              ) : null}
+            </div>
+          </section>
         </div>
       </aside>
     </div>
