@@ -73,6 +73,42 @@ describe('shared movement account choices', () => {
     expect(result.map((item) => item.id)).toEqual(['cash-lyd-b'])
   })
 
+  it('matches every automatic person balance to the correct money account', () => {
+    const accounts = [
+      account('own-cash-lyd', VALUE_KINDS.CASH, { ownerName: 'أنا', subAccountName: 'الخزنة', currencyKind: CURRENCIES.DINAR }),
+      account('own-bank-lyd', VALUE_KINDS.BANK, { ownerName: 'أنا', subAccountName: 'الجمهورية', currencyKind: CURRENCIES.DINAR }),
+      account('own-cash-usd', VALUE_KINDS.CASH, { ownerName: 'أنا', subAccountName: 'خزنة دولار', currencyKind: CURRENCIES.USD }),
+      account('person-cash-lyd', VALUE_KINDS.RECEIVABLE, { ownerName: 'سعيد', subAccountName: 'كاش بيننا', counterpartyKind: 'cash-dinar', currencyKind: CURRENCIES.DINAR }),
+      account('person-cheque-lyd', VALUE_KINDS.RECEIVABLE, { ownerName: 'سعيد', subAccountName: 'شيك بيننا', counterpartyKind: 'cheque-dinar', currencyKind: CURRENCIES.DINAR }),
+      account('person-cash-usd', VALUE_KINDS.RECEIVABLE, { ownerName: 'سعيد', subAccountName: 'دولار بيننا', counterpartyKind: 'cash-usd', currencyKind: CURRENCIES.USD }),
+    ]
+
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.TRANSFER, 'destination', {
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'own-cash-lyd',
+    }).map((item) => item.id)).toEqual(expect.arrayContaining(['person-cash-lyd']))
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.TRANSFER, 'destination', {
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'own-cash-lyd',
+    }).map((item) => item.id)).not.toEqual(expect.arrayContaining(['person-cheque-lyd', 'person-cash-usd']))
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.TRANSFER, 'destination', {
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'own-bank-lyd',
+    }).map((item) => item.id)).toEqual(expect.arrayContaining(['person-cheque-lyd']))
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.TRANSFER, 'destination', {
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'own-bank-lyd',
+    }).map((item) => item.id)).not.toEqual(expect.arrayContaining(['person-cash-lyd', 'person-cash-usd']))
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.TRANSFER, 'destination', {
+      currency: CURRENCIES.USD,
+      sourceAccountId: 'own-cash-usd',
+    }).map((item) => item.id)).toEqual(expect.arrayContaining(['person-cash-usd']))
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.TRANSFER, 'destination', {
+      currency: CURRENCIES.USD,
+      sourceAccountId: 'own-cash-usd',
+    }).map((item) => item.id)).not.toEqual(expect.arrayContaining(['person-cash-lyd', 'person-cheque-lyd']))
+  })
+
   it('offers only cash-to-bank for deposits and bank-to-cash for withdrawals', () => {
     const accounts = [
       account('cash', VALUE_KINDS.CASH),

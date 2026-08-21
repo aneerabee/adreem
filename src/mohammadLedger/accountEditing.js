@@ -66,11 +66,12 @@ export function accountUpdateMovementErrors(accountId, candidateAccounts = [], m
     )
 }
 
-function referencesAccount(record = {}, accountId) {
-  return [record.sourceAccountId, record.destinationAccountId, record.expenseCategoryId].includes(accountId)
+function referencesAnyAccount(record = {}, accountIds = new Set()) {
+  return [record.sourceAccountId, record.destinationAccountId, record.expenseCategoryId].some((accountId) => accountIds.has(accountId))
 }
 
 export function accountStructureUsage(accountOrId, {
+  accounts = [],
   movements = [],
   reconciliations = [],
   recurringRules = [],
@@ -80,19 +81,24 @@ export function accountStructureUsage(accountOrId, {
   const id = String(account?.id || accountOrId || '').trim()
   if (!id) return { movement: false, reconciliation: false, recurringRule: false, dimension: false, locked: false }
 
-  const linkedDimensions = dimensions.filter((item) => item.linkedAccountId === id)
+  const relatedAccounts = account?.counterpartyId
+    ? accounts.filter((item) => item.counterpartyId === account.counterpartyId)
+    : []
+  const accountIds = new Set([id, ...relatedAccounts.map((item) => item.id)].filter(Boolean))
+  const linkedDimensions = dimensions.filter((item) => accountIds.has(item.linkedAccountId))
   const dimensionIds = new Set([
     account?.dimensionId,
-    `dimension-account-${id}`,
+    ...Array.from(accountIds, (accountId) => `dimension-account-${accountId}`),
     ...linkedDimensions.map((item) => item.id),
   ].filter(Boolean))
-  const databaseStructureLock = Boolean(account?.structureLocked)
-  const movement = Number(account?.postedCount || 0) > 0 || movements.some((item) => STRUCTURE_LOCKING_MOVEMENT_STATUSES.has(item.status) && (
-    referencesAccount(item, id) || dimensionIds.has(item.dimensionId)
+  const linkedBundle = Boolean(account?.counterpartyId)
+  const databaseStructureLock = Boolean(account?.structureLocked || relatedAccounts.some((item) => item.structureLocked))
+  const movement = Number(account?.postedCount || 0) > 0 || relatedAccounts.some((item) => Number(item.postedCount || 0) > 0) || movements.some((item) => STRUCTURE_LOCKING_MOVEMENT_STATUSES.has(item.status) && (
+    referencesAnyAccount(item, accountIds) || dimensionIds.has(item.dimensionId)
   ))
-  const reconciliation = reconciliations.some((item) => item.accountId === id)
+  const reconciliation = reconciliations.some((item) => accountIds.has(item.accountId))
   const recurringRule = recurringRules.some((item) => (
-    referencesAccount(item.template, id) || dimensionIds.has(item.template?.dimensionId)
+    referencesAnyAccount(item.template, accountIds) || dimensionIds.has(item.template?.dimensionId)
   ))
   const dimension = linkedDimensions.length > 0
   return {
@@ -100,8 +106,9 @@ export function accountStructureUsage(accountOrId, {
     reconciliation,
     recurringRule,
     dimension,
+    linkedBundle,
     databaseStructureLock,
-    locked: databaseStructureLock || movement || reconciliation || recurringRule || dimension,
+    locked: linkedBundle || databaseStructureLock || movement || reconciliation || recurringRule || dimension,
   }
 }
 
@@ -170,8 +177,19 @@ export function prepareAccountUpdate({
     notes: draft.notes === undefined ? currentAccount.notes : String(draft.notes || '').trim(),
     updatedAt,
   }
-  const candidateAccounts = accounts.map((account) => (account.id === accountId ? nextAccount : account))
+  const linkedAccountIds = new Set(currentAccount.counterpartyId
+    ? accounts.filter((account) => account.counterpartyId === currentAccount.counterpartyId).map((account) => account.id)
+    : [accountId])
+  const renameLinkedAccounts = linkedAccountIds.size > 1 && currentAccount.ownerName !== nextAccount.ownerName
+  const candidateAccounts = accounts.map((account) => {
+    if (account.id === accountId) return nextAccount
+    if (renameLinkedAccounts && linkedAccountIds.has(account.id)) {
+      return { ...account, ownerName: nextAccount.ownerName, updatedAt }
+    }
+    return account
+  })
   const structureErrors = accountStructureLockErrors(currentAccount, nextAccount, {
+    accounts,
     movements,
     reconciliations,
     recurringRules,
@@ -179,15 +197,23 @@ export function prepareAccountUpdate({
   })
   if (structureErrors.length) return { ok: false, reason: 'account-structure-locked', errors: structureErrors }
 
-  const validation = validateAccount(nextAccount, accounts.filter((account) => account.id !== accountId))
-  if (!validation.ok) return { ok: false, reason: 'account-validation', errors: validation.errors }
+  const updatedAccountIds = renameLinkedAccounts ? linkedAccountIds : new Set([accountId])
+  const validationErrors = []
+  const acceptedAccounts = candidateAccounts.filter((account) => !updatedAccountIds.has(account.id))
+  for (const account of candidateAccounts.filter((item) => updatedAccountIds.has(item.id))) {
+    const validation = validateAccount(account, acceptedAccounts)
+    validationErrors.push(...validation.errors)
+    if (validation.ok) acceptedAccounts.push(account)
+  }
+  if (validationErrors.length) return { ok: false, reason: 'account-validation', errors: validationErrors }
 
-  const movementErrors = accountUpdateMovementErrors(accountId, candidateAccounts, movements)
+  const movementErrors = Array.from(updatedAccountIds).flatMap((id) => accountUpdateMovementErrors(id, candidateAccounts, movements))
   if (movementErrors.length) return { ok: false, reason: 'movement-history', errors: movementErrors }
   return {
     ok: true,
     accounts: candidateAccounts,
     account: nextAccount,
+    accountIds: Array.from(updatedAccountIds),
     previousAccount: currentAccount,
     changes: accountEditChanges(currentAccount, nextAccount),
   }

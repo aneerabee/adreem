@@ -8,7 +8,11 @@ import {
   accountPresets,
   accountSupportsOpeningBalance,
   applyAccountName,
+  counterpartyAccountChannels,
+  counterpartyOpeningFor,
   emptyAccountDraft,
+  emptyCounterpartyOpenings,
+  isCounterpartyBundleDraft,
 } from '../../../src/mohammadLedger/accountConfig.js'
 import { accountStructureUsage } from '../../../src/mohammadLedger/accountEditing.js'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
@@ -47,12 +51,15 @@ const STEPS = {
 
 function createAccountSession(options = {}) {
   const hasExistingDraft = Boolean(options.draft)
+  const draft = hasExistingDraft
+    ? { ...options.draft, counterpartyBundle: options.draft?.counterpartyBundle === true }
+    : emptyAccountDraft()
   return {
     flow: 'account',
     mode: options.mode || 'create',
     step: STEPS.GROUP,
     sessionId: randomUUID(),
-    draft: options.draft || emptyAccountDraft(),
+    draft,
     presetGroup: options.presetGroup ?? (hasExistingDraft
       ? accountPresetGroupFor(accountPresetFor(options.draft?.type, options.draft?.valueKind)).key
       : ''),
@@ -61,6 +68,7 @@ function createAccountSession(options = {}) {
     reviewOriginalLabel: options.reviewOriginalLabel || '',
     selectedDetail: hasExistingDraft ? options.draft?.subAccountName || '' : '',
     openingBuffer: '',
+    bundleOpeningIndex: 0,
     structureLocked: Boolean(options.structureLocked),
     uiMessageId: null,
   }
@@ -73,6 +81,8 @@ function applyPresetToSession(session, preset) {
     type: preset.type,
     valueKind: preset.valueKind,
     subAccountName: preset.subAccountName,
+    counterpartyBundle: Boolean(preset.counterpartyBundle),
+    counterpartyOpenings: emptyCounterpartyOpenings(),
     currencyKind: session.draft.currencyKind,
     openingBalanceAmount: '',
     openingBalanceDirection: '',
@@ -81,11 +91,54 @@ function applyPresetToSession(session, preset) {
   session.openingBuffer = ''
 }
 
+function isCounterpartySession(session) {
+  return session?.mode === 'create' && isCounterpartyBundleDraft(session?.draft)
+}
+
+function currentCounterpartyChannel(session) {
+  return counterpartyAccountChannels[Math.min(Math.max(0, Number(session?.bundleOpeningIndex) || 0), counterpartyAccountChannels.length - 1)]
+}
+
+function loadCounterpartyOpeningBuffer(session) {
+  const channel = currentCounterpartyChannel(session)
+  const opening = counterpartyOpeningFor(session.draft, channel.key)
+  session.openingBuffer = opening.amount > 0 ? String(opening.amount) : ''
+}
+
+function beginCounterpartyOpenings(session) {
+  session.bundleOpeningIndex = 0
+  loadCounterpartyOpeningBuffer(session)
+  session.step = STEPS.OPENING
+}
+
+function saveCounterpartyOpening(session, updates = {}) {
+  const channel = currentCounterpartyChannel(session)
+  session.draft.counterpartyOpenings = {
+    ...session.draft.counterpartyOpenings,
+    [channel.key]: {
+      ...session.draft.counterpartyOpenings?.[channel.key],
+      ...updates,
+    },
+  }
+}
+
+function advanceCounterpartyOpening(session) {
+  if (session.bundleOpeningIndex < counterpartyAccountChannels.length - 1) {
+    session.bundleOpeningIndex += 1
+    loadCounterpartyOpeningBuffer(session)
+    session.step = STEPS.OPENING
+    return false
+  }
+  session.step = STEPS.REVIEW
+  return true
+}
+
 function needsOpeningStep(session) {
   return session?.mode === 'create' && accountSupportsOpeningBalance(session?.draft)
 }
 
 function nextStepAfterDefinition(session) {
+  if (isCounterpartySession(session)) return STEPS.OPENING
   if (accountNeedsCurrency(session.draft)) return STEPS.CURRENCY
   return needsOpeningStep(session) ? STEPS.OPENING : STEPS.REVIEW
 }
@@ -246,6 +299,7 @@ export async function startReviewAccount(ctx, accountId) {
       type: account.type,
       valueKind: account.valueKind,
       currencyKind: account.currencyKind,
+      counterpartyBundle: false,
       notes: account.notes || '',
     },
   })
@@ -265,6 +319,7 @@ export async function startEditAccount(ctx, accountId) {
     })
   }
   const usage = accountStructureUsage(account, {
+    accounts: state.accounts || [],
     movements: state.movements || [],
     reconciliations: state.reconciliations || [],
     recurringRules: state.recurringRules || [],
@@ -298,6 +353,7 @@ export async function startEditAccount(ctx, accountId) {
       type: account.type,
       valueKind: account.valueKind,
       currencyKind: account.currencyKind,
+      counterpartyBundle: false,
       notes: account.notes || '',
     },
   })
@@ -330,7 +386,14 @@ export async function handleAccountCallback(ctx, data) {
   }
 
   if (data === 'acct:back') {
+    if (isCounterpartySession(session) && session.step === STEPS.OPENING && session.bundleOpeningIndex > 0) {
+      session.bundleOpeningIndex -= 1
+      loadCounterpartyOpeningBuffer(session)
+      ctx.sessions.set(ctx.chatId, ctx.userId, session)
+      return sendStep(ctx, session)
+    }
     session.step = previousStep(session)
+    if (isCounterpartySession(session) && session.step === STEPS.OPENING) loadCounterpartyOpeningBuffer(session)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
   }
@@ -400,6 +463,17 @@ export async function handleAccountCallback(ctx, data) {
     const value = session.openingBuffer ? numericBufferValue(session.openingBuffer, { allowZero: true }) : 0
     if (value === null) return sendStep(ctx, session)
     session.openingBuffer = normalizeNumericBuffer(String(value))
+    if (isCounterpartySession(session)) {
+      saveCounterpartyOpening(session, { amount: String(value), direction: '' })
+      if (value > 0) {
+        session.step = STEPS.DIRECTION
+        ctx.sessions.set(ctx.chatId, ctx.userId, session)
+        return sendStep(ctx, session)
+      }
+      const finished = advanceCounterpartyOpening(session)
+      ctx.sessions.set(ctx.chatId, ctx.userId, session)
+      return finished ? sendReviewStep(ctx, session) : sendStep(ctx, session)
+    }
     session.draft.openingBalanceAmount = String(value)
     if (session.draft.valueKind === VALUE_KINDS.RECEIVABLE && value > 0) session.draft.openingBalanceDirection = ''
     session.step = session.draft.valueKind === VALUE_KINDS.RECEIVABLE && value > 0 ? STEPS.DIRECTION : STEPS.REVIEW
@@ -411,6 +485,12 @@ export async function handleAccountCallback(ctx, data) {
     if (session.step !== STEPS.DIRECTION) return sendStep(ctx, session)
     const direction = data.slice('acct:opening-direction:'.length)
     if (!Object.values(ACCOUNT_OPENING_DIRECTIONS).includes(direction)) return sendStep(ctx, session)
+    if (isCounterpartySession(session)) {
+      saveCounterpartyOpening(session, { direction })
+      const finished = advanceCounterpartyOpening(session)
+      ctx.sessions.set(ctx.chatId, ctx.userId, session)
+      return finished ? sendReviewStep(ctx, session) : sendStep(ctx, session)
+    }
     session.draft.openingBalanceDirection = direction
     session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -457,14 +537,14 @@ export async function handleAccountCallback(ctx, data) {
       return await ctx.telegram.editMessageText({
         chat_id: ctx.chatId,
         message_id: session.uiMessageId || ctx.messageId,
-        text: accountCreatedText(result.account, { duplicate: result.duplicate, reviewed: session.mode === 'review', edited: session.mode === 'edit', unchanged: result.unchanged }),
+        text: accountCreatedText(result.account, { accounts: result.accounts, bundle: result.bundle, duplicate: result.duplicate, reviewed: session.mode === 'review', edited: session.mode === 'edit', unchanged: result.unchanged }),
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })
     } catch {
       return ctx.telegram.sendMessage({
         chat_id: ctx.chatId,
-        text: accountCreatedText(result.account, { duplicate: result.duplicate, reviewed: session.mode === 'review', edited: session.mode === 'edit', unchanged: result.unchanged }),
+        text: accountCreatedText(result.account, { accounts: result.accounts, bundle: result.bundle, duplicate: result.duplicate, reviewed: session.mode === 'review', edited: session.mode === 'edit', unchanged: result.unchanged }),
         parse_mode: 'HTML',
         reply_markup: mainMenuKeyboard(),
       })
@@ -508,11 +588,14 @@ export async function handleAccountText(ctx, text) {
     }
     session.draft = applyAccountName(session.draft, accountName)
     const preset = accountPresetFor(session.draft.type, session.draft.valueKind)
-    session.step = session.mode === 'edit' && session.structureLocked
-      ? STEPS.REVIEW
-      : preset.skipDetail
-      ? nextStepAfterDefinition(session)
-      : STEPS.DETAIL
+    if (isCounterpartySession(session)) beginCounterpartyOpenings(session)
+    else {
+      session.step = session.mode === 'edit' && session.structureLocked
+        ? STEPS.REVIEW
+        : preset.skipDetail
+        ? nextStepAfterDefinition(session)
+        : STEPS.DETAIL
+    }
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     if (session.step === STEPS.REVIEW) {
       try {
@@ -560,6 +643,12 @@ export async function handleAccountText(ctx, text) {
 function previousStep(session) {
   const step = session?.step
   const preset = accountPresetFor(session?.draft?.type, session?.draft?.valueKind)
+  if (isCounterpartySession(session)) {
+    if (step === STEPS.OWNER) return STEPS.GROUP
+    if (step === STEPS.OPENING) return STEPS.OWNER
+    if (step === STEPS.DIRECTION) return STEPS.OPENING
+    if (step === STEPS.REVIEW) return STEPS.OPENING
+  }
   if (session?.mode === 'edit' && session?.structureLocked && step === STEPS.REVIEW) return STEPS.OWNER
   if (step === STEPS.TYPE) return STEPS.GROUP
   if (step === STEPS.OWNER) return groupNeedsTypeStep(session?.presetGroup) ? STEPS.TYPE : STEPS.GROUP

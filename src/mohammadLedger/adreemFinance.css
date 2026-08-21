@@ -401,6 +401,72 @@
 .ml3-balances-surface .ml3-account-values strong.is-negative { color: var(--finance-coral-dark); }
 .ml3-balances-surface .ml3-empty { min-height: 92px; display: grid; place-items: center; color: var(--finance-muted); }
 
+.adreem-counterparty-list {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--finance-line);
+  border-radius: 8px;
+  background: var(--finance-paper);
+}
+.adreem-counterparty-list.is-receivable { border-color: color-mix(in srgb, var(--finance-green) 28%, var(--finance-line)); }
+.adreem-counterparty-list.is-payable { border-color: color-mix(in srgb, var(--finance-coral) 28%, var(--finance-line)); }
+.adreem-counterparty-list-head {
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--finance-line);
+  background: var(--finance-surface);
+}
+.adreem-counterparty-list.is-receivable .adreem-counterparty-list-head { background: var(--finance-green-soft); color: var(--finance-green-dark); }
+.adreem-counterparty-list.is-payable .adreem-counterparty-list-head { background: var(--finance-coral-soft); color: var(--finance-coral-dark); }
+.adreem-counterparty-list-head h3 { margin: 0; font-size: 0.76rem; }
+.adreem-counterparty-list-head span { font-size: 0.62rem; font-weight: 820; }
+.adreem-counterparty-card { min-width: 0; border-bottom: 1px solid var(--finance-line); background: var(--finance-paper); }
+.adreem-counterparty-card:last-child { border-bottom: 0; }
+.adreem-counterparty-card > header {
+  min-width: 0;
+  min-height: 37px;
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--finance-surface) 78%, white);
+}
+.adreem-counterparty-avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 6px; background: var(--finance-blue-soft); color: var(--finance-blue); }
+.adreem-counterparty-card > header strong { min-width: 0; overflow: hidden; color: var(--finance-ink); font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-counterparty-card > header small { padding: 3px 6px; border-radius: 999px; background: var(--finance-paper); color: var(--finance-muted); font-size: 0.56rem; font-weight: 790; }
+.adreem-counterparty-card.is-receivable > header small { background: var(--finance-green-soft); color: var(--finance-green-dark); }
+.adreem-counterparty-card.is-payable > header small { background: var(--finance-coral-soft); color: var(--finance-coral-dark); }
+.adreem-counterparty-channels { min-width: 0; display: grid; }
+.adreem-counterparty-channels button {
+  min-width: 0;
+  min-height: 35px;
+  display: grid;
+  grid-template-columns: 23px minmax(70px, 0.6fr) minmax(90px, 1fr) 14px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--finance-line) 78%, transparent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--finance-muted);
+  text-align: start;
+}
+.adreem-counterparty-channels button:hover { background: var(--finance-surface); }
+.adreem-counterparty-channels button i { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 5px; background: var(--finance-surface); }
+.adreem-counterparty-channels button span { overflow: hidden; font-size: 0.65rem; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-counterparty-channels button b { overflow: hidden; font-size: 0.66rem; font-variant-numeric: tabular-nums; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-counterparty-channels button.is-positive i,
+.adreem-counterparty-channels button.is-positive b { color: var(--finance-green-dark); }
+.adreem-counterparty-channels button.is-negative i,
+.adreem-counterparty-channels button.is-negative b { color: var(--finance-coral-dark); }
+.adreem-counterparty-channels button.is-zero { opacity: 0.7; }
+
 /* Entry mode and guided flow */
 .adreem-entry {
   --flow-tone: var(--finance-green);
@@ -650,6 +716,20 @@
 .ml3-opening-direction button { border-color: var(--finance-line); border-radius: 8px; background: var(--finance-paper); }
 .ml3-opening-direction button.is-positive.is-active { border-color: var(--finance-green); background: var(--finance-green-soft); color: var(--finance-green-dark); box-shadow: inset 0 -3px 0 var(--finance-green); }
 .ml3-opening-direction button.is-negative.is-active { border-color: var(--finance-coral); background: var(--finance-coral-soft); color: var(--finance-coral-dark); box-shadow: inset 0 -3px 0 var(--finance-coral); }
+.adreem-counterparty-openings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.adreem-counterparty-opening { min-width: 0; display: grid; align-content: start; gap: 6px; padding: 8px; border: 1px solid var(--finance-line); border-radius: 8px; background: var(--finance-surface); }
+.adreem-counterparty-opening > header { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.adreem-counterparty-opening > header strong { overflow: hidden; color: var(--finance-ink); font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-counterparty-opening > header small { color: var(--finance-blue); font-size: 0.62rem; font-weight: 820; }
+.adreem-counterparty-opening .ml3-number-compact { gap: 3px; font-size: 0.6rem; }
+.adreem-counterparty-opening .ml3-number-compact input { min-width: 0; height: 35px; border-color: var(--finance-line); background: var(--finance-paper); font-size: 0.86rem; }
+.ml3-opening-direction.is-compact { gap: 4px; }
+.ml3-opening-direction.is-compact button { min-height: 31px; padding: 4px; font-size: 0.6rem; font-weight: 790; }
+.adreem-opening-zero { min-height: 31px; display: grid; place-items: center; color: var(--finance-muted); font-size: 0.59rem; }
+.adreem-counterparty-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 6px; }
+.adreem-counterparty-summary > span { min-width: 0; display: grid; gap: 2px; padding: 6px; border: 1px solid color-mix(in srgb, var(--finance-green) 18%, var(--finance-line)); border-radius: 6px; background: var(--finance-paper); }
+.adreem-counterparty-summary b { overflow: hidden; color: var(--finance-ink); font-size: 0.63rem; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-counterparty-summary small { overflow: hidden; color: var(--finance-muted); font-size: 0.56rem; text-overflow: ellipsis; white-space: nowrap; }
 
 .ml3-today-panel {
   max-height: calc(100dvh - 172px);
@@ -747,6 +827,12 @@
   .ml3-account-field,
   .ml3-account-summary { margin: 9px; }
   .ml3-account-opening { padding: 7px 9px; }
+  .adreem-counterparty-openings { grid-template-columns: 1fr; gap: 5px; }
+  .adreem-counterparty-opening { grid-template-columns: minmax(72px, 0.6fr) minmax(100px, 1fr) minmax(130px, 1.15fr); align-items: end; gap: 6px; padding: 6px; }
+  .adreem-counterparty-opening > header { align-self: center; }
+  .adreem-counterparty-opening .adreem-opening-zero { align-self: end; }
+  .adreem-counterparty-summary { grid-template-columns: 1fr; }
+  .adreem-counterparty-summary > span { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
   .ml3-today-panel { padding: 7px; }
 }
 
@@ -757,6 +843,10 @@
   .ml3-account-switcher button > strong { font-size: 0.56rem; }
   .ml3-balance-pane-head { grid-template-columns: 1fr; }
   .ml3-account-toolbar { width: 100%; }
+  .adreem-counterparty-card > header { grid-template-columns: 25px minmax(0, 1fr) auto; padding-inline: 6px; }
+  .adreem-counterparty-channels button { grid-template-columns: 21px minmax(62px, 0.55fr) minmax(86px, 1fr) 12px; padding-inline: 6px; }
+  .adreem-counterparty-opening { grid-template-columns: minmax(62px, 0.55fr) minmax(88px, 0.9fr) minmax(118px, 1.2fr); gap: 4px; }
+  .ml3-opening-direction.is-compact button { font-size: 0.56rem; }
   .ml3-balances-surface .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(88px, auto); }
   .ml3-number-entry { grid-template-columns: minmax(96px, 0.5fr) minmax(0, 1.5fr); }
   .ml3-number-display { min-height: 131px; }

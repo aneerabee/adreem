@@ -123,7 +123,7 @@ describe('ledger repository state preparation', () => {
   })
 
   it('enforces ledger integrity for every repository caller', () => {
-    const current = createMohammadFallbackState('2026-05-20T10:00:00.000Z', { ledgerId: 'main' })
+    const current = createEmptyAdreemState('2026-05-20T10:00:00.000Z', { ledgerId: 'main' })
     const cashAccount = {
       id: 'cash-main',
       ownerName: 'أنا',

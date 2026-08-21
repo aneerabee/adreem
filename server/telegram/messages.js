@@ -13,6 +13,9 @@ import {
   accountPresetStepCopy,
   accountPrimaryName,
   accountSupportsOpeningBalance,
+  counterpartyAccountChannels,
+  counterpartyOpeningFor,
+  isCounterpartyBundleDraft,
 } from '../../src/mohammadLedger/accountConfig.js'
 import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { accountEditChanges } from '../../src/mohammadLedger/accountEditing.js'
@@ -188,8 +191,9 @@ function accountStepTitle(session) {
   if (session?.step === 'owner') return preset.nameLabel || 'اكتب الاسم'
   if (session?.step === 'detail') return preset.detailLabel || 'اختر التفصيل'
   if (session?.step === 'currency') return 'اختر العملة'
-  if (session?.step === 'opening') return 'أدخل الرصيد عند البداية'
-  if (session?.step === 'direction') return 'لمن الرصيد؟'
+  const bundleChannel = isCounterpartyBundleDraft(session?.draft) ? counterpartyAccountChannels[session?.bundleOpeningIndex || 0] : null
+  if (session?.step === 'opening') return bundleChannel ? `رصيد ${bundleChannel.label}` : 'أدخل الرصيد عند البداية'
+  if (session?.step === 'direction') return bundleChannel ? `${bundleChannel.label}: لمن الرصيد؟` : 'لمن الرصيد؟'
   if (session?.step === 'review') return 'راجع الحساب'
   return 'حساب جديد'
 }
@@ -202,7 +206,7 @@ function accountStepHelp(session) {
   if (session?.step === 'owner') return preset.namePlaceholder || 'اكتب الاسم فقط.'
   if (session?.step === 'detail') return 'كاش أو شيك بيننا.'
   if (session?.step === 'currency') return 'دينار أو دولار.'
-  if (session?.step === 'opening') return 'اكتب صفرًا إذا لا يوجد رصيد سابق.'
+  if (session?.step === 'opening') return isCounterpartyBundleDraft(session?.draft) ? 'صفر إذا لا يوجد رصيد سابق.' : 'اكتب صفرًا إذا لا يوجد رصيد سابق.'
   if (session?.step === 'direction') return 'اختر المعنى الصحيح للمبلغ.'
   if (session?.step === 'review') return 'تأكد ثم احفظ.'
   return ''
@@ -215,25 +219,37 @@ export function accountStepText(session) {
   const hasTypeStep = group.keys.length > 1
   const structureLocked = session?.mode === 'edit' && session?.structureLocked
   const hasOpeningStep = session?.mode === 'create' && accountSupportsOpeningBalance(draft)
+  const isBundle = session?.mode === 'create' && isCounterpartyBundleDraft(draft)
+  const bundleChannel = isBundle ? counterpartyAccountChannels[session?.bundleOpeningIndex || 0] : null
   const openingAmount = Number(session?.openingBuffer || draft.openingBalanceAmount || 0)
   const hasDirectionStep = hasOpeningStep && draft.valueKind === VALUE_KINDS.RECEIVABLE && openingAmount > 0
   const steps = structureLocked
     ? ['owner', 'review']
-    : ['group', ...(hasTypeStep ? ['type'] : []), 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), ...(hasOpeningStep ? ['opening'] : []), ...(hasDirectionStep ? ['direction'] : []), 'review']
-  const currentIndex = Math.max(0, steps.indexOf(session?.step))
-  const progress = `${currentIndex + 1}/${steps.length}`
+    : isBundle
+      ? ['group', 'owner', 'opening', 'review']
+      : ['group', ...(hasTypeStep ? ['type'] : []), 'owner', ...(preset.skipDetail ? [] : ['detail']), ...(accountNeedsCurrency(draft) ? ['currency'] : []), ...(hasOpeningStep ? ['opening'] : []), ...(hasDirectionStep ? ['direction'] : []), 'review']
+  const currentStep = isBundle && session?.step === 'direction' ? 'opening' : session?.step
+  const currentIndex = Math.max(0, steps.indexOf(currentStep))
+  const progress = `${currentIndex + 1}/${steps.length}${bundleChannel && ['opening', 'direction'].includes(session?.step) ? ` · ${Number(session.bundleOpeningIndex || 0) + 1}/${counterpartyAccountChannels.length}` : ''}`
   const summary = []
   if (currentIndex > steps.indexOf('group')) summary.push(htmlLine('الفئة', group.title))
   if (hasTypeStep && currentIndex > steps.indexOf('type') && draft.type) summary.push(htmlLine('الحساب', preset.title))
   const nameValue = accountNameValue(draft)
   if (currentIndex > steps.indexOf('owner') && nameValue) summary.push(htmlDataLine(preset.nameLabel || 'الاسم', nameValue))
-  if (!preset.skipDetail && currentIndex > steps.indexOf('detail') && draft.subAccountName) {
+  if (!isBundle && !preset.skipDetail && currentIndex > steps.indexOf('detail') && draft.subAccountName) {
     summary.push(htmlLine(preset.detailLabel || 'التفصيل', accountDetailName(draft)))
   }
-  if (accountNeedsCurrency(draft) && currentIndex > steps.indexOf('currency') && draft.currencyKind) {
+  if (!isBundle && accountNeedsCurrency(draft) && currentIndex > steps.indexOf('currency') && draft.currencyKind) {
     summary.push(htmlLine('العملة', draft.currencyKind === CURRENCIES.USD ? 'دولار' : 'دينار'))
   }
-  if (hasOpeningStep && currentIndex > steps.indexOf('opening')) {
+  if (isBundle && ['opening', 'direction', 'review'].includes(session?.step)) {
+    const completedChannelCount = session?.step === 'review'
+      ? counterpartyAccountChannels.length
+      : Number(session?.bundleOpeningIndex || 0)
+    counterpartyAccountChannels.slice(0, completedChannelCount).forEach((channel) => {
+      summary.push(htmlLine(channel.label, counterpartyOpeningText(draft, channel)))
+    })
+  } else if (hasOpeningStep && currentIndex > steps.indexOf('opening')) {
     const currency = draft.currencyKind === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR
     const openingText = session?.step === 'direction' && !draft.openingBalanceDirection
       ? formatMoney(Math.abs(openingAmount), currency)
@@ -256,7 +272,7 @@ export function accountStepText(session) {
     `<b>${escapeHtml(accountStepTitle(session))}</b>`,
     ...(help ? [`<code>${escapeHtml(help)}</code>`] : []),
     ...(session?.step === 'opening'
-      ? ['', `<blockquote>${escapeHtml(`${numericBufferDisplay(session.openingBuffer)} ${draft.currencyKind === CURRENCIES.USD ? '$' : 'د.ل'}`)}</blockquote>`]
+      ? ['', `<blockquote>${escapeHtml(`${numericBufferDisplay(session.openingBuffer)} ${(bundleChannel?.currencyKind || draft.currencyKind) === CURRENCIES.USD ? '$' : 'د.ل'}`)}</blockquote>`]
       : []),
   ]
   return lines.join('\n')
@@ -264,6 +280,7 @@ export function accountStepText(session) {
 
 export function accountReviewText(session, result = null) {
   const draft = session?.draft || {}
+  const isBundle = session?.mode === 'create' && isCounterpartyBundleDraft(draft)
   const lines = [
     `<b>${session?.mode === 'edit' ? 'تأكيد تعديل الحساب' : session?.mode === 'review' ? 'تأكيد إصلاح الحساب' : 'تأكيد الحساب'}</b>`,
     '<code>راجع قبل الحفظ</code>',
@@ -271,9 +288,9 @@ export function accountReviewText(session, result = null) {
     '<blockquote>',
     escapeHtml(protectedAccountPrimaryName(draft)),
     '\n',
-    escapeHtml(protectedAccountContext(draft)),
-    '\n',
-    escapeHtml(`الرصيد الأول: ${accountOpeningText(draft)}`),
+    ...(isBundle
+      ? counterpartyAccountChannels.flatMap((channel, index) => [...(index ? ['\n'] : []), escapeHtml(`${channel.label}: ${counterpartyOpeningText(draft, channel)}`)])
+      : [escapeHtml(protectedAccountContext(draft)), '\n', escapeHtml(`الرصيد الأول: ${accountOpeningText(draft)}`)]),
     '</blockquote>',
   ]
   const errors = result?.validation?.errors || []
@@ -284,7 +301,7 @@ export function accountReviewText(session, result = null) {
   return lines.join('\n')
 }
 
-export function accountCreatedText(account, { duplicate = false, reviewed = false, edited = false, unchanged = false } = {}) {
+export function accountCreatedText(account, { accounts = [], bundle = false, duplicate = false, reviewed = false, edited = false, unchanged = false } = {}) {
   const title = unchanged
     ? 'لا يوجد تغيير في الحساب.'
     : reviewed ? 'تم إصلاح الحساب واعتماده.' : edited ? 'تم تعديل الحساب وحفظ السجل.' : (duplicate ? 'كان محفوظًا سابقًا ولم يتكرر.' : 'تم إنشاء الحساب.')
@@ -293,11 +310,18 @@ export function accountCreatedText(account, { duplicate = false, reviewed = fals
     '<blockquote>',
     escapeHtml(protectedAccountPrimaryName(account)),
     '\n',
-    escapeHtml(protectedAccountContext(account)),
-    '\n',
-    escapeHtml(`الرصيد: ${accountOpeningText(account)}`),
+    ...(bundle && accounts.length > 1
+      ? accounts.flatMap((item, index) => [...(index ? ['\n'] : []), escapeHtml(`${accountChoiceKindLabel(item)}: ${accountOpeningText(item)}`)])
+      : [escapeHtml(protectedAccountContext(account)), '\n', escapeHtml(`الرصيد: ${accountOpeningText(account)}`)]),
     '</blockquote>',
   ].join('')
+}
+
+function counterpartyOpeningText(draft = {}, channel = {}) {
+  const opening = counterpartyOpeningFor(draft, channel.key)
+  if (!opening.amount) return 'صفر'
+  const currency = channel.currencyKind === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+  return `${opening.direction === 'i_owe' ? 'عليّ له' : 'لي عنده'} ${formatMoney(opening.amount, currency)}`
 }
 
 function accountOpeningText(account = {}) {
@@ -455,6 +479,7 @@ function accountChoiceKindIcon(account) {
   if (kind === VALUE_KINDS.CASH) return '💵'
   if (kind === VALUE_KINDS.BANK) return '🏦'
   if (kind === 'person-bank') return '🧾'
+  if (kind === 'person-usd') return '💲'
   if (kind === VALUE_KINDS.ASSET) return '📦'
   if (kind === VALUE_KINDS.PROJECT) return '📊'
   if (kind === VALUE_KINDS.EXPENSE) return '🧾'

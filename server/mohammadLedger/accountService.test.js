@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, emptyAccountDraft } from '../../src/mohammadLedger/accountConfig.js'
 import { CURRENCIES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement } from '../../src/mohammadLedger/ledgerCore.js'
 import { appendTelegramAccount, resolveTelegramReviewAccount, updateTelegramAccount, validateAccountDraft } from './accountService.js'
 
@@ -31,6 +32,29 @@ function memoryRepository(initialState = emptyState()) {
 }
 
 describe('telegram account service', () => {
+  it('creates the same three linked person balances used by the web', async () => {
+    const repository = memoryRepository()
+    const result = await appendTelegramAccount(repository, {
+      ...emptyAccountDraft(),
+      ownerName: 'شركة النور',
+      counterpartyOpenings: {
+        ...emptyAccountDraft().counterpartyOpenings,
+        [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR]: { amount: '900', direction: ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME },
+        [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD]: { amount: '40', direction: ACCOUNT_OPENING_DIRECTIONS.I_OWE },
+      },
+    }, { idempotencyKey: 'counterparty-bundle-create' })
+
+    expect(result.rejected).toBeFalsy()
+    expect(result.bundle).toBe(true)
+    expect(repository.state.accounts).toHaveLength(3)
+    expect(repository.state.movements).toHaveLength(2)
+    expect(repository.state.accounts.map((account) => [account.counterpartyKind, account.openingDinar, account.openingUsd])).toEqual([
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 900, 0],
+      [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 0, 0],
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, -40],
+    ])
+  })
+
   it('creates accounts through the same web account validation rules', async () => {
     const repository = memoryRepository()
     const result = await appendTelegramAccount(repository, {
@@ -258,6 +282,30 @@ describe('telegram account service', () => {
 
     expect(result.unchanged).toBe(true)
     expect(repository.state.auditEvents).toEqual([])
+  })
+
+  it('renames every linked person balance and records the complete linked set', async () => {
+    const repository = memoryRepository()
+    const created = await appendTelegramAccount(repository, {
+      ...emptyAccountDraft(),
+      ownerName: 'سعيد',
+    }, { idempotencyKey: 'linked-person-create' })
+
+    const result = await updateTelegramAccount(repository, created.accounts[0].id, {
+      ...created.accounts[0],
+      ownerName: 'شركة سعيد',
+    }, { idempotencyKey: 'linked-person-rename' })
+
+    expect(result.rejected).toBeFalsy()
+    expect(result.accountIds).toHaveLength(3)
+    expect(new Set(repository.state.accounts.map((account) => account.ownerName))).toEqual(new Set(['شركة سعيد']))
+    expect(repository.state.auditEvents.at(-1)).toMatchObject({
+      action: 'account.updated',
+      details: {
+        accountId: created.accounts[0].id,
+        accountIds: expect.arrayContaining(created.accounts.map((account) => account.id)),
+      },
+    })
   })
 
   it('rejects an edit that would invalidate an earlier posted movement', async () => {

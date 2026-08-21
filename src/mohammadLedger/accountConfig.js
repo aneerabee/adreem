@@ -6,6 +6,36 @@ export const ACCOUNT_OPENING_DIRECTIONS = {
   I_OWE: 'i_owe',
 }
 
+export const COUNTERPARTY_ACCOUNT_KINDS = {
+  CASH_DINAR: 'cash-dinar',
+  CHEQUE_DINAR: 'cheque-dinar',
+  CASH_USD: 'cash-usd',
+}
+
+export const counterpartyAccountChannels = [
+  {
+    key: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR,
+    label: 'دينار كاش',
+    shortLabel: 'كاش',
+    subAccountName: 'كاش بيننا',
+    currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+  },
+  {
+    key: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR,
+    label: 'دينار شيك',
+    shortLabel: 'شيك',
+    subAccountName: 'شيك بيننا',
+    currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+  },
+  {
+    key: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD,
+    label: 'دولار',
+    shortLabel: 'دولار',
+    subAccountName: 'دولار بيننا',
+    currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
+  },
+]
+
 const OPENING_BALANCE_VALUE_KINDS = new Set([
   VALUE_KINDS.RECEIVABLE,
   VALUE_KINDS.CASH,
@@ -17,15 +47,16 @@ export const accountPresets = [
   {
     key: 'person-cash',
     title: 'شخص أو جهة',
-    detail: 'فلوس لك أو عليك',
+    detail: 'كاش وشيك ودولار',
     type: ACCOUNT_TYPES.PERSON,
     valueKind: VALUE_KINDS.RECEIVABLE,
     subAccountName: 'كاش بيننا',
+    counterpartyBundle: true,
     nameTarget: 'ownerName',
     nameLabel: 'اسم الشخص أو الجهة',
     namePlaceholder: 'مثال: سعيد، المقر، شركة',
     detailLabel: 'نوع التعامل',
-    detailOptions: ['كاش بيننا', 'شيك بيننا'],
+    detailOptions: counterpartyAccountChannels.map((channel) => channel.subAccountName),
   },
   {
     key: 'own-cash',
@@ -94,7 +125,7 @@ export const accountPresets = [
 export const accountPresetGroups = [
   {
     key: 'people',
-    title: 'مع شخص أو جهة',
+    title: 'شخص أو جهة',
     hint: 'أقبض منه أو أدفع له',
     keys: ['person-cash'],
   },
@@ -144,10 +175,19 @@ export function emptyAccountDraft() {
     type: ACCOUNT_TYPES.PERSON,
     valueKind: VALUE_KINDS.RECEIVABLE,
     currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+    counterpartyBundle: true,
+    counterpartyOpenings: emptyCounterpartyOpenings(),
     openingBalanceAmount: '',
     openingBalanceDirection: '',
     notes: '',
   }
+}
+
+export function emptyCounterpartyOpenings() {
+  return Object.fromEntries(counterpartyAccountChannels.map((channel) => [
+    channel.key,
+    { amount: '', direction: '' },
+  ]))
 }
 
 function openingInputNumber(value) {
@@ -196,6 +236,73 @@ export function accountOpeningDraftErrors(draft = {}) {
   return []
 }
 
+export function isCounterpartyBundleDraft(draft = {}) {
+  return draft.counterpartyBundle === true && draft.type === ACCOUNT_TYPES.PERSON && draft.valueKind === VALUE_KINDS.RECEIVABLE
+}
+
+export function isCounterpartyAccount(account = {}) {
+  return account.type === ACCOUNT_TYPES.PERSON && account.valueKind === VALUE_KINDS.RECEIVABLE
+}
+
+export function counterpartyOpeningFor(draft = {}, channelKey = '') {
+  const opening = draft.counterpartyOpenings?.[channelKey] || {}
+  const amount = Math.max(0, openingInputNumber(opening.amount))
+  const direction = Object.values(ACCOUNT_OPENING_DIRECTIONS).includes(opening.direction) ? opening.direction : ''
+  return { amount, direction }
+}
+
+export function counterpartyOpeningDraftErrors(draft = {}) {
+  if (!isCounterpartyBundleDraft(draft)) return []
+  return counterpartyAccountChannels.flatMap((channel) => {
+    const opening = counterpartyOpeningFor(draft, channel.key)
+    if (opening.amount > 0 && !opening.direction) {
+      return [{
+        field: `counterpartyOpenings.${channel.key}.direction`,
+        message: `حدد هل رصيد ${channel.label} لك عنده أو عليك له.`,
+      }]
+    }
+    return []
+  })
+}
+
+export function counterpartyAccountDrafts(draft = {}) {
+  if (!isCounterpartyBundleDraft(draft)) return []
+  const ownerName = normalizeAccountText(draft.ownerName)
+  return counterpartyAccountChannels.map((channel) => {
+    const opening = counterpartyOpeningFor(draft, channel.key)
+    const signedAmount = opening.direction === ACCOUNT_OPENING_DIRECTIONS.I_OWE ? -opening.amount : opening.amount
+    return {
+      ownerName,
+      subAccountName: channel.subAccountName,
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: channel.currencyKind,
+      openingDinar: channel.currencyKind === ACCOUNT_CURRENCY_KINDS.DINAR ? signedAmount : 0,
+      openingUsd: channel.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? signedAmount : 0,
+      counterpartyKind: channel.key,
+      notes: String(draft.notes || '').trim(),
+    }
+  })
+}
+
+export function counterpartyChannelForAccount(account = {}) {
+  const explicit = counterpartyAccountChannels.find((channel) => channel.key === account.counterpartyKind)
+  if (explicit) return explicit
+  const detail = normalizeAccountText(account.subAccountName)
+  if (accountCurrencyKindFor(account) === ACCOUNT_CURRENCY_KINDS.USD || /دولار|usd/i.test(detail)) {
+    return counterpartyAccountChannels.find((channel) => channel.key === COUNTERPARTY_ACCOUNT_KINDS.CASH_USD)
+  }
+  if (/شيك|مصرف|بنك|حساب/i.test(detail)) {
+    return counterpartyAccountChannels.find((channel) => channel.key === COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR)
+  }
+  return counterpartyAccountChannels.find((channel) => channel.key === COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR)
+}
+
+export function counterpartyGroupKey(account = {}) {
+  if (!isCounterpartyAccount(account)) return ''
+  return String(account.counterpartyId || `legacy:${normalizeAccountText(account.ownerName).toLocaleLowerCase('ar')}`).trim()
+}
+
 export function accountPresetFor(type, valueKind) {
   return accountPresets.find((preset) => preset.type === type && preset.valueKind === valueKind) || accountPresets[0]
 }
@@ -207,7 +314,7 @@ export function accountPresetGroupFor(presetOrKey = '') {
 
 export function accountDetailOptionsFor(type, valueKind) {
   const preset = accountPresetFor(type, valueKind)
-  return preset.detailOptions || [preset.subAccountName].filter(Boolean)
+  return preset.detailOptions || (preset.counterpartyBundle ? counterpartyAccountChannels.map((channel) => channel.subAccountName) : [preset.subAccountName].filter(Boolean))
 }
 
 export function displaySubAccountName(value = '') {
@@ -222,10 +329,12 @@ export function accountDetailName(account = {}) {
   if (!isPersonBalance) return displaySubAccountName(text)
   if (/^(كاش|نقد|نقدي)$/i.test(text)) return 'كاش بيننا'
   if (/^(مصرفي|مصرفي بيننا|حساب|شيك)$/i.test(text)) return 'شيك بيننا'
+  if (/^(دولار|دولار بيننا|usd)$/i.test(text)) return 'دولار بيننا'
   return displaySubAccountName(text)
 }
 
 export function accountNeedsCurrency(draftOrPreset = {}) {
+  if (isCounterpartyBundleDraft(draftOrPreset) || draftOrPreset.counterpartyBundle === true) return false
   const valueKind = draftOrPreset.valueKind
   return valueKind === VALUE_KINDS.CASH || valueKind === VALUE_KINDS.BANK || valueKind === VALUE_KINDS.RECEIVABLE
 }
@@ -267,6 +376,7 @@ export function applyAccountClassification(draft = {}, type, valueKind) {
     type: preset.type,
     valueKind: preset.valueKind,
     currencyKind: accountCurrencyKindFor(draft),
+    counterpartyBundle: draft.counterpartyBundle === true && Boolean(preset.counterpartyBundle),
   }
   if (preset.nameTarget === 'subAccountName') {
     return {
@@ -330,6 +440,7 @@ export function accountContextLabel(account = {}) {
 export function accountChoiceKind(account = {}) {
   const kind = accountPresentationValueKind(account)
   if (kind !== VALUE_KINDS.RECEIVABLE) return kind
+  if (counterpartyChannelForAccount(account)?.key === COUNTERPARTY_ACCOUNT_KINDS.CASH_USD) return 'person-usd'
   return /مصرف|بنك|شيك|حساب|bank/i.test(account.subAccountName || '') ? 'person-bank' : 'person-cash'
 }
 
@@ -339,6 +450,7 @@ export function accountChoiceKindLabel(account = {}) {
   if (kind === VALUE_KINDS.BANK) return 'مصرف'
   if (kind === 'person-bank') return 'شيك بيننا'
   if (kind === 'person-cash') return 'كاش بيننا'
+  if (kind === 'person-usd') return 'دولار'
   if (kind === VALUE_KINDS.PROJECT) return 'مشروع'
   if (kind === VALUE_KINDS.ASSET) return 'أصل'
   if (kind === VALUE_KINDS.EXPENSE) return 'نوع مصروف'

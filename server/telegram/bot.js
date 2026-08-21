@@ -1,6 +1,7 @@
 import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { accountStructureUsage } from '../../src/mohammadLedger/accountEditing.js'
+import { buildCounterpartyBalanceViews } from '../../src/mohammadLedger/counterpartyAccounts.js'
 import { normalizeAccountSearchText } from '../../src/mohammadLedger/movementAccounts.js'
 import {
   buildDimensionReports,
@@ -249,42 +250,65 @@ async function showMoreMenu(ctx) {
   )
 }
 
-async function showAccounts(ctx, requestedPage = 0) {
+async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money') {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
   const allBuckets = snapshot.balances
     .filter((bucket) => bucket.account.status === ACCOUNT_STATUSES.ACTIVE)
     .sort((a, b) => Math.abs(b.dinar) - Math.abs(a.dinar) || Math.abs(b.usd) - Math.abs(a.usd))
-  const pageCount = Math.max(1, Math.ceil(allBuckets.length / ACCOUNT_PAGE_SIZE))
+  const people = allBuckets.filter((bucket) => bucket.account.valueKind === VALUE_KINDS.RECEIVABLE)
+  const ownMoney = allBuckets.filter((bucket) => bucket.account.valueKind === VALUE_KINDS.CASH || bucket.account.valueKind === VALUE_KINDS.BANK)
+  const bucketAmount = (bucket) => bucket.account.currencyKind === CURRENCIES.USD ? Number(bucket.usd || 0) : Number(bucket.dinar || 0)
+  const filter = ['money', 'collect', 'pay', 'all'].includes(requestedFilter) ? requestedFilter : 'money'
+  const filteredBuckets = filter === 'money'
+    ? ownMoney
+    : filter === 'collect'
+      ? people.filter((bucket) => bucketAmount(bucket) > 0)
+      : filter === 'pay'
+        ? people.filter((bucket) => bucketAmount(bucket) < 0)
+        : allBuckets
+  const pageCount = Math.max(1, Math.ceil(filteredBuckets.length / ACCOUNT_PAGE_SIZE))
   const page = Math.min(Math.max(0, Number(requestedPage) || 0), pageCount - 1)
-  const visibleBuckets = allBuckets.slice(page * ACCOUNT_PAGE_SIZE, (page + 1) * ACCOUNT_PAGE_SIZE)
+  const visibleBuckets = filteredBuckets.slice(page * ACCOUNT_PAGE_SIZE, (page + 1) * ACCOUNT_PAGE_SIZE)
   const session = {
     flow: 'accounts',
     page,
     pageCount,
+    balanceFilter: filter,
     choices: {
       accounts: Object.fromEntries(visibleBuckets.map((bucket) => [accountChoiceToken(bucket.account), bucket.account.id])),
     },
     uiMessageId: ctx.isCallback ? ctx.messageId : null,
   }
   sessions.set(ctx.chatId, ctx.userId, session)
-  const myMoney = allBuckets.filter((bucket) => bucket.account.valueKind === VALUE_KINDS.CASH || bucket.account.valueKind === VALUE_KINDS.BANK)
-  const people = allBuckets.filter((bucket) => bucket.account.valueKind === VALUE_KINDS.RECEIVABLE)
-  const moneyDinar = myMoney.reduce((sum, bucket) => sum + Number(bucket.dinar || 0), 0)
-  const collectDinar = people.reduce((sum, bucket) => sum + Math.max(0, Number(bucket.dinar || 0)), 0)
-  const payDinar = people.reduce((sum, bucket) => sum + Math.max(0, -Number(bucket.dinar || 0)), 0)
+  const money = ownMoney.reduce((total, bucket) => ({
+    dinar: total.dinar + Number(bucket.dinar || 0),
+    usd: total.usd + Number(bucket.usd || 0),
+  }), { dinar: 0, usd: 0 })
+  const peopleViews = buildCounterpartyBalanceViews(people)
+  const collect = peopleViews.all.reduce((total, group) => ({
+    dinar: total.dinar + group.receivable.dinar,
+    usd: total.usd + group.receivable.usd,
+  }), { dinar: 0, usd: 0 })
+  const pay = peopleViews.all.reduce((total, group) => ({
+    dinar: total.dinar + group.payable.dinar,
+    usd: total.usd + group.payable.usd,
+  }), { dinar: 0, usd: 0 })
+  const balancePair = (value) => `${formatMoney(value.dinar, CURRENCIES.DINAR)} · ${formatMoney(value.usd, CURRENCIES.USD)}`
   const accountLegend = accountChoiceLegendText(visibleBuckets.map((bucket) => bucket.account))
+  const filterLabel = { money: 'فلوسي', collect: 'لي عند الناس', pay: 'عليّ للناس', all: 'كل الحسابات' }[filter]
   const text = allBuckets.length
-    ? `<b>ADREEM · الأرصدة</b>\n<code>${allBuckets.length} حساب · صفحة ${page + 1}/${pageCount}</code>\n\n<blockquote>${escapeHtml(`فلوسي: ${formatMoney(moneyDinar)}\nأقبض: ${formatMoney(collectDinar)}\nأدفع: ${formatMoney(payDinar)}`)}</blockquote>\n\n<b>افتح حسابًا</b>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}`
+    ? `<b>ADREEM · الأرصدة</b>\n<blockquote>${escapeHtml(`فلوسي\n${balancePair(money)}\n\nلي عند الناس\n${balancePair(collect)}\n\nعليّ للناس\n${balancePair(pay)}`)}</blockquote>\n\n<b>${escapeHtml(filterLabel)}</b>\n<code>${filteredBuckets.length} حساب · ${page + 1}/${pageCount}</code>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}${visibleBuckets.length ? '' : '\n<blockquote>لا توجد حسابات في هذا القسم.</blockquote>'}`
     : '<b>ADREEM · الأرصدة</b>\n<blockquote>لا توجد حسابات.\nأنشئ حسابًا من «المزيد».</blockquote>'
   return sendScreen(ctx, text, accountsBrowserKeyboard(visibleBuckets, session))
 }
 
 async function handleAccountsCallback(ctx, data) {
-  if (data.startsWith('accounts:page:')) return showAccounts(ctx, Number(data.slice('accounts:page:'.length)))
   const session = sessions.get(ctx.chatId, ctx.userId)
   if (session?.flow !== 'accounts') return showAccounts(ctx)
+  if (data.startsWith('accounts:filter:')) return showAccounts(ctx, 0, data.slice('accounts:filter:'.length))
+  if (data.startsWith('accounts:page:')) return showAccounts(ctx, Number(data.slice('accounts:page:'.length)), session.balanceFilter)
   if (data.startsWith('accounts:edit:')) {
     const editToken = data.slice('accounts:edit:'.length)
     const editAccountId = session.choices?.accounts?.[editToken]
@@ -318,6 +342,7 @@ async function handleAccountsCallback(ctx, data) {
     accountEditHistoryText(account.id, state.auditEvents || []),
   ].filter(Boolean).join('\n')
   const accountLocked = accountStructureUsage(account, {
+    accounts: state.accounts || [],
     movements: state.movements || [],
     reconciliations: state.reconciliations || [],
     recurringRules: state.recurringRules || [],

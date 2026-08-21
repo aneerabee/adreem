@@ -70,30 +70,22 @@ describe('telegram account flow', () => {
 
     const selectedGroupSession = ctx.sessions.get(ctx.chatId, ctx.userId)
     expect(selectedGroupSession.step).toBe('owner')
-    expect(ctx.telegram.calls.at(-1).payload.text).toContain('<code>2/6</code>')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('<code>2/4</code>')
     expect(ctx.telegram.calls.at(-1).payload.text).not.toContain('النوع: شخص أو جهة')
 
     await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'شركة النور')
-    const detailButtons = ctx.telegram.calls.at(-1).payload.reply_markup.inline_keyboard
-      .flat()
-      .filter((button) => button.callback_data?.startsWith('acct:detail:'))
-    expect(detailButtons.map((button) => button.text)).toEqual(['كاش بيننا', 'شيك بيننا'])
-    expect(detailButtons.every((button) => button.style === 'primary')).toBe(true)
-
-    await handleAccountCallback(ctx, 'acct:detail:0')
-    await handleAccountCallback(ctx, 'acct:currency:USD')
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('opening')
-    await handleAccountCallback(ctx, 'acct:num:done')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('رصيد دينار كاش')
+    for (let index = 0; index < 3; index += 1) await handleAccountCallback(ctx, 'acct:num:done')
     await handleAccountCallback(ctx, 'acct:confirm')
 
-    expect(ctx.repository.state.accounts).toHaveLength(1)
-    expect(ctx.repository.state.accounts[0]).toMatchObject({
-      ownerName: 'شركة النور',
-      subAccountName: 'كاش بيننا',
-      type: ACCOUNT_TYPES.PERSON,
-      valueKind: VALUE_KINDS.RECEIVABLE,
-      currencyKind: ACCOUNT_CURRENCY_KINDS.USD,
-    })
+    expect(ctx.repository.state.accounts).toHaveLength(3)
+    expect(ctx.repository.state.accounts.map((account) => [account.ownerName, account.subAccountName, account.currencyKind])).toEqual([
+      ['شركة النور', 'كاش بيننا', ACCOUNT_CURRENCY_KINDS.DINAR],
+      ['شركة النور', 'شيك بيننا', ACCOUNT_CURRENCY_KINDS.DINAR],
+      ['شركة النور', 'دولار بيننا', ACCOUNT_CURRENCY_KINDS.USD],
+    ])
+    expect(new Set(ctx.repository.state.accounts.map((account) => account.counterpartyId)).size).toBe(1)
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
   })
 
@@ -108,7 +100,7 @@ describe('telegram account flow', () => {
     expect(session.step).toBe('group')
   })
 
-  it('rejects unapproved free text for a person account detail', async () => {
+  it('keeps unexpected free text inside the first opening balance step', async () => {
     const ctx = createCtx()
 
     await startAccount(ctx)
@@ -117,11 +109,9 @@ describe('telegram account flow', () => {
     await handleAccountText({ ...ctx, isCallback: false, messageId: 57 }, 'تفصيل حر')
 
     const rejectedSession = ctx.sessions.get(ctx.chatId, ctx.userId)
-    expect(rejectedSession.step).toBe('detail')
-    expect(rejectedSession.draft.subAccountName).toBe('كاش بيننا')
-
-    await handleAccountText({ ...ctx, isCallback: false, messageId: 58 }, 'شيك بيننا')
-    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('currency')
+    expect(rejectedSession.step).toBe('opening')
+    expect(rejectedSession.bundleOpeningIndex).toBe(0)
+    expect(rejectedSession.draft.counterpartyOpenings['cash-dinar'].amount).toBe('')
   })
 
   it('keeps back navigation inside the account flow without touching movement sessions', async () => {
@@ -171,8 +161,8 @@ describe('telegram account flow', () => {
     await startAccount(ctx)
     await handleAccountCallback(ctx, 'acct:group:people')
     await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'مو إدريس')
-    await handleAccountCallback(ctx, 'acct:detail:1')
-    await handleAccountCallback(ctx, 'acct:currency:USD')
+    await handleAccountCallback(ctx, 'acct:num:done')
+    await handleAccountCallback(ctx, 'acct:num:done')
     for (const key of ['1', '2', '5', '0']) await handleAccountCallback(ctx, `acct:num:${key}`)
     await handleAccountCallback(ctx, 'acct:num:done')
 
@@ -183,7 +173,8 @@ describe('telegram account flow', () => {
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('عليّ له')
     await handleAccountCallback(ctx, 'acct:confirm')
 
-    expect(ctx.repository.state.accounts[0]).toMatchObject({ openingDinar: 0, openingUsd: -1_250 })
+    expect(ctx.repository.state.accounts).toHaveLength(3)
+    expect(ctx.repository.state.accounts[2]).toMatchObject({ openingDinar: 0, openingUsd: -1_250 })
     expect(ctx.repository.state.movements).toHaveLength(1)
     expect(ctx.repository.state.movements[0]).toMatchObject({
       type: MOVEMENT_TYPES.OPENING_BALANCE,
@@ -198,8 +189,6 @@ describe('telegram account flow', () => {
     await startAccount(ctx)
     await handleAccountCallback(ctx, 'acct:group:people')
     await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'سيف')
-    await handleAccountCallback(ctx, 'acct:detail:0')
-    await handleAccountCallback(ctx, 'acct:currency:LYD')
     for (const key of ['5', '0', '0']) await handleAccountCallback(ctx, `acct:num:${key}`)
     await handleAccountCallback(ctx, 'acct:num:done')
 
@@ -255,7 +244,7 @@ describe('telegram account flow', () => {
     expect(session.draft.valueKind).toBe(VALUE_KINDS.RECEIVABLE)
   })
 
-  it('does not advance when an invalid account currency callback arrives', async () => {
+  it('ignores an outdated currency callback for an automatic person bundle', async () => {
     const ctx = createCtx()
     await startAccount(ctx)
     await handleAccountCallback(ctx, 'acct:group:people')
@@ -265,7 +254,7 @@ describe('telegram account flow', () => {
     await handleAccountCallback(ctx, 'acct:currency:EUR')
 
     const session = ctx.sessions.get(ctx.chatId, ctx.userId)
-    expect(session.step).toBe('currency')
+    expect(session.step).toBe('opening')
     expect(session.draft.currencyKind).not.toBe('EUR')
     expect(ctx.repository.state.accounts).toHaveLength(0)
   })

@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { accountStructureLockErrors } from '../../src/mohammadLedger/accountEditing.js'
+import { counterpartyAccountChannels } from '../../src/mohammadLedger/accountConfig.js'
 import {
   CURRENCIES,
   MOVEMENT_STATUSES,
@@ -109,6 +110,38 @@ function changedRecordIds(nextRecords = [], currentRecords = []) {
 function changedAccountClassification(account, previousById) {
   const previous = previousById.get(account?.id)
   return Boolean(previous) && ACCOUNT_CLASSIFICATION_FIELDS.some((field) => account?.[field] !== previous?.[field])
+}
+
+function validateCounterpartyGroups(accounts = [], errors = []) {
+  const expectedKinds = new Set(counterpartyAccountChannels.map((channel) => channel.key))
+  const groups = new Map()
+  for (const account of accounts) {
+    const counterpartyId = cleanId(account?.counterpartyId)
+    if (!counterpartyId) continue
+    groups.set(counterpartyId, [...(groups.get(counterpartyId) || []), account])
+  }
+  for (const [counterpartyId, group] of groups) {
+    const ownerNames = new Set(group.map((account) => String(account.ownerName || '').trim()))
+    const kinds = new Set(group.map((account) => account.counterpartyKind))
+    if (group.length !== expectedKinds.size || kinds.size !== expectedKinds.size || Array.from(expectedKinds).some((kind) => !kinds.has(kind))) {
+      errors.push({
+        code: 'invalid-counterparty-bundle',
+        recordType: 'accounts',
+        id: counterpartyId,
+        field: 'counterpartyKind',
+        message: 'حسابات الشخص المرتبطة يجب أن تبقى دينار كاش ودينار شيك ودولار معًا.',
+      })
+    }
+    if (ownerNames.size !== 1) {
+      errors.push({
+        code: 'invalid-counterparty-bundle',
+        recordType: 'accounts',
+        id: counterpartyId,
+        field: 'ownerName',
+        message: 'اسم الشخص يجب أن يكون موحدًا في حساباته الثلاثة.',
+      })
+    }
+  }
 }
 
 function dependsOnAccounts(movement, accountIds) {
@@ -443,6 +476,16 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   const changedDimensionIds = changedRecordIds(dimensions, currentState.dimensions)
   const changedReconciliationIds = changedRecordIds(reconciliations, currentState.reconciliations)
   const changedRecurringRuleIds = changedRecordIds(recurringRules, currentState.recurringRules)
+  validateCounterpartyGroups(accounts, errors)
+  for (const previousAccount of previousAccounts.values()) {
+    if (accountById.has(cleanId(previousAccount.id))) continue
+    errors.push({
+      code: 'account-deletion-not-allowed',
+      recordType: 'accounts',
+      id: previousAccount.id,
+      message: 'لا يمكن حذف حساب من مسار الحفظ العادي. أخفِه أو استخدم مسار التصفير المحمي.',
+    })
+  }
   for (const accountId of changedAccountIds) {
     const nextAccount = accountById.get(accountId)
     const previousAccount = previousAccounts.get(accountId)
@@ -478,6 +521,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
         })
       }
       accountStructureLockErrors(previousAccount, account, {
+        accounts: currentState.accounts || [],
         movements: currentState.movements || [],
         reconciliations: currentState.reconciliations || [],
         recurringRules: currentState.recurringRules || [],

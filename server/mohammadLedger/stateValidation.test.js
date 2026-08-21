@@ -3,6 +3,8 @@ import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammad
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES } from '../../src/mohammadLedger/ledgerOperations.js'
 import { createEmptyAdreemState } from '../../src/mohammadLedger/ledgerState.js'
+import { buildCounterpartyAccountBundle } from '../../src/mohammadLedger/counterpartyAccounts.js'
+import { emptyAccountDraft } from '../../src/mohammadLedger/accountConfig.js'
 import { validateLedgerStateTransition } from './stateValidation.js'
 
 const at = '2026-08-19T12:00:00.000Z'
@@ -95,6 +97,51 @@ describe('server ledger state validation', () => {
   it('accepts a valid empty ledger', () => {
     const state = createEmptyAdreemState(at, { ledgerId: 'main' })
     expect(validateLedgerStateTransition(state, state, { ledgerId: 'main' })).toEqual({ ok: true, errors: [] })
+  })
+
+  it('accepts a complete linked person and rejects partial or mismatched bundles', () => {
+    const current = createEmptyAdreemState(at)
+    const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
+    const valid = validateLedgerStateTransition({ ...current, accounts }, current)
+    const missingChannel = validateLedgerStateTransition({ ...current, accounts: accounts.slice(0, 2) }, current)
+    const mismatchedName = validateLedgerStateTransition({
+      ...current,
+      accounts: accounts.map((account, index) => index === 2 ? { ...account, ownerName: 'اسم مختلف' } : account),
+    }, current)
+
+    expect(valid.ok).toBe(true)
+    expect(missingChannel.errors).toContainEqual(expect.objectContaining({ code: 'invalid-counterparty-bundle', field: 'counterpartyKind' }))
+    expect(mismatchedName.errors).toContainEqual(expect.objectContaining({ code: 'invalid-counterparty-bundle', field: 'ownerName' }))
+  })
+
+  it('freezes every linked person channel after any one of them has a movement', () => {
+    const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
+    const movement = {
+      id: 'linked-person-movement',
+      type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: null,
+      destinationAccountId: accounts[0].id,
+      createdAt: at,
+      updatedAt: at,
+    }
+    const current = { ...createEmptyAdreemState(at), accounts, movements: [movement] }
+    const renamed = accounts.map((account) => ({ ...account, ownerName: 'شركة سعيد', updatedAt: validationNow }))
+    const result = validateLedgerStateTransition({ ...current, accounts: renamed }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'account-structure-locked', field: 'ownerName' }))
+  })
+
+  it('rejects silently deleting one linked channel or the complete person bundle', () => {
+    const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
+    const current = { ...createEmptyAdreemState(at), accounts }
+    const oneRemoved = validateLedgerStateTransition({ ...current, accounts: accounts.slice(1) }, current)
+    const allRemoved = validateLedgerStateTransition({ ...current, accounts: [] }, current)
+
+    expect(oneRemoved.errors).toContainEqual(expect.objectContaining({ code: 'account-deletion-not-allowed', id: accounts[0].id }))
+    expect(allRemoved.errors.filter((error) => error.code === 'account-deletion-not-allowed')).toHaveLength(3)
   })
 
   it('accepts one matching opening movement only while its account is first created', () => {

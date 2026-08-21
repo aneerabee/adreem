@@ -1,4 +1,5 @@
 import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS, buildAccountMap, inferAccountCurrencyKind, normalizeAccountCurrencyKind } from './accountCatalog.js'
+import { counterpartyAccountChannels } from './accountConfig.js'
 import {
   accountSupportsTransferCurrency,
   areTransferAccountsCompatible,
@@ -483,6 +484,8 @@ export function createAccount({
   currencyKind,
   notes = '',
   status = ACCOUNT_STATUSES.ACTIVE,
+  counterpartyId = '',
+  counterpartyKind = '',
 }) {
   const normalizedOwner = normalizeAccountText(ownerName)
   const normalizedSub = canonicalAccountDetail(subAccountName)
@@ -512,6 +515,8 @@ export function createAccount({
     currencyKind: normalizedCurrencyKind,
     status,
     notes,
+    ...(counterpartyId ? { counterpartyId: String(counterpartyId).trim() } : {}),
+    ...(counterpartyKind ? { counterpartyKind: String(counterpartyKind).trim() } : {}),
     createdFrom: 'manual',
     createdAt: isoNow(),
   }
@@ -566,6 +571,22 @@ export function validateAccount(account, existingAccounts = []) {
   })
   if (ownerName && subAccountName && hasDuplicateLogicalAccount) {
     errors.push({ field: 'subAccountName', message: 'يوجد حساب بنفس الاسم ونفس التفصيل.' })
+  }
+  if (account?.counterpartyId || account?.counterpartyKind) {
+    const channel = counterpartyAccountChannels.find((item) => item.key === account.counterpartyKind)
+    if (!String(account.counterpartyId || '').trim()) {
+      errors.push({ field: 'counterpartyId', message: 'ربط الشخص بالحسابات الثلاثة غير مكتمل.' })
+    }
+    if (!channel) {
+      errors.push({ field: 'counterpartyKind', message: 'نوع رصيد الشخص غير معروف.' })
+    } else if (
+      account.type !== ACCOUNT_TYPES.PERSON ||
+      account.valueKind !== VALUE_KINDS.RECEIVABLE ||
+      canonicalAccountDetail(account.subAccountName) !== canonicalAccountDetail(channel.subAccountName) ||
+      normalizeAccountCurrencyKind(account.currencyKind, inferAccountCurrencyKind(account)) !== channel.currencyKind
+    ) {
+      errors.push({ field: 'counterpartyKind', message: 'نوع رصيد الشخص لا يطابق العملة أو طريقة التعامل.' })
+    }
   }
 
   return { ok: errors.length === 0, errors }

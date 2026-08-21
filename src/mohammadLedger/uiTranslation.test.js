@@ -39,6 +39,11 @@ describe('ADREEM UI translation', () => {
     expect(translateUiText('لي عند الناس')).toBe('People owe me')
     expect(translateUiText('عليّ للناس')).toBe('I owe people')
     expect(translateUiText('ابحث عن حساب')).toBe('Search accounts')
+    expect(translateUiText('دينار كاش')).toBe('Cash dinars')
+    expect(translateUiText('دينار شيك')).toBe('Cheque dinars')
+    expect(translateUiText('دولار بيننا')).toBe('USD between us')
+    expect(translateUiText('كاش وشيك ودولار')).toBe('Cash, cheque, and USD')
+    expect(translateUiText('3 أرصدة سابقة')).toBe('3 previous balances')
   })
 
   it('translates formatted Telegram text without changing its markup', () => {
@@ -71,6 +76,14 @@ describe('ADREEM UI translation', () => {
       .toBe('Cancel Transfer worth 1,200 LYD? The entry will remain visible in history.')
     expect(stripUiDataProtection(translateUiText(`هل تريد دمج حساب ${preserveUiData('دخل')} داخل ${preserveUiData('مالك')}؟ ستُنقل الحركات ومرفقات الحساب إلى الحساب المختار.`, 'en')))
       .toBe('Merge account دخل into مالك? Entries and account attachments will move to the selected account.')
+  })
+
+  it('translates linked person validation without weakening its meaning', () => {
+    expect(translateUiText('ربط الشخص بالحسابات الثلاثة غير مكتمل.', 'en')).toBe('The three person balances are not fully linked.')
+    expect(translateUiText('حدد هل رصيد دينار شيك لك عنده أو عليك له.', 'en'))
+      .toBe('Choose whether the Cheque dinars balance is owed to you or owed by you.')
+    expect(translateUiText('لا يمكن حذف حساب من مسار الحفظ العادي. أخفِه أو استخدم مسار التصفير المحمي.', 'en'))
+      .toBe('An account cannot be deleted through normal saving. Hide it or use the protected reset flow.')
   })
 
   it('keeps callback data unchanged while translating button labels', () => {

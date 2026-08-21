@@ -1,8 +1,21 @@
 import { createHash } from 'node:crypto'
-import { accountOpeningAmounts, accountOpeningDraftErrors, accountPresetFor, emptyAccountDraft } from '../../src/mohammadLedger/accountConfig.js'
+import {
+  accountOpeningAmounts,
+  accountOpeningDraftErrors,
+  accountPresetFor,
+  counterpartyOpeningDraftErrors,
+  emptyAccountDraft,
+  emptyCounterpartyOpenings,
+  isCounterpartyBundleDraft,
+} from '../../src/mohammadLedger/accountConfig.js'
 import { accountEditSnapshot, accountUpdateMovementErrors, prepareAccountUpdate } from '../../src/mohammadLedger/accountEditing.js'
 import { normalizeAccountText } from '../../src/mohammadLedger/accountCompatibility.js'
 import { ACCOUNT_STATUSES } from '../../src/mohammadLedger/accountCatalog.js'
+import {
+  buildCounterpartyAccountBundle,
+  buildCounterpartyOpeningMovements,
+  validateCounterpartyAccountBundle,
+} from '../../src/mohammadLedger/counterpartyAccounts.js'
 import { createAccount, createOpeningMovements, validateAccount, validateMovement } from '../../src/mohammadLedger/ledgerCore.js'
 import { createAuditEvent } from '../../src/mohammadLedger/ledgerOperations.js'
 import { findTelegramUpdateAuditEvent } from './ledgerService.js'
@@ -22,6 +35,8 @@ export function normalizeAccountDraft(draft = {}) {
     type: preset.type,
     valueKind: preset.valueKind,
     currencyKind: draft.currencyKind || fallback.currencyKind,
+    counterpartyBundle: draft.counterpartyBundle === true,
+    counterpartyOpenings: draft.counterpartyOpenings || emptyCounterpartyOpenings(),
     ...openingAmounts,
     notes: String(draft.notes || '').trim(),
   }
@@ -39,7 +54,18 @@ export function buildAccountCandidate(draft = {}, metadata = {}) {
   }
 }
 
+export function buildAccountCandidates(draft = {}, metadata = {}) {
+  const normalized = normalizeAccountDraft(draft)
+  return isCounterpartyBundleDraft(normalized)
+    ? buildCounterpartyAccountBundle(normalized, metadata)
+    : [buildAccountCandidate(normalized, metadata)]
+}
+
 export function validateAccountDraft(draft, existingAccounts = []) {
+  const normalized = normalizeAccountDraft(draft)
+  if (isCounterpartyBundleDraft(normalized)) {
+    return validateCounterpartyAccountBundle(normalized, existingAccounts)
+  }
   const account = buildAccountCandidate(draft)
   const errors = [...accountOpeningDraftErrors(draft), ...validateAccount(account, existingAccounts).errors]
   return {
@@ -106,36 +132,59 @@ export async function appendTelegramAccount(repository, draft, metadata = {}) {
   if (!idempotencyKey) throw new Error('Missing Telegram account idempotency key.')
 
   return repository.update((state) => {
-    const existing = state.accounts.find((account) => account.source === 'telegram' && account.idempotencyKey === idempotencyKey)
+    const existingAccounts = state.accounts.filter((account) => account.source === 'telegram' && account.idempotencyKey === idempotencyKey)
+    const existing = existingAccounts[0]
     if (existing) {
-      const openingMovements = (state.movements || []).filter((movement) => movement.id === `opening-${existing.id}-dinar` || movement.id === `opening-${existing.id}-usd`)
+      const existingIds = new Set(existingAccounts.map((account) => account.id))
+      const openingMovements = (state.movements || []).filter((movement) => existingIds.has(movement.destinationAccountId) && movement.type === 'opening_balance')
       return {
         state,
         account: existing,
+        accounts: existingAccounts,
         openingMovements,
+        bundle: existingAccounts.length > 1,
         duplicate: true,
         validation: { ok: true, errors: [] },
       }
     }
 
-    const account = buildAccountCandidate(draft, {
+    const metadataFields = {
       source: 'telegram',
       idempotencyKey,
       telegramUserId: metadata.telegramUserId,
       telegramChatId: metadata.telegramChatId,
-    })
-    const draftErrors = accountOpeningDraftErrors(draft)
-    const validationErrors = [...draftErrors, ...validateAccount(account, state.accounts).errors]
+    }
+    const normalized = normalizeAccountDraft(draft)
+    const isBundle = isCounterpartyBundleDraft(normalized)
+    const checked = isBundle
+      ? validateCounterpartyAccountBundle(normalized, state.accounts, metadataFields)
+      : null
+    const accounts = isBundle ? checked.accounts : [buildAccountCandidate(normalized, metadataFields)]
+    const account = accounts[0]
+    const draftErrors = isBundle ? counterpartyOpeningDraftErrors(normalized) : accountOpeningDraftErrors(draft)
+    const validationErrors = isBundle
+      ? [...checked.validation.errors]
+      : [...draftErrors, ...validateAccount(account, state.accounts).errors]
     const validation = { ok: validationErrors.length === 0, errors: validationErrors }
     if (!validation.ok) {
-      return { state, account, validation, rejected: true }
+      return { state, account, accounts, bundle: isBundle, validation, rejected: true }
     }
-    const openingMovements = createOpeningMovements([account], account.createdAt)
-    const openingErrors = openingMovements.flatMap((movement) => validateMovement(movement, [...state.accounts, account], state.movements || []).errors)
+    const openingResult = isBundle
+      ? buildCounterpartyOpeningMovements(accounts, state.movements || [], state.accounts)
+      : {
+          movements: createOpeningMovements([account], account.createdAt),
+          validation: { ok: true, errors: [] },
+        }
+    const openingMovements = openingResult.movements
+    const openingErrors = isBundle
+      ? openingResult.validation.errors
+      : openingMovements.flatMap((movement) => validateMovement(movement, [...state.accounts, account], state.movements || []).errors)
     if (openingErrors.length) {
       return {
         state,
         account,
+        accounts,
+        bundle: isBundle,
         openingMovements: [],
         validation: { ok: false, errors: openingErrors },
         rejected: true,
@@ -144,12 +193,14 @@ export async function appendTelegramAccount(repository, draft, metadata = {}) {
     return {
       state: {
         ...state,
-        accounts: [...state.accounts, account],
+        accounts: [...state.accounts, ...accounts],
         movements: [...(state.movements || []), ...openingMovements],
         auditEvents: [
           ...(state.auditEvents || []),
           createAuditEvent('account.created', {
             accountId: account.id,
+            accountIds: accounts.map((item) => item.id),
+            counterpartyId: account.counterpartyId || '',
             openingMovementIds: openingMovements.map((movement) => movement.id),
             source: 'telegram',
             telegramUserId: metadata.telegramUserId,
@@ -158,6 +209,8 @@ export async function appendTelegramAccount(repository, draft, metadata = {}) {
         ],
       },
       account,
+      accounts,
+      bundle: isBundle,
       openingMovements,
       validation,
       duplicate: false,
@@ -285,6 +338,7 @@ export async function updateTelegramAccount(repository, accountId, draft, metada
           ...(state.auditEvents || []),
           createAuditEvent('account.updated', {
             accountId: id,
+            accountIds: result.accountIds || [id],
             before: accountEditSnapshot(target),
             after: accountEditSnapshot(result.account),
             source: 'telegram',
@@ -294,6 +348,7 @@ export async function updateTelegramAccount(repository, accountId, draft, metada
         ],
       },
       account: result.account,
+      accountIds: result.accountIds || [id],
       validation: { ok: true, errors: [] },
       changes: result.changes,
       unchanged: false,

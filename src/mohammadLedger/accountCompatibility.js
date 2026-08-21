@@ -35,6 +35,7 @@ export function sameLogicalAccount(left, right) {
 
 export function transferAccountKind(account) {
   const text = `${account?.subAccountName || ''} ${account?.legacyName || ''}`.toLowerCase()
+  if (account?.valueKind === VALUE_KINDS.RECEIVABLE && (account?.counterpartyKind === 'cash-usd' || /دولار|usd|\$/.test(text))) return 'cash'
   if (account?.valueKind === VALUE_KINDS.CASH || /كاش|نقد|cash/.test(text)) return 'cash'
   if (account?.valueKind === VALUE_KINDS.BANK || /مصرف|مصرفي|شيك|حساب|الجمهورية|الوحدة|تركيا|bank/.test(text)) return 'bank'
   return account?.valueKind || 'account'

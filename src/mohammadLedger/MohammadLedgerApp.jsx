@@ -10,9 +10,10 @@ import './adreemStudio.css'
 import './adreemFinance.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
-import { ACCOUNT_OPENING_DIRECTIONS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, emptyAccountDraft, parseAccountClassification as parseClassification } from './accountConfig'
+import { ACCOUNT_OPENING_DIRECTIONS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
 import { accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
+import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
 import { formatZonedDate, formatZonedDateTime, formatZonedTime, isZonedToday, isZonedYesterday, zonedDayKey, zonedDayRange } from './dateRange'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, createOpeningMovements, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, validateMovementBalanceTransition, voidMovement } from './ledgerCore'
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUploadedAttachment, getMohammadPersistenceMode, loadAdreemMovementPage, loadMohammadPersistedState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
@@ -373,7 +374,7 @@ function conciseAccountChoiceContext(account) {
   if (!account) return ''
   const kind = accountChoiceKind(account)
   const kindLabel = accountChoiceKindLabel(account)
-  if (![VALUE_KINDS.CASH, VALUE_KINDS.BANK, 'person-bank', 'person-cash'].includes(kind)) return kindLabel
+  if (![VALUE_KINDS.CASH, VALUE_KINDS.BANK, 'person-bank', 'person-cash', 'person-usd'].includes(kind)) return kindLabel
   const primary = normalizeAccountSearchText(accountPrimaryName(account))
   const normalizedKind = normalizeAccountSearchText(kindLabel)
   const currency = accountCurrencyLabel(account)
@@ -1023,7 +1024,9 @@ export { accountEditChanges }
 
 function AccountEditHistory({ accountId, auditEvents = [] }) {
   const edits = auditEvents
-    .filter((event) => event.action === 'account.updated' && event.details?.accountId === accountId)
+    .filter((event) => event.action === 'account.updated' && (
+      event.details?.accountId === accountId || event.details?.accountIds?.includes(accountId)
+    ))
     .map((event) => ({ ...event, changes: accountEditChanges(event.details?.before, event.details?.after) }))
     .filter((event) => event.changes.length)
     .sort((left, right) => String(right.createdAt || '').localeCompare(String(left.createdAt || '')))
@@ -1081,6 +1084,66 @@ function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfi
         </AnimatePresence>
       </div>
     </Tag>
+  )
+}
+
+function counterpartyBucketAmount(bucket = {}) {
+  const currency = bucket.account?.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+  return {
+    amount: currency === CURRENCIES.USD ? Number(bucket.usd || 0) : Number(bucket.dinar || 0),
+    currency,
+  }
+}
+
+function CounterpartyCard({ group, direction = 'all', onOpen }) {
+  const visibleRows = group.rows.filter((bucket) => {
+    const { amount } = counterpartyBucketAmount(bucket)
+    if (direction === 'receivable') return amount > 0
+    if (direction === 'payable') return amount < 0
+    return true
+  })
+  const hasReceivable = group.receivable.dinar > 0 || group.receivable.usd > 0
+  const hasPayable = group.payable.dinar > 0 || group.payable.usd > 0
+  const status = hasReceivable && hasPayable ? 'لي وعليّ' : hasReceivable ? 'لي عنده' : hasPayable ? 'عليّ له' : 'مسكر'
+  return (
+    <Motion.article layout="position" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={UI_MOTION_TRANSITION} className={`adreem-counterparty-card is-${direction}`}>
+      <header>
+        <span className="adreem-counterparty-avatar"><UserRound aria-hidden="true" size={16} /></span>
+        <strong>{preserveUiData(group.ownerName)}</strong>
+        <small>{status}</small>
+      </header>
+      <div className="adreem-counterparty-channels">
+        {visibleRows.map((bucket) => {
+          const { amount, currency } = counterpartyBucketAmount(bucket)
+          const tone = amount > 0 ? 'is-positive' : amount < 0 ? 'is-negative' : 'is-zero'
+          return (
+            <button type="button" key={bucket.account.id} className={tone} onClick={() => onOpen?.(bucket.account.id)}>
+              <i><AccountChoiceIcon account={bucket.account} size={15} /></i>
+              <span>{accountChoiceKindLabel(bucket.account)}</span>
+              <b>{amount === 0 ? 'صفر' : `${amount > 0 ? 'لي' : 'عليّ'} ${money(Math.abs(amount), currency)}`}</b>
+              <ChevronLeft aria-hidden="true" size={14} />
+            </button>
+          )
+        })}
+      </div>
+    </Motion.article>
+  )
+}
+
+function CounterpartyList({ title, groups = [], direction = 'all', onOpen, hideHeader = false }) {
+  return (
+    <section className={`adreem-counterparty-list is-${direction}`}>
+      {!hideHeader ? (
+        <div className="adreem-counterparty-list-head">
+          <h3>{title}</h3>
+          <span>{formatCount(groups.length)}</span>
+        </div>
+      ) : null}
+      {groups.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
+      <AnimatePresence initial={false}>
+        {groups.map((group) => <CounterpartyCard key={`${direction}:${group.id}`} group={group} direction={direction} onOpen={onOpen} />)}
+      </AnimatePresence>
+    </section>
   )
 }
 
@@ -1590,7 +1653,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
-  const accountUsage = accountStructureUsage(account, { movements, reconciliations, recurringRules, dimensions })
+  const accountUsage = accountStructureUsage(account, { accounts, movements, reconciliations, recurringRules, dimensions })
   const structureLocked = accountUsage.locked
   const accountLocked = accountUsage.movement
   const accountAttachments = attachmentsForRecord(attachments, {
@@ -2194,15 +2257,21 @@ export default function MohammadLedgerApp() {
   const selectedAccountDetails = accountDetailOptionsFor(accountDraft.type, accountDraft.valueKind)
   const accountDraftNameValue = accountNameValue(accountDraft)
   const hasAccountDraftName = Boolean(accountDraftNameValue.trim())
-  const accountNeedsDetailChoice = !selectedAccountPreset.skipDetail && selectedAccountDetails.length > 0
+  const accountIsCounterpartyBundle = isCounterpartyBundleDraft(accountDraft)
+  const accountNeedsDetailChoice = !accountIsCounterpartyBundle && !selectedAccountPreset.skipDetail && selectedAccountDetails.length > 0
   const accountNeedsCurrencyChoice = accountNeedsCurrency(accountDraft)
   const accountNeedsOpeningBalance = accountSupportsOpeningBalance(accountDraft)
   const accountNeedsPresetChoice = selectedAccountPresetGroup.keys.length > 1
   const accountOpening = accountOpeningAmounts(accountDraft)
   const accountOpeningCurrency = accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? CURRENCIES.USD : CURRENCIES.DINAR
   const accountOpeningValue = accountOpeningCurrency === CURRENCIES.USD ? accountOpening.openingUsd : accountOpening.openingDinar
-  const accountOpeningDirectionReady = accountOpeningDraftErrors(accountDraft).length === 0
-  const accountOpeningSummary = accountOpeningValue === 0
+  const accountOpeningDirectionReady = (accountIsCounterpartyBundle ? counterpartyOpeningDraftErrors(accountDraft) : accountOpeningDraftErrors(accountDraft)).length === 0
+  const counterpartyOpeningCount = accountIsCounterpartyBundle
+    ? counterpartyAccountChannels.filter((channel) => counterpartyOpeningFor(accountDraft, channel.key).amount > 0).length
+    : 0
+  const accountOpeningSummary = accountIsCounterpartyBundle
+    ? counterpartyOpeningCount > 0 ? `${formatCount(counterpartyOpeningCount)} أرصدة سابقة` : 'كلها تبدأ من صفر'
+    : accountOpeningValue === 0
     ? 'بدون رصيد سابق'
     : accountDraft.valueKind === VALUE_KINDS.RECEIVABLE
       ? accountOpeningDirectionReady
@@ -3120,6 +3189,8 @@ export default function MohammadLedgerApp() {
           type: preset.type,
           valueKind: preset.valueKind,
           subAccountName: preset.nameTarget === 'subAccountName' ? '' : preset.subAccountName,
+          counterpartyBundle: Boolean(preset.counterpartyBundle),
+          counterpartyOpenings: emptyCounterpartyOpenings(),
           currencyKind: accountNeedsCurrency(preset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
           openingBalanceAmount: '',
           openingBalanceDirection: '',
@@ -3148,6 +3219,8 @@ export default function MohammadLedgerApp() {
         type: firstPreset.type,
         valueKind: firstPreset.valueKind,
         subAccountName: firstPreset.nameTarget === 'subAccountName' ? '' : firstPreset.subAccountName,
+        counterpartyBundle: Boolean(firstPreset.counterpartyBundle),
+        counterpartyOpenings: emptyCounterpartyOpenings(),
         currencyKind: accountNeedsCurrency(firstPreset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
         openingBalanceAmount: '',
         openingBalanceDirection: '',
@@ -3297,7 +3370,7 @@ export default function MohammadLedgerApp() {
     }
     const submissionKey = JSON.stringify(['account', accountDraft])
     if (!claimSubmission(accountCreationLockRef, submissionKey)) return
-    const openingDraftErrors = accountOpeningDraftErrors(accountDraft)
+    const openingDraftErrors = accountIsCounterpartyBundle ? counterpartyOpeningDraftErrors(accountDraft) : accountOpeningDraftErrors(accountDraft)
     if (openingDraftErrors.length) {
       releaseSubmission(accountCreationLockRef, submissionKey)
       setAccountWizardStep(ACCOUNT_WIZARD_STEPS.OPENING)
@@ -3305,30 +3378,50 @@ export default function MohammadLedgerApp() {
       return
     }
     const openingAmounts = accountOpeningAmounts(accountDraft)
-    const account = createAccount({ ...accountDraft, ...openingAmounts })
-    const validation = validateAccount(account, accounts)
-    if (!validation.ok) {
+    const nextAccounts = accountIsCounterpartyBundle
+      ? buildCounterpartyAccountBundle(accountDraft, { source: 'web' })
+      : [createAccount({ ...accountDraft, ...openingAmounts })]
+    const validationErrors = []
+    const acceptedAccounts = [...accounts]
+    for (const account of nextAccounts) {
+      const validation = validateAccount(account, acceptedAccounts)
+      validationErrors.push(...validation.errors)
+      if (validation.ok) acceptedAccounts.push(account)
+    }
+    if (validationErrors.length) {
       releaseSubmission(accountCreationLockRef, submissionKey)
-      setFeedback(validation.errors.map((error) => error.message).join(' '))
+      setFeedback([...new Set(validationErrors.map((error) => error.message))].join(' '))
       return
     }
-    const openingMovements = createOpeningMovements([account], account.createdAt)
-    const openingErrors = openingMovements.flatMap((movement) => validateMovement(movement, [...accounts, account], movements).errors)
+    const openingResult = accountIsCounterpartyBundle
+      ? buildCounterpartyOpeningMovements(nextAccounts, movements, accounts)
+      : {
+          movements: createOpeningMovements(nextAccounts, nextAccounts[0].createdAt),
+          validation: { ok: true, errors: [] },
+        }
+    const openingMovements = openingResult.movements
+    const openingErrors = accountIsCounterpartyBundle
+      ? openingResult.validation.errors
+      : openingMovements.flatMap((movement) => validateMovement(movement, [...accounts, ...nextAccounts], movements).errors)
     if (openingErrors.length) {
       releaseSubmission(accountCreationLockRef, submissionKey)
       setFeedback(openingErrors.map((error) => error.message).join(' '))
       return
     }
-    setAccounts((current) => [...current, account])
+    setAccounts((current) => [...current, ...nextAccounts])
     setMovements((current) => [...current, ...openingMovements])
     setLedgerExtras((current) => ({
       ...current,
       auditEvents: [...(current.auditEvents || []), createAuditEvent('account.created', {
-        accountId: account.id,
+        accountId: nextAccounts[0].id,
+        accountIds: nextAccounts.map((account) => account.id),
+        counterpartyId: nextAccounts[0].counterpartyId || '',
         openingMovementIds: openingMovements.map((movement) => movement.id),
       })],
     }))
-    setFeedback(openingMovements.length ? 'تم إنشاء الحساب وتسجيل رصيده الأول.' : 'تم إنشاء الحساب.')
+    setFeedback(accountIsCounterpartyBundle
+      ? openingMovements.length ? 'تم إنشاء الشخص وحساباته الثلاثة مع الأرصدة السابقة.' : 'تم إنشاء الشخص وحساباته الثلاثة.'
+      : openingMovements.length ? 'تم إنشاء الحساب وتسجيل رصيده الأول.' : 'تم إنشاء الحساب.')
     setAccountDraft(emptyAccountDraft())
     setActiveAccountPresetGroup('')
     setActiveAccountPresetKey('')
@@ -3410,6 +3503,7 @@ export default function MohammadLedgerApp() {
         ...(current.auditEvents || []),
         createAuditEvent('account.updated', {
           accountId,
+          accountIds: result.accountIds || [accountId],
           before: accountEditSnapshot(currentAccount),
           after: accountEditSnapshot(result.account),
           source: 'web',
@@ -3771,9 +3865,9 @@ export default function MohammadLedgerApp() {
       return haystack.includes(normalizedAccountQuery)
     }
     const filterRows = (rows) => rows.filter(accountMatchesQuery)
-    const peopleViews = buildPeopleAccountViews(filterRows(peopleRows))
-    const peoplePositive = peopleViews.positive
-    const peopleNegative = peopleViews.negative
+    const peopleViews = buildCounterpartyBalanceViews(filterRows(peopleRows))
+    const peoplePositive = peopleViews.receivable
+    const peopleNegative = peopleViews.payable
     const peopleDirectory = peopleViews.all
     const accountRowsByGroup = {
       people: peopleViews.withBalance,
@@ -3862,11 +3956,11 @@ export default function MohammadLedgerApp() {
                     </div>
                     {peopleAccountView === 'balances' ? (
                       <div className="ml3-account-sections">
-                        <AccountList title="لي عند الناس" rows={peoplePositive} onOpen={setSelectedAccountId} embedded tone="positive" compactValues />
-                        <AccountList title="عليّ للناس" rows={peopleNegative} onOpen={setSelectedAccountId} embedded tone="negative" compactValues />
+                        <CounterpartyList title="لي عند الناس" groups={peoplePositive} direction="receivable" onOpen={setSelectedAccountId} />
+                        <CounterpartyList title="عليّ للناس" groups={peopleNegative} direction="payable" onOpen={setSelectedAccountId} />
                       </div>
                     ) : (
-                      <AccountList title="كل الأشخاص" rows={peopleDirectory} onOpen={setSelectedAccountId} embedded tone="people" compactValues hideHeader />
+                      <CounterpartyList title="كل الأشخاص" groups={peopleDirectory} direction="all" onOpen={setSelectedAccountId} hideHeader />
                     )}
                   </>
                 ) : activeGroup.key === 'money' ? (
@@ -4601,12 +4695,76 @@ export default function MohammadLedgerApp() {
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? (
                     <div className="ml3-account-opening">
-                      <NumericEntry
-                        label={`الرصيد الأول · ${accountOpeningCurrency === CURRENCIES.USD ? 'دولار' : 'دينار'}`}
-                        value={accountDraft.openingBalanceAmount}
-                        onChange={(value) => setAccountDraft((current) => ({ ...current, openingBalanceAmount: value }))}
-                      />
-                      {accountDraft.valueKind === VALUE_KINDS.RECEIVABLE ? (
+                      {accountIsCounterpartyBundle ? (
+                        <div className="adreem-counterparty-openings">
+                          {counterpartyAccountChannels.map((channel) => {
+                            const opening = counterpartyOpeningFor(accountDraft, channel.key)
+                            return (
+                              <section className={`adreem-counterparty-opening adreem-counterparty-opening--${channel.key}`} key={channel.key}>
+                                <header>
+                                  <strong>{channel.label}</strong>
+                                  <small>{channel.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? '$' : 'د.ل'}</small>
+                                </header>
+                                <NumericEntry
+                                  compact
+                                  label="الرصيد السابق"
+                                  value={accountDraft.counterpartyOpenings?.[channel.key]?.amount || ''}
+                                  onChange={(value) => setAccountDraft((current) => ({
+                                    ...current,
+                                    counterpartyOpenings: {
+                                      ...current.counterpartyOpenings,
+                                      [channel.key]: {
+                                        ...current.counterpartyOpenings?.[channel.key],
+                                        amount: value,
+                                        ...(Number(value || 0) > 0 ? {} : { direction: '' }),
+                                      },
+                                    },
+                                  }))}
+                                />
+                                {opening.amount > 0 ? (
+                                  <div className="ml3-opening-direction is-compact" aria-label={`اتجاه رصيد ${channel.label}`}>
+                                    <button
+                                      type="button"
+                                      className={opening.direction === ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME ? 'is-active is-positive' : 'is-positive'}
+                                      onClick={() => setAccountDraft((current) => ({
+                                        ...current,
+                                        counterpartyOpenings: {
+                                          ...current.counterpartyOpenings,
+                                          [channel.key]: { ...current.counterpartyOpenings?.[channel.key], direction: ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME },
+                                        },
+                                      }))}
+                                      aria-pressed={opening.direction === ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME}
+                                    >
+                                      لي عنده
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={opening.direction === ACCOUNT_OPENING_DIRECTIONS.I_OWE ? 'is-active is-negative' : 'is-negative'}
+                                      onClick={() => setAccountDraft((current) => ({
+                                        ...current,
+                                        counterpartyOpenings: {
+                                          ...current.counterpartyOpenings,
+                                          [channel.key]: { ...current.counterpartyOpenings?.[channel.key], direction: ACCOUNT_OPENING_DIRECTIONS.I_OWE },
+                                        },
+                                      }))}
+                                      aria-pressed={opening.direction === ACCOUNT_OPENING_DIRECTIONS.I_OWE}
+                                    >
+                                      عليّ له
+                                    </button>
+                                  </div>
+                                ) : <small className="adreem-opening-zero">يبدأ من صفر</small>}
+                              </section>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <NumericEntry
+                          label={`الرصيد الأول · ${accountOpeningCurrency === CURRENCIES.USD ? 'دولار' : 'دينار'}`}
+                          value={accountDraft.openingBalanceAmount}
+                          onChange={(value) => setAccountDraft((current) => ({ ...current, openingBalanceAmount: value }))}
+                        />
+                      )}
+                      {!accountIsCounterpartyBundle && accountDraft.valueKind === VALUE_KINDS.RECEIVABLE ? (
                         <div className="ml3-opening-direction" aria-label="اتجاه الرصيد">
                           <button
                             type="button"
@@ -4633,9 +4791,23 @@ export default function MohammadLedgerApp() {
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
                     <div className="ml3-account-summary">
-                      <span>الحساب بعد الحفظ</span>
+                      <span>{accountIsCounterpartyBundle ? 'الشخص بعد الحفظ' : 'الحساب بعد الحفظ'}</span>
                       <strong>{protectedAccountDraftSummary(accountDraft)}</strong>
-                      {accountNeedsOpeningBalance ? <small>{accountOpeningSummary}</small> : null}
+                      {accountIsCounterpartyBundle ? (
+                        <div className="adreem-counterparty-summary">
+                          {counterpartyAccountChannels.map((channel) => {
+                            const opening = counterpartyOpeningFor(accountDraft, channel.key)
+                            const currency = channel.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+                            const direction = opening.direction === ACCOUNT_OPENING_DIRECTIONS.I_OWE ? 'عليّ له' : 'لي عنده'
+                            return (
+                              <span key={channel.key}>
+                                <b>{channel.label}</b>
+                                <small>{opening.amount > 0 ? `${direction} ${money(opening.amount, currency)}` : 'صفر'}</small>
+                              </span>
+                            )
+                          })}
+                        </div>
+                      ) : accountNeedsOpeningBalance ? <small>{accountOpeningSummary}</small> : null}
                     </div>
                   ) : null}
 

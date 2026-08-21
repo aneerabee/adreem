@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import { accountEditChanges, accountStructureUsage, prepareAccountUpdate } from './accountEditing.js'
+import { buildCounterpartyAccountBundle } from './counterpartyAccounts.js'
+import { emptyAccountDraft } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements } from './ledgerCore.js'
 
 const EDIT_CASES = [
@@ -196,5 +198,49 @@ describe('account editing', () => {
     })
 
     expect(usage).toMatchObject({ movement: true, locked: true })
+  })
+
+  it('renames all three linked person balances atomically before their first movement', () => {
+    const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
+    const result = prepareAccountUpdate({
+      accounts,
+      movements: [],
+      accountId: accounts[0].id,
+      draft: { ...accounts[0], ownerName: 'شركة سعيد' },
+      updatedAt: '2026-08-21T12:00:00.000Z',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.accountIds).toHaveLength(3)
+    expect(new Set(result.accounts.map((account) => account.ownerName))).toEqual(new Set(['شركة سعيد']))
+  })
+
+  it('keeps linked person channel types immutable and freezes the whole person after any channel moves', () => {
+    const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
+    const structuralEdit = prepareAccountUpdate({
+      accounts,
+      movements: [],
+      accountId: accounts[0].id,
+      draft: { ...accounts[0], currencyKind: ACCOUNT_CURRENCY_KINDS.USD },
+    })
+    const movement = {
+      id: 'person-first-movement',
+      status: MOVEMENT_STATUSES.POSTED,
+      destinationAccountId: accounts[1].id,
+    }
+    const renameAfterMovement = prepareAccountUpdate({
+      accounts,
+      movements: [movement],
+      accountId: accounts[2].id,
+      draft: { ...accounts[2], ownerName: 'اسم جديد' },
+    })
+
+    expect(structuralEdit).toMatchObject({ ok: false, reason: 'account-structure-locked' })
+    expect(renameAfterMovement).toMatchObject({ ok: false, reason: 'account-structure-locked' })
+    expect(accountStructureUsage(accounts[0], { accounts, movements: [movement] })).toMatchObject({
+      movement: true,
+      linkedBundle: true,
+      locked: true,
+    })
   })
 })

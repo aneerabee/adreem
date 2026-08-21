@@ -259,11 +259,21 @@ export function accountChoicesKeyboard(accounts, role, balancesByAccountId = new
 }
 
 export function accountsBrowserKeyboard(buckets = [], session = {}) {
+  const activeFilter = session.balanceFilter || 'all'
+  const filterButton = (label, value) => ({
+    text: `${activeFilter === value ? '✓ ' : ''}${label}`,
+    callback_data: `accounts:filter:${value}`,
+    style: activeFilter === value ? 'success' : 'primary',
+  })
   const rows = buckets.map((bucket) => ([{
     text: accountChoiceButtonText(bucket.account, bucket),
     callback_data: `accounts:open:${accountChoiceToken(bucket.account)}`,
     style: accountChoiceButtonStyle(bucket.account, bucket),
   }]))
+  rows.unshift(
+    [filterButton('فلوسي', 'money'), filterButton('لي', 'collect')],
+    [filterButton('عليّ', 'pay'), filterButton('الكل', 'all')],
+  )
   rows.push(...paginationRows('accounts', session.page, session.pageCount))
   rows.push([{ text: '🔎 بحث', callback_data: 'main:search', style: 'primary' }, { text: '↩️ الرئيسية', callback_data: 'main:home' }])
   return { inline_keyboard: rows }

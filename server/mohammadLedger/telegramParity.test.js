@@ -9,7 +9,8 @@ import {
   postMovement,
 } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { accountOpeningAmounts } from '../../src/mohammadLedger/accountConfig.js'
+import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountOpeningAmounts, emptyAccountDraft } from '../../src/mohammadLedger/accountConfig.js'
+import { buildCounterpartyAccountBundle, buildCounterpartyOpeningMovements } from '../../src/mohammadLedger/counterpartyAccounts.js'
 import { createEmptyAdreemState, createMohammadFallbackState } from '../../src/mohammadLedger/ledgerState.js'
 import { voidRecentMovementInState } from '../telegram/historyActions.js'
 import { appendTelegramAccount } from './accountService.js'
@@ -54,6 +55,72 @@ async function telegramMovementFor(draft, initialState = createMohammadFallbackS
 }
 
 describe('telegram and web movement parity', () => {
+  it('creates the identical three-channel person bundle in web and Telegram', async () => {
+    const draft = {
+      ...emptyAccountDraft(),
+      ownerName: 'شركة النور',
+      counterpartyOpenings: {
+        ...emptyAccountDraft().counterpartyOpenings,
+        [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR]: { amount: '800', direction: ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME },
+        [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR]: { amount: '250', direction: ACCOUNT_OPENING_DIRECTIONS.I_OWE },
+        [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD]: { amount: '60', direction: ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME },
+      },
+    }
+    const webAccounts = buildCounterpartyAccountBundle(draft)
+    const webOpening = buildCounterpartyOpeningMovements(webAccounts)
+    const repository = memoryRepository(createEmptyAdreemState())
+    const telegram = await appendTelegramAccount(repository, draft, { idempotencyKey: 'bundle-parity' })
+    const comparableAccount = (account) => ({
+      ownerName: account.ownerName,
+      subAccountName: account.subAccountName,
+      type: account.type,
+      valueKind: account.valueKind,
+      currencyKind: account.currencyKind,
+      counterpartyKind: account.counterpartyKind,
+      openingDinar: account.openingDinar,
+      openingUsd: account.openingUsd,
+    })
+
+    expect(telegram.accounts.map(comparableAccount)).toEqual(webAccounts.map(comparableAccount))
+    expect(telegram.openingMovements.map(comparableMovement)).toEqual(webOpening.movements.map(comparableMovement))
+  })
+
+  it('keeps identical person bundles isolated when two users use separate ledger repositories', async () => {
+    const firstLedger = memoryRepository(createEmptyAdreemState(undefined, { ledgerId: 'owner-a' }))
+    const secondLedger = memoryRepository(createEmptyAdreemState(undefined, { ledgerId: 'owner-b' }))
+    const firstDraft = {
+      ...emptyAccountDraft(),
+      ownerName: 'شركة النور',
+      counterpartyOpenings: {
+        ...emptyAccountDraft().counterpartyOpenings,
+        [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR]: { amount: '900', direction: ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME },
+      },
+    }
+    const secondDraft = {
+      ...emptyAccountDraft(),
+      ownerName: 'شركة النور',
+      counterpartyOpenings: {
+        ...emptyAccountDraft().counterpartyOpenings,
+        [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD]: { amount: '40', direction: ACCOUNT_OPENING_DIRECTIONS.I_OWE },
+      },
+    }
+
+    await appendTelegramAccount(firstLedger, firstDraft, { idempotencyKey: 'same-update-key' })
+    expect(secondLedger.state.accounts).toHaveLength(0)
+    expect(secondLedger.state.movements).toHaveLength(0)
+    expect(secondLedger.state.auditEvents).toHaveLength(0)
+
+    await appendTelegramAccount(secondLedger, secondDraft, { idempotencyKey: 'same-update-key' })
+    expect(firstLedger.state.ledgerId).toBe('owner-a')
+    expect(secondLedger.state.ledgerId).toBe('owner-b')
+    expect(firstLedger.state.accounts).toHaveLength(3)
+    expect(secondLedger.state.accounts).toHaveLength(3)
+    expect(firstLedger.state.movements).toHaveLength(1)
+    expect(secondLedger.state.movements).toHaveLength(1)
+    expect(firstLedger.state.movements[0]).toMatchObject({ currency: CURRENCIES.DINAR, amount: 900 })
+    expect(secondLedger.state.movements[0]).toMatchObject({ currency: CURRENCIES.USD, amount: -40 })
+  })
+
   it('creates the same opening account and balance from web and Telegram inputs', async () => {
     const draft = {
       ownerName: 'مو إدريس',
