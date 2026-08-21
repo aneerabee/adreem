@@ -682,8 +682,12 @@ describe('ADREEM web API auth helpers', () => {
       savedAt: '2026-01-01T10:00:00.000Z',
       version: 2,
     }
+    let rejectedState = null
     api.__setRepositoryForTest?.({
       ledgerConfig: { identity: { ledgerId: 'main' } },
+      backupRejected(state) {
+        rejectedState = state
+      },
       async update(callback) {
         return callback(currentState)
       },
@@ -712,6 +716,8 @@ describe('ADREEM web API auth helpers', () => {
 
     expect(response.statusCode).toBe(422)
     expect(JSON.parse(response.body).error).toContain('Ledger integrity check failed')
+    expect(rejectedState?.movements).toHaveLength(1)
+    expect(rejectedState?.movements?.[0]?.id).toBe('expense-1')
   })
 
   it('requires the web client ledger version before accepting a save', async () => {

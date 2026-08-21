@@ -64,7 +64,7 @@ export function createLatestSaveCoordinator({
 
   return {
     submit(value) {
-      if (stopped) return 0
+      if (stopped || failed) return 0
       const item = { id: sequence + 1, value }
       sequence = item.id
       pending = item

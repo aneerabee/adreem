@@ -34,7 +34,7 @@ function SaveState({ status, text, onRetry }) {
     <div className={`adreem-cloud-state adreem-cloud-state--${status}`} role="status">
       <Icon aria-hidden="true" size={16} strokeWidth={2.2} />
       <span>{text}</span>
-      {status === 'retrying' ? (
+      {status === 'retrying' || status === 'failed' || status === 'local-only' ? (
         <button type="button" onClick={onRetry} aria-label="إعادة محاولة الحفظ" title="إعادة محاولة الحفظ">
           <RefreshCw aria-hidden="true" size={15} />
         </button>
@@ -57,6 +57,7 @@ export default function AdreemChrome({
   languageStatus,
   languageMessage,
   onRetrySave,
+  onReloadConfirmed,
   onOpenAdmin,
   onLogout,
   onLanguageChange,
@@ -71,6 +72,8 @@ export default function AdreemChrome({
   const direction = uiLanguageDirection(normalizedLanguage)
   setActiveUiLanguage(normalizedLanguage)
   const counts = { today: todayCount, review: reviewCount }
+  const saveBlocked = ['saving', 'retrying', 'failed', 'local-only'].includes(saveStatus)
+  const saveFailed = saveStatus === 'failed' || saveStatus === 'local-only'
 
   useEffect(() => {
     if (!profileOpen) return undefined
@@ -170,6 +173,32 @@ export default function AdreemChrome({
             })}
           </nav>
           <section className="adreem-view">{children}</section>
+          {saveBlocked ? (
+            <div className={`adreem-save-shield adreem-save-shield--${saveStatus}`} role={saveFailed ? 'alertdialog' : 'status'} aria-live="assertive" aria-modal={saveFailed ? 'true' : undefined}>
+              <section>
+                <span className="adreem-save-shield-icon" aria-hidden="true">
+                  {saveFailed ? <CloudAlert size={24} /> : <RefreshCw size={24} />}
+                </span>
+                <div>
+                  <strong>{saveFailed ? 'الحفظ لم يتم' : saveStatus === 'retrying' ? 'نعيد الحفظ' : 'نثبت التغيير'}</strong>
+                  <p>{saveFailed ? 'أوقفنا أي تعديل جديد حتى لا تفقد بيانات أخرى.' : saveStatus === 'retrying' ? 'الاتصال تأخر. نحاول تلقائيًا.' : 'لحظة واحدة حتى تؤكد السحابة الحفظ.'}</p>
+                </div>
+                {saveStatus !== 'saving' ? (
+                  <div className="adreem-save-shield-actions">
+                    <button type="button" onClick={onRetrySave}>
+                      <RefreshCw aria-hidden="true" size={16} />
+                      حاول الآن
+                    </button>
+                    {saveFailed ? (
+                      <button type="button" className="is-secondary" onClick={onReloadConfirmed}>
+                        آخر نسخة مؤكدة
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+            </div>
+          ) : null}
         </div>
       </section>
       {profileOpen ? (

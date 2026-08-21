@@ -122,6 +122,25 @@ describe('latest cloud save coordinator', () => {
     expect(coordinator.hasPending()).toBe(false)
   })
 
+  it('rejects newer snapshots while a permanent failure is unresolved', async () => {
+    const error = Object.assign(new Error('invalid state'), { retryable: false })
+    const save = vi.fn().mockRejectedValueOnce(error).mockResolvedValueOnce({ ok: true })
+    const coordinator = createLatestSaveCoordinator({ save })
+
+    expect(coordinator.submit({ version: 1 })).toBe(1)
+    await settle()
+
+    expect(coordinator.submit({ version: 2 })).toBe(0)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(coordinator.hasPending()).toBe(true)
+
+    coordinator.retryNow()
+    await settle()
+
+    expect(save.mock.calls.map(([state]) => state.version)).toEqual([1, 1])
+    expect(coordinator.hasPending()).toBe(false)
+  })
+
   it('keeps the exact failed item ahead of changes submitted while it was saving', async () => {
     const first = deferred()
     const retried = deferred()

@@ -676,6 +676,7 @@ export function createAdreemApiHandler(env = process.env) {
             ledgerId: repository.ledgerConfig?.identity?.ledgerId || ledgerIdForToken(token),
           })
           if (!validation.ok) {
+            repository.backupRejected?.(state)
             throw new ApiRequestError(`Ledger integrity check failed: ${validation.errors[0]?.message || 'invalid state'}`, 422)
           }
           movementUpdates = movementUpdateAuditEntries(currentState, state)

@@ -1,7 +1,7 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, Landmark, ReceiptText, Search, SlidersHorizontal, UserRound, WalletCards, Wrench, X } from 'lucide-react'
 import './adreemDesk.css'
@@ -466,7 +466,7 @@ export function storageTextForStatus(saveStatus, storageMode) {
 
 export function saveFailureMessage(error, retryDelay) {
   if (retryDelay === null) {
-    return error?.status === 409 ? 'تغيّرت بيانات الدفتر في جلسة أخرى. أعد تحميل الصفحة قبل المتابعة.' : 'تعذر تأكيد الحفظ. أعد تحميل الصفحة ثم حاول مرة أخرى.'
+    return error?.status === 409 ? 'تغيّرت البيانات في جهاز آخر. أوقفنا التعديل. أعد تحميل الصفحة.' : 'الحفظ لم يتم. أوقفنا التعديل لحماية بياناتك.'
   }
   return `لم يتم تأكيد الحفظ. سيحاول النظام تلقائيًا خلال ${Math.max(1, Math.round(retryDelay / 1000))} ث.`
 }
@@ -2637,7 +2637,7 @@ export default function MohammadLedgerApp() {
     }
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isHydrated || !canPersist) return
     if (!saveCoordinatorRef.current) {
       let coordinator = null
@@ -2677,7 +2677,7 @@ export default function MohammadLedgerApp() {
           }
           if (result.reports) setServerReports(result.reports)
           setSyncProblem(false)
-          setFeedback((current) => (current.startsWith('لم يتم تأكيد الحفظ') ? 'تم الحفظ في السحابة.' : current))
+          if (!coordinator?.hasPending()) setFeedback('تم حفظ التغيير في السحابة.')
           if (!result.state || coordinator?.hasPending()) return
           const normalizedState = normalizeLedgerState(result.state, item.value)
           const nextExtras = ledgerExtrasFromState(normalizedState)
@@ -2702,7 +2702,8 @@ export default function MohammadLedgerApp() {
       hasHydratedSnapshotRef.current = true
       return
     }
-    saveCoordinatorRef.current.submit({ ...ledgerExtras, accounts, movements })
+    const submissionId = saveCoordinatorRef.current.submit({ ...ledgerExtras, accounts, movements })
+    if (!submissionId) setSaveStatus('failed')
   }, [accounts, movements, ledgerExtras, isHydrated, canPersist])
 
   async function loadOlderMovements() {
@@ -4156,6 +4157,9 @@ export default function MohammadLedgerApp() {
   return (
     <AdreemChrome activeSection={activeSection} activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} storageText={storageText} todayCount={todayMovementCount} reviewCount={reviewItems.length} canOpenAdmin={canOpenAdmin} canLogout={canLogout} profile={protectedUserProfile(userProfile)} language={normalizedUiLanguage} languageStatus={languageStatus} languageMessage={languageMessage} onLanguageChange={changeUiLanguage} onRetrySave={() => {
       if (!orphanCleanupInProgressRef.current) saveCoordinatorRef.current?.retryNow()
+    }} onReloadConfirmed={() => {
+      if (typeof window === 'undefined') return
+      if (window.confirm('سيتم فتح آخر نسخة حفظتها السحابة. هل تريد المتابعة؟')) window.location.reload()
     }} onOpenAdmin={openAdminUsersPage} onLogout={requestCloudLogout} onSectionChange={switchSection}>
       {activeSection !== 'entry' && activeSection !== 'accounts' ? <AlertBoard reviewAccounts={balancesByKind.review} reviewMovements={reviewMovements} externalMissing={unresolvedExternalAccounts} balances={balances} movements={postedUserMovements} totals={totals} dueRecurringCount={dueRules.length} reconciliationDiffCount={reconciliationDiffCount} /> : null}
 

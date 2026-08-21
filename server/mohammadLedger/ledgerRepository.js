@@ -151,6 +151,7 @@ export function createLedgerRepository(env = process.env, options = {}) {
     ledgerConfig,
     load: () => loadLedgerState(client, ledgerConfig),
     update: (updater, updateOptions = {}) => updateLedgerState(client, updater, ledgerConfig, env, updateOptions),
+    backupRejected: (state) => writeLedgerBackup(env, ledgerConfig, 'rejected', state),
     uploadAttachmentFile: (file) => uploadLedgerAttachmentFile(client, ledgerConfig, env, file),
     deleteAttachmentFile: (storagePath) => deleteLedgerAttachmentFile(client, ledgerConfig, env, storagePath),
   }
