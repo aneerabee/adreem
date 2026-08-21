@@ -11,6 +11,9 @@
   --finance-blue: oklch(0.56 0.15 250);
   --finance-blue-dark: oklch(0.4 0.12 250);
   --finance-blue-soft: oklch(0.96 0.03 250);
+  --finance-neutral: #64748b;
+  --finance-neutral-dark: #334155;
+  --finance-neutral-soft: #f8fafc;
   --finance-coral: oklch(0.61 0.18 25);
   --finance-coral-dark: oklch(0.44 0.15 25);
   --finance-coral-soft: oklch(0.965 0.035 25);
@@ -48,9 +51,9 @@
 }
 
 .ml3-balances-surface--money {
-  --balance-focus: var(--finance-green);
-  --balance-focus-dark: var(--finance-green-dark);
-  --balance-focus-soft: var(--finance-green-soft);
+  --balance-focus: var(--finance-blue);
+  --balance-focus-dark: var(--finance-blue-dark);
+  --balance-focus-soft: var(--finance-blue-soft);
 }
 
 .ml3-balances-surface--assets {
@@ -114,7 +117,7 @@
 
 [dir="rtl"] .ml3-balance-ledger button::before { border-radius: 999px 0 0 999px; }
 .ml3-balance-ledger button::after { content: none; }
-.ml3-balance-ledger button.is-cash { --summary-tone: var(--finance-green); --summary-ink: var(--finance-green-dark); --summary-soft: var(--finance-green-soft); }
+.ml3-balance-ledger button.is-cash { --summary-tone: var(--finance-blue); --summary-ink: var(--finance-blue-dark); --summary-soft: var(--finance-blue-soft); }
 .ml3-balance-ledger button.is-bank { --summary-tone: var(--finance-blue); --summary-ink: var(--finance-blue-dark); --summary-soft: var(--finance-blue-soft); }
 .ml3-balance-ledger button.is-positive { --summary-tone: var(--finance-green); --summary-ink: var(--finance-green-dark); --summary-soft: var(--finance-green-soft); }
 .ml3-balance-ledger button.is-negative { --summary-tone: var(--finance-debt); --summary-ink: var(--finance-debt-dark); --summary-soft: var(--finance-debt-soft); }
@@ -244,7 +247,7 @@
   box-shadow: none;
 }
 
-.ml3-account-switcher--money { --group-tone: var(--finance-green); --group-soft: var(--finance-green-soft); }
+.ml3-account-switcher--money { --group-tone: var(--finance-blue); --group-soft: var(--finance-blue-soft); }
 .ml3-account-switcher--people,
 .ml3-account-switcher--assets { --group-tone: var(--finance-blue); --group-soft: var(--finance-blue-soft); }
 .ml3-account-switcher--expenses,
@@ -391,7 +394,7 @@
   background: var(--row-tone);
   opacity: 0.78;
 }
-.ml3-balances-surface .ml3-account-row--cash { --row-tone: var(--finance-green); --row-soft: var(--finance-green-soft); }
+.ml3-balances-surface .ml3-account-row--cash,
 .ml3-balances-surface .ml3-account-row--bank,
 .ml3-balances-surface .ml3-account-row--asset,
 .ml3-balances-surface .ml3-account-row--project { --row-tone: var(--finance-blue); --row-soft: var(--finance-blue-soft); }
@@ -513,7 +516,8 @@
 }
 .adreem-counterparty-card.is-receivable { --counterparty-tone: var(--finance-green); --counterparty-ink: var(--finance-green-dark); --counterparty-soft: var(--finance-green-soft); }
 .adreem-counterparty-card.is-payable { --counterparty-tone: var(--finance-debt); --counterparty-ink: var(--finance-debt-dark); --counterparty-soft: var(--finance-debt-soft); }
-.adreem-counterparty-card.is-zero { --counterparty-tone: var(--finance-muted); --counterparty-ink: var(--finance-muted); --counterparty-soft: var(--finance-surface); }
+.adreem-counterparty-card.is-mixed,
+.adreem-counterparty-card.is-zero { --counterparty-tone: var(--finance-neutral); --counterparty-ink: var(--finance-neutral-dark); --counterparty-soft: var(--finance-neutral-soft); }
 .adreem-counterparty-card.is-focused {
   z-index: 2;
   border-color: color-mix(in srgb, var(--counterparty-tone) 58%, var(--finance-line));
@@ -582,8 +586,8 @@
   will-change: opacity, transform;
 }
 .adreem-counterparty-channel {
-  --channel-tone: var(--finance-blue);
-  --channel-soft: var(--finance-blue-soft);
+  --channel-tone: var(--finance-neutral);
+  --channel-soft: var(--finance-neutral-soft);
   min-width: 0;
   min-height: 38px;
   display: grid;
@@ -598,15 +602,14 @@
   border-radius: 6px;
   background: color-mix(in srgb, var(--channel-soft) 48%, var(--finance-paper));
 }
-.adreem-counterparty-channel.is-cash-dinar { --channel-tone: var(--finance-green); --channel-soft: var(--finance-green-soft); }
-.adreem-counterparty-channel.is-cheque-dinar { --channel-tone: var(--finance-blue); --channel-soft: var(--finance-blue-soft); }
-.adreem-counterparty-channel.is-cash-usd { --channel-tone: var(--finance-gold); --channel-soft: var(--finance-gold-soft); }
+.adreem-counterparty-channel.is-positive { --channel-tone: var(--finance-green); --channel-soft: var(--finance-green-soft); }
 .adreem-counterparty-channel.is-negative { --channel-tone: var(--finance-debt); --channel-soft: var(--finance-debt-soft); }
+.adreem-counterparty-channel.is-zero { --channel-tone: var(--finance-neutral); --channel-soft: var(--finance-neutral-soft); }
 .adreem-counterparty-channel > i { grid-area: icon; width: 17px; height: 17px; display: grid; place-items: center; color: var(--channel-tone); }
 .adreem-counterparty-channel > small { grid-area: label; min-width: 0; overflow: hidden; color: var(--finance-muted); font-size: 0.54rem; font-weight: 780; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-counterparty-channel > b { grid-area: value; min-width: 0; overflow: hidden; color: var(--channel-tone); font-size: 0.59rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-counterparty-channel.is-negative > b { color: var(--finance-debt-dark); }
-.adreem-counterparty-channel.is-zero { opacity: 0.66; }
+.adreem-counterparty-channel.is-zero { opacity: 0.72; }
 .adreem-counterparty-channels { min-width: 0; display: grid; transform-origin: top center; will-change: opacity, transform; }
 .adreem-counterparty-channels button {
   min-width: 0;

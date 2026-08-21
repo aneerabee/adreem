@@ -46,4 +46,14 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('.adreem-counterparty-channel.is-negative > b { color: var(--finance-debt-dark); }')
     expect(financeStylesheet).toContain('.ml3-opening-direction button.is-negative.is-active { border-color: var(--finance-debt);')
   })
+
+  it('colors balance containers by financial meaning instead of account type', () => {
+    expect(financeStylesheet).toContain('.ml3-balance-ledger button.is-cash { --summary-tone: var(--finance-blue);')
+    expect(financeStylesheet).toContain('.ml3-account-switcher--money { --group-tone: var(--finance-blue);')
+    expect(financeStylesheet).toContain('.adreem-counterparty-card.is-mixed,')
+    expect(financeStylesheet).toContain('.adreem-counterparty-channel.is-positive { --channel-tone: var(--finance-green);')
+    expect(financeStylesheet).toContain('.adreem-counterparty-channel.is-negative { --channel-tone: var(--finance-debt);')
+    expect(financeStylesheet).not.toContain('.adreem-counterparty-channel.is-cash-usd { --channel-tone: var(--finance-gold);')
+    expect(financeStylesheet).not.toContain('.adreem-counterparty-channel.is-cheque-dinar { --channel-tone: var(--finance-blue);')
+  })
 })
