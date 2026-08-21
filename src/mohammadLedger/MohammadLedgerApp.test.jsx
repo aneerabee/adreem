@@ -247,7 +247,7 @@ describe('MohammadLedgerApp account review', () => {
     expect(markup).toContain(`value="${ACCOUNT_CURRENCY_KINDS.USD}"`)
   })
 
-  it('shows used account structure as fixed while keeping its name editable', () => {
+  it('shows every used account field as fixed', () => {
     const account = createAccount({
       id: 'used-person',
       ownerName: 'سيف',
@@ -257,10 +257,10 @@ describe('MohammadLedgerApp account review', () => {
       currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
     })
 
-    const markup = renderToStaticMarkup(<AccountClassificationEditorFields account={account} structureLocked />)
+    const markup = renderToStaticMarkup(<AccountClassificationEditorFields account={account} structureLocked accountLocked />)
 
-    expect(markup).toContain('النوع وطريقة التعامل والعملة ثابتة')
-    expect(markup.match(/disabled=""/g)).toHaveLength(3)
+    expect(markup).toContain('بيانات الحساب ثابتة بعد أول حركة')
+    expect(markup.match(/disabled=""/g)).toHaveLength(4)
     expect(markup).toContain('name="classification"')
     expect(markup).toContain('name="currencyKind"')
   })
@@ -728,6 +728,9 @@ describe('MohammadLedgerApp history filtering', () => {
     expect(markup).toContain('· تم')
     expect(markup).toContain('· ناقص')
     expect(markup).toContain('· ملغي')
+    expect(markup).toContain('مطابقة الرصيد')
+    expect(markup).toContain('الرصيد الفعلي بالدينار')
+    expect(markup).not.toContain('>حفظ التعديل</button>')
   })
 })
 

@@ -58,10 +58,12 @@ describe('telegram browsing keyboards', () => {
   it('renders stable navigation for empty and paged account lists', () => {
     const empty = accountsBrowserKeyboard([], { page: 0, pageCount: 1 })
     const profile = accountProfileKeyboard(3, 'account-token')
+    const lockedProfile = accountProfileKeyboard(3, '')
 
     expect(empty.inline_keyboard).toHaveLength(1)
     expect(profile.inline_keyboard[0][0].callback_data).toBe('accounts:edit:account-token')
     expect(profile.inline_keyboard[1][0].callback_data).toBe('accounts:page:3')
+    expect(lockedProfile.inline_keyboard.flat().some((button) => button.callback_data.startsWith('accounts:edit:'))).toBe(false)
   })
 
   it('adds bounded history pagination without changing movement choices', () => {

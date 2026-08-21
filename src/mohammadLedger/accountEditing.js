@@ -86,7 +86,8 @@ export function accountStructureUsage(accountOrId, {
     `dimension-account-${id}`,
     ...linkedDimensions.map((item) => item.id),
   ].filter(Boolean))
-  const movement = Boolean(account?.structureLocked) || Number(account?.postedCount || 0) > 0 || movements.some((item) => STRUCTURE_LOCKING_MOVEMENT_STATUSES.has(item.status) && (
+  const databaseStructureLock = Boolean(account?.structureLocked)
+  const movement = Number(account?.postedCount || 0) > 0 || movements.some((item) => STRUCTURE_LOCKING_MOVEMENT_STATUSES.has(item.status) && (
     referencesAccount(item, id) || dimensionIds.has(item.dimensionId)
   ))
   const reconciliation = reconciliations.some((item) => item.accountId === id)
@@ -99,12 +100,9 @@ export function accountStructureUsage(accountOrId, {
     reconciliation,
     recurringRule,
     dimension,
-    locked: movement || reconciliation || recurringRule || dimension,
+    databaseStructureLock,
+    locked: databaseStructureLock || movement || reconciliation || recurringRule || dimension,
   }
-}
-
-function isPersonBalance(account = {}) {
-  return account.valueKind === VALUE_KINDS.RECEIVABLE
 }
 
 export function accountStructureChanges(before = {}, after = {}) {
@@ -113,20 +111,35 @@ export function accountStructureChanges(before = {}, after = {}) {
   if (before.valueKind !== after.valueKind) changes.push('valueKind')
   if (before.currencyKind !== after.currencyKind) changes.push('currencyKind')
   if (
-    (isPersonBalance(before) || isPersonBalance(after)) &&
+    (before.valueKind === VALUE_KINDS.RECEIVABLE || after.valueKind === VALUE_KINDS.RECEIVABLE) &&
     accountDetailName(before) !== accountDetailName(after)
   ) changes.push('subAccountName')
+  return changes
+}
+
+function accountFrozenChanges(before = {}, after = {}) {
+  const changes = []
+  if (before.ownerName !== after.ownerName) changes.push('ownerName')
+  if (before.subAccountName !== after.subAccountName) changes.push('subAccountName')
+  if (before.type !== after.type) changes.push('type')
+  if (before.valueKind !== after.valueKind) changes.push('valueKind')
+  if (before.currencyKind !== after.currencyKind) changes.push('currencyKind')
+  if (String(before.notes || '') !== String(after.notes || '')) changes.push('notes')
   return changes
 }
 
 export function accountStructureLockErrors(currentAccount, nextAccount, context = {}) {
   const usage = accountStructureUsage(currentAccount, context)
   if (!usage.locked) return []
-  const fields = accountStructureChanges(currentAccount, nextAccount)
+  const fields = usage.movement
+    ? accountFrozenChanges(currentAccount, nextAccount)
+    : accountStructureChanges(currentAccount, nextAccount)
   if (!fields.length) return []
   return [{
     field: fields[0],
-    message: 'لا يمكن تغيير نوع الحساب أو طريقة التعامل أو العملة بعد استعماله. يمكنك تعديل الاسم والملاحظات فقط.',
+    message: usage.movement
+      ? 'بيانات الحساب ثابتة بعد أول حركة ولا يمكن تعديلها. المطابقة تبقى عملية مستقلة ومسجلة.'
+      : 'لا يمكن تغيير نوع الحساب أو طريقة التعامل أو العملة بعد استعماله. يمكنك تعديل الاسم والملاحظات فقط.',
   }]
 }
 

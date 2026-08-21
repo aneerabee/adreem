@@ -1488,12 +1488,12 @@ function accountEditorDraft(account) {
   }
 }
 
-export function AccountClassificationEditorFields({ account, className = '', structureLocked = false }) {
-  const editorKey = [account.id, account.updatedAt, account.ownerName, account.subAccountName, account.type, account.valueKind, account.currencyKind, structureLocked].join(':')
-  return <AccountClassificationEditor key={editorKey} account={account} className={className} structureLocked={structureLocked} />
+export function AccountClassificationEditorFields({ account, className = '', structureLocked = false, accountLocked = false }) {
+  const editorKey = [account.id, account.updatedAt, account.ownerName, account.subAccountName, account.type, account.valueKind, account.currencyKind, structureLocked, accountLocked].join(':')
+  return <AccountClassificationEditor key={editorKey} account={account} className={className} structureLocked={structureLocked} accountLocked={accountLocked} />
 }
 
-function AccountClassificationEditor({ account, className = '', structureLocked = false }) {
+function AccountClassificationEditor({ account, className = '', structureLocked = false, accountLocked = false }) {
   const [draft, setDraft] = useState(() => accountEditorDraft(account))
   const classification = classificationValue(draft)
   const parsedClassification = parseClassification(classification)
@@ -1510,7 +1510,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
       <input type="hidden" name="subAccountName" value={draft.subAccountName || ''} />
       {structureLocked ? <input type="hidden" name="classification" value={classification} /> : null}
       {structureLocked && accountNeedsCurrency(parsedClassification) ? <input type="hidden" name="currencyKind" value={currencyFieldValue} /> : null}
-      {structureLocked ? <p className="ml3-profile-lock-note">النوع وطريقة التعامل والعملة ثابتة بعد استعمال الحساب. الاسم فقط قابل للتعديل.</p> : null}
+      {accountLocked ? <p className="ml3-profile-lock-note">بيانات الحساب ثابتة بعد أول حركة. المطابقة عملية مستقلة ومسجلة.</p> : structureLocked ? <p className="ml3-profile-lock-note">النوع وطريقة التعامل والعملة ثابتة بعد استعمال الحساب. الاسم فقط قابل للتعديل.</p> : null}
       <label>
         هذا الحساب هو
         <select
@@ -1531,7 +1531,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
       </label>
       <label>
         {preset.nameLabel || 'اسم الحساب'}
-        <input value={accountNameValue(draft)} onChange={(event) => setDraft((current) => applyAccountName(current, event.target.value))} placeholder={preset.namePlaceholder || 'اكتب الاسم'} />
+        <input value={accountNameValue(draft)} disabled={accountLocked} onChange={(event) => setDraft((current) => applyAccountName(current, event.target.value))} placeholder={preset.namePlaceholder || 'اكتب الاسم'} />
       </label>
       {showDetail ? (
         <label>
@@ -1561,7 +1561,9 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
-  const structureLocked = accountStructureUsage(account, { movements, reconciliations, recurringRules, dimensions }).locked
+  const accountUsage = accountStructureUsage(account, { movements, reconciliations, recurringRules, dimensions })
+  const structureLocked = accountUsage.locked
+  const accountLocked = accountUsage.movement
   const accountAttachments = attachmentsForRecord(attachments, {
     accountId: account.id,
   })
@@ -1608,7 +1610,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
 
         {canReconcileBalance ? (
           <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
-            <h3>مطابقة</h3>
+            <h3>مطابقة الرصيد</h3>
             {lastReconciliation ? (
               <p className="ml3-profile-note">
                 آخر مطابقة: {movementDateTime(lastReconciliation.createdAt)} · {preserveUiData(lastReconciliation.note)}
@@ -1616,11 +1618,11 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
             ) : null}
             <div className="ml3-profile-editor-grid">
               <label>
-                الدينار الفعلي
+                الرصيد الفعلي بالدينار
                 <input name="actualDinar" inputMode="numeric" defaultValue={formatInteger(dinar)} />
               </label>
               <label>
-                الدولار الفعلي
+                الرصيد الفعلي بالدولار
                 <input name="actualUsd" inputMode="numeric" defaultValue={formatMoneyNumber(usd)} />
               </label>
               <label>
@@ -1657,10 +1659,10 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
           ) : null}
         </form>
 
-        <form className="ml3-profile-editor" onSubmit={(event) => onUpdateAccount(event, account.id)}>
+        <form className={`ml3-profile-editor${accountLocked ? ' is-locked' : ''}`} onSubmit={(event) => onUpdateAccount(event, account.id)}>
           <h3>بيانات الحساب</h3>
-          <AccountClassificationEditorFields account={account} structureLocked={structureLocked} />
-          <button type="submit">حفظ التعديل</button>
+          <AccountClassificationEditorFields account={account} structureLocked={structureLocked} accountLocked={accountLocked} />
+          {accountLocked ? null : <button type="submit">حفظ التعديل</button>}
         </form>
 
         <AccountEditHistory accountId={account.id} auditEvents={auditEvents} />

@@ -1610,6 +1610,14 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   .ml3-picker-results > button em { display: none; }
 }
 
+@media (max-width: 720px) {
+  .adreem-app input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+  .adreem-app select,
+  .adreem-app textarea {
+    font-size: 16px !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(adreem-entry-surface),
   ::view-transition-new(adreem-entry-surface) { animation: none !important; }

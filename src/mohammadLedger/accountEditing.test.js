@@ -114,7 +114,7 @@ describe('account editing', () => {
     expect(result).toMatchObject({ ok: false, reason: 'account-structure-locked' })
   })
 
-  it('still allows renaming a used account without changing its accounting identity', () => {
+  it('rejects renaming a used account after its first posted movement', () => {
     const account = createAccount({
       id: 'used-person',
       ownerName: 'سيف',
@@ -132,7 +132,11 @@ describe('account editing', () => {
       draft: { ...account, ownerName: 'شركة سيف' },
     })
 
-    expect(result).toMatchObject({ ok: true, account: { ownerName: 'شركة سيف' } })
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'account-structure-locked',
+      errors: [expect.objectContaining({ field: 'ownerName' })],
+    })
   })
 
   it('locks structural fields when an account is linked to reconciliation, recurrence, or a dimension', () => {
@@ -150,10 +154,29 @@ describe('account editing', () => {
       reconciliations: [],
       recurringRules: [],
       dimensions: [],
-    })).toMatchObject({ locked: true })
+    })).toMatchObject({ locked: true, movement: false, databaseStructureLock: true })
     expect(accountStructureUsage({ id: 'database-counted', structureLocked: false, postedCount: 4 }, {
       movements: [],
-    })).toMatchObject({ locked: true })
+    })).toMatchObject({ locked: true, movement: true })
+  })
+
+  it('keeps a linked project name editable until its first movement', () => {
+    const project = createAccount({
+      id: 'linked-project',
+      ownerName: 'الشاحنة الأولى',
+      subAccountName: 'مشروع',
+      type: ACCOUNT_TYPES.PROJECT,
+      valueKind: VALUE_KINDS.PROJECT,
+    })
+    const result = prepareAccountUpdate({
+      accounts: [project],
+      dimensions: [{ id: 'dimension-project', linkedAccountId: project.id }],
+      movements: [],
+      accountId: project.id,
+      draft: { ...project, ownerName: 'شاحنة التوزيع' },
+    })
+
+    expect(result).toMatchObject({ ok: true, account: { ownerName: 'شاحنة التوزيع' } })
   })
 
   it('locks a project after a posted movement uses its generated tracking dimension', () => {

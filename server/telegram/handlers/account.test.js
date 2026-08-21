@@ -368,7 +368,7 @@ describe('telegram account flow', () => {
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم إلغاء تعديل الحساب')
   })
 
-  it('edits only the name when the account structure is locked by a posted movement', async () => {
+  it('refuses to edit any account data after a posted movement', async () => {
     const ctx = createCtx()
     ctx.repository = memoryRepository({
       ...emptyState(),
@@ -395,16 +395,11 @@ describe('telegram account flow', () => {
     })
 
     await startEditAccount(ctx, 'used-person')
-    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({ structureLocked: true, step: 'owner' })
-    expect(ctx.telegram.calls.at(-1).payload.text).toContain('النوع وطريقة التعامل والعملة ثابتة')
-
-    await handleAccountText({ ...ctx, isCallback: false, messageId: 59 }, 'شركة سيف')
-    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('review')
-    expect(ctx.telegram.calls.at(-1).payload.text).not.toContain('لا يمكن الحفظ الآن')
-    await handleAccountCallback(ctx, 'acct:confirm')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('هذا الحساب ثابت بعد أول حركة')
 
     expect(ctx.repository.state.accounts[0]).toMatchObject({
-      ownerName: 'شركة سيف',
+      ownerName: 'سيف',
       subAccountName: 'كاش بيننا',
       currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
     })

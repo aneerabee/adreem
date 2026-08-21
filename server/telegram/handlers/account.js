@@ -222,16 +222,33 @@ export async function startEditAccount(ctx, accountId) {
       reply_markup: mainMenuKeyboard(),
     })
   }
+  const usage = accountStructureUsage(account, {
+    movements: state.movements || [],
+    reconciliations: state.reconciliations || [],
+    recurringRules: state.recurringRules || [],
+    dimensions: state.dimensions || [],
+  })
+  if (usage.movement) {
+    const payload = {
+      chat_id: ctx.chatId,
+      text: '<b>هذا الحساب ثابت بعد أول حركة.</b>\n<blockquote>بياناته لا تتغير. مطابقة الرصيد تبقى عملية مستقلة ومسجلة.</blockquote>',
+      parse_mode: 'HTML',
+      reply_markup: mainMenuKeyboard(),
+    }
+    if (ctx.isCallback && ctx.messageId) {
+      try {
+        return await ctx.telegram.editMessageText({ ...payload, message_id: ctx.messageId })
+      } catch {
+        // Fall back to a fresh card when Telegram cannot update the old one.
+      }
+    }
+    return ctx.telegram.sendMessage(payload)
+  }
   const session = createAccountSession({
     mode: 'edit',
     editAccountId: account.id,
     reviewOriginalLabel: accountLabel(account),
-    structureLocked: accountStructureUsage(account, {
-      movements: state.movements || [],
-      reconciliations: state.reconciliations || [],
-      recurringRules: state.recurringRules || [],
-      dimensions: state.dimensions || [],
-    }).locked,
+    structureLocked: usage.locked,
     draft: {
       ...emptyAccountDraft(),
       ownerName: account.ownerName || '',

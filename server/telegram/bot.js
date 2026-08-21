@@ -1,5 +1,6 @@
 import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
+import { accountStructureUsage } from '../../src/mohammadLedger/accountEditing.js'
 import { normalizeAccountSearchText } from '../../src/mohammadLedger/movementAccounts.js'
 import {
   buildDimensionReports,
@@ -316,7 +317,13 @@ async function handleAccountsCallback(ctx, data) {
     movements.length ? movements.join('\n') : '<blockquote>لا توجد حركات لهذا الحساب.</blockquote>',
     accountEditHistoryText(account.id, state.auditEvents || []),
   ].filter(Boolean).join('\n')
-  return sendScreen(ctx, text, accountProfileKeyboard(session.page, token))
+  const accountLocked = accountStructureUsage(account, {
+    movements: state.movements || [],
+    reconciliations: state.reconciliations || [],
+    recurringRules: state.recurringRules || [],
+    dimensions: state.dimensions || [],
+  }).movement
+  return sendScreen(ctx, text, accountProfileKeyboard(session.page, accountLocked ? '' : token))
 }
 
 async function showToday(ctx) {

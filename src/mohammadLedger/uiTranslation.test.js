@@ -49,6 +49,8 @@ describe('ADREEM UI translation', () => {
   it('translates compact balance directions without changing the amount', () => {
     expect(translateUiText('لي 500 د.ل', 'en')).toBe('Owed to me 500 LYD')
     expect(translateUiText('عليّ 250 $', 'en')).toBe('I owe 250 $')
+    expect(translateUiText('مطابقة الرصيد', 'en')).toBe('Reconcile balance')
+    expect(translateUiText('الرصيد الفعلي بالدينار', 'en')).toBe('Actual balance in dinars')
   })
 
   it('preserves user-entered names and notes', () => {
