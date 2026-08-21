@@ -16,6 +16,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, can
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUploadedAttachment, getMohammadPersistenceMode, loadAdreemMovementPage, loadMohammadPersistedState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
+import { ledgerNavigationSearch, readLedgerNavigation } from './ledgerNavigation'
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
 import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccountsForRole, sameLogicalAccount } from './movementAccounts'
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, buildReconciliationCorrectionDrafts, createAttachment, createAuditEvent, createReconciliation, createRecurringRuleFromMovement, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, lastReconciliationForAccount, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
@@ -902,8 +903,10 @@ export function buildPeopleAccountViews(rows = []) {
 }
 
 export function buildBalanceOverview(rows = []) {
-  let moneyDinar = 0
-  let moneyUsd = 0
+  let cashDinar = 0
+  let cashUsd = 0
+  let bankDinar = 0
+  let bankUsd = 0
   let receivableDinar = 0
   let receivableUsd = 0
   let payableDinar = 0
@@ -912,9 +915,13 @@ export function buildBalanceOverview(rows = []) {
     const kind = bucket.account?.valueKind
     const dinar = Number(bucket.dinar || 0)
     const usd = Number(bucket.usd || 0)
-    if (kind === VALUE_KINDS.CASH || kind === VALUE_KINDS.BANK) {
-      moneyDinar += dinar
-      moneyUsd += usd
+    if (kind === VALUE_KINDS.CASH) {
+      cashDinar += dinar
+      cashUsd += usd
+    }
+    if (kind === VALUE_KINDS.BANK) {
+      bankDinar += dinar
+      bankUsd += usd
     }
     if (kind === VALUE_KINDS.RECEIVABLE) {
       if (dinar > 0) receivableDinar += dinar
@@ -924,19 +931,19 @@ export function buildBalanceOverview(rows = []) {
     }
   }
   return {
-    money: { dinar: moneyDinar, usd: moneyUsd },
+    cash: { dinar: cashDinar, usd: cashUsd },
+    bank: { dinar: bankDinar, usd: bankUsd },
+    money: { dinar: cashDinar + bankDinar, usd: cashUsd + bankUsd },
     receivable: { dinar: receivableDinar, usd: receivableUsd },
     payable: { dinar: payableDinar, usd: payableUsd },
   }
 }
 
 function BalanceAmountPair({ value }) {
-  const hasDinar = hasMoneyValue(value.dinar)
-  const hasUsd = hasMoneyValue(value.usd)
   return (
     <span className="ml3-balance-pair">
-      {hasDinar || !hasUsd ? <strong>{money(value.dinar)}</strong> : null}
-      {hasUsd ? <small>{money(value.usd, CURRENCIES.USD)}</small> : null}
+      <strong>{formatInteger(value.dinar)}<span>د.ل</span></strong>
+      <small>{formatInteger(value.usd)}<span>$</span></small>
     </span>
   )
 }
@@ -2017,12 +2024,13 @@ function OperationsPanel({ reports, expenseReports, dueRules, recurringRules, at
 
 export default function MohammadLedgerApp() {
   const [initialState] = useState(loadInitialLedgerState)
+  const [initialNavigation] = useState(() => readLedgerNavigation(typeof window === 'undefined' ? '' : window.location.search))
   const [accounts, setAccounts] = useState(initialState.accounts)
   const [movements, setMovements] = useState(initialState.movements)
   const [ledgerExtras, setLedgerExtras] = useState(() => ledgerExtrasFromState(initialState))
-  const [activeSection, setActiveSection] = useState('entry')
-  const [activeEntryMode, setActiveEntryMode] = useState('movement')
-  const [activeAccountGroup, setActiveAccountGroup] = useState('money')
+  const [activeSection, setActiveSection] = useState(initialNavigation.section)
+  const [activeEntryMode, setActiveEntryMode] = useState(initialNavigation.entryMode)
+  const [activeAccountGroup, setActiveAccountGroup] = useState(initialNavigation.accountGroup)
   const [activeAccountPresetGroup, setActiveAccountPresetGroup] = useState('')
   const [movementDraft, setMovementDraft] = useState(() => emptyMovementDraft())
   const [movementAttachmentFile, setMovementAttachmentFile] = useState(null)
@@ -2066,7 +2074,7 @@ export default function MohammadLedgerApp() {
   const [accountProfilePage, setAccountProfilePage] = useState(null)
   const [isLoadingAccountProfile, setIsLoadingAccountProfile] = useState(false)
   const [accountQuery, setAccountQuery] = useState('')
-  const [peopleAccountView, setPeopleAccountView] = useState('balances')
+  const [peopleAccountView, setPeopleAccountView] = useState(initialNavigation.peopleView)
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
   const [activeAccountDetail, setActiveAccountDetail] = useState('')
@@ -2108,6 +2116,19 @@ export default function MohammadLedgerApp() {
     document.documentElement.lang = normalizedUiLanguage
     document.documentElement.dir = uiDirection
   }, [normalizedUiLanguage, uiDirection])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const search = ledgerNavigationSearch(window.location.search, {
+      section: activeSection,
+      entryMode: activeEntryMode,
+      accountGroup: activeAccountGroup,
+      peopleView: peopleAccountView,
+    })
+    const nextUrl = `${window.location.pathname}${search}${window.location.hash}`
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (nextUrl !== currentUrl) window.history.replaceState(window.history.state, '', nextUrl)
+  }, [activeAccountGroup, activeEntryMode, activeSection, peopleAccountView])
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -3720,10 +3741,14 @@ export default function MohammadLedgerApp() {
     const activeGroupCount = visibleRows.length
     return (
       <section className="ml3-panel ml3-balances-surface" key={`accounts-${activeAccountGroup}`}>
-        <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة">
-          <button type="button" className={`is-money ${activeAccountGroup === 'money' ? 'is-active' : ''}`} aria-current={activeAccountGroup === 'money' ? 'true' : undefined} onClick={() => setActiveAccountGroup('money')}>
-            <i><WalletCards aria-hidden="true" size={18} /></i>
-            <span><b>فلوسي</b><BalanceAmountPair value={balanceOverview.money} /></span>
+        <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة بالدينار والدولار">
+          <button type="button" className="is-cash" onClick={() => setActiveAccountGroup('money')}>
+            <i><Banknote aria-hidden="true" size={18} /></i>
+            <span><b>كاش عندي</b><BalanceAmountPair value={balanceOverview.cash} /></span>
+          </button>
+          <button type="button" className="is-bank" onClick={() => setActiveAccountGroup('money')}>
+            <i><Landmark aria-hidden="true" size={18} /></i>
+            <span><b>في المصرف</b><BalanceAmountPair value={balanceOverview.bank} /></span>
           </button>
           <button type="button" className="is-positive" onClick={() => {
             setActiveAccountGroup('people')
@@ -3965,7 +3990,7 @@ export default function MohammadLedgerApp() {
             }}
           >
             <span>أقبض من الناس</span>
-            <strong>{money(totals.peopleOweMe)}</strong>
+            <BalanceAmountPair value={balanceOverview.receivable} />
           </button>
           <button
             type="button"
@@ -3977,7 +4002,7 @@ export default function MohammadLedgerApp() {
             }}
           >
             <span>أدفع لهم</span>
-            <strong>{money(totals.iOwePeople)}</strong>
+            <BalanceAmountPair value={balanceOverview.payable} />
           </button>
           <button
             type="button"

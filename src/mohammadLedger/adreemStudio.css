@@ -755,8 +755,8 @@
   gap: 10px;
 }
 .ml3-balance-ledger {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
   margin: 0;
   padding: 4px;
   border: 1px solid color-mix(in srgb, var(--accounts) 13%, var(--line));
@@ -764,7 +764,11 @@
   background: #edf1f3;
 }
 .ml3-balance-ledger button {
-  min-height: 58px;
+  --summary-tone: var(--accounts);
+  --summary-soft: var(--accounts-soft);
+  position: relative;
+  min-height: 68px;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 31px minmax(0, 1fr);
   align-items: center;
@@ -772,35 +776,91 @@
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 6px 8px;
-  background: transparent;
+  background: color-mix(in srgb, var(--summary-soft) 55%, #fff);
   color: var(--ink);
   text-align: start;
   box-shadow: none;
-  transition: background-color 150ms ease-out, border-color 150ms ease-out, transform 150ms ease-out;
+  animation: ml3-balance-card-in 340ms both cubic-bezier(0.2, 0.78, 0.24, 1);
+  transition: background-color 180ms ease-out, border-color 180ms ease-out, box-shadow 180ms ease-out, transform 180ms ease-out;
 }
+.ml3-balance-ledger button:nth-child(2) { animation-delay: 45ms; }
+.ml3-balance-ledger button:nth-child(3) { animation-delay: 90ms; }
+.ml3-balance-ledger button:nth-child(4) { animation-delay: 135ms; }
+.ml3-balance-ledger button::after {
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--summary-tone);
+  content: '';
+  opacity: 0.72;
+}
+[dir='rtl'] .ml3-balance-ledger button::after { border-radius: 3px 0 0 3px; }
+.ml3-balance-ledger button.is-cash { --summary-tone: #187b58; --summary-soft: #e7f6ef; }
+.ml3-balance-ledger button.is-bank { --summary-tone: #2466a2; --summary-soft: #e8f1fa; }
+.ml3-balance-ledger button.is-positive { --summary-tone: var(--positive); --summary-soft: var(--positive-soft); }
+.ml3-balance-ledger button.is-negative { --summary-tone: var(--negative); --summary-soft: var(--negative-soft); }
 .ml3-balance-ledger button i {
   width: 30px;
   height: 30px;
   display: grid;
   place-items: center;
   border-radius: 6px;
-  background: var(--accounts-soft);
-  color: var(--accounts);
+  background: #fff;
+  color: var(--summary-tone);
   font-style: normal;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--summary-tone) 13%, transparent);
+  transition: transform 180ms ease-out, box-shadow 180ms ease-out;
 }
 .ml3-balance-ledger button > span { min-width: 0; display: grid; gap: 1px; }
-.ml3-balance-ledger button > span > b { overflow: hidden; color: var(--muted); font-size: 0.64rem; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-balance-pair { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+.ml3-balance-ledger button > span > b { overflow: hidden; color: var(--summary-tone); font-size: 0.65rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balance-pair {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  direction: ltr;
+}
 .ml3-balance-pair strong,
-.ml3-balance-pair small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-balance-pair strong { color: var(--ink); font-size: 0.79rem; }
-.ml3-balance-pair small { color: var(--muted); font-size: 0.62rem; font-weight: 750; }
-.ml3-balance-ledger button.is-positive i { background: var(--positive-soft); color: var(--positive); }
-.ml3-balance-ledger button.is-negative i { background: var(--negative-soft); color: var(--negative); }
-.ml3-balance-ledger button.is-positive .ml3-balance-pair strong { color: var(--positive); }
-.ml3-balance-ledger button.is-negative .ml3-balance-pair strong { color: var(--negative); }
+.ml3-balance-pair small {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  border: 1px solid color-mix(in srgb, var(--summary-tone, var(--accounts)) 13%, transparent);
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  font-size: 0.67rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ml3-balance-pair strong > span,
+.ml3-balance-pair small > span { flex: 0 0 auto; color: var(--summary-tone, var(--accounts)); font-size: 0.54rem; font-weight: 850; }
 .ml3-balance-ledger button:hover,
-.ml3-balance-ledger button.is-active { border-color: var(--line); background: #fff; transform: translateY(-1px); }
+.ml3-balance-ledger button.is-active {
+  border-color: color-mix(in srgb, var(--summary-tone) 36%, var(--line));
+  background: #fff;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--summary-tone) 10%, transparent);
+  transform: translateY(-2px);
+}
+.ml3-balance-ledger button:hover i { transform: translateY(-2px) scale(1.04); box-shadow: 0 7px 16px color-mix(in srgb, var(--summary-tone) 18%, transparent); }
+.ml3-balance-ledger button:active { transform: translateY(0) scale(0.985); }
+
+.ml3-home-card .ml3-balance-pair { width: 100%; margin-top: 3px; }
+.ml3-home-card.is-positive { --summary-tone: var(--positive); }
+.ml3-home-card.is-negative { --summary-tone: var(--negative); }
+.ml3-home-card .ml3-balance-pair strong,
+.ml3-home-card .ml3-balance-pair small { font-size: 0.72rem; }
+
+@keyframes ml3-balance-card-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .ml3-balances-workspace {
   min-width: 0;
@@ -1374,19 +1434,19 @@
   .ml3-picker-results { max-height: 210px; }
 
   .ml3-today-panel { position: static; max-height: none; box-shadow: none; }
-  .ml3-balance-ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; }
+  .ml3-balance-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 3px; }
   .ml3-balance-ledger button {
-    min-height: 61px;
-    grid-template-columns: 1fr;
-    justify-items: start;
-    gap: 2px;
-    padding: 5px 6px;
+    min-height: 66px;
+    grid-template-columns: 27px minmax(0, 1fr);
+    justify-items: stretch;
+    gap: 6px;
+    padding: 5px 7px;
   }
-  .ml3-balance-ledger button i { display: none; }
+  .ml3-balance-ledger button i { width: 27px; height: 27px; display: grid; }
   .ml3-balance-ledger button > span > b { font-size: 0.61rem; white-space: normal; }
-  .ml3-balance-pair { display: grid; gap: 0; }
-  .ml3-balance-pair strong { font-size: 0.69rem; }
-  .ml3-balance-pair small { font-size: 0.58rem; }
+  .ml3-balance-pair { gap: 3px; }
+  .ml3-balance-pair strong,
+  .ml3-balance-pair small { padding-inline: 3px; font-size: 0.62rem; }
   .ml3-balances-workspace { grid-template-columns: 1fr; gap: 7px; }
   .ml3-account-switcher {
     position: static;
@@ -1436,9 +1496,12 @@
   .ml3-history-filters > input,
   .ml3-history-filters > select:last-child { grid-column: 1; }
   .ml3-review-queue { grid-template-columns: 1fr; }
-  .ml3-balance-ledger button { min-height: 59px; padding-inline: 4px; }
+  .ml3-balance-ledger button { min-height: 64px; padding-inline: 5px; }
   .ml3-balance-ledger button > span > b { font-size: 0.58rem; }
-  .ml3-balance-pair strong { font-size: 0.64rem; }
+  .ml3-balance-pair strong,
+  .ml3-balance-pair small { font-size: 0.58rem; }
+  .ml3-balance-pair strong > span,
+  .ml3-balance-pair small > span { font-size: 0.48rem; }
   .ml3-account-switcher button strong { font-size: 0.6rem; }
   .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(80px, auto); gap: 5px; }
 }

@@ -373,6 +373,8 @@ describe('MohammadLedgerApp people account views', () => {
       bucket('person-usd', VALUE_KINDS.RECEIVABLE, 0, -80),
       bucket('asset', VALUE_KINDS.ASSET, 9000, 0),
     ])).toEqual({
+      cash: { dinar: 1500, usd: 0 },
+      bank: { dinar: 0, usd: 300 },
       money: { dinar: 1500, usd: 300 },
       receivable: { dinar: 700, usd: 0 },
       payable: { dinar: 0, usd: 80 },
