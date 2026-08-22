@@ -5,6 +5,7 @@ import {
   ACCOUNT_OPENING_DIRECTIONS,
   accountChoiceKind,
   accountChoiceKindLabel,
+  accountDetailDisplayName,
   accountDetailName,
   accountContextLabel,
   accountDisplayName,
@@ -53,8 +54,9 @@ describe('account display wording', () => {
     const asset = { ownerName: 'الشاحنة', subAccountName: 'أصل', type: ACCOUNT_TYPES.ASSET, valueKind: VALUE_KINDS.ASSET }
 
     expect(accountPrimaryName(person)).toBe('سعيد')
-    expect(accountContextLabel(person)).toBe('كاش بيننا · دينار')
-    expect(accountDisplayName(person)).toBe('سعيد · كاش بيننا · دينار')
+    expect(accountDetailDisplayName(person)).toBe('كاش')
+    expect(accountContextLabel(person)).toBe('كاش · دينار')
+    expect(accountDisplayName(person)).toBe('سعيد · كاش · دينار')
     expect(accountDisplayName(cash)).toBe('خزنة البيت · كاش · دينار')
     expect(accountDisplayName(bank)).toBe('الجمهورية · حساب مصرفي · دولار')
     expect(accountDisplayName(asset)).toBe('الشاحنة · أصل')
@@ -69,8 +71,8 @@ describe('account display wording', () => {
     expect(accountChoiceKind({ valueKind: VALUE_KINDS.CASH })).toBe(VALUE_KINDS.CASH)
     expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.CASH })).toBe('كاش')
     expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.BANK })).toBe('مصرف')
-    expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.RECEIVABLE, subAccountName: 'كاش بيننا' })).toBe('كاش بيننا')
-    expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.RECEIVABLE, subAccountName: 'شيك بيننا' })).toBe('شيك بيننا')
+    expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.RECEIVABLE, subAccountName: 'كاش بيننا' })).toBe('كاش')
+    expect(accountChoiceKindLabel({ valueKind: VALUE_KINDS.RECEIVABLE, subAccountName: 'شيك بيننا' })).toBe('شيك')
   })
 
   it('moves the visible name safely when the account family changes', () => {

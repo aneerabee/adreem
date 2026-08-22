@@ -333,6 +333,14 @@ export function accountDetailName(account = {}) {
   return displaySubAccountName(text)
 }
 
+export function accountDetailDisplayName(account = {}) {
+  const detail = accountDetailName(account)
+  if (detail === 'كاش بيننا') return 'كاش'
+  if (detail === 'شيك بيننا') return 'شيك'
+  if (detail === 'دولار بيننا') return 'دولار'
+  return detail
+}
+
 export function accountNeedsCurrency(draftOrPreset = {}) {
   if (isCounterpartyBundleDraft(draftOrPreset) || draftOrPreset.counterpartyBundle === true) return false
   const valueKind = draftOrPreset.valueKind
@@ -431,8 +439,8 @@ export function accountContextLabel(account = {}) {
   if (kind === VALUE_KINDS.EXPENSE) return 'نوع مصروف'
   if (kind === VALUE_KINDS.REVIEW) return 'مراجعة'
   if (kind === VALUE_KINDS.RECEIVABLE) {
-    const detail = accountDetailName({ ...account, type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE })
-    return `${detail || 'رصيد بيننا'}${currencySuffix}`
+    const detail = accountDetailDisplayName({ ...account, type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE })
+    return `${detail || 'رصيد'}${currencySuffix}`
   }
   return accountKindLabel(account)
 }
@@ -448,8 +456,8 @@ export function accountChoiceKindLabel(account = {}) {
   const kind = accountChoiceKind(account)
   if (kind === VALUE_KINDS.CASH) return 'كاش'
   if (kind === VALUE_KINDS.BANK) return 'مصرف'
-  if (kind === 'person-bank') return 'شيك بيننا'
-  if (kind === 'person-cash') return 'كاش بيننا'
+  if (kind === 'person-bank') return 'شيك'
+  if (kind === 'person-cash') return 'كاش'
   if (kind === 'person-usd') return 'دولار'
   if (kind === VALUE_KINDS.PROJECT) return 'مشروع'
   if (kind === VALUE_KINDS.ASSET) return 'أصل'

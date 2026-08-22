@@ -286,10 +286,10 @@ async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money', n
   sessions.set(ctx.chatId, ctx.userId, session)
   const balancePair = (value) => `${formatMoney(value.dinar, CURRENCIES.DINAR)} · ${formatMoney(value.usd, CURRENCIES.USD)}`
   const accountLegend = accountChoiceLegendText(visibleBuckets.map((bucket) => bucket.account))
-  const filterLabel = { money: 'فلوسي', collect: 'لي عند الناس', pay: 'عليّ للناس', separate: 'حسابات منفصلة', all: 'كل الحسابات' }[filter]
+  const filterLabel = { money: 'فلوسي', collect: 'أقبض من الناس', pay: 'أدفع للناس', separate: 'حسابات منفصلة', all: 'كل الحسابات' }[filter]
   const noticeText = notice ? `\n<blockquote>${escapeHtml(notice)}</blockquote>` : ''
   const text = allBuckets.length
-    ? `<b>ADREEM · الأرصدة</b>${noticeText}\n<blockquote>${escapeHtml(`فلوسي\n${balancePair(summary.money)}\n\nلي عند الناس\n${balancePair(summary.collect)}\n\nعليّ للناس\n${balancePair(summary.pay)}`)}</blockquote>\n\n<b>${escapeHtml(filterLabel)}</b>\n<code>${filteredBuckets.length} حساب · ${page + 1}/${pageCount}</code>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}${visibleBuckets.length ? '' : '\n<blockquote>لا توجد حسابات في هذا القسم.</blockquote>'}`
+    ? `<b>ADREEM · الأرصدة</b>${noticeText}\n<blockquote>${escapeHtml(`فلوسي\n${balancePair(summary.money)}\n\nأقبض من الناس\n${balancePair(summary.collect)}\n\nأدفع للناس\n${balancePair(summary.pay)}`)}</blockquote>\n\n<b>${escapeHtml(filterLabel)}</b>\n<code>${filteredBuckets.length} حساب · ${page + 1}/${pageCount}</code>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}${visibleBuckets.length ? '' : '\n<blockquote>لا توجد حسابات في هذا القسم.</blockquote>'}`
     : '<b>ADREEM · الأرصدة</b>\n<blockquote>لا توجد حسابات.\nأنشئ حسابًا من «المزيد».</blockquote>'
   return sendScreen(ctx, text, accountsBrowserKeyboard(visibleBuckets, session))
 }

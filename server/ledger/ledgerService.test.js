@@ -6,6 +6,7 @@ import {
   appendTelegramMovement,
   appendTelegramReconciliation,
   buildLedgerSnapshot,
+  formatMoney,
   getMovementAccounts,
   parseAmountText,
   parseBalanceText,
@@ -13,6 +14,13 @@ import {
   resolveTelegramReviewMovement,
   telegramUpdateIdempotencyKey,
 } from './ledgerService.js'
+
+describe('telegram exact money formatting', () => {
+  it('does not round a net total beyond the ordinary numeric limit', () => {
+    expect(formatMoney(9_999_999_999_999_990n, CURRENCIES.DINAR)).toBe('9,999,999,999,999,990 د.ل')
+    expect(formatMoney(-9_999_999_999_999_990n, CURRENCIES.USD)).toBe('-9,999,999,999,999,990 $')
+  })
+})
 
 function memoryRepository(initialState = createFallbackLedgerState()) {
   let state = initialState

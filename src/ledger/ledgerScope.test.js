@@ -72,6 +72,63 @@ describe('ADREEM account summary scope', () => {
     expect(rows).toHaveLength(4)
   })
 
+  it('shows and counts only accounts with a non-zero rounded balance', () => {
+    const position = buildNetPosition([
+      bucket('zero', VALUE_KINDS.CASH, 0, 0),
+      bucket('tiny', VALUE_KINDS.CASH, 0.49, -0.49),
+      bucket('invalid', VALUE_KINDS.BANK, Number.NaN, Number.POSITIVE_INFINITY),
+      bucket('unsafe', VALUE_KINDS.BANK, Number.MAX_SAFE_INTEGER + 1, 0),
+      bucket('owed-to-me', VALUE_KINDS.RECEIVABLE, 1, 0),
+      bucket('i-owe', VALUE_KINDS.RECEIVABLE, -1, 0),
+      bucket('usd', VALUE_KINDS.CASH, 0, 1),
+    ])
+
+    expect(position).toMatchObject({ dinar: 0, usd: 1, accountCount: 3 })
+    expect(position.contributions.map((item) => item.accountId)).toEqual(['owed-to-me', 'i-owe', 'usd'])
+  })
+
+  it('preserves every supported whole-number sign and currency exactly', () => {
+    const supportedValues = [
+      -999_999_999_999_999,
+      -1_000_000,
+      -1,
+      0,
+      1,
+      1_000_000,
+      999_999_999_999_999,
+    ]
+
+    for (const amount of supportedValues) {
+      const dinar = buildNetPosition([bucket(`dinar-${amount}`, VALUE_KINDS.CASH, amount, 0)])
+      const usd = buildNetPosition([bucket(`usd-${amount}`, VALUE_KINDS.CASH, 0, amount)])
+      expect(dinar).toMatchObject({ dinar: amount, usd: 0, accountCount: amount === 0 ? 0 : 1 })
+      expect(usd).toMatchObject({ dinar: 0, usd: amount, accountCount: amount === 0 ? 0 : 1 })
+    }
+  })
+
+  it('keeps a multi-account total exact beyond the ordinary numeric limit', () => {
+    const perAccount = 999_999_999_999_999
+    const rows = Array.from({ length: 10 }, (_, index) => (
+      bucket(`large-${index}`, VALUE_KINDS.CASH, perAccount, -perAccount)
+    ))
+    const position = buildNetPosition(rows)
+
+    expect(position).toMatchObject({
+      dinar: 9_999_999_999_999_990n,
+      usd: -9_999_999_999_999_990n,
+      accountCount: 10,
+    })
+    expect(convertNetPosition(position, 7.5, 'LYD')).toEqual({
+      ok: false,
+      error: 'نتيجة الصافي أكبر من الحد المسموح.',
+    })
+  })
+
+  it('fails closed when the balance-row collection is missing or malformed', () => {
+    expect(buildNetPosition(null)).toEqual({ dinar: 0, usd: 0, accountCount: 0, contributions: [] })
+    expect(buildNetPosition({ account: { id: 'not-a-list' } })).toEqual({ dinar: 0, usd: 0, accountCount: 0, contributions: [] })
+  })
+
   it('handles sets, duplicate ids, unknown ids, and excluding every account', () => {
     const rows = [
       bucket('cash', VALUE_KINDS.CASH, 10_000),
@@ -113,5 +170,11 @@ describe('ADREEM account summary scope', () => {
     expect(convertNetPosition(position, 7.5, 'USD')).toEqual({ ok: true, currency: 'USD', amount: 1_500, rate: 7.5 })
     expect(convertNetPosition(position, 0, 'LYD')).toMatchObject({ ok: false })
     expect(convertNetPosition(position, Number.NaN, 'USD')).toMatchObject({ ok: false })
+    expect(convertNetPosition({ dinar: Number.MAX_SAFE_INTEGER + 1, usd: 0 }, 7.5, 'USD')).toMatchObject({ ok: false })
+    expect(convertNetPosition({ dinar: 0, usd: Number.MAX_SAFE_INTEGER }, 2, 'LYD')).toEqual({
+      ok: false,
+      error: 'نتيجة الصافي أكبر من الحد المسموح.',
+    })
+    expect(convertNetPosition({ dinar: 1, usd: 1 }, Number.MAX_VALUE, 'LYD')).toMatchObject({ ok: false })
   })
 })

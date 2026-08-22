@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { accountPresetGroups, accountPresets, accountPrimaryName } from '../../src/ledger/accountConfig.js'
+import { VALUE_KINDS } from '../../src/ledger/accountCatalog.js'
+import { accountDetailDisplayName, accountPresetGroups, accountPresets, accountPrimaryName } from '../../src/ledger/accountConfig.js'
 import { CURRENCIES } from '../../src/ledger/ledgerCore.js'
 import { movementTypeOptions } from '../../src/ledger/movementConfig.js'
 import { preserveUiData } from '../../src/ledger/uiTranslation.js'
@@ -126,7 +127,7 @@ function accountGroupIcon(key) {
 
 export function accountDetailKeyboard(selectedDetail = '', detailOptions = []) {
   const rows = detailOptions.map((detail, index) => ([{
-    text: `${selectedDetail === detail ? '✓ ' : ''}${detail}`,
+    text: `${selectedDetail === detail ? '✓ ' : ''}${accountDetailDisplayName({ subAccountName: detail, valueKind: VALUE_KINDS.RECEIVABLE })}`,
     callback_data: `acct:detail:${index}`,
     style: selectedDetail === detail ? 'success' : 'primary',
   }]))

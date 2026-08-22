@@ -22,6 +22,9 @@ const NET_SEARCH_LABELS = Object.freeze({
   [ACCOUNT_CURRENCY_KINDS.MULTI]: 'دينار دولار متعدد',
 })
 
+const MAX_SAFE_MONEY_BIGINT = BigInt(Number.MAX_SAFE_INTEGER)
+const MIN_SAFE_MONEY_BIGINT = BigInt(Number.MIN_SAFE_INTEGER)
+
 export function accountSupportsNetScope(account = {}) {
   return NET_ELIGIBLE_VALUE_KINDS.has(account.valueKind)
 }
@@ -63,6 +66,19 @@ function netContributionImpact(item = {}) {
   return Math.abs(Number(item.dinar || 0)) + Math.abs(Number(item.usd || 0))
 }
 
+function roundedNetAmount(value) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return 0
+  const rounded = Math.round(amount)
+  return Number.isSafeInteger(rounded) ? rounded : 0
+}
+
+function exactNetTotal(contributions, currencyField) {
+  const total = contributions.reduce((sum, item) => sum + BigInt(item[currencyField]), 0n)
+  if (total >= MIN_SAFE_MONEY_BIGINT && total <= MAX_SAFE_MONEY_BIGINT) return Number(total)
+  return total
+}
+
 export function filterNetContributions(contributions = [], query = '') {
   const normalizedQuery = normalizedNetSearchText(query)
   return (Array.isArray(contributions) ? contributions : [])
@@ -89,21 +105,23 @@ export function filterNetContributions(contributions = [], query = '') {
 }
 
 export function buildNetPosition(rows = [], excludedAccountIds = []) {
+  const balanceRows = Array.isArray(rows) ? rows : []
   const excluded = excludedAccountIds instanceof Set
     ? excludedAccountIds
     : new Set(Array.isArray(excludedAccountIds) ? excludedAccountIds : [])
-  const contributions = rows
+  const contributions = balanceRows
     .filter((row) => isAccountIncludedInNet(row?.account))
     .filter((row) => !excluded.has(row.account.id))
     .map((row) => ({
       accountId: row.account.id,
       account: row.account,
-      dinar: Math.round(Number(row.dinar || 0)),
-      usd: Math.round(Number(row.usd || 0)),
+      dinar: roundedNetAmount(row.dinar),
+      usd: roundedNetAmount(row.usd),
     }))
+    .filter((item) => item.dinar !== 0 || item.usd !== 0)
   return {
-    dinar: contributions.reduce((total, item) => total + item.dinar, 0),
-    usd: contributions.reduce((total, item) => total + item.usd, 0),
+    dinar: exactNetTotal(contributions, 'dinar'),
+    usd: exactNetTotal(contributions, 'usd'),
     accountCount: contributions.length,
     contributions,
   }
@@ -116,9 +134,16 @@ export function convertNetPosition(position = {}, requestedRate, targetCurrency 
   }
   const dinar = Number(position.dinar || 0)
   const usd = Number(position.usd || 0)
+  if (!Number.isSafeInteger(dinar) || !Number.isSafeInteger(usd)) {
+    return { ok: false, error: 'نتيجة الصافي أكبر من الحد المسموح.' }
+  }
   const currency = targetCurrency === 'USD' ? 'USD' : 'LYD'
-  const amount = currency === 'USD'
+  const rawAmount = currency === 'USD'
     ? Math.round(usd + (dinar / rate))
     : Math.round(dinar + (usd * rate))
+  if (!Number.isSafeInteger(rawAmount)) {
+    return { ok: false, error: 'نتيجة الصافي أكبر من الحد المسموح.' }
+  }
+  const amount = rawAmount
   return { ok: true, currency, amount, rate }
 }

@@ -80,6 +80,7 @@ export function runTelegramIdempotentStateAction(state, idempotencyKey, operatio
 }
 
 export function formatInteger(value) {
+  if (typeof value === 'bigint') return MONEY_FORMAT.format(value)
   return MONEY_FORMAT.format(Math.round(Number(value || 0)))
 }
 

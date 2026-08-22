@@ -1,5 +1,5 @@
 import { ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog.js'
-import { accountDetailName, accountNeedsCurrency, accountPresetFor, accountPrimaryName } from './accountConfig.js'
+import { accountDetailDisplayName, accountDetailName, accountNeedsCurrency, accountPresetFor, accountPrimaryName } from './accountConfig.js'
 import { MOVEMENT_STATUSES, validateAccount, validateMovement } from './ledgerCore.js'
 
 const STRUCTURE_LOCKING_MOVEMENT_STATUSES = new Set([
@@ -19,7 +19,7 @@ export function accountEditSnapshot(account = {}) {
 
 function accountEditTypeLabel(account = {}) {
   const preset = accountPresetFor(account.type, account.valueKind)
-  return account.valueKind === VALUE_KINDS.RECEIVABLE ? `${preset.title} · ${accountDetailName(account)}` : preset.title
+  return account.valueKind === VALUE_KINDS.RECEIVABLE ? `${preset.title} · ${accountDetailDisplayName(account)}` : preset.title
 }
 
 function accountEditCurrencyLabel(account = {}) {

@@ -234,6 +234,7 @@
   border-radius: 8px;
   background: var(--finance-paper);
   box-shadow: var(--finance-shadow);
+  scroll-margin-top: 8px;
 }
 
 .ml3-account-switcher {
@@ -620,6 +621,19 @@
 }
 .ml3-balance-pane-title h2 { min-width: 0; overflow: hidden; margin: 0; color: var(--finance-ink); font-size: 0.96rem; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-balance-pane-title > span { flex: 0 0 auto; color: var(--balance-focus); font-size: 0.66rem; font-weight: 820; }
+.adreem-balance-focus-reset {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--balance-focus) 22%, var(--finance-line));
+  border-radius: 7px;
+  background: var(--balance-focus-soft);
+  color: var(--balance-focus);
+}
+.adreem-balance-focus-reset:hover { border-color: var(--balance-focus); background: var(--finance-surface); }
 
 .ml3-account-toolbar {
   min-width: 0;

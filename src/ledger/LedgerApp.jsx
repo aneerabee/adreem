@@ -10,7 +10,7 @@ import './adreemStudio.css'
 import './adreemFinance.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
-import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
+import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailDisplayName, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
 import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
@@ -55,6 +55,12 @@ const COUNTERPARTY_BALANCE_FILTERS = Object.freeze([
   { key: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, label: 'شيك', icon: Landmark },
   { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, label: 'دولار', icon: CircleDollarSign },
 ])
+const BALANCE_FOCUS_LABELS = Object.freeze({
+  cash: 'الكاش',
+  bank: 'المصرف',
+  receivable: 'أقبض من الناس',
+  payable: 'أدفع للناس',
+})
 const MOVEMENT_REQUEST_KEYS = Object.freeze({
   accountProfile: 'account-profile',
   history: 'history',
@@ -68,6 +74,20 @@ function scrollLedgerToTop(behavior = 'auto') {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
   document.querySelector('.adreem-view')?.scrollTo({ top: 0, left: 0, behavior })
   window.scrollTo({ top: 0, left: 0, behavior })
+}
+
+function scrollToBalancesWorkspace() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      document.querySelector('.ml3-balances-workspace')?.scrollIntoView({
+        block: 'start',
+        inline: 'nearest',
+        behavior: reducedMotion ? 'auto' : 'smooth',
+      })
+    })
+  })
 }
 
 const accountGroupTabs = [
@@ -286,6 +306,7 @@ export function parseMoneyAmount(value) {
 }
 
 export function formatMoneyNumber(value) {
+  if (typeof value === 'bigint') return value.toLocaleString('en-US')
   const number = Number(value || 0)
   if (!Number.isFinite(number)) return '0'
   return Math.round(number).toLocaleString('en-US', { maximumFractionDigits: 0 })
@@ -1066,7 +1087,7 @@ export function NetPositionPanel({
         </div>
         <output className={conversion.ok && conversion.amount < 0 ? 'is-negative' : ''}>
           <small>النتيجة</small>
-          <strong>{conversion.ok ? money(conversion.amount, conversion.currency) : 'أدخل السعر'}</strong>
+          <strong>{conversion.ok ? money(conversion.amount, conversion.currency) : conversion.error || 'أدخل السعر'}</strong>
         </output>
       </div>
       <details className="adreem-net-accounts">
@@ -1371,6 +1392,13 @@ export function filterCounterpartyGroupsByQuery(groups = [], query = '') {
   }))
 }
 
+export function filterMoneyBalanceRows(rows = [], focus = '') {
+  const source = Array.isArray(rows) ? rows : []
+  if (focus === 'cash') return source.filter((bucket) => bucket.account?.valueKind === VALUE_KINDS.CASH)
+  if (focus === 'bank') return source.filter((bucket) => bucket.account?.valueKind === VALUE_KINDS.BANK)
+  return source
+}
+
 export function unifiedCounterpartyGroups(views = {}, query = '', filterKey = 'all') {
   const source = normalizeAccountSearchText(query) ? views.all || [] : views.withBalance || []
   return filterCounterpartyGroups(filterCounterpartyGroupsByQuery(source, query), filterKey)
@@ -1384,7 +1412,7 @@ function CounterpartyChannel({ bucket }) {
     <span className={`adreem-counterparty-channel is-${channelKind} ${rowTone}`}>
       <i><AccountChoiceIcon account={bucket.account} size={14} /></i>
       <small>{accountChoiceKindLabel(bucket.account)}</small>
-      <b>{amount === 0 ? 'صفر' : `${amount > 0 ? 'لي' : 'عليّ'} ${money(Math.abs(amount), currency)}`}</b>
+      <b>{amount === 0 ? 'صفر' : `${amount > 0 ? 'أقبض' : 'أدفع'} ${money(Math.abs(amount), currency)}`}</b>
     </span>
   )
 }
@@ -1392,7 +1420,7 @@ function CounterpartyChannel({ bucket }) {
 export function CounterpartyCard({ group, isFocused = false, isDimmed = false, onFocus, onOpen }) {
   const hasReceivable = group.receivable.dinar > 0 || group.receivable.usd > 0
   const hasPayable = group.payable.dinar > 0 || group.payable.usd > 0
-  const balanceStatus = hasReceivable && hasPayable ? 'لي وعليّ' : hasReceivable ? 'لي عنده' : hasPayable ? 'عليّ له' : 'مسكر'
+  const balanceStatus = hasReceivable && hasPayable ? 'أقبض وأدفع' : hasReceivable ? 'أقبض منه' : hasPayable ? 'أدفع له' : 'مسكر'
   const tone = hasReceivable && hasPayable ? 'mixed' : hasReceivable ? 'receivable' : hasPayable ? 'payable' : 'zero'
   const previewRows = group.rows.filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
   return (
@@ -1421,7 +1449,7 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
               <button type="button" key={bucket.account.id} className={rowTone} onClick={() => onOpen?.(bucket.account.id)}>
                 <i><AccountChoiceIcon account={bucket.account} size={15} /></i>
                 <span>{accountChoiceKindLabel(bucket.account)}</span>
-                <b>{amount === 0 ? 'صفر' : `${amount > 0 ? 'لي' : 'عليّ'} ${money(Math.abs(amount), currency)}`}</b>
+                <b>{amount === 0 ? 'صفر' : `${amount > 0 ? 'أقبض' : 'أدفع'} ${money(Math.abs(amount), currency)}`}</b>
                 <ChevronLeft aria-hidden="true" size={14} />
               </button>
             )
@@ -1987,7 +2015,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
           {preset.detailLabel || 'نوع التعامل'}
           <select value={draft.subAccountName || detailOptions[0]} disabled={structureLocked} onChange={(event) => setDraft((current) => ({ ...current, subAccountName: event.target.value }))}>
             {detailOptions.map((option) => (
-              <option key={option} value={option}>{option}</option>
+              <option key={option} value={option}>{accountDetailDisplayName({ ...draft, subAccountName: option })}</option>
             ))}
           </select>
         </label>
@@ -2579,6 +2607,7 @@ export default function LedgerApp() {
   const [activeSection, setActiveSection] = useState(initialNavigation.section)
   const [activeEntryMode, setActiveEntryMode] = useState(initialNavigation.entryMode)
   const [activeAccountGroup, setActiveAccountGroup] = useState(initialNavigation.accountGroup)
+  const [balanceFocus, setBalanceFocus] = useState(initialNavigation.balanceFocus)
   const [activeAccountPresetGroup, setActiveAccountPresetGroup] = useState('')
   const [movementDraft, setMovementDraft] = useState(() => emptyMovementDraft())
   const [movementAttachmentFile, setMovementAttachmentFile] = useState(null)
@@ -2630,7 +2659,9 @@ export default function LedgerApp() {
   const [separatePage, setSeparatePage] = useState(null)
   const [isSavingSeparateRecord, setIsSavingSeparateRecord] = useState(false)
   const [isLoadingSeparateRecords, setIsLoadingSeparateRecords] = useState(false)
-  const [counterpartyBalanceFilter, setCounterpartyBalanceFilter] = useState('all')
+  const [counterpartyBalanceFilter, setCounterpartyBalanceFilter] = useState(
+    ['receivable', 'payable'].includes(initialNavigation.balanceFocus) ? initialNavigation.balanceFocus : 'all',
+  )
   const [focusedCounterpartyId, setFocusedCounterpartyId] = useState('')
   const [isNetOpen, setIsNetOpen] = useState(false)
   const [netExcludedAccountIds, setNetExcludedAccountIds] = useState([])
@@ -2688,11 +2719,12 @@ export default function LedgerApp() {
       section: activeSection,
       entryMode: activeEntryMode,
       accountGroup: activeAccountGroup,
+      balanceFocus,
     })
     const nextUrl = `${window.location.pathname}${search}${window.location.hash}`
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
     if (nextUrl !== currentUrl) window.history.replaceState(window.history.state, '', nextUrl)
-  }, [activeAccountGroup, activeEntryMode, activeSection])
+  }, [activeAccountGroup, activeEntryMode, activeSection, balanceFocus])
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -2782,7 +2814,9 @@ export default function LedgerApp() {
           {
             key: ACCOUNT_WIZARD_STEPS.DETAIL,
             title: selectedAccountPreset.detailLabel || 'نوع التعامل',
-            summary: activeAccountDetail || 'اختر',
+            summary: activeAccountDetail
+              ? accountDetailDisplayName({ ...accountDraft, subAccountName: activeAccountDetail })
+              : 'اختر',
           },
         ]
       : []),
@@ -3782,6 +3816,25 @@ export default function LedgerApp() {
     )
   }
 
+  function selectAccountGroup(groupKey) {
+    setActiveAccountGroup(groupKey)
+    setBalanceFocus('')
+    setCounterpartyBalanceFilter('all')
+    setFocusedCounterpartyId('')
+  }
+
+  function openBalanceFocus(focus) {
+    const accountGroup = ['cash', 'bank'].includes(focus) ? 'money' : 'people'
+    if (activeSection !== 'accounts') switchSection('accounts')
+    closeNetPanel()
+    setActiveAccountGroup(accountGroup)
+    setBalanceFocus(focus)
+    setCounterpartyBalanceFilter(['receivable', 'payable'].includes(focus) ? focus : 'all')
+    setAccountQuery('')
+    setFocusedCounterpartyId('')
+    scrollToBalancesWorkspace()
+  }
+
   function editMovementStep(step) {
     const targetIndex = visibleMovementSteps.indexOf(step)
     const direction = targetIndex >= 0 && targetIndex < currentMovementStepIndex ? 'back' : 'forward'
@@ -4714,9 +4767,15 @@ export default function LedgerApp() {
     const peopleSource = normalizedAccountQuery ? searchablePeople : peopleBalances
     const visiblePeopleGroups = unifiedCounterpartyGroups(peopleViews, accountQuery, counterpartyBalanceFilter)
     const activeFocusedCounterpartyId = visiblePeopleGroups.some((group) => group.id === focusedCounterpartyId) ? focusedCounterpartyId : ''
+    const activeBalanceFocus = (
+      (activeGroup.key === 'money' && ['cash', 'bank'].includes(balanceFocus))
+      || (activeGroup.key === 'people' && ['receivable', 'payable'].includes(balanceFocus))
+    ) ? balanceFocus : ''
+    const balancePaneTitle = BALANCE_FOCUS_LABELS[activeBalanceFocus]
+      || (activeGroup.key === 'people' ? 'الناس' : activeGroup.title)
     const accountRowsByGroup = {
       people: peopleBalances,
-      money: filterRows(moneyRows),
+      money: filterRows(filterMoneyBalanceRows(moneyRows, activeBalanceFocus)),
       assets: filterRows(balancesByKind.assets || []),
       expenses: filterRows(balancesByKind.expenses || []),
       separate: [],
@@ -4728,25 +4787,21 @@ export default function LedgerApp() {
     return (
       <section className={`ml3-panel ml3-balances-surface ml3-balances-surface--${activeGroup.key}`}>
         <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة بالدينار والدولار">
-          <Motion.button type="button" className={`is-cash${balanceAmountIsWide(balanceOverview.cash) ? ' has-wide-balance' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeGroup.key === 'money'} onClick={() => setActiveAccountGroup('money')}>
+          <Motion.button type="button" className={`is-cash${balanceAmountIsWide(balanceOverview.cash) ? ' has-wide-balance' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeBalanceFocus === 'cash'} onClick={() => openBalanceFocus('cash')}>
             <i><Banknote aria-hidden="true" size={18} /></i>
-            <span><b>كاش عندي</b><BalanceAmountPair value={balanceOverview.cash} /></span>
+            <span><b>الكاش</b><BalanceAmountPair value={balanceOverview.cash} /></span>
           </Motion.button>
-          <Motion.button type="button" className={`is-bank${balanceAmountIsWide(balanceOverview.bank) ? ' has-wide-balance' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeGroup.key === 'money'} onClick={() => setActiveAccountGroup('money')}>
+          <Motion.button type="button" className={`is-bank${balanceAmountIsWide(balanceOverview.bank) ? ' has-wide-balance' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeBalanceFocus === 'bank'} onClick={() => openBalanceFocus('bank')}>
             <i><Landmark aria-hidden="true" size={18} /></i>
-            <span><b>في المصرف</b><BalanceAmountPair value={balanceOverview.bank} /></span>
+            <span><b>المصرف</b><BalanceAmountPair value={balanceOverview.bank} /></span>
           </Motion.button>
-          <Motion.button type="button" className={`is-positive${balanceAmountIsWide(balanceOverview.receivable) ? ' has-wide-balance' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeGroup.key === 'people'} onClick={() => {
-            setActiveAccountGroup('people')
-          }}>
+          <Motion.button type="button" className={`is-positive${balanceAmountIsWide(balanceOverview.receivable) ? ' has-wide-balance' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeBalanceFocus === 'receivable'} onClick={() => openBalanceFocus('receivable')}>
             <i><ArrowDownToLine aria-hidden="true" size={18} /></i>
-            <span><b>لي عند الناس</b><BalanceAmountPair value={balanceOverview.receivable} /></span>
+            <span><b>أقبض من الناس</b><BalanceAmountPair value={balanceOverview.receivable} /></span>
           </Motion.button>
-          <Motion.button type="button" className={`is-negative${balanceAmountIsWide(balanceOverview.payable) ? ' has-wide-balance' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeGroup.key === 'people'} onClick={() => {
-            setActiveAccountGroup('people')
-          }}>
+          <Motion.button type="button" className={`is-negative${balanceAmountIsWide(balanceOverview.payable) ? ' has-wide-balance' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeBalanceFocus === 'payable'} onClick={() => openBalanceFocus('payable')}>
             <i><ArrowUpFromLine aria-hidden="true" size={18} /></i>
-            <span><b>عليّ للناس</b><BalanceAmountPair value={balanceOverview.payable} /></span>
+            <span><b>أدفع للناس</b><BalanceAmountPair value={balanceOverview.payable} /></span>
           </Motion.button>
         </div>
 
@@ -4786,7 +4841,7 @@ export default function LedgerApp() {
                   ? allSeparateRecords.length
                   : accountRowsByGroup[group.key]?.length || 0
               return (
-                <button type="button" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-current={activeAccountGroup === group.key ? 'true' : undefined} onClick={() => setActiveAccountGroup(group.key)}>
+                <button type="button" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-current={activeAccountGroup === group.key ? 'true' : undefined} onClick={() => selectAccountGroup(group.key)}>
                   {activeAccountGroup === group.key ? <Motion.i className="adreem-motion-selection" layoutId="adreem-balance-group" transition={UI_MOTION_TRANSITION} /> : null}
                   <AccountGroupIcon groupKey={group.key} />
                   <strong>{group.label}</strong>
@@ -4801,8 +4856,13 @@ export default function LedgerApp() {
                 <div className={`ml3-balance-pane-head ${activeGroup.key === 'separate' ? 'is-separate' : ''}`}>
                   <div className="ml3-balance-pane-title">
                     <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
-                    <h2>{activeGroup.key === 'people' ? 'الناس' : activeGroup.title}</h2>
+                    <h2>{balancePaneTitle}</h2>
                     <span>{formatCount(activeGroupCount)}</span>
+                    {activeBalanceFocus ? (
+                      <button type="button" className="adreem-balance-focus-reset" aria-label="عرض الكل" title="عرض الكل" onClick={() => selectAccountGroup(activeGroup.key)}>
+                        <X aria-hidden="true" size={14} />
+                      </button>
+                    ) : null}
                   </div>
                   {activeGroup.key !== 'separate' ? (
                     <label className="ml3-account-toolbar">
@@ -4813,7 +4873,6 @@ export default function LedgerApp() {
                         onChange={(event) => {
                           setAccountQuery(event.target.value)
                           setFocusedCounterpartyId('')
-                          if (activeGroup.key === 'people') setCounterpartyBalanceFilter('all')
                         }}
                         placeholder="ابحث عن حساب"
                       />
@@ -4847,6 +4906,7 @@ export default function LedgerApp() {
                     <div className="adreem-people-controls">
                       <CounterpartyFilters groups={peopleSource} value={counterpartyBalanceFilter} onChange={(nextFilter) => {
                         setCounterpartyBalanceFilter(nextFilter)
+                        setBalanceFocus(['receivable', 'payable'].includes(nextFilter) ? nextFilter : '')
                         setFocusedCounterpartyId('')
                       }} />
                     </div>
@@ -5023,10 +5083,7 @@ export default function LedgerApp() {
           <button
             type="button"
             className={`ml3-home-card is-positive${balanceAmountIsWide(balanceOverview.receivable) ? ' has-wide-balance' : ''}`}
-            onClick={() => {
-              switchSection('accounts')
-              setActiveAccountGroup('people')
-            }}
+            onClick={() => openBalanceFocus('receivable')}
           >
             <span>أقبض من الناس</span>
             <BalanceAmountPair value={balanceOverview.receivable} />
@@ -5034,12 +5091,9 @@ export default function LedgerApp() {
           <button
             type="button"
             className={`ml3-home-card is-negative${balanceAmountIsWide(balanceOverview.payable) ? ' has-wide-balance' : ''}`}
-            onClick={() => {
-              switchSection('accounts')
-              setActiveAccountGroup('people')
-            }}
+            onClick={() => openBalanceFocus('payable')}
           >
-            <span>أدفع لهم</span>
+            <span>أدفع للناس</span>
             <BalanceAmountPair value={balanceOverview.payable} />
           </button>
           <button
@@ -5047,7 +5101,7 @@ export default function LedgerApp() {
             className="ml3-home-card is-money"
             onClick={() => {
               switchSection('accounts')
-              setActiveAccountGroup('money')
+              selectAccountGroup('money')
             }}
           >
             <span>أماكن الفلوس</span>
@@ -5565,7 +5619,7 @@ export default function LedgerApp() {
                             goToAccountWizardStep(accountNeedsCurrencyChoice ? ACCOUNT_WIZARD_STEPS.CURRENCY : accountNeedsOpeningBalance ? ACCOUNT_WIZARD_STEPS.OPENING : ACCOUNT_WIZARD_STEPS.SAVE)
                           }}
                         >
-                          <strong>{option}</strong>
+                          <strong>{accountDetailDisplayName({ ...accountDraft, subAccountName: option })}</strong>
                         </button>
                       ))}
                     </div>

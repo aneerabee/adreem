@@ -33,6 +33,8 @@ import {
   filterMovementHistory,
   filterCounterpartyGroups,
   filterCounterpartyGroupsByQuery,
+  filterMoneyBalanceRows,
+  formatMoneyNumber,
   unifiedCounterpartyGroups,
   mergeAccountsConfirmation,
   mergeAccountReferenceErrors,
@@ -82,6 +84,11 @@ describe('LedgerApp numeric entry', () => {
     preventImplicitNumericSubmit({ key: 'Enter', preventDefault })
 
     expect(preventDefault).toHaveBeenCalledOnce()
+  })
+
+  it('formats exact totals that exceed the ordinary numeric limit without rounding them', () => {
+    expect(formatMoneyNumber(9_999_999_999_999_990n)).toBe('9,999,999,999,999,990')
+    expect(formatMoneyNumber(-9_999_999_999_999_990n)).toBe('-9,999,999,999,999,990')
   })
 })
 
@@ -175,6 +182,28 @@ describe('LedgerApp net position controls', () => {
     expect(markup).not.toContain('مصرف الجمهورية')
     expect(TEMPORARY_NET_RESET_MS).toBe(5 * 60 * 1000)
   })
+
+  it('shows an exact oversized raw total and refuses an unsafe converted result', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <NetPositionPanel
+        position={{
+          dinar: 9_999_999_999_999_990n,
+          usd: -9_999_999_999_999_990n,
+          accountCount: 10,
+          contributions: [],
+        }}
+        rate="7.5"
+        targetCurrency={CURRENCIES.DINAR}
+        onRateChange={() => {}}
+        onTargetCurrencyChange={() => {}}
+        onClose={() => {}}
+      />,
+    ))
+
+    expect(markup).toContain('9,999,999,999,999,990 د.ل')
+    expect(markup).toContain('-9,999,999,999,999,990 $')
+    expect(markup).toContain('نتيجة الصافي أكبر من الحد المسموح.')
+  })
 })
 
 describe('LedgerApp separate accounts', () => {
@@ -247,8 +276,8 @@ describe('LedgerApp movement account picker', () => {
     expect(markup).toContain('lucide-banknote')
     expect(markup).toContain('lucide-landmark')
     expect(markup).toContain('lucide-circle-dollar-sign')
-    expect(markup).toContain('كاش بيننا')
-    expect(markup).toContain('شيك بيننا')
+    expect(markup).toContain('>كاش<')
+    expect(markup).toContain('>شيك<')
     expect(markup).toContain('دولار')
     expect(markup).toContain('12,000 د.ل')
     expect(markup).toContain('أدفع 4,500 د.ل')
@@ -574,6 +603,20 @@ describe('LedgerApp people account views', () => {
     })
   })
 
+  it('opens cash and bank summaries on only their matching money accounts', () => {
+    const rows = [
+      { account: { id: 'cash-lyd', valueKind: VALUE_KINDS.CASH } },
+      { account: { id: 'cash-usd', valueKind: VALUE_KINDS.CASH } },
+      { account: { id: 'bank', valueKind: VALUE_KINDS.BANK } },
+      { account: { id: 'person', valueKind: VALUE_KINDS.RECEIVABLE } },
+    ]
+
+    expect(filterMoneyBalanceRows(rows, 'cash').map((bucket) => bucket.account.id)).toEqual(['cash-lyd', 'cash-usd'])
+    expect(filterMoneyBalanceRows(rows, 'bank').map((bucket) => bucket.account.id)).toEqual(['bank'])
+    expect(filterMoneyBalanceRows(rows, '')).toBe(rows)
+    expect(filterMoneyBalanceRows(null, 'cash')).toEqual([])
+  })
+
   it('keeps zero-balance people out of current balances but available in the full directory', () => {
     const person = (id, currencyKind) => ({
       id,
@@ -756,9 +799,9 @@ describe('LedgerApp people account views', () => {
     expect(markup).toContain('is-cash-dinar is-positive')
     expect(markup).toContain('is-cheque-dinar is-negative')
     expect(markup).toContain('is-cash-usd is-positive')
-    expect(markup.match(/لي 1,200 د\.ل/g)).toHaveLength(1)
-    expect(markup.match(/عليّ 450 د\.ل/g)).toHaveLength(1)
-    expect(markup.match(/لي 80 \$/g)).toHaveLength(1)
+    expect(markup.match(/أقبض 1,200 د\.ل/g)).toHaveLength(1)
+    expect(markup.match(/أدفع 450 د\.ل/g)).toHaveLength(1)
+    expect(markup.match(/أقبض 80 \$/g)).toHaveLength(1)
   })
 
   it('shows a settled search result in the same people card without empty balance rows', () => {
@@ -829,12 +872,12 @@ describe('LedgerApp people account views', () => {
     expect(markup).toContain('aria-expanded="true"')
     expect(markup.match(/adreem-counterparty-channel-preview/g)).toHaveLength(1)
     expect(markup.match(/adreem-counterparty-channels/g)).toHaveLength(1)
-    expect(markup).toContain('كاش بيننا')
-    expect(markup).toContain('شيك بيننا')
+    expect(markup).toContain('>كاش<')
+    expect(markup).toContain('>شيك<')
     expect(markup).toContain('دولار')
-    expect(markup).toContain('لي 1,200 د.ل')
-    expect(markup).toContain('عليّ 450 د.ل')
-    expect(markup).toContain('لي 80 $')
+    expect(markup).toContain('أقبض 1,200 د.ل')
+    expect(markup).toContain('أدفع 450 د.ل')
+    expect(markup).toContain('أقبض 80 $')
   })
 
   it('describes account edits using clear before and after values', () => {
@@ -854,7 +897,7 @@ describe('LedgerApp people account views', () => {
 
     expect(accountEditChanges(before, after)).toEqual([
       expect.objectContaining({ key: 'name', before: 'سعيد', after: 'شركة سعيد' }),
-      expect.objectContaining({ key: 'type', before: 'شخص أو جهة · كاش بيننا', after: 'شخص أو جهة · شيك بيننا' }),
+      expect.objectContaining({ key: 'type', before: 'شخص أو جهة · كاش', after: 'شخص أو جهة · شيك' }),
       expect.objectContaining({ key: 'currency', before: 'دينار', after: 'دولار' }),
     ])
   })
@@ -881,7 +924,7 @@ describe('LedgerApp English user data protection', () => {
 
       expect(custom).toContain('>دخل · Dinar<')
       expect(custom).not.toContain('>Income · Dinar<')
-      expect(standard).toContain('>Cash between us · Dinar<')
+      expect(standard).toContain('>Cash · Dinar<')
     } finally {
       setActiveUiLanguage('ar')
     }

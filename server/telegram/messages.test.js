@@ -48,7 +48,7 @@ describe('telegram account balance presentation', () => {
     expect(formatAccountBalance(receivable, bucket)).toBe('أقبض منه 12,500 د.ل')
     expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('👤 سعيد · أقبض منه 12,500 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('success')
-    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🟢 سعيد\nكاش بيننا · دينار')
+    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🟢 سعيد\nكاش · دينار')
   })
 
   it('marks money I should pay in red terms', () => {
@@ -57,7 +57,7 @@ describe('telegram account balance presentation', () => {
     expect(formatAccountBalance(receivable, bucket)).toBe('أدفع له 3,200 د.ل')
     expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('👤 سعيد · أدفع له 3,200 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('danger')
-    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🔴 سعيد\nكاش بيننا · دينار')
+    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🔴 سعيد\nكاش · دينار')
   })
 
   it('uses the same visual direction for my own money accounts', () => {
@@ -79,7 +79,7 @@ describe('telegram account balance presentation', () => {
     const bank = { ownerName: 'أنا', subAccountName: 'الجمهورية', valueKind: VALUE_KINDS.BANK }
     const cheque = { ownerName: 'سعيد', subAccountName: 'شيك بيننا', valueKind: VALUE_KINDS.RECEIVABLE }
 
-    expect(accountChoiceLegendText([cash, receivable, bank, cheque, cash])).toBe('💵 كاش · 👤 كاش بيننا · 🏦 مصرف · 🧾 شيك بيننا')
+    expect(accountChoiceLegendText([cash, receivable, bank, cheque, cash])).toBe('💵 كاش · 👤 كاش · 🏦 مصرف · 🧾 شيك')
     expect(stripUiDataProtection(accountChoiceButtonText(receivable, { dinar: 100, usd: 0 }))).not.toContain('كاش بيننا')
   })
 
@@ -105,7 +105,7 @@ describe('telegram account balance presentation', () => {
       ].join('\n'),
     }, 'en')
 
-    expect(localized.text).toContain('🟢 دخل\nCash between us · Dinar')
+    expect(localized.text).toContain('🟢 دخل\nCash · Dinar')
     expect(localized.text).toContain('🟢 مالك\nCash · Dinar')
     expect(localized.text).not.toContain('🟢 Income')
   })
@@ -378,7 +378,7 @@ describe('telegram movement presentation', () => {
 
     expect(card).toContain('<blockquote>')
     expect(card).toContain('🔁 تحويل · 1,250 د.ل · مسودة')
-    expect(card).toContain('كاش عندي · كاش · دينار ← سعيد · كاش بيننا · دينار')
+    expect(card).toContain('كاش عندي · كاش · دينار ← سعيد · كاش · دينار')
     expect(card).toContain('ملاحظة: تجربة &lt;مهمة&gt;')
   })
 
@@ -490,7 +490,7 @@ describe('telegram movement presentation', () => {
     expect(text).toContain('قبل: 2,000 د.ل')
     expect(text).toContain('التغيير: -500 د.ل')
     expect(text).toContain('بعد: 1,500 د.ل')
-    expect(text).toContain('🟢 إلى: سعيد · كاش بيننا · دينار')
+    expect(text).toContain('🟢 إلى: سعيد · كاش · دينار')
     expect(text).toContain('التغيير: +500 د.ل')
     expect(text).toContain('بعد: 600 د.ل')
   })

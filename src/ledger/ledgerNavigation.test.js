@@ -7,12 +7,28 @@ describe('ADREEM ledger navigation', () => {
       section: 'accounts',
       entryMode: 'movement',
       accountGroup: 'people',
+      balanceFocus: '',
     })
     expect(readLedgerNavigation('?entry=account')).toEqual({
       section: 'entry',
       entryMode: 'account',
       accountGroup: 'money',
+      balanceFocus: '',
     })
+  })
+
+  it('keeps only a valid focused balance destination after refresh', () => {
+    expect(readLedgerNavigation('?section=accounts&group=money&focus=cash')).toMatchObject({ accountGroup: 'money', balanceFocus: 'cash' })
+    expect(readLedgerNavigation('?section=accounts&group=people&focus=payable')).toMatchObject({ accountGroup: 'people', balanceFocus: 'payable' })
+    expect(readLedgerNavigation('?section=accounts&group=money&focus=payable').balanceFocus).toBe('')
+    expect(readLedgerNavigation('?section=history&group=people&focus=receivable').balanceFocus).toBe('')
+
+    expect(ledgerNavigationSearch('', {
+      ...DEFAULT_LEDGER_NAVIGATION,
+      section: 'accounts',
+      accountGroup: 'people',
+      balanceFocus: 'receivable',
+    })).toBe('?section=accounts&group=people&focus=receivable')
   })
 
   it('keeps unrelated query values and removes inactive navigation values', () => {

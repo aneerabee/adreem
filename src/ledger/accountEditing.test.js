@@ -172,7 +172,7 @@ describe('account editing', () => {
 
     expect(accountEditChanges(before, after)).toEqual([
       expect.objectContaining({ key: 'name', label: 'الاسم', before: 'أحمد', after: 'شركة أحمد' }),
-      expect.objectContaining({ key: 'type', label: 'نوع الحساب', before: 'شخص أو جهة · كاش بيننا', after: 'شخص أو جهة · شيك بيننا' }),
+      expect.objectContaining({ key: 'type', label: 'نوع الحساب', before: 'شخص أو جهة · كاش', after: 'شخص أو جهة · شيك' }),
     ])
   })
 
