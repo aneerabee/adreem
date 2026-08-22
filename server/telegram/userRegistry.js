@@ -1,9 +1,9 @@
 import { closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomBytes, createHash, pbkdf2Sync, timingSafeEqual } from 'node:crypto'
 import { dirname } from 'node:path'
-import { ADREEM_DEFAULT_LEDGER_ID, createLedgerIdentity, adreemStateRowId } from '../../src/mohammadLedger/ledgerState.js'
-import { DEFAULT_UI_LANGUAGE, normalizeUiLanguage } from '../../src/mohammadLedger/uiLanguage.js'
-import { parseTelegramLedgerMap } from '../mohammadLedger/ledgerRepository.js'
+import { ADREEM_DEFAULT_LEDGER_ID, createLedgerIdentity, adreemStateRowId } from '../../src/ledger/ledgerState.js'
+import { DEFAULT_UI_LANGUAGE, normalizeUiLanguage } from '../../src/ledger/uiLanguage.js'
+import { parseTelegramLedgerMap } from '../ledger/ledgerRepository.js'
 
 const HASH_PATTERN = /^[a-f0-9]{64}$/i
 const PASSWORD_ITERATIONS = 210_000
@@ -285,15 +285,13 @@ export function createTelegramUserAccess(env = process.env, filePath = defaultRe
   const envUserIds = parseIdList(
     env.ADREEM_TELEGRAM_USER_IDS ||
     env.ADREEM_TELEGRAM_USER_ID ||
-    env.MOHAMMAD_TELEGRAM_USER_IDS ||
-    env.MOHAMMAD_TELEGRAM_USER_ID ||
     '',
   )
   const adminIds = parseIdList(env.ADREEM_TELEGRAM_ADMIN_IDS)
   const ownerEmails = parseIdList(env.ADREEM_OWNER_EMAILS || env.ADREEM_OWNER_EMAIL).map(normalizeEmail)
   const ownerUserIds = parseIdList(env.ADREEM_OWNER_USER_IDS || env.ADREEM_OWNER_USER_ID)
   const ownerLedgerIds = parseIdList(env.ADREEM_OWNER_LEDGER_IDS || env.ADREEM_OWNER_LEDGER_ID)
-  const envLedgerMap = parseTelegramLedgerMap(env.ADREEM_TELEGRAM_LEDGER_IDS || env.MOHAMMAD_TELEGRAM_LEDGER_IDS)
+  const envLedgerMap = parseTelegramLedgerMap(env.ADREEM_TELEGRAM_LEDGER_IDS)
 
   function registryMap() {
     const registry = loadTelegramUserRegistry(filePath)

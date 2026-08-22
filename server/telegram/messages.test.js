@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
-import { ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { localizeTelegramPayload, stripUiDataProtection } from '../../src/mohammadLedger/uiTranslation.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/ledger/ledgerCore.js'
+import { ACCOUNT_TYPES, VALUE_KINDS } from '../../src/ledger/accountCatalog.js'
+import { localizeTelegramPayload, stripUiDataProtection } from '../../src/ledger/uiTranslation.js'
 import {
   accountBlockquote,
   accountChoiceLegendText,

@@ -15,7 +15,7 @@ import {
   runMigration,
   verifyTargetSecurityManifest,
 } from './migrateAdreemV3.js'
-import { projectMovementEntries, validateLedgerProjection } from '../mohammadLedger/ledgerProjection.js'
+import { projectMovementEntries, validateLedgerProjection } from '../ledger/ledgerProjection.js'
 
 const temporaryDirectories = []
 const OWNER_ID = '11111111-1111-4111-8111-111111111111'

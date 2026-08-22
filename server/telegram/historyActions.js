@@ -1,8 +1,8 @@
-import { MOVEMENT_STATUSES, MOVEMENT_TYPES, validateMovementBalanceTransition, voidMovement } from '../../src/mohammadLedger/ledgerCore.js'
-import { appendMovementAuditEvent, findTelegramUpdateAuditEvent } from '../mohammadLedger/ledgerService.js'
+import { MOVEMENT_STATUSES, MOVEMENT_TYPES, validateMovementBalanceTransition, voidMovement } from '../../src/ledger/ledgerCore.js'
+import { appendMovementAuditEvent, findTelegramUpdateAuditEvent } from '../ledger/ledgerService.js'
 import { createActionSessionId, stableActionToken } from './actionTokens.js'
 import { zonedDayKey } from './dateRange.js'
-import { isMainLedgerMovement } from '../../src/mohammadLedger/separateRecords.js'
+import { isMainLedgerMovement } from '../../src/ledger/separateRecords.js'
 
 export const HISTORY_ACTION_LIMIT = 8
 export const CANCEL_WINDOW_HOURS = 24

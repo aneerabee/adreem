@@ -1,14 +1,14 @@
 import './appStudio.css'
-import AdminUsersPage from './mohammadLedger/AdminUsersPage'
-import ConfigurationErrorPage from './mohammadLedger/ConfigurationErrorPage'
-import LoginPage from './mohammadLedger/LoginPage'
-import MohammadLedgerApp from './mohammadLedger/MohammadLedgerApp'
+import AdminUsersPage from './ledger/AdminUsersPage'
+import ConfigurationErrorPage from './ledger/ConfigurationErrorPage'
+import LoginPage from './ledger/LoginPage'
+import LedgerApp from './ledger/LedgerApp'
 import { ADREEM_VIEWS, resolveAdreemView } from './adreemRouting'
 import {
   ADREEM_API_TOKEN_PERSIST_KEY,
   ADREEM_API_TOKEN_SESSION_KEY,
   clearLegacyBrowserLedgerData,
-} from './mohammadLedger/mohammadPersistence'
+} from './ledger/ledgerPersistence'
 
 const ADREEM_API_URL = String(import.meta.env.VITE_ADREEM_API_URL || '').replace(/\/+$/, '')
 
@@ -36,5 +36,5 @@ export default function App() {
   if (view === ADREEM_VIEWS.CONFIGURATION_ERROR) return <ConfigurationErrorPage />
   if (view === ADREEM_VIEWS.ADMIN) return <AdminUsersPage />
   if (view === ADREEM_VIEWS.LOGIN) return <LoginPage />
-  return <MohammadLedgerApp />
+  return <LedgerApp />
 }

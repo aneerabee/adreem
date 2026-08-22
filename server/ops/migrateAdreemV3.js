@@ -3,14 +3,14 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, u
 import { basename, dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
-import { createLedgerIdentity } from '../../src/mohammadLedger/ledgerState.js'
+import { createLedgerIdentity } from '../../src/ledger/ledgerState.js'
 import {
   compareProjectedBatch,
   compareProjectedLedger,
   createLedgerMigrationBatches,
   prepareLedgerProjection,
   validateLedgerProjection,
-} from '../mohammadLedger/ledgerProjection.js'
+} from '../ledger/ledgerProjection.js'
 import {
   assertDatabaseCaFile,
   databaseConnectionFromUrl,

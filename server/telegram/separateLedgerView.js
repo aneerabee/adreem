@@ -1,5 +1,5 @@
-import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
-import { filterSeparateRecords } from '../../src/mohammadLedger/separateRecords.js'
+import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/ledger/ledgerCore.js'
+import { filterSeparateRecords } from '../../src/ledger/separateRecords.js'
 
 const SEPARATE_RECORD_LOAD_LIMIT = 250
 const MAX_SEPARATE_RECORD_PAGES = 100

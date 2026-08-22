@@ -1,4 +1,4 @@
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/ledger/ledgerCore.js'
 import {
   accountChoiceKind,
   accountChoiceKindLabel,
@@ -16,9 +16,9 @@ import {
   counterpartyAccountChannels,
   counterpartyOpeningFor,
   isCounterpartyBundleDraft,
-} from '../../src/mohammadLedger/accountConfig.js'
-import { VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { accountEditChanges } from '../../src/mohammadLedger/accountEditing.js'
+} from '../../src/ledger/accountConfig.js'
+import { VALUE_KINDS } from '../../src/ledger/accountCatalog.js'
+import { accountEditChanges } from '../../src/ledger/accountEditing.js'
 import {
   movementConfigFor,
   movementLabels,
@@ -28,10 +28,10 @@ import {
   movementSupportsDimension,
   movementSupportsExpenseCategory,
   movementTone,
-} from '../../src/mohammadLedger/movementConfig.js'
-import { formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
-import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
-import { SEPARATE_RECORD_DIRECTIONS, normalizeSeparateRecordDirection } from '../../src/mohammadLedger/separateRecords.js'
+} from '../../src/ledger/movementConfig.js'
+import { formatMoney, formatRate } from '../ledger/ledgerService.js'
+import { preserveUiData } from '../../src/ledger/uiTranslation.js'
+import { SEPARATE_RECORD_DIRECTIONS, normalizeSeparateRecordDirection } from '../../src/ledger/separateRecords.js'
 import { formatZonedDate, formatZonedTime } from './dateRange.js'
 import { numericBufferDisplay } from './numericKeypad.js'
 
@@ -129,11 +129,12 @@ function currentStepTitle(session) {
   if (session?.step === 'rate') return config.rateLabel || 'اكتب سعر الصرف'
   if (session?.step === 'source') return config.sourceQuestion || `اختر ${config.sourceLabel}`
   if (session?.step === 'destination') return config.destinationQuestion || `اختر ${config.destinationLabel}`
-  if (session?.step === 'note') return 'أضف ملاحظة'
+  if (session?.step === 'note') return config.noteLabel || 'أضف ملاحظة'
   if (session?.step === 'dimension') return 'اربط مشروعًا'
   if (session?.step === 'category') return 'اختر نوع المصروف'
   if (session?.step === 'attachment') return 'أضف مرفقًا'
   if (session?.step === 'recurring') return 'هل تتكرر؟'
+  if (session?.step === 'recurring_date') return 'متى تدخل المرة القادمة؟'
   if (session?.step === 'review') return 'راجع قبل الحفظ'
   return 'إدخال حركة'
 }
@@ -152,6 +153,7 @@ function currentStepHelp(session) {
   if (session?.step === 'category') return 'اختياري.'
   if (session?.step === 'attachment') return 'اختياري.'
   if (session?.step === 'recurring') return ''
+  if (session?.step === 'recurring_date') return 'اختر اليوم من التقويم.'
   if (session?.step === 'review') return ''
   return ''
 }
@@ -365,6 +367,7 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
         ...(movementSupportsExpenseCategory(draft.type) ? ['category'] : []),
         'attachment',
         'recurring',
+        ...(draft.recurringEnabled ? ['recurring_date'] : []),
         'review',
       ]
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
@@ -378,11 +381,12 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   if (!movementNeedsRate(draft.type) && draft.currencyConfirmed) summary.push(htmlLine('العملة', currencyLabel(draft.currency)))
   if (source) summary.push(htmlLine(config.sourceLabel, protectedAccountLabel(source)))
   if (movementNeedsDestination(draft.type) && destination) summary.push(htmlLine(config.destinationLabel, protectedAccountLabel(destination)))
-  if (draft.note) summary.push(htmlDataLine('ملاحظة', draft.note))
+  if (draft.note) summary.push(htmlDataLine(config.noteLabel || 'ملاحظة', draft.note))
   if (dimension) summary.push(htmlDataLine('مشروع', dimension.name))
   if (expenseCategory) summary.push(htmlDataLine('نوع المصروف', accountPrimaryName(expenseCategory)))
   if (draft.attachmentLabel || draft.attachmentUrl) summary.push(htmlDataLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   if (draft.recurringEnabled) summary.push(htmlLine('تكرار', 'شهري'))
+  if (draft.recurringEnabled && draft.recurringFirstRunOn) summary.push(htmlLine('الموعد القادم', draft.recurringFirstRunOn))
   const movementTitle = separateAccount ? 'حساب منفصل' : draft.type ? movementLabels[draft.type] || draft.type : 'حركة جديدة'
   const title = session?.mode === 'review' ? `ADREEM · إصلاح ${separateAccount ? 'حساب منفصل' : 'حركة'}` : `ADREEM · ${movementTitle}`
   const help = currentStepHelp(session)
@@ -650,9 +654,10 @@ export function reviewMovementText(session, preview, context = {}) {
   if (separateAccount) lines.push(htmlLine('الاتجاه', separateRecordDirectionLabel(draft.recordDirection)))
   if (dimension) lines.push(htmlDataLine('مشروع', dimension.name))
   if (expenseCategory) lines.push(htmlDataLine('نوع المصروف', accountPrimaryName(expenseCategory)))
-  if (draft.note) lines.push(htmlDataLine('ملاحظة', draft.note))
+  if (draft.note) lines.push(htmlDataLine(config.noteLabel || 'ملاحظة', draft.note))
   if (draft.attachmentLabel || draft.attachmentUrl) lines.push(htmlDataLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   if (draft.recurringEnabled) lines.push(htmlLine('تكرار', 'شهري'))
+  if (draft.recurringEnabled && draft.recurringFirstRunOn) lines.push(htmlLine('الموعد القادم', draft.recurringFirstRunOn))
   lines.push('')
 
   if (!preview.validation.ok) {

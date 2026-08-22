@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CURRENCIES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
-import { createMohammadFallbackState } from '../../src/mohammadLedger/ledgerState.js'
-import { appendTelegramMovement, telegramUpdateIdempotencyKey } from '../mohammadLedger/ledgerService.js'
+import { CURRENCIES, MOVEMENT_TYPES } from '../../src/ledger/ledgerCore.js'
+import { createFallbackLedgerState } from '../../src/ledger/ledgerState.js'
+import { appendTelegramMovement, telegramUpdateIdempotencyKey } from '../ledger/ledgerService.js'
 import { createMemoryStateRepository } from './memoryStateRepository.js'
 import {
   createPersistentTelegramState,
@@ -24,7 +24,7 @@ function deferred() {
   return { promise, reject, resolve }
 }
 
-function memoryLedgerRepository(initialState = createMohammadFallbackState()) {
+function memoryLedgerRepository(initialState = createFallbackLedgerState()) {
   let state = initialState
   return {
     get state() {

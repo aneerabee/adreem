@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createRelationalLedgerRepository } from '../mohammadLedger/relationalLedgerRepository.js'
-import { supabaseAuthEnabled } from '../mohammadLedger/supabaseAuth.js'
+import { createRelationalLedgerRepository } from '../ledger/relationalLedgerRepository.js'
+import { supabaseAuthEnabled } from '../ledger/supabaseAuth.js'
 
 function requiredConfig(env = process.env) {
   const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL

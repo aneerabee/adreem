@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../../src/ledger/accountCatalog.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/ledger/ledgerCore.js'
 import { createSessionStore } from '../sessionStore.js'
 import { handleAccountCallback, handleAccountText, startAccount, startEditAccount, startReviewAccount } from './account.js'
 
@@ -296,7 +296,7 @@ describe('telegram account flow', () => {
       accounts: [
         {
           id: 'review-person',
-          ownerName: 'محمد',
+          ownerName: 'أحمد',
           subAccountName: 'حساب',
           type: ACCOUNT_TYPES.REVIEW,
           valueKind: VALUE_KINDS.REVIEW,
@@ -307,7 +307,7 @@ describe('telegram account flow', () => {
 
     await startReviewAccount(ctx, 'review-person')
     await handleAccountCallback(ctx, 'acct:group:people')
-    await handleAccountText({ ...ctx, isCallback: false, messageId: 58 }, 'محمد')
+    await handleAccountText({ ...ctx, isCallback: false, messageId: 58 }, 'أحمد')
     await handleAccountCallback(ctx, 'acct:detail:1')
     await handleAccountCallback(ctx, 'acct:currency:LYD')
     await handleAccountCallback(ctx, 'acct:confirm')
@@ -315,7 +315,7 @@ describe('telegram account flow', () => {
     expect(ctx.repository.state.accounts).toHaveLength(1)
     expect(ctx.repository.state.accounts[0]).toMatchObject({
       id: 'review-person',
-      ownerName: 'محمد',
+      ownerName: 'أحمد',
       subAccountName: 'شيك بيننا',
       type: ACCOUNT_TYPES.PERSON,
       valueKind: VALUE_KINDS.RECEIVABLE,

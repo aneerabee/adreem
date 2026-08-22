@@ -145,12 +145,17 @@ export const ADREEM_CRITICAL_FUNCTION_PRIVILEGES = Object.freeze([
   Object.freeze({ function: 'public.adreem_bot_state_complete_claim', executeGrantedTo: Object.freeze(['service_role']) }),
   Object.freeze({ function: 'public.adreem_bot_state_complete_effect', executeGrantedTo: Object.freeze(['service_role']) }),
   Object.freeze({ function: 'public.adreem_bot_state_delete', executeGrantedTo: Object.freeze(['service_role']) }),
+  Object.freeze({ function: 'public.adreem_bot_state_fail_claim', executeGrantedTo: Object.freeze(['service_role']) }),
   Object.freeze({ function: 'public.adreem_bot_state_get', executeGrantedTo: Object.freeze(['service_role']) }),
   Object.freeze({ function: 'public.adreem_bot_state_release_claim', executeGrantedTo: Object.freeze(['service_role']) }),
   Object.freeze({ function: 'public.adreem_bot_state_renew_claim', executeGrantedTo: Object.freeze(['service_role']) }),
   Object.freeze({ function: 'public.adreem_bot_state_set', executeGrantedTo: Object.freeze(['service_role']) }),
   Object.freeze({ function: 'public.adreem_bot_state_set_if_absent', executeGrantedTo: Object.freeze(['service_role']) }),
   Object.freeze({ function: 'public.adreem_current_owner_is_active', executeGrantedTo: Object.freeze(['authenticated']) }),
+  Object.freeze({
+    function: 'public.adreem_delete_unused_account',
+    executeGrantedTo: Object.freeze(['authenticated', 'service_role']),
+  }),
   Object.freeze({
     function: 'public.adreem_ledger_report_summary',
     executeGrantedTo: Object.freeze(['authenticated', 'service_role']),

@@ -256,6 +256,8 @@ begin
       structure_locked = true,
       payload = source.payload || jsonb_build_object(
         'status', 'inactive',
+        'openingDinar', 0,
+        'openingUsd', 0,
         'mergedIntoAccountId', p_target_account_id,
         'disabledAt', p_merged_at,
         'updatedAt', p_merged_at
@@ -542,6 +544,10 @@ begin
       and existing.record_id = v_record_id;
 
     if found then
+      if v_movement_type = 'opening_balance' and
+         v_existing_movement_payload - 'updatedAt' is not distinct from v_item - 'updatedAt' then
+        continue;
+      end if;
       if v_existing_movement_status = 'voided' and v_existing_movement_payload is distinct from v_item then
         raise exception 'ADREEM_VOIDED_MOVEMENT_IMMUTABLE' using errcode = '23514';
       end if;

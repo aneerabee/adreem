@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
-import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/ledger/ledgerCore.js'
+import { createFallbackLedgerState } from '../../../src/ledger/ledgerState.js'
 import { createSessionStore } from '../sessionStore.js'
 import { createLocalizedTelegramClient } from '../localizedTelegram.js'
 import { handleReconciliationCallback, handleReconciliationText, startReconciliation } from './reconciliation.js'
 
-function memoryRepository(initialState = createMohammadFallbackState()) {
+function memoryRepository(initialState = createFallbackLedgerState()) {
   let state = initialState
   return {
     get state() {
@@ -181,6 +181,20 @@ describe('telegram reconciliation flow', () => {
 
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).flow).toBe('movement')
     expect(ctx.repository.state.reconciliations).toHaveLength(0)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('مطابقة قديمة')
+  })
+
+  it('edits an old reconciliation card instead of adding chat clutter', async () => {
+    const ctx = createCtx()
+    await startReconciliation(ctx)
+    ctx.messageId = 999
+
+    await handleReconciliationCallback(ctx, 'rec:confirm')
+
+    expect(ctx.telegram.calls.at(-1)).toMatchObject({
+      method: 'editMessageText',
+      payload: { message_id: 999 },
+    })
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('مطابقة قديمة')
   })
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
+import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/ledger/ledgerCore.js'
 import {
   buildHistorySession,
   canVoidRecentMovement,
@@ -141,6 +141,7 @@ describe('telegram history actions', () => {
   it('keeps a recent income posted when canceling it would overdraw owned cash', () => {
     const income = movement({
       id: 'income-100',
+      databaseSequence: 1,
       type: MOVEMENT_TYPES.EXTERNAL_INCOME,
       sourceAccountId: null,
       destinationAccountId: 'me-cash',

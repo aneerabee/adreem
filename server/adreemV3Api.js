@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import { isIP } from 'node:net'
-import { createRelationalLedgerRepository } from './mohammadLedger/relationalLedgerRepository.js'
-import { createSupabaseAuthService } from './mohammadLedger/supabaseAuth.js'
-import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './mohammadLedger/attachmentValidation.js'
-import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/mohammadLedger/ledgerOperations.js'
-import { ConcurrentLedgerUpdateError } from './mohammadLedger/ledgerRepository.js'
+import { createRelationalLedgerRepository } from './ledger/relationalLedgerRepository.js'
+import { createSupabaseAuthService } from './ledger/supabaseAuth.js'
+import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './ledger/attachmentValidation.js'
+import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/ledger/ledgerOperations.js'
+import { ConcurrentLedgerUpdateError } from './ledger/ledgerRepository.js'
 
 const DEFAULT_BODY_LIMIT = 1_000_000
 const ATTACHMENT_BODY_LIMIT = 15_000_000
@@ -15,6 +15,7 @@ const DEFAULT_ATTACHMENT_UPLOADS_PER_MINUTE = 12
 const DEFAULT_ATTACHMENT_LEDGER_QUOTA_BYTES = 1024 * 1024 * 1024
 const ATTACHMENT_USAGE_PAGE_SIZE = 100
 const SESSION_FENCE_TTL_MS = DEFAULT_REFRESH_COOKIE_MAX_AGE_SECONDS * 1_000
+const MAX_SESSION_FENCE_ENTRIES = 4_096
 const REFRESH_SINGLE_FLIGHT_TTL_MS = 10_000
 const AUTH_SESSION_MARKER = 'cookie-v3'
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -247,6 +248,20 @@ function accountDeletionApiError(error) {
   return error
 }
 
+function ledgerDeltaApiError(error) {
+  if (error?.name === 'ConcurrentLedgerUpdateError' || error?.code === '40001') {
+    const mapped = new V3ApiError('تغير الدفتر أثناء الحفظ. أعد المحاولة على أحدث نسخة.', 409)
+    mapped.code = 'ledger-revision-conflict'
+    return mapped
+  }
+  if (['22023', '23514'].includes(String(error?.code || '')) || String(error?.message || '').includes('ADREEM_')) {
+    const mapped = new V3ApiError('رفضنا التغيير لأنه لا يحافظ على سلامة الأرصدة أو السجلات.', 409)
+    mapped.code = 'ledger-integrity'
+    return mapped
+  }
+  return error
+}
+
 function createRateLimiter(now = Date.now) {
   const buckets = new Map()
   let checks = 0
@@ -306,53 +321,126 @@ function createKeyedLock() {
   }
 }
 
-function createSessionFence(now = Date.now) {
+export function createSessionFence(now = Date.now, maxEntries = MAX_SESSION_FENCE_ENTRIES) {
   const sessions = new Map()
+  const pendingSessions = new Map()
+  const revokedTokens = new Map()
+  const capacity = positiveInteger(maxEntries, MAX_SESSION_FENCE_ENTRIES)
   let checks = 0
   const keyFor = (refreshToken) => createHash('sha256').update(String(refreshToken || '')).digest('hex')
+  const entries = () => Array.from(new Set(sessions.values()))
+  const deleteEntry = (entry) => {
+    for (const [key, storedEntry] of sessions) {
+      if (storedEntry === entry) sessions.delete(key)
+    }
+  }
+  const purgeExpired = () => {
+    const checkedAt = now()
+    for (const entry of entries()) {
+      if (entry.expiresAt <= checkedAt) deleteEntry(entry)
+    }
+    for (const [key, entry] of pendingSessions) {
+      if (entry.expiresAt <= checkedAt) pendingSessions.delete(key)
+    }
+    for (const [key, expiresAt] of revokedTokens) {
+      if (expiresAt <= checkedAt) revokedTokens.delete(key)
+    }
+  }
   const clean = () => {
     checks += 1
     if (checks % 100 !== 0) return
+    purgeExpired()
+  }
+  const makeRoom = () => {
+    if (entries().length < capacity) return
     const checkedAt = now()
-    for (const [key, entry] of sessions) {
-      if (entry.expiresAt <= checkedAt) sessions.delete(key)
+    for (const entry of entries()) {
+      if (entry.expiresAt <= checkedAt) deleteEntry(entry)
     }
+    while (entries().length >= capacity) deleteEntry(entries()[0])
   }
   return {
     begin(refreshToken) {
       clean()
       const key = keyFor(refreshToken)
-      const entry = sessions.get(key) || {
-        generation: 0,
-        revoked: false,
-        currentKey: key,
-        expiresAt: now() + SESSION_FENCE_TTL_MS,
+      if (revokedTokens.has(key)) {
+        return { key, generation: 0, revoked: true, stale: false, overloaded: false }
       }
-      sessions.set(key, entry)
+      let entry = sessions.get(key) || pendingSessions.get(key)
+      if (!entry) {
+        if (pendingSessions.size >= capacity) purgeExpired()
+        if (pendingSessions.size >= capacity) {
+          return { key, generation: 0, revoked: false, stale: false, overloaded: true }
+        }
+        entry = {
+          generation: 0,
+          revoked: false,
+          currentKey: key,
+          expiresAt: now() + REFRESH_SINGLE_FLIGHT_TTL_MS,
+        }
+        pendingSessions.set(key, entry)
+      }
       return {
         key,
         generation: entry.generation,
         revoked: entry.revoked,
         stale: !entry.revoked && entry.currentKey !== key,
+        overloaded: false,
       }
     },
-    fence(refreshToken) {
-      if (!refreshToken) return
+    fence(refreshToken, { verified = false } = {}) {
+      if (!refreshToken) return false
       const key = keyFor(refreshToken)
-      const entry = sessions.get(key) || {
-        generation: 0,
-        revoked: false,
-        currentKey: key,
-        expiresAt: now() + SESSION_FENCE_TTL_MS,
+      const entry = sessions.get(key) || pendingSessions.get(key)
+      if (!entry) {
+        if (!verified) return false
+        purgeExpired()
+        if (revokedTokens.size >= capacity) return false
+        revokedTokens.set(key, now() + SESSION_FENCE_TTL_MS)
+        return true
       }
       entry.generation += 1
       entry.revoked = true
       entry.expiresAt = now() + SESSION_FENCE_TTL_MS
+      if (pendingSessions.get(key) === entry) {
+        pendingSessions.delete(key)
+        if (revokedTokens.size < capacity || revokedTokens.has(key)) revokedTokens.set(key, entry.expiresAt)
+        return true
+      }
       sessions.set(key, entry)
+      return true
+    },
+    discard(refreshToken) {
+      if (!refreshToken) return
+      const key = keyFor(refreshToken)
+      const entry = sessions.get(key) || pendingSessions.get(key)
+      if (entry) deleteEntry(entry)
+      for (const [pendingKey, pendingEntry] of pendingSessions) {
+        if (pendingEntry === entry) pendingSessions.delete(pendingKey)
+      }
+      revokedTokens.delete(key)
+    },
+    reject(refreshToken) {
+      if (!refreshToken) return
+      const key = keyFor(refreshToken)
+      if (sessions.has(key)) {
+        this.fence(refreshToken)
+        return
+      }
+      if (revokedTokens.has(key)) return
+      pendingSessions.delete(key)
     },
     rotate(ticket, refreshToken) {
       if (!this.valid(ticket)) return false
-      const entry = sessions.get(ticket.key)
+      let entry = sessions.get(ticket.key) || pendingSessions.get(ticket.key)
+      if (pendingSessions.get(ticket.key) === entry) {
+        pendingSessions.delete(ticket.key)
+        makeRoom()
+      } else {
+        for (const [storedKey, storedEntry] of sessions) {
+          if (storedEntry === entry && storedKey !== ticket.key) sessions.delete(storedKey)
+        }
+      }
       const nextKey = keyFor(refreshToken)
       entry.generation += 1
       entry.revoked = false
@@ -363,8 +451,18 @@ function createSessionFence(now = Date.now) {
       return true
     },
     valid(ticket) {
-      const entry = sessions.get(ticket.key)
+      const entry = sessions.get(ticket.key) || pendingSessions.get(ticket.key)
+      if (!entry) return false
       return entry?.generation === ticket.generation && entry.currentKey === ticket.key && !entry.revoked
+    },
+    size() {
+      return entries().length + revokedTokens.size
+    },
+    pendingSize() {
+      return pendingSessions.size
+    },
+    revokedSize() {
+      return revokedTokens.size
     },
   }
 }
@@ -382,6 +480,16 @@ function movementDateFilter(value) {
   const date = new Date(String(value))
   if (!Number.isFinite(date.getTime())) throw new V3ApiError('Invalid movement date filter.', 400)
   return date.toISOString()
+}
+
+function conflictMovementIds(searchParams) {
+  const ids = Array.from(new Set(searchParams.getAll('movementId')
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)))
+  if (ids.length > 250 || ids.some((id) => id.length > 200)) {
+    throw new V3ApiError('Too many movement records were requested.', 400)
+  }
+  return ids
 }
 
 async function ledgerAttachmentUsage(authService, env, context) {
@@ -518,6 +626,9 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
 
   async function refreshWithFence(refreshToken) {
     const ticket = sessionFence.begin(refreshToken)
+    if (ticket.overloaded) {
+      throw new V3ApiError('Too many session checks are in progress. Try again shortly.', 429)
+    }
     if (ticket.stale) {
       const error = new V3ApiError('The login session changed in another tab. Retry the request.', 409)
       error.code = 'adreem-session-rotated'
@@ -551,7 +662,10 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
         return result
       } catch (error) {
         if (!error?.rotatedSession) {
-          if (Number(error?.status) === 401) sessionFence.fence(refreshToken)
+          if (Number(error?.status) === 401) {
+            if (error?.clearSession) sessionFence.reject(refreshToken)
+            else sessionFence.discard(refreshToken)
+          }
           throw error
         }
         if (!sessionFence.rotate(ticket, error.rotatedSession.refreshToken)) {
@@ -682,18 +796,18 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
 
       if (url.pathname === '/api/auth/logout') {
         if (req.method !== 'POST') throw new V3ApiError('Method not allowed.', 405)
-        await readJson(req)
         const session = v3SessionFromCookieHeader(req.headers?.cookie)
         sessionFence.fence(session.refreshToken)
         responseCookies = v3ClearSessionCookieHeaders()
-        await authService.logout(session.accessToken, session.refreshToken)
+        const verified = await authService.logout(session.accessToken, session.refreshToken)
+        if (verified !== false) sessionFence.fence(session.refreshToken, { verified: true })
         return reply(204, {})
       }
 
       if (url.pathname === '/ready') {
-        const { data, error } = await authService.admin
+        const { error } = await authService.admin
           .from('adreem_ledgers')
-          .select('id, revision')
+          .select('id')
           .limit(1)
           .maybeSingle()
         if (error) throw error
@@ -701,7 +815,6 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
           ok: true,
           service: 'adreem-api',
           storageMode: 'relational',
-          revision: data?.revision ?? null,
         })
       }
 
@@ -749,6 +862,9 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
         if (adminUserId && req.method === 'PATCH') {
           const body = await readJson(req)
           if (body.active !== undefined && typeof body.active !== 'boolean') throw new V3ApiError('Active must be a boolean.', 400)
+          if (body.active !== undefined && Object.keys(body).some((key) => key !== 'active')) {
+            throw new V3ApiError('Activation must be changed separately from profile details.', 400)
+          }
           let user
           try {
             user = body.active === undefined
@@ -846,9 +962,11 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
 
       if (url.pathname !== '/api/ledger') throw new V3ApiError('Not found.', 404)
       if (req.method === 'GET') {
-        const { result, reports } = await loadConsistentLedgerView(repository, {
-          movementLimit: url.searchParams.get('movementLimit'),
-        })
+        const movementIds = conflictMovementIds(url.searchParams)
+        const loadOptions = movementIds.length
+          ? { movementIds }
+          : { movementLimit: url.searchParams.get('movementLimit') }
+        const { result, reports } = await loadConsistentLedgerView(repository, loadOptions)
         return reply(200, {
           state: result.state,
           source: result.source,
@@ -870,7 +988,11 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
         if (!body.delta || typeof body.delta !== 'object' || Array.isArray(body.delta)) {
           throw new V3ApiError('A ledger delta is required.', 400)
         }
-        await withAttachmentLock(context.ledger.id, () => repository.applyDelta(body.delta, expectedRevision))
+        try {
+          await withAttachmentLock(context.ledger.id, () => repository.applyDelta(body.delta, expectedRevision))
+        } catch (error) {
+          throw ledgerDeltaApiError(error)
+        }
         const { result, reports } = await loadConsistentLedgerView(repository, {
           movementLimit: body.movementLimit,
         })
@@ -895,7 +1017,11 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
         : Number(error?.status) >= 400 && Number(error?.status) < 600
           ? Number(error.status)
           : 500
-      if (status >= 500) console.error('[adreem-v3-api]', error?.message || error)
+      if (status >= 500) console.error('[adreem-v3-api] request failed', {
+        status,
+        name: String(error?.name || 'Error').slice(0, 80),
+        code: String(error?.code || '').slice(0, 80),
+      })
       const message = error instanceof V3ApiError
         ? error.message
         : status >= 500

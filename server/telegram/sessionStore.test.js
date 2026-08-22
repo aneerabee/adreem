@@ -68,6 +68,38 @@ describe('telegram session store', () => {
     expect(persisted[1].draft).toEqual({ amount: 20, attachment: { label: 'receipt.pdf' } })
   })
 
+  it('binds new sessions to the active ledger and discards drafts after reassignment', async () => {
+    const cleared = []
+    const store = createSessionStore({
+      onClear: async (chatId, userId) => cleared.push(`${chatId}:${userId}`),
+    })
+
+    store.bindScope(10, 20, { ownerId: 'owner-a', ledgerId: 'ledger-a' })
+    store.set(10, 20, { flow: 'movement', draft: { amount: 125 } })
+    store.releaseScope(10, 20)
+    expect(store.peek(10, 20)).toMatchObject({
+      ledgerScope: { ownerId: 'owner-a', ledgerId: 'ledger-a' },
+      draft: { amount: 125 },
+    })
+
+    expect(store.bindScope(10, 20, { ownerId: 'owner-b', ledgerId: 'ledger-b' })).toEqual({ discarded: true })
+    expect(store.peek(10, 20)).toBe(null)
+    await store.flush()
+    expect(cleared).toEqual(['10:20'])
+  })
+
+  it('keeps a durable session only when its owner and ledger still match', () => {
+    const store = createSessionStore()
+    store.hydrate(10, 20, {
+      flow: 'movement',
+      ledgerScope: { ownerId: 'owner-a', ledgerId: 'ledger-a' },
+      touchedAt: Date.now(),
+    })
+
+    expect(store.bindScope(10, 20, { ownerId: 'owner-a', ledgerId: 'ledger-a' })).toEqual({ discarded: false })
+    expect(store.peek(10, 20)).toMatchObject({ flow: 'movement' })
+  })
+
   it('tracks a replacement card without letting an older card take over the session', () => {
     const current = { flow: 'movement', uiMessageId: 20 }
 

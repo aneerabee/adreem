@@ -71,6 +71,7 @@ describe('ADREEM backup safety primitives', () => {
       'public.adreem_bot_state_claim_effect',
       'public.adreem_bot_state_complete_claim',
       'public.adreem_bot_state_complete_effect',
+      'public.adreem_bot_state_fail_claim',
       'public.adreem_bot_state_release_claim',
       'public.adreem_bot_state_renew_claim',
     ]
@@ -87,6 +88,10 @@ describe('ADREEM backup safety primitives', () => {
         ADREEM_CRITICAL_FUNCTION_PRIVILEGES.filter((entry) => entry.function !== functionName),
       )).toThrowError(expect.objectContaining({ code: 'INVALID_CRITICAL_FUNCTION_PRIVILEGES' }))
     }
+    expect(ADREEM_CRITICAL_FUNCTION_PRIVILEGES).toContainEqual({
+      function: 'public.adreem_delete_unused_account',
+      executeGrantedTo: ['authenticated', 'service_role'],
+    })
     expect(() => validateCriticalFunctionPrivileges(ADREEM_CRITICAL_FUNCTION_PRIVILEGES.map((entry) => (
       entry.function === 'public.adreem_current_owner_is_active'
         ? { ...entry, executeGrantedTo: ['PUBLIC', 'authenticated'] }

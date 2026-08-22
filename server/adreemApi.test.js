@@ -13,8 +13,8 @@ import {
   tokenHash,
   userIdFromAdminPath,
 } from './adreemApi.js'
-import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './mohammadLedger/attachmentValidation.js'
-import { ConcurrentLedgerUpdateError } from './mohammadLedger/ledgerRepository.js'
+import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './ledger/attachmentValidation.js'
+import { ConcurrentLedgerUpdateError } from './ledger/ledgerRepository.js'
 import { createPasswordHash } from './telegram/userRegistry.js'
 
 let tempDir = null

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOUNT_STATUSES } from '../../src/mohammadLedger/accountCatalog.js'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, summarizeBalances } from '../../src/mohammadLedger/ledgerCore.js'
-import { createMohammadFallbackState } from '../../src/mohammadLedger/ledgerState.js'
+import { ACCOUNT_STATUSES } from '../../src/ledger/accountCatalog.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, summarizeBalances } from '../../src/ledger/ledgerCore.js'
+import { createFallbackLedgerState } from '../../src/ledger/ledgerState.js'
 import {
   buildReviewSession,
   cancelReviewMovementInState,
@@ -13,7 +13,7 @@ import { actionCallbackData, parseActionCallback, stableActionToken } from './ac
 
 function stateWithReviewItems() {
   return {
-    ...createMohammadFallbackState('2026-01-01T00:00:00.000Z'),
+    ...createFallbackLedgerState('2026-01-01T00:00:00.000Z'),
     accounts: [
       {
         id: 'me-cash',

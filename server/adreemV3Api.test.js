@@ -2,9 +2,89 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   ADREEM_ACCESS_COOKIE_NAME,
   ADREEM_REFRESH_COOKIE_NAME,
+  createSessionFence,
   createAdreemV3ApiHandler,
   v3BrowserAuthOrigin,
 } from './adreemV3Api.js'
+
+describe('ADREEM refresh-session fence', () => {
+  it('does not retain unverified refresh tokens or evict a revoked session marker', () => {
+    const fence = createSessionFence(() => 1000, 3)
+    const ticket = fence.begin('valid-1')
+    expect(fence.rotate(ticket, 'valid-2')).toBe(true)
+    fence.fence('valid-2')
+
+    for (let index = 0; index < 100; index += 1) fence.begin(`invalid-${index}`)
+
+    expect(fence.size()).toBe(1)
+    expect(fence.pendingSize()).toBe(3)
+    expect(fence.begin('valid-2').revoked).toBe(true)
+  })
+
+  it('rejects a refresh that was fenced while provider verification was in flight', () => {
+    const fence = createSessionFence(() => 1000, 3)
+    const ticket = fence.begin('login-issued-token')
+
+    fence.fence('login-issued-token')
+
+    expect(fence.rotate(ticket, 'rotated-after-logout')).toBe(false)
+  })
+
+  it('keeps a logout tombstone even when refresh had not started yet', () => {
+    const fence = createSessionFence(() => 1000, 3)
+
+    fence.fence('logged-out-before-refresh', { verified: true })
+
+    expect(fence.begin('logged-out-before-refresh')).toMatchObject({ revoked: true, overloaded: false })
+    expect(fence.revokedSize()).toBe(1)
+  })
+
+  it('does not let unverified logout tokens evict a verified tombstone', () => {
+    const fence = createSessionFence(() => 1000, 2)
+    fence.fence('verified-logout', { verified: true })
+
+    for (let index = 0; index < 20; index += 1) fence.fence(`unverified-${index}`)
+
+    expect(fence.revokedSize()).toBe(1)
+    expect(fence.begin('verified-logout')).toMatchObject({ revoked: true })
+  })
+
+  it('refuses excess unverified checks without evicting an in-flight token', () => {
+    const fence = createSessionFence(() => 1000, 2)
+    const first = fence.begin('first-in-flight')
+    fence.begin('second-in-flight')
+
+    expect(fence.begin('overflow')).toMatchObject({ overloaded: true })
+    expect(fence.pendingSize()).toBe(2)
+    expect(fence.rotate(first, 'first-verified')).toBe(true)
+  })
+
+  it('drops a provider-rejected unverified token without consuming verified capacity', () => {
+    const fence = createSessionFence(() => 1000, 3)
+    fence.begin('provider-rejected')
+
+    fence.reject('provider-rejected')
+
+    expect(fence.size()).toBe(0)
+    expect(fence.pendingSize()).toBe(0)
+  })
+
+  it('keeps repeated rotations and independent sessions within the configured bound', () => {
+    const fence = createSessionFence(() => 1000, 3)
+    let token = 'chain-0'
+    for (let index = 1; index <= 10; index += 1) {
+      const nextToken = `chain-${index}`
+      expect(fence.rotate(fence.begin(token), nextToken)).toBe(true)
+      token = nextToken
+    }
+    expect(fence.size()).toBe(1)
+
+    for (let index = 0; index < 4; index += 1) {
+      expect(fence.rotate(fence.begin(`session-${index}`), `session-${index}-next`)).toBe(true)
+    }
+    expect(fence.size()).toBe(3)
+  })
+})
 
 function response() {
   return {
@@ -178,6 +258,21 @@ describe('ADREEM v3 API', () => {
     expect(repository.applyDelta).toHaveBeenCalledWith({ movements: [{ id: 'm2' }] }, 7)
   })
 
+  it('returns a permanent safe conflict for database integrity rejection', async () => {
+    const { handler, repository } = fixture()
+    repository.applyDelta.mockRejectedValueOnce(Object.assign(new Error('ADREEM_NEGATIVE_OWN_BALANCE private detail'), { code: '23514' }))
+    const req = request({ method: 'PUT', body: { baseRevision: 7, delta: { movements: [{ id: 'm2' }] } } })
+    const res = response()
+    const pending = handler(req, res)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    req.emitBody()
+    await pending
+
+    expect(res.statusCode).toBe(409)
+    expect(JSON.parse(res.body)).toMatchObject({ code: 'ledger-integrity' })
+    expect(res.body).not.toContain('private detail')
+  })
+
   it('deletes an unused account and returns the authoritative ledger state', async () => {
     const { handler, repository } = fixture()
     const req = request({ method: 'DELETE', url: '/api/accounts/unused%20cash', body: { baseRevision: 7 } })
@@ -256,6 +351,17 @@ describe('ADREEM v3 API', () => {
       excludeOpening: true,
     }))
     expect(JSON.parse(res.body)).toMatchObject({ revision: 7, page: { hasMore: true } })
+  })
+
+  it('loads exact older movements for conflict recovery', async () => {
+    const { handler, repository } = fixture()
+    const req = request({ url: '/api/ledger?movementId=older-1&movementId=older-2' })
+    const res = response()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(repository.load).toHaveBeenCalledWith({ movementIds: ['older-1', 'older-2'] })
   })
 
   it('passes the main movement type list to the isolated repository', async () => {
@@ -562,6 +668,51 @@ describe('ADREEM v3 API', () => {
     expect(res.headers['set-cookie'].every((header) => header.includes('Max-Age=0'))).toBe(true)
   })
 
+  it('always clears and revokes repeated logout requests without rate limiting the safety action', async () => {
+    const { authService, handler } = fixture()
+    const responses = []
+
+    for (let index = 0; index < 35; index += 1) {
+      const req = request({
+        method: 'POST',
+        url: '/api/auth/logout',
+        accessToken: `access-${index}`,
+        refreshToken: `refresh-${index}`,
+        origin: 'https://app.test',
+        fetchSite: 'same-origin',
+      })
+      const res = response()
+      const pending = handler(req, res)
+      req.emitBody()
+      await pending
+      responses.push(res)
+    }
+
+    expect(responses.every((res) => res.statusCode === 204)).toBe(true)
+    expect(responses.every((res) => res.headers['set-cookie']?.length === 2)).toBe(true)
+    expect(responses.every((res) => res.headers['set-cookie'].every((header) => header.includes('Max-Age=0')))).toBe(true)
+    expect(authService.logout).toHaveBeenCalledTimes(35)
+  })
+
+  it('rejects a refresh request that arrives after logout already completed', async () => {
+    const { authService, handler } = fixture()
+    const logoutReq = request({ method: 'POST', url: '/api/auth/logout', refreshToken: 'late-old-refresh' })
+    const logoutRes = response()
+    const logoutPending = handler(logoutReq, logoutRes)
+    logoutReq.emitBody()
+    await logoutPending
+
+    const refreshReq = request({ method: 'POST', url: '/api/auth/refresh', accessToken: '', refreshToken: 'late-old-refresh' })
+    const refreshRes = response()
+    const refreshPending = handler(refreshReq, refreshRes)
+    refreshReq.emitBody()
+    await refreshPending
+
+    expect(logoutRes.statusCode).toBe(204)
+    expect(refreshRes.statusCode).toBe(401)
+    expect(authService.refresh).not.toHaveBeenCalled()
+  })
+
   it('creates an active member only when the owner explicitly sends a boolean true', async () => {
     const { authService, context, handler } = fixture()
     context.isOwner = true
@@ -611,6 +762,26 @@ describe('ADREEM v3 API', () => {
     expect(authService.setUserActive).not.toHaveBeenCalled()
   })
 
+  it('rejects mixing activation with profile edits instead of silently dropping fields', async () => {
+    const { authService, context, handler } = fixture()
+    context.isOwner = true
+    const req = request({
+      method: 'PATCH',
+      url: '/api/admin/users/user-a',
+      body: { active: false, displayName: 'Name that must not be ignored' },
+    })
+    const res = response()
+
+    const pending = handler(req, res)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    req.emitBody()
+    await pending
+
+    expect(res.statusCode).toBe(400)
+    expect(authService.setUserActive).not.toHaveBeenCalled()
+    expect(authService.updateUser).not.toHaveBeenCalled()
+  })
+
   it('returns stable user-management error codes without exposing provider details', async () => {
     const { authService, context, handler } = fixture()
     context.isOwner = true
@@ -650,6 +821,7 @@ describe('ADREEM v3 API', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'ADREEM API failed.' })
     expect(res.body).not.toContain('password=secret')
     expect(log).toHaveBeenCalled()
+    expect(JSON.stringify(log.mock.calls)).not.toContain('password=secret')
     log.mockRestore()
   })
 

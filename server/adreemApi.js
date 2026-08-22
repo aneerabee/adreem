@@ -5,13 +5,13 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import { createClient } from '@supabase/supabase-js'
-import { ConcurrentLedgerUpdateError, createLedgerRepository, LedgerIntegrityError } from './mohammadLedger/ledgerRepository.js'
-import { validateLedgerStateTransition } from './mohammadLedger/stateValidation.js'
-import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './mohammadLedger/attachmentValidation.js'
-import { mergeLedgerStates } from '../src/mohammadLedger/ledgerState.js'
-import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/mohammadLedger/ledgerOperations.js'
-import { deleteUnusedAccountFromLedgerState } from '../src/mohammadLedger/accountEditing.js'
-import { isSupportedUiLanguage, normalizeUiLanguage } from '../src/mohammadLedger/uiLanguage.js'
+import { ConcurrentLedgerUpdateError, createLedgerRepository, LedgerIntegrityError } from './ledger/ledgerRepository.js'
+import { validateLedgerStateTransition } from './ledger/stateValidation.js'
+import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './ledger/attachmentValidation.js'
+import { mergeLedgerStates } from '../src/ledger/ledgerState.js'
+import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/ledger/ledgerOperations.js'
+import { deleteUnusedAccountFromLedgerState } from '../src/ledger/accountEditing.js'
+import { isSupportedUiLanguage, normalizeUiLanguage } from '../src/ledger/uiLanguage.js'
 import {
   createTelegramUserAccess,
   defaultRegistryPath,
@@ -19,7 +19,7 @@ import {
   validateTelegramLedgerAssignments,
 } from './telegram/userRegistry.js'
 import { createAdreemV3ApiHandler } from './adreemV3Api.js'
-import { supabaseAuthEnabled } from './mohammadLedger/supabaseAuth.js'
+import { supabaseAuthEnabled } from './ledger/supabaseAuth.js'
 
 const DEFAULT_PORT = 8787
 const DEFAULT_JSON_BODY_LIMIT = 5_000_000

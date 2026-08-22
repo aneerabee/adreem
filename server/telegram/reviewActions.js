@@ -1,6 +1,6 @@
-import { ACCOUNT_STATUSES } from '../../src/mohammadLedger/accountCatalog.js'
-import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
-import { buildLedgerSnapshot } from '../mohammadLedger/ledgerService.js'
+import { ACCOUNT_STATUSES } from '../../src/ledger/accountCatalog.js'
+import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/ledger/ledgerCore.js'
+import { buildLedgerSnapshot } from '../ledger/ledgerService.js'
 import { createActionSessionId, stableActionToken } from './actionTokens.js'
 
 export const REVIEW_ACTION_LIMIT = 8

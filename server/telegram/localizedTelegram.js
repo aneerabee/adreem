@@ -1,4 +1,4 @@
-import { localizeTelegramPayload } from '../../src/mohammadLedger/uiTranslation.js'
+import { localizeTelegramPayload } from '../../src/ledger/uiTranslation.js'
 
 export function createLocalizedTelegramClient(client, language) {
   return {

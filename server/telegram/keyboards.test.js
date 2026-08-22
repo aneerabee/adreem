@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { stripUiDataProtection } from '../../src/mohammadLedger/uiTranslation.js'
+import { stripUiDataProtection } from '../../src/ledger/uiTranslation.js'
 import {
   accountChoiceToken,
+  accountDeleteConfirmKeyboard,
   accountProfileKeyboard,
   accountsBrowserKeyboard,
   dimensionKeyboard,
@@ -15,6 +16,7 @@ import {
   reportKeyboard,
   reportListKeyboard,
   recurringRulesKeyboard,
+  recurringDateKeyboard,
   reviewKeyboard,
   separateDirectionKeyboard,
   separateLedgerKeyboard,
@@ -51,6 +53,22 @@ describe('telegram browsing keyboards', () => {
     expect(decimal.flat().some((button) => button.callback_data === 'mv:num:done')).toBe(true)
   })
 
+  it('renders a bounded monthly calendar with one selected date', () => {
+    const keyboard = recurringDateKeyboard('2026-09', '2026-09-25').inline_keyboard
+    const buttons = keyboard.flat()
+
+    expect(buttons.some((button) => button.callback_data === 'mv:recurring-date:2026-09-01')).toBe(true)
+    expect(buttons.some((button) => button.callback_data === 'mv:recurring-date:2026-09-30')).toBe(true)
+    expect(buttons.some((button) => button.callback_data === 'mv:recurring-date:2026-09-31')).toBe(false)
+    expect(buttons.find((button) => button.callback_data === 'mv:recurring-date:2026-09-25')).toMatchObject({ text: '✓ 25', style: 'success' })
+    expect(buttons.map((button) => button.callback_data)).toEqual(expect.arrayContaining([
+      'mv:recurring-month:2026-08',
+      'mv:recurring-month:2026-10',
+      'mv:back',
+      'mv:cancel',
+    ]))
+  })
+
   it('uses the same stable account token for display and selection', () => {
     const first = bucket('cash-main', 1200)
     const second = bucket('bank-main', -50)
@@ -64,8 +82,9 @@ describe('telegram browsing keyboards', () => {
 
   it('renders stable navigation for empty and paged account lists', () => {
     const empty = accountsBrowserKeyboard([], { page: 0, pageCount: 1 })
-    const profile = accountProfileKeyboard(3, 'account-token')
+    const profile = accountProfileKeyboard(3, 'account-token', { canDelete: true })
     const lockedProfile = accountProfileKeyboard(3, '')
+    const deleteConfirm = accountDeleteConfirmKeyboard(3, 'account-token')
 
     expect(empty.inline_keyboard).toHaveLength(4)
     expect(empty.inline_keyboard.flat().map((button) => button.callback_data)).toEqual(expect.arrayContaining([
@@ -77,7 +96,13 @@ describe('telegram browsing keyboards', () => {
       'accounts:net',
     ]))
     expect(profile.inline_keyboard[0][0].callback_data).toBe('accounts:edit:account-token')
-    expect(profile.inline_keyboard[1][0].callback_data).toBe('accounts:page:3')
+    expect(profile.inline_keyboard[1][0].callback_data).toBe('accounts:delete:account-token')
+    expect(profile.inline_keyboard[2][0].callback_data).toBe('accounts:page:3')
+    expect(deleteConfirm.inline_keyboard.flat().map((button) => button.callback_data)).toEqual([
+      'accounts:delete-confirm:account-token',
+      'accounts:open:account-token',
+      'accounts:page:3',
+    ])
     expect(profile.inline_keyboard.flat().some((button) => button.callback_data.startsWith('accounts:scope:'))).toBe(false)
     expect(lockedProfile.inline_keyboard.flat().some((button) => button.callback_data.startsWith('accounts:edit:'))).toBe(false)
   })

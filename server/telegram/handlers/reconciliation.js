@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
-import { accountSupportsTransferCurrency } from '../../../src/mohammadLedger/accountCompatibility.js'
-import { CURRENCIES } from '../../../src/mohammadLedger/ledgerCore.js'
+import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../../src/ledger/accountCatalog.js'
+import { accountSupportsTransferCurrency } from '../../../src/ledger/accountCompatibility.js'
+import { CURRENCIES } from '../../../src/ledger/ledgerCore.js'
 import {
   appendTelegramReconciliation,
   buildLedgerSnapshot,
@@ -9,7 +9,7 @@ import {
   parseBalanceText,
   rankAccountsForTelegram,
   telegramUpdateIdempotencyKey,
-} from '../../mohammadLedger/ledgerService.js'
+} from '../../ledger/ledgerService.js'
 import {
   accountChoiceToken,
   mainMenuKeyboard,
@@ -20,7 +20,7 @@ import {
   reconciliationTextStepKeyboard,
 } from '../keyboards.js'
 import { accountChoiceLegendText, escapeHtml, reconciliationReviewText, reconciliationStepText } from '../messages.js'
-import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
+import { preserveUiData } from '../../../src/ledger/uiTranslation.js'
 import { applyNumericKey, normalizeNumericBuffer, numericBufferDisplay, numericBufferValue } from '../numericKeypad.js'
 
 const STEPS = {
@@ -340,6 +340,19 @@ function isStaleReconciliationCallback(ctx, session) {
 
 async function sendExpiredReconciliationMessage(ctx) {
   const text = '<b>هذه مطابقة قديمة.</b>\n<blockquote>افتح مطابقة رصيد من القائمة إذا أردت البدء من جديد.</blockquote>'
+  if (ctx.isCallback && ctx.messageId) {
+    try {
+      return await ctx.telegram.editMessageText({
+        chat_id: ctx.chatId,
+        message_id: ctx.messageId,
+        text,
+        parse_mode: 'HTML',
+        reply_markup: mainMenuKeyboard(),
+      })
+    } catch {
+      // Fall back to a fresh message if Telegram cannot edit the old card.
+    }
+  }
   return ctx.telegram.sendMessage({ chat_id: ctx.chatId, text, parse_mode: 'HTML', reply_markup: mainMenuKeyboard() })
 }
 

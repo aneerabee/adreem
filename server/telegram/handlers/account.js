@@ -13,17 +13,17 @@ import {
   emptyAccountDraft,
   emptyCounterpartyOpenings,
   isCounterpartyBundleDraft,
-} from '../../../src/mohammadLedger/accountConfig.js'
-import { accountStructureUsage } from '../../../src/mohammadLedger/accountEditing.js'
-import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
+} from '../../../src/ledger/accountConfig.js'
+import { accountStructureUsage } from '../../../src/ledger/accountEditing.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, VALUE_KINDS } from '../../../src/ledger/accountCatalog.js'
 import {
   appendTelegramAccount,
   resolveTelegramReviewAccount,
   updateTelegramAccount,
   validateAccountDraft,
   validateExistingAccountDraft,
-} from '../../mohammadLedger/accountService.js'
-import { accountLabel, telegramUpdateIdempotencyKey } from '../../mohammadLedger/ledgerService.js'
+} from '../../ledger/accountService.js'
+import { accountLabel, telegramUpdateIdempotencyKey } from '../../ledger/ledgerService.js'
 import {
   accountGroupKeyboard,
   accountConfirmKeyboard,

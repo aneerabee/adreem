@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
-import { movementLabels } from '../../src/mohammadLedger/movementConfig.js'
-import { formatMoney } from '../mohammadLedger/ledgerService.js'
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../src/ledger/accountCatalog.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/ledger/ledgerCore.js'
+import { movementLabels } from '../../src/ledger/movementConfig.js'
+import { formatMoney } from '../ledger/ledgerService.js'
 import {
   accountBlockquote,
   alertsText,
@@ -41,9 +41,9 @@ import {
   separateLedgerKeyboard,
   separateVoidConfirmKeyboard,
 } from './keyboards.js'
-import { localizeTelegramPayload, preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
+import { localizeTelegramPayload, preserveUiData } from '../../src/ledger/uiTranslation.js'
 
-const ALLOWED_ARABIC_USER_NAME = 'محمد التجريبي'
+const ALLOWED_ARABIC_USER_NAME = 'أحمد التجريبي'
 const COLLIDING_PROJECT_NAME = 'دخل'
 const COLLIDING_EXPENSE_NAME = 'مالك'
 const COLLIDING_NOTE = 'مصروف'

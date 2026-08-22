@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { ACCOUNT_SUMMARY_SCOPES } from '../../src/mohammadLedger/ledgerScope.js'
+import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/ledger/accountCatalog.js'
+import { ACCOUNT_SUMMARY_SCOPES } from '../../src/ledger/ledgerScope.js'
 import { buildTelegramBalanceView, TELEGRAM_BALANCE_FILTERS } from './balanceView.js'
 
 function bucket(id, valueKind, dinar = 0, usd = 0, summaryScope) {

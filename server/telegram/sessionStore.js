@@ -12,6 +12,7 @@ export function sessionWithReplacementMessage(session, currentMessageId, replace
 
 export function createSessionStore({ ttlMs = DEFAULT_TTL_MS, onSet, onClear } = {}) {
   const sessions = new Map()
+  const activeScopes = new Map()
   const pendingWrites = []
   const writeTails = new Map()
   let flushTail = Promise.resolve()
@@ -46,6 +47,17 @@ export function createSessionStore({ ttlMs = DEFAULT_TTL_MS, onSet, onClear } = 
     return JSON.stringify([chatId, userId])
   }
 
+  function normalizedScope(scope) {
+    return {
+      ownerId: String(scope?.ownerId || ''),
+      ledgerId: String(scope?.ledgerId || ''),
+    }
+  }
+
+  function sameScope(left, right) {
+    return Boolean(left && right) && left.ownerId === right.ownerId && left.ledgerId === right.ledgerId
+  }
+
   function cleanup() {
     const now = Date.now()
     for (const [key, session] of sessions.entries()) {
@@ -74,9 +86,31 @@ export function createSessionStore({ ttlMs = DEFAULT_TTL_MS, onSet, onClear } = 
     },
     set(chatId, userId, session) {
       cleanup()
-      const nextSession = { ...cloneSession(session), touchedAt: Date.now() }
-      sessions.set(keyFor(chatId, userId), nextSession)
+      const key = keyFor(chatId, userId)
+      const scope = activeScopes.get(key)
+      const nextSession = {
+        ...cloneSession(session),
+        ...(scope ? { ledgerScope: cloneSession(scope) } : {}),
+        touchedAt: Date.now(),
+      }
+      sessions.set(key, nextSession)
       persistSet(chatId, userId, nextSession)
+    },
+    bindScope(chatId, userId, scope) {
+      cleanup()
+      const key = keyFor(chatId, userId)
+      const nextScope = normalizedScope(scope)
+      const current = sessions.get(key) || null
+      const discarded = Boolean(current && !sameScope(current.ledgerScope, nextScope))
+      if (discarded) {
+        sessions.delete(key)
+        persistClear(chatId, userId)
+      }
+      activeScopes.set(key, nextScope)
+      return { discarded }
+    },
+    releaseScope(chatId, userId) {
+      activeScopes.delete(keyFor(chatId, userId))
     },
     update(chatId, userId, updater) {
       const current = this.get(chatId, userId)

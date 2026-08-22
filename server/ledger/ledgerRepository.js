@@ -1,0 +1,403 @@
+import { createClient } from '@supabase/supabase-js'
+import { createHash } from 'node:crypto'
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import {
+  ADREEM_STATE_ROW_ID,
+  LEGACY_STATE_ROW_ID,
+  STATE_ROW_ID,
+  LEDGER_STATE_TABLE,
+  adreemStateRowId,
+  createLedgerIdentity,
+  createEmptyAdreemState,
+  normalizeLedgerState,
+  selectPersistedLedgerRows,
+} from '../../src/ledger/ledgerState.js'
+import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../../src/ledger/ledgerOperations.js'
+import { attachmentContentMatchesMime } from './attachmentValidation.js'
+import { validateLedgerStateTransition } from './stateValidation.js'
+
+const MAX_SAVE_ATTEMPTS = 4
+const DEFAULT_BACKUP_LIMIT = 60
+const DEFAULT_REGISTRY_FILE = './adreem-telegram-users.json'
+const REQUIRED_PERSISTED_LISTS = ['accounts', 'movements']
+const OPTIONAL_PERSISTED_RECORD_LISTS = ['dimensions', 'attachments', 'recurringRules', 'reconciliations', 'auditEvents']
+const OPTIONAL_PERSISTED_LISTS = [...OPTIONAL_PERSISTED_RECORD_LISTS, 'ignoredExternalAccounts']
+
+export class ConcurrentLedgerUpdateError extends Error {
+  constructor(message = 'Ledger state changed during save.') {
+    super(message)
+    this.name = 'ConcurrentLedgerUpdateError'
+  }
+}
+
+export class LedgerIntegrityError extends Error {
+  constructor(validation) {
+    super(validation?.errors?.[0]?.message || 'Ledger integrity check failed.')
+    this.name = 'LedgerIntegrityError'
+    this.validation = validation
+  }
+}
+
+export class PersistedLedgerStateError extends Error {
+  constructor(rowId, validation) {
+    super(`Persisted ledger row ${rowId || 'unknown'} is invalid: ${validation?.errors?.[0]?.message || 'invalid payload'}`)
+    this.name = 'PersistedLedgerStateError'
+    this.rowId = rowId || null
+    this.validation = validation
+  }
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function validatePersistedLedgerPayload(payload) {
+  const errors = []
+  if (!isRecord(payload)) {
+    return {
+      ok: false,
+      errors: [{ code: 'invalid-persisted-payload', field: 'payload', message: 'Cloud ledger payload must be an object.' }],
+    }
+  }
+
+  for (const field of REQUIRED_PERSISTED_LISTS) {
+    if (!Array.isArray(payload[field])) {
+      errors.push({ code: 'invalid-persisted-list', field, message: `Cloud ledger ${field} must be an array.` })
+    }
+  }
+  for (const field of OPTIONAL_PERSISTED_LISTS) {
+    if (Object.prototype.hasOwnProperty.call(payload, field) && !Array.isArray(payload[field])) {
+      errors.push({ code: 'invalid-persisted-list', field, message: `Cloud ledger ${field} must be an array when present.` })
+    }
+  }
+  for (const field of [...REQUIRED_PERSISTED_LISTS, ...OPTIONAL_PERSISTED_RECORD_LISTS]) {
+    if (!Array.isArray(payload[field])) continue
+    const invalidIndex = payload[field].findIndex((record) => !isRecord(record))
+    if (invalidIndex >= 0) {
+      errors.push({
+        code: 'invalid-persisted-record',
+        field,
+        index: invalidIndex,
+        message: `Cloud ledger ${field}[${invalidIndex}] must be an object.`,
+      })
+    }
+  }
+  if (Array.isArray(payload.ignoredExternalAccounts)) {
+    const invalidIndex = payload.ignoredExternalAccounts.findIndex((accountId) => typeof accountId !== 'string')
+    if (invalidIndex >= 0) {
+      errors.push({
+        code: 'invalid-persisted-record',
+        field: 'ignoredExternalAccounts',
+        index: invalidIndex,
+        message: `Cloud ledger ignoredExternalAccounts[${invalidIndex}] must be a string.`,
+      })
+    }
+  }
+
+  return { ok: errors.length === 0, errors }
+}
+
+export function selectLedgerRowsForLoad(rows, fallbackState, options = {}) {
+  const safeRows = Array.isArray(rows) ? rows : []
+  const primaryRowId = options.primaryRowId || STATE_ROW_ID
+  const legacyRowId = options.legacyRowId || LEGACY_STATE_ROW_ID
+  const selectedRow = safeRows.find((row) => row?.id === primaryRowId) ||
+    safeRows.find((row) => row?.id === legacyRowId)
+
+  if (selectedRow) {
+    const validation = validatePersistedLedgerPayload(selectedRow.payload)
+    if (!validation.ok) throw new PersistedLedgerStateError(selectedRow.id, validation)
+  }
+
+  return selectPersistedLedgerRows(safeRows, fallbackState, { primaryRowId, legacyRowId })
+}
+
+export function ledgerVersionMatches(currentUpdatedAt, expectedUpdatedAt) {
+  return String(currentUpdatedAt || '') === String(expectedUpdatedAt || '')
+}
+
+export function nextLedgerVersionTimestamp(expectedUpdatedAt = null, now = Date.now()) {
+  const expectedTime = Date.parse(String(expectedUpdatedAt || ''))
+  const minimumTime = Number.isFinite(expectedTime) ? expectedTime + 1 : now
+  return new Date(Math.max(now, minimumTime)).toISOString()
+}
+
+export function assertLedgerStateTransition(nextState, currentState, ledgerConfig = {}, options = {}) {
+  const validation = validateLedgerStateTransition(nextState, currentState, {
+    ledgerId: ledgerConfig.identity?.ledgerId,
+    allowedDeletedAccountIds: options.allowedDeletedAccountIds,
+  })
+  if (!validation.ok) throw new LedgerIntegrityError(validation)
+  return validation
+}
+
+export function hasPersistedLedgerRow(loadResult, ledgerConfig) {
+  return Boolean(loadResult?.rowId && loadResult.rowId === ledgerConfig?.rowId)
+}
+
+export function createLedgerRepository(env = process.env, options = {}) {
+  const ledgerConfig = resolveLedgerConfig(env, options)
+  const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL
+  const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase env for ADREEM server. Required: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.')
+  }
+
+  const client = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  return {
+    ledgerConfig,
+    load: () => loadLedgerState(client, ledgerConfig),
+    update: (updater, updateOptions = {}) => updateLedgerState(client, updater, ledgerConfig, env, updateOptions),
+    backupRejected: (state) => writeLedgerBackup(env, ledgerConfig, 'rejected', state),
+    uploadAttachmentFile: (file) => uploadLedgerAttachmentFile(client, ledgerConfig, env, file),
+    deleteAttachmentFile: (storagePath) => deleteLedgerAttachmentFile(client, ledgerConfig, env, storagePath),
+  }
+}
+
+function cleanAttachmentFileName(value = '') {
+  const cleaned = String(value || 'attachment')
+    .trim()
+    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+  return cleaned || 'attachment'
+}
+
+function attachmentBucket(env = process.env) {
+  const bucket = String(env.ADREEM_ATTACHMENTS_BUCKET || '').trim()
+  if (!bucket) throw new Error('Attachments bucket is not configured.')
+  return bucket
+}
+
+async function uploadLedgerAttachmentFile(client, ledgerConfig, env, file = {}) {
+  const buffer = Buffer.isBuffer(file.buffer) ? file.buffer : Buffer.from(file.buffer || '')
+  const mimeType = String(file.mimeType || '').trim().toLowerCase()
+  if (!buffer.length) throw new Error('Attachment file is empty.')
+  if (buffer.length > ATTACHMENT_MAX_SIZE_BYTES) throw new Error('Attachment is larger than 10MB.')
+  if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType)) throw new Error('Attachment type is not allowed.')
+  if (!attachmentContentMatchesMime(buffer, mimeType)) throw new Error('Attachment content does not match its file type.')
+
+  const fileName = cleanAttachmentFileName(file.fileName)
+  const ledgerId = ledgerConfig.identity.ledgerId
+  const date = new Date().toISOString().slice(0, 10)
+  const hash = createHash('sha256').update(`${ledgerId}:${fileName}:${Date.now()}:${buffer.length}`).digest('hex').slice(0, 16)
+  const storagePath = `${ledgerId}/${date}/${hash}-${fileName}`
+  const { error } = await client.storage.from(attachmentBucket(env)).upload(storagePath, buffer, {
+    contentType: mimeType || 'application/octet-stream',
+    upsert: false,
+  })
+  if (error) throw new Error(error.message || 'Attachment upload failed.')
+  return { label: fileName, storagePath, mimeType, sizeBytes: buffer.length }
+}
+
+async function deleteLedgerAttachmentFile(client, ledgerConfig, env, storagePath = '') {
+  const cleanPath = String(storagePath || '').trim()
+  if (!cleanPath.startsWith(`${ledgerConfig.identity.ledgerId}/`) || cleanPath.includes('..')) {
+    throw new Error('Attachment path is outside this ledger.')
+  }
+  const { error } = await client.storage.from(attachmentBucket(env)).remove([cleanPath])
+  if (error) throw new Error(error.message || 'Attachment deletion failed.')
+  return { ok: true }
+}
+
+export function resolveLedgerConfig(env = process.env, options = {}) {
+  const identity = createLedgerIdentity({
+    tenantId: options.tenantId || env.ADREEM_TENANT_ID || env.VITE_ADREEM_TENANT_ID,
+    ledgerId: options.ledgerId || env.ADREEM_LEDGER_ID || env.VITE_ADREEM_LEDGER_ID,
+  })
+  const rowId = options.rowId || adreemStateRowId(identity)
+  const legacyRowIds = rowId === ADREEM_STATE_ROW_ID ? [LEGACY_STATE_ROW_ID] : []
+  return {
+    identity,
+    rowId,
+    readableRowIds: [rowId, ...legacyRowIds],
+    legacyRowId: legacyRowIds[0] || null,
+  }
+}
+
+export function parseTelegramLedgerMap(value = '') {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .reduce((map, item) => {
+      const [userId, ledgerId] = item.split(/[=:]/).map((part) => part?.trim())
+      if (userId && ledgerId) map.set(userId, createLedgerIdentity({ ledgerId }).ledgerId)
+      return map
+    }, new Map())
+}
+
+export function resolveTelegramLedgerId(userId, env = process.env) {
+  const explicitMap = parseTelegramLedgerMap(env.ADREEM_TELEGRAM_LEDGER_IDS)
+  return explicitMap.get(String(userId)) || createLedgerIdentity({
+    ledgerId: env.ADREEM_LEDGER_ID || env.VITE_ADREEM_LEDGER_ID,
+  }).ledgerId
+}
+
+async function loadLedgerState(client, ledgerConfig) {
+  const fallback = createEmptyAdreemState(undefined, ledgerConfig.identity)
+  const { data, error } = await client
+    .from(LEDGER_STATE_TABLE)
+    .select('id, payload, updated_at')
+    .in('id', ledgerConfig.readableRowIds)
+
+  if (error) throw error
+  return selectLedgerRowsForLoad(data, fallback, {
+    primaryRowId: ledgerConfig.rowId,
+    legacyRowId: ledgerConfig.legacyRowId || '__no_legacy_row__',
+  })
+}
+
+async function insertLedgerState(client, state, ledgerConfig) {
+  const updatedAt = new Date().toISOString()
+  const { data, error } = await client
+    .from(LEDGER_STATE_TABLE)
+    .insert({
+      id: ledgerConfig.rowId,
+      payload: state,
+      updated_at: updatedAt,
+    })
+    .select('updated_at')
+    .maybeSingle()
+
+  if (error) {
+    if (error.code === '23505') throw new ConcurrentLedgerUpdateError()
+    throw error
+  }
+  return data?.updated_at || updatedAt
+}
+
+async function replaceLedgerState(client, state, expectedUpdatedAt, ledgerConfig) {
+  const updatedAt = nextLedgerVersionTimestamp(expectedUpdatedAt)
+  let query = client
+    .from(LEDGER_STATE_TABLE)
+    .update({
+      payload: state,
+      updated_at: updatedAt,
+    })
+    .eq('id', ledgerConfig.rowId)
+
+  query = expectedUpdatedAt == null
+    ? query.is('updated_at', null)
+    : query.eq('updated_at', expectedUpdatedAt)
+
+  const { data, error } = await query.select('updated_at').maybeSingle()
+  if (error) throw error
+  if (!data?.updated_at) throw new ConcurrentLedgerUpdateError()
+  return data.updated_at
+}
+
+export function prepareLedgerStateForSave(resultState, currentState, savedAt = new Date().toISOString(), identity = null) {
+  return normalizeLedgerState(
+    {
+      ...resultState,
+      ...(identity || {}),
+      savedAt,
+    },
+    currentState,
+  )
+}
+
+function ledgerBackupDirectory(env = process.env) {
+  if (env.ADREEM_BACKUP_DIR) return env.ADREEM_BACKUP_DIR
+  if (env.ADREEM_LEDGER_BACKUP_DIR) return env.ADREEM_LEDGER_BACKUP_DIR
+  const registryPath = env.ADREEM_TELEGRAM_USERS_FILE || env.ADREEM_TELEGRAM_REGISTRY_PATH || DEFAULT_REGISTRY_FILE
+  return join(dirname(registryPath), 'ledger-backups')
+}
+
+function backupFileName(ledgerConfig, phase, savedAt = new Date().toISOString()) {
+  const safeLedgerId = String(ledgerConfig.identity.ledgerId || ledgerConfig.rowId || 'ledger')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .slice(0, 80)
+  const stamp = savedAt.replace(/[:.]/g, '-')
+  return `${safeLedgerId}-${stamp}-${phase}.json`
+}
+
+function pruneLedgerBackups(directory, ledgerConfig, limit = DEFAULT_BACKUP_LIMIT) {
+  const safeLedgerId = String(ledgerConfig.identity.ledgerId || ledgerConfig.rowId || 'ledger')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .slice(0, 80)
+  const files = readdirSync(directory)
+    .filter((file) => file.startsWith(`${safeLedgerId}-`) && file.endsWith('.json'))
+    .sort()
+  const excess = files.length - limit
+  if (excess <= 0) return
+  files.slice(0, excess).forEach((file) => rmSync(join(directory, file), { force: true }))
+}
+
+export function writeLedgerBackup(env, ledgerConfig, phase, state) {
+  if (env.ADREEM_BACKUP_DISABLED === 'true') return
+  if (process.env.NODE_ENV === 'test' && !env.ADREEM_BACKUP_DIR && !env.ADREEM_LEDGER_BACKUP_DIR) return
+  try {
+    const directory = ledgerBackupDirectory(env)
+    mkdirSync(directory, { recursive: true })
+    const savedAt = new Date().toISOString()
+    const payload = {
+      appId: ledgerConfig.identity.appId,
+      tenantId: ledgerConfig.identity.tenantId,
+      ledgerId: ledgerConfig.identity.ledgerId,
+      rowId: ledgerConfig.rowId,
+      phase,
+      savedAt,
+      state,
+    }
+    writeFileSync(join(directory, backupFileName(ledgerConfig, phase, savedAt)), `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 })
+    pruneLedgerBackups(directory, ledgerConfig, Number(env.ADREEM_BACKUP_LIMIT || DEFAULT_BACKUP_LIMIT))
+  } catch (error) {
+    console.error('[adreem-ledger-backup]', error?.message || error)
+  }
+}
+
+async function updateLedgerState(client, updater, ledgerConfig, env = process.env, updateOptions = {}) {
+  const { expectedUpdatedAt } = updateOptions
+  let lastConflict = null
+  const checksClientVersion = expectedUpdatedAt !== undefined
+
+  for (let attempt = 1; attempt <= MAX_SAVE_ATTEMPTS; attempt += 1) {
+    const current = await loadLedgerState(client, ledgerConfig)
+    if (checksClientVersion && !ledgerVersionMatches(current.updatedAt, expectedUpdatedAt)) {
+      throw new ConcurrentLedgerUpdateError('Ledger was updated by another session. Reload before saving.')
+    }
+    const result = await updater(current.state)
+    if (!result?.state) return { ...result, state: current.state, updatedAt: current.updatedAt }
+
+    const nextState = prepareLedgerStateForSave(result.state, current.state, new Date().toISOString(), ledgerConfig.identity)
+    try {
+      assertLedgerStateTransition(nextState, current.state, ledgerConfig, {
+        allowedDeletedAccountIds: updateOptions.allowUnusedAccountDeletion
+          ? result.deletedAccountIds
+          : [],
+      })
+    } catch (error) {
+      if (!(error instanceof LedgerIntegrityError)) throw error
+      return {
+        ...result,
+        state: current.state,
+        ok: false,
+        rejected: true,
+        validation: error.validation,
+        message: error.message,
+        updatedAt: current.updatedAt,
+      }
+    }
+
+    try {
+      const hasPrimaryRow = hasPersistedLedgerRow(current, ledgerConfig)
+      if (hasPrimaryRow) writeLedgerBackup(env, ledgerConfig, 'before', current.state)
+      const updatedAt = hasPrimaryRow
+        ? await replaceLedgerState(client, nextState, current.updatedAt, ledgerConfig)
+        : await insertLedgerState(client, nextState, ledgerConfig)
+      writeLedgerBackup(env, ledgerConfig, 'after', nextState)
+      return { ...result, state: nextState, updatedAt, attempts: attempt }
+    } catch (error) {
+      if (!(error instanceof ConcurrentLedgerUpdateError)) throw error
+      lastConflict = error
+    }
+  }
+
+  throw lastConflict || new ConcurrentLedgerUpdateError()
+}

@@ -41,8 +41,8 @@ describe('localized Telegram client', () => {
     const client = fakeClient()
     const localized = createLocalizedTelegramClient(client, 'en')
 
-    const payload = await localized.sendMessage({ chat_id: 1, text: '<b>محمد الكيفو</b>' })
+    const payload = await localized.sendMessage({ chat_id: 1, text: '<b>أحمد الكيفو</b>' })
 
-    expect(payload.text).toBe('<b>محمد الكيفو</b>')
+    expect(payload.text).toBe('<b>أحمد الكيفو</b>')
   })
 })

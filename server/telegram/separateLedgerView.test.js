@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/ledger/ledgerCore.js'
 import { loadSeparateLedgerRecords, paginateSeparateLedgerRecords } from './separateLedgerView.js'
 
 function record(id, sequence, overrides = {}) {

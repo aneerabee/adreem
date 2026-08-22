@@ -1,9 +1,9 @@
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
-import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { accountStructureUsage } from '../../src/mohammadLedger/accountEditing.js'
-import { normalizeAccountSearchText } from '../../src/mohammadLedger/movementAccounts.js'
-import { buildNetPosition, convertNetPosition } from '../../src/mohammadLedger/ledgerScope.js'
-import { MAIN_LEDGER_MOVEMENT_TYPES, normalizeSeparateRecordDirection, separateRecordCancellationDraft } from '../../src/mohammadLedger/separateRecords.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/ledger/ledgerCore.js'
+import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/ledger/accountCatalog.js'
+import { accountDeletionEligibility, accountStructureUsage } from '../../src/ledger/accountEditing.js'
+import { normalizeAccountSearchText } from '../../src/ledger/movementAccounts.js'
+import { buildNetPosition, convertNetPosition } from '../../src/ledger/ledgerScope.js'
+import { MAIN_LEDGER_MOVEMENT_TYPES, normalizeSeparateRecordDirection, separateRecordCancellationDraft } from '../../src/ledger/separateRecords.js'
 import {
   buildDimensionReports,
   buildExpenseCategoryReports,
@@ -11,8 +11,9 @@ import {
   dimensionsFromAccounts,
   dueRecurringRules,
   executeRecurringRuleInState,
-} from '../../src/mohammadLedger/ledgerOperations.js'
-import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
+  recurringRuleDueOn,
+} from '../../src/ledger/ledgerOperations.js'
+import { createLedgerRepository } from '../ledger/ledgerRepository.js'
 import { createSupabaseTelegramLedgerAccess } from './supabaseLedgerAccess.js'
 import {
   appendTelegramMovement,
@@ -20,9 +21,10 @@ import {
   formatMoney,
   runTelegramIdempotentStateAction,
   telegramUpdateIdempotencyKey,
-} from '../mohammadLedger/ledgerService.js'
+} from '../ledger/ledgerService.js'
 import {
   accountChoiceToken,
+  accountDeleteConfirmKeyboard,
   accountProfileKeyboard,
   accountsBrowserKeyboard,
   dimensionKeyboard,
@@ -64,7 +66,7 @@ import {
 import { createSessionStore, sessionWithReplacementMessage } from './sessionStore.js'
 import { createTelegramClient } from './telegramClient.js'
 import { createLocalizedTelegramClient } from './localizedTelegram.js'
-import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
+import { preserveUiData } from '../../src/ledger/uiTranslation.js'
 import { handleAccountCallback, handleAccountText, startAccount, startEditAccount, startReviewAccount } from './handlers/account.js'
 import { handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement, startSeparateRecord } from './handlers/movement.js'
 import { handleReconciliationCallback, handleReconciliationText, startReconciliation } from './handlers/reconciliation.js'
@@ -261,7 +263,7 @@ async function showMoreMenu(ctx) {
   )
 }
 
-async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money') {
+async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money', notice = '') {
   sessions.clear(ctx.chatId, ctx.userId)
   if (requestedFilter === 'separate') return showSeparateAccounts(ctx, requestedPage)
   const { state } = await ctx.repository.load()
@@ -285,8 +287,9 @@ async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money') {
   const balancePair = (value) => `${formatMoney(value.dinar, CURRENCIES.DINAR)} · ${formatMoney(value.usd, CURRENCIES.USD)}`
   const accountLegend = accountChoiceLegendText(visibleBuckets.map((bucket) => bucket.account))
   const filterLabel = { money: 'فلوسي', collect: 'لي عند الناس', pay: 'عليّ للناس', separate: 'حسابات منفصلة', all: 'كل الحسابات' }[filter]
+  const noticeText = notice ? `\n<blockquote>${escapeHtml(notice)}</blockquote>` : ''
   const text = allBuckets.length
-    ? `<b>ADREEM · الأرصدة</b>\n<blockquote>${escapeHtml(`فلوسي\n${balancePair(summary.money)}\n\nلي عند الناس\n${balancePair(summary.collect)}\n\nعليّ للناس\n${balancePair(summary.pay)}`)}</blockquote>\n\n<b>${escapeHtml(filterLabel)}</b>\n<code>${filteredBuckets.length} حساب · ${page + 1}/${pageCount}</code>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}${visibleBuckets.length ? '' : '\n<blockquote>لا توجد حسابات في هذا القسم.</blockquote>'}`
+    ? `<b>ADREEM · الأرصدة</b>${noticeText}\n<blockquote>${escapeHtml(`فلوسي\n${balancePair(summary.money)}\n\nلي عند الناس\n${balancePair(summary.collect)}\n\nعليّ للناس\n${balancePair(summary.pay)}`)}</blockquote>\n\n<b>${escapeHtml(filterLabel)}</b>\n<code>${filteredBuckets.length} حساب · ${page + 1}/${pageCount}</code>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}${visibleBuckets.length ? '' : '\n<blockquote>لا توجد حسابات في هذا القسم.</blockquote>'}`
     : '<b>ADREEM · الأرصدة</b>\n<blockquote>لا توجد حسابات.\nأنشئ حسابًا من «المزيد».</blockquote>'
   return sendScreen(ctx, text, accountsBrowserKeyboard(visibleBuckets, session))
 }
@@ -380,6 +383,61 @@ async function handleAccountsCallback(ctx, data) {
   }
   if (data.startsWith('accounts:filter:')) return showAccounts(ctx, 0, data.slice('accounts:filter:'.length))
   if (data.startsWith('accounts:page:')) return showAccounts(ctx, Number(data.slice('accounts:page:'.length)), session.balanceFilter)
+  if (data.startsWith('accounts:delete-confirm:')) {
+    const deleteToken = data.slice('accounts:delete-confirm:'.length)
+    const deleteAccountId = session.choices?.accounts?.[deleteToken]
+    if (!deleteAccountId || session.pendingDeleteAccountId !== deleteAccountId) {
+      return showAccounts(ctx, session.page, session.balanceFilter, 'انتهى طلب الحذف. لم يتغير شيء.')
+    }
+    const { state, revision } = await ctx.repository.load()
+    const account = (state.accounts || []).find((item) => item.id === deleteAccountId)
+    const deletion = accountDeletionEligibility(account, {
+      accounts: state.accounts || [],
+      movements: state.movements || [],
+      attachments: state.attachments || [],
+      reconciliations: state.reconciliations || [],
+      recurringRules: state.recurringRules || [],
+      dimensions: state.dimensions || [],
+    })
+    if (!deletion.canDelete || typeof ctx.repository.deleteUnusedAccount !== 'function') {
+      return showAccounts(ctx, session.page, session.balanceFilter, 'لم يعد الحساب قابلًا للحذف. لم يتغير شيء.')
+    }
+    try {
+      await ctx.repository.deleteUnusedAccount(deleteAccountId, revision)
+      return showAccounts(ctx, session.page, session.balanceFilter, 'تم حذف الحساب نهائيًا.')
+    } catch (error) {
+      console.error('[adreem-telegram-bot] account deletion failed', {
+        name: error?.name || 'Error',
+        code: error?.code || '',
+      })
+      return showAccounts(ctx, session.page, session.balanceFilter, 'تعذر الحذف الآن. لم يتغير شيء.')
+    }
+  }
+  if (data.startsWith('accounts:delete:')) {
+    const deleteToken = data.slice('accounts:delete:'.length)
+    const deleteAccountId = session.choices?.accounts?.[deleteToken]
+    if (!deleteAccountId) return showAccounts(ctx, session.page, session.balanceFilter)
+    const { state } = await ctx.repository.load()
+    const account = (state.accounts || []).find((item) => item.id === deleteAccountId)
+    const deletion = accountDeletionEligibility(account, {
+      accounts: state.accounts || [],
+      movements: state.movements || [],
+      attachments: state.attachments || [],
+      reconciliations: state.reconciliations || [],
+      recurringRules: state.recurringRules || [],
+      dimensions: state.dimensions || [],
+    })
+    if (!deletion.canDelete || typeof ctx.repository.deleteUnusedAccount !== 'function') {
+      return showAccounts(ctx, session.page, session.balanceFilter, 'هذا الحساب مستخدم أو مرتبط بسجل آخر، لذلك لا يمكن حذفه.')
+    }
+    const nextSession = { ...session, pendingDeleteAccountId: deleteAccountId }
+    sessions.set(ctx.chatId, ctx.userId, nextSession)
+    return sendScreen(
+      ctx,
+      `<b>حذف الحساب نهائيًا؟</b>\n<blockquote>${escapeHtml(`${preserveUiData(account.ownerName || account.name || 'الحساب')}\nمتاح فقط لأنه لم يُستخدم في أي حركة.`)}</blockquote>`,
+      accountDeleteConfirmKeyboard(session.page, deleteToken),
+    )
+  }
   if (data.startsWith('accounts:edit:')) {
     const editToken = data.slice('accounts:edit:'.length)
     const editAccountId = session.choices?.accounts?.[editToken]
@@ -412,15 +470,21 @@ async function handleAccountsCallback(ctx, data) {
     movements.length ? movements.join('\n') : '<blockquote>لا توجد حركات لهذا الحساب.</blockquote>',
     accountEditHistoryText(account.id, state.auditEvents || []),
   ].filter(Boolean).join('\n')
-  const accountLocked = accountStructureUsage(account, {
+  const accountContext = {
     accounts: state.accounts || [],
     movements: state.movements || [],
     reconciliations: state.reconciliations || [],
     recurringRules: state.recurringRules || [],
     dimensions: state.dimensions || [],
-  }).movement
+  }
+  const accountLocked = accountStructureUsage(account, accountContext).movement
+  const deletion = accountDeletionEligibility(account, {
+    ...accountContext,
+    attachments: state.attachments || [],
+  })
   return sendScreen(ctx, text, accountProfileKeyboard(session.page, token, {
     canEdit: !accountLocked,
+    canDelete: deletion.canDelete && typeof ctx.repository.deleteUnusedAccount === 'function',
   }))
 }
 
@@ -824,7 +888,8 @@ async function showRecurring(ctx, notice = '', requestedPage = 0) {
   rules.forEach((rule, index) => {
     const amount = formatMoney(rule.template?.amount, rule.template?.currency)
     const status = dueRuleIds.has(rule.id) ? 'مستحقة الآن' : 'غير مستحقة'
-    lines.push('', `<blockquote>${escapeHtml(`#${session.items[index].number} · ${preserveUiData(rule.name)}\n${amount} · يوم ${rule.dayOfMonth || 1}\n${status}`)}</blockquote>`)
+    const nextRunOn = recurringRuleDueOn(rule)
+    lines.push('', `<blockquote>${escapeHtml(`#${session.items[index].number} · ${preserveUiData(rule.name)}\n${amount}\n${status} · ${nextRunOn}`)}</blockquote>`)
   })
   return sendScreen(ctx, lines.join('\n'), recurringRulesKeyboard(session))
 }
@@ -962,9 +1027,10 @@ async function handleHistoryCallback(ctx, data) {
   if (!movementId) return showHistory(ctx)
 
   if (action === 'cancel') {
-    const { state } = await ctx.repository.load()
+    const { state } = await ctx.repository.load({ movementIds: [movementId] })
     const snapshot = buildLedgerSnapshot(state)
     const movement = state.movements.find((item) => item.id === movementId)
+    if (!movement) return showHistory(ctx, 'هذه الحركة لم تعد موجودة في السجل.', session.page)
     const text = [
       '<b>تأكيد إلغاء الحركة</b>',
       '<code>الإلغاء يبقي الحركة في السجل كملغية</code>',
@@ -1263,8 +1329,13 @@ async function handleUpdate(update, execution = null) {
     })
     return
   }
-  if (update.callback_query) return handleCallback(ctx, update)
-  if (update.message) return handleMessage(ctx, update)
+  sessions.bindScope(ctx.chatId, ctx.userId, identity)
+  try {
+    if (update.callback_query) return await handleCallback(ctx, update)
+    if (update.message) return await handleMessage(ctx, update)
+  } finally {
+    sessions.releaseScope(ctx.chatId, ctx.userId)
+  }
 }
 
 async function handleUpdateDurably(update) {

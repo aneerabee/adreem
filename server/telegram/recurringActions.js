@@ -2,7 +2,7 @@ import {
   createAuditEvent,
   disableRecurringRule,
   dueRecurringRules,
-} from '../../src/mohammadLedger/ledgerOperations.js'
+} from '../../src/ledger/ledgerOperations.js'
 import { createActionSessionId, stableActionToken } from './actionTokens.js'
 
 export const RECURRING_ACTION_LIMIT = 8

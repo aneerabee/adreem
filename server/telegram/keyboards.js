@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
-import { accountPresetGroups, accountPresets, accountPrimaryName } from '../../src/mohammadLedger/accountConfig.js'
-import { CURRENCIES } from '../../src/mohammadLedger/ledgerCore.js'
-import { movementTypeOptions } from '../../src/mohammadLedger/movementConfig.js'
-import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
+import { accountPresetGroups, accountPresets, accountPrimaryName } from '../../src/ledger/accountConfig.js'
+import { CURRENCIES } from '../../src/ledger/ledgerCore.js'
+import { movementTypeOptions } from '../../src/ledger/movementConfig.js'
+import { preserveUiData } from '../../src/ledger/uiTranslation.js'
 import {
   accountChoiceButtonStyle,
   accountChoiceButtonText,
@@ -342,8 +342,19 @@ export function accountProfileKeyboard(page = 0, accountToken = '', options = {}
   return {
     inline_keyboard: [
       ...(accountToken && options.canEdit !== false ? [[{ text: 'تعديل الحساب', callback_data: `accounts:edit:${accountToken}`, style: 'success' }]] : []),
+      ...(accountToken && options.canDelete === true ? [[{ text: 'حذف الحساب', callback_data: `accounts:delete:${accountToken}`, style: 'danger' }]] : []),
       [{ text: '↩️ الأرصدة', callback_data: `accounts:page:${Math.max(0, Number(page) || 0)}`, style: 'primary' }],
       [{ text: 'الرئيسية', callback_data: 'main:home' }],
+    ],
+  }
+}
+
+export function accountDeleteConfirmKeyboard(page = 0, accountToken = '') {
+  return {
+    inline_keyboard: [
+      [{ text: 'نعم، حذف نهائي', callback_data: `accounts:delete-confirm:${accountToken}`, style: 'danger' }],
+      [{ text: '↩️ رجوع', callback_data: `accounts:open:${accountToken}`, style: 'primary' }],
+      [{ text: 'الأرصدة', callback_data: `accounts:page:${Math.max(0, Number(page) || 0)}` }],
     ],
   }
 }
@@ -495,6 +506,37 @@ export function recurringKeyboard() {
       [{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }],
     ],
   }
+}
+
+export function recurringDateKeyboard(monthKey, selectedDate = '') {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(monthKey || ''))
+  const now = new Date()
+  const year = match ? Number(match[1]) : now.getUTCFullYear()
+  const month = match ? Number(match[2]) : now.getUTCMonth() + 1
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  const normalizedMonth = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`
+  const previous = new Date(Date.UTC(year, month - 2, 1))
+  const next = new Date(Date.UTC(year, month, 1))
+  const monthValue = (date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
+  const rows = [[{ text: normalizedMonth, callback_data: 'mv:recurring-date:noop', style: 'primary' }]]
+
+  for (let day = 1; day <= lastDay; day += 7) {
+    rows.push(Array.from({ length: Math.min(7, lastDay - day + 1) }, (_unused, index) => {
+      const value = `${normalizedMonth}-${String(day + index).padStart(2, '0')}`
+      return {
+        text: value === selectedDate ? `✓ ${day + index}` : String(day + index),
+        callback_data: `mv:recurring-date:${value}`,
+        ...(value === selectedDate ? { style: 'success' } : {}),
+      }
+    }))
+  }
+
+  rows.push([
+    { text: '‹', callback_data: `mv:recurring-month:${monthValue(previous)}` },
+    { text: '›', callback_data: `mv:recurring-month:${monthValue(next)}` },
+  ])
+  rows.push([{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
+  return { inline_keyboard: rows }
 }
 
 export function confirmKeyboard() {

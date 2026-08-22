@@ -1,5 +1,5 @@
-import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { isAccountIncludedInNet } from '../../src/mohammadLedger/ledgerScope.js'
+import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/ledger/accountCatalog.js'
+import { isAccountIncludedInNet } from '../../src/ledger/ledgerScope.js'
 
 export const TELEGRAM_BALANCE_FILTERS = Object.freeze({
   MONEY: 'money',

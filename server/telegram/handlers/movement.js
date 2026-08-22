@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
-import { CURRENCIES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
+import { VALUE_KINDS } from '../../../src/ledger/accountCatalog.js'
+import { CURRENCIES, MOVEMENT_TYPES } from '../../../src/ledger/ledgerCore.js'
 import {
   movementAccountCurrencyForRole,
   movementConfigFor,
@@ -12,18 +12,20 @@ import {
   movementSupportsDimension,
   movementSupportsExpenseCategory,
   movementTypeOptions,
-} from '../../../src/mohammadLedger/movementConfig.js'
+} from '../../../src/ledger/movementConfig.js'
 import {
   ALLOWED_ATTACHMENT_MIME_TYPES,
   ATTACHMENT_MAX_SIZE_BYTES,
+  defaultRecurringFirstRunOn,
   dimensionsFromAccounts,
-} from '../../../src/mohammadLedger/ledgerOperations.js'
+  normalizeRecurringDateKey,
+} from '../../../src/ledger/ledgerOperations.js'
 import {
   SEPARATE_RECORD_DIRECTIONS,
   normalizeSeparateRecordDirection,
   normalizeSeparateRecordName,
   separateRecordNames,
-} from '../../../src/mohammadLedger/separateRecords.js'
+} from '../../../src/ledger/separateRecords.js'
 import {
   appendTelegramMovement,
   buildLedgerSnapshot,
@@ -34,7 +36,7 @@ import {
   rankMovementAccountsForTelegram,
   resolveTelegramReviewMovement,
   telegramUpdateIdempotencyKey,
-} from '../../mohammadLedger/ledgerService.js'
+} from '../../ledger/ledgerService.js'
 import {
   accountChoicesKeyboard,
   accountChoiceToken,
@@ -48,11 +50,12 @@ import {
   noteKeyboard,
   numericKeypadKeyboard,
   recurringKeyboard,
+  recurringDateKeyboard,
   separateDirectionKeyboard,
   separateNameKeyboard,
 } from '../keyboards.js'
 import { accountChoiceLegendText, escapeHtml, movementStepText, reviewMovementText } from '../messages.js'
-import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
+import { preserveUiData } from '../../../src/ledger/uiTranslation.js'
 import { applyNumericKey, normalizeNumericBuffer, numericBufferDisplay, numericBufferValue } from '../numericKeypad.js'
 
 const ACCOUNT_PAGE_SIZE = 6
@@ -71,6 +74,7 @@ const STEPS = {
   CATEGORY: 'category',
   ATTACHMENT: 'attachment',
   RECURRING: 'recurring',
+  RECURRING_DATE: 'recurring_date',
   REVIEW: 'review',
 }
 
@@ -103,6 +107,7 @@ function createMovementSession(options = {}) {
       attachmentSizeBytes: 0,
       attachmentPending: null,
       recurringEnabled: false,
+      recurringFirstRunOn: '',
       separateAccountId: '',
       relatedName: '',
       recordDirection: SEPARATE_RECORD_DIRECTIONS.RECEIVABLE,
@@ -272,6 +277,16 @@ async function sendStep(ctx, session, textPrefix = '') {
       reply_markup: recurringKeyboard(),
     })
   }
+  if (session.step === STEPS.RECURRING_DATE) {
+    const selectedDate = normalizeRecurringDateKey(session.draft.recurringFirstRunOn) || defaultRecurringFirstRunOn()
+    const monthKey = /^(\d{4}-\d{2})$/.test(session.recurringMonth || '')
+      ? session.recurringMonth
+      : selectedDate.slice(0, 7)
+    return upsertFlowMessage(ctx, session, {
+      text,
+      reply_markup: recurringDateKeyboard(monthKey, selectedDate),
+    })
+  }
   if (session.step === STEPS.REVIEW) {
     const preview = previewDraft(state, session.draft)
     return upsertFlowMessage(ctx, session, {
@@ -384,6 +399,7 @@ export async function startSeparateRecord(ctx, existingMovement = null) {
       attachmentSizeBytes: 0,
       attachmentPending: null,
       recurringEnabled: false,
+      recurringFirstRunOn: '',
       separateAccountId: editingMovement?.separateAccountId || randomUUID(),
       relatedName: editingMovement?.relatedName || '',
       recordDirection: normalizeSeparateRecordDirection(editingMovement?.recordDirection || SEPARATE_RECORD_DIRECTIONS.RECEIVABLE),
@@ -427,6 +443,7 @@ export async function startReviewMovement(ctx, movementId) {
       attachmentSizeBytes: 0,
       attachmentPending: null,
       recurringEnabled: false,
+      recurringFirstRunOn: '',
       separateAccountId: movement.separateAccountId || randomUUID(),
       relatedName: movement.relatedName || '',
       recordDirection: normalizeSeparateRecordDirection(movement.recordDirection),
@@ -501,6 +518,7 @@ export async function handleMovementCallback(ctx, data) {
       attachmentSizeBytes: Number(session.draft.attachmentSizeBytes || 0),
       attachmentPending: session.draft.attachmentPending || null,
       recurringEnabled: Boolean(session.draft.recurringEnabled),
+      recurringFirstRunOn: session.draft.recurringFirstRunOn || '',
     }
     session.numericInput = null
     session.accountPicker = null
@@ -637,6 +655,38 @@ export async function handleMovementCallback(ctx, data) {
     const recurringChoice = data.slice('mv:recurring:'.length)
     if (!['monthly', 'no'].includes(recurringChoice)) return sendStep(ctx, session, 'اختر التكرار من الأزرار.')
     session.draft.recurringEnabled = recurringChoice === 'monthly'
+    if (session.draft.recurringEnabled) {
+      session.draft.recurringFirstRunOn = normalizeRecurringDateKey(session.draft.recurringFirstRunOn) || defaultRecurringFirstRunOn()
+      session.recurringMonth = session.draft.recurringFirstRunOn.slice(0, 7)
+      session.step = STEPS.RECURRING_DATE
+    } else {
+      session.draft.recurringFirstRunOn = ''
+      session.recurringMonth = ''
+      session.step = STEPS.REVIEW
+    }
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
+  if (data.startsWith('mv:recurring-month:')) {
+    const month = data.slice('mv:recurring-month:'.length)
+    const minimumMonth = defaultRecurringFirstRunOn(new Date(), 1).slice(0, 7)
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month < minimumMonth) {
+      return sendStep(ctx, session, 'اختر شهرًا قادمًا.')
+    }
+    session.recurringMonth = month
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
+  if (data.startsWith('mv:recurring-date:')) {
+    const value = data.slice('mv:recurring-date:'.length)
+    if (value === 'noop') return sendStep(ctx, session)
+    const dateKey = normalizeRecurringDateKey(value)
+    const earliest = defaultRecurringFirstRunOn(new Date(), 1)
+    if (!dateKey || dateKey < earliest) return sendStep(ctx, session, 'اختر تاريخًا من الشهر القادم أو بعده.')
+    session.draft.recurringFirstRunOn = dateKey
+    session.recurringMonth = dateKey.slice(0, 7)
     session.step = STEPS.REVIEW
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -790,6 +840,8 @@ function callbackMatchesCurrentStep(data, step) {
   if (data.startsWith('mv:category:')) return step === STEPS.CATEGORY
   if (data === 'mv:attachment:skip') return step === STEPS.ATTACHMENT
   if (data.startsWith('mv:recurring:')) return step === STEPS.RECURRING
+  if (data.startsWith('mv:recurring-month:')) return step === STEPS.RECURRING_DATE
+  if (data.startsWith('mv:recurring-date:')) return step === STEPS.RECURRING_DATE
   if (data === 'mv:confirm') return step === STEPS.REVIEW
   return false
 }
@@ -1012,7 +1064,8 @@ function previousStep(session) {
   if (session.step === STEPS.CATEGORY) return movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.NOTE
   if (session.step === STEPS.ATTACHMENT) return movementSupportsExpenseCategory(session.draft.type) ? STEPS.CATEGORY : (movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.NOTE)
   if (session.step === STEPS.RECURRING) return STEPS.ATTACHMENT
-  if (session.step === STEPS.REVIEW) return session.draft.type === MOVEMENT_TYPES.RECORD_ONLY ? STEPS.NOTE : STEPS.RECURRING
+  if (session.step === STEPS.RECURRING_DATE) return STEPS.RECURRING
+  if (session.step === STEPS.REVIEW) return session.draft.type === MOVEMENT_TYPES.RECORD_ONLY ? STEPS.NOTE : (session.draft.recurringEnabled ? STEPS.RECURRING_DATE : STEPS.RECURRING)
   return STEPS.TYPE
 }
 

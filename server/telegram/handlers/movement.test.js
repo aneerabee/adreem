@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
-import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
-import { buildLedgerSnapshot } from '../../mohammadLedger/ledgerService.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/ledger/ledgerCore.js'
+import { createFallbackLedgerState } from '../../../src/ledger/ledgerState.js'
+import { buildLedgerSnapshot } from '../../ledger/ledgerService.js'
 import { createSessionStore } from '../sessionStore.js'
 import { createLocalizedTelegramClient } from '../localizedTelegram.js'
 import { attachmentPathIsReferenced, handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement, startSeparateRecord } from './movement.js'
 
-function memoryRepository(initialState = createMohammadFallbackState()) {
+function memoryRepository(initialState = createFallbackLedgerState()) {
   let state = initialState
   return {
     get state() {
@@ -200,7 +200,7 @@ describe('telegram movement flow safety', () => {
 
     await handleMovementCallback(ctx, 'mv:confirm')
 
-    expect(ctx.repository.state.movements).toHaveLength(createMohammadFallbackState().movements.length)
+    expect(ctx.repository.state.movements).toHaveLength(createFallbackLedgerState().movements.length)
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('عملية قديمة')
   })
@@ -252,7 +252,7 @@ describe('telegram movement flow safety', () => {
 
     const session = ctx.sessions.get(ctx.chatId, ctx.userId)
     expect(session.step).toBe('amount')
-    expect(ctx.repository.state.movements).toHaveLength(createMohammadFallbackState().movements.length)
+    expect(ctx.repository.state.movements).toHaveLength(createFallbackLedgerState().movements.length)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('زر من خطوة سابقة')
   })
 
@@ -304,7 +304,7 @@ describe('telegram movement flow safety', () => {
   })
 
   it('shows all transfer accounts by pages and puts people first at the destination', async () => {
-    const base = createMohammadFallbackState()
+    const base = createFallbackLedgerState()
     const extraCashAccounts = Array.from({ length: 9 }, (_, index) => ({
       ...base.accounts.find((account) => account.id === 'me-cash'),
       id: `own-cash-${index}`,
@@ -396,7 +396,7 @@ describe('telegram movement flow safety', () => {
   })
 
   it('resolves a review movement through the same movement wizard', async () => {
-    const initialState = createMohammadFallbackState()
+    const initialState = createFallbackLedgerState()
     const ctx = createCtx()
     ctx.repository = memoryRepository({
       ...initialState,
@@ -438,7 +438,7 @@ describe('telegram movement flow safety', () => {
   })
 
   it('links supported movements to a project dimension when selected', async () => {
-    const base = createMohammadFallbackState()
+    const base = createFallbackLedgerState()
     const meCash = base.accounts.find((account) => account.id === 'me-cash')
     const truckProject = {
       id: 'truck-project',
@@ -510,6 +510,9 @@ describe('telegram movement flow safety', () => {
     await handleMovementCallback(ctx, 'mv:category:skip')
     await handleMovementText({ ...ctx, isCallback: false, messageId: 60 }, 'https://example.com/receipt.jpg')
     await handleMovementCallback(ctx, 'mv:recurring:monthly')
+    const recurringDate = ctx.sessions.get(ctx.chatId, ctx.userId).draft.recurringFirstRunOn
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('recurring_date')
+    await handleMovementCallback(ctx, `mv:recurring-date:${recurringDate}`)
     await handleMovementCallback(ctx, 'mv:confirm')
 
     const movement = ctx.repository.state.movements.find((item) => item.note === 'ديزل')
@@ -520,7 +523,11 @@ describe('telegram movement flow safety', () => {
       source: 'telegram',
     })
     expect(ctx.repository.state.recurringRules).toHaveLength(1)
-    expect(ctx.repository.state.recurringRules[0].template.note).toBe('ديزل')
+    expect(ctx.repository.state.recurringRules[0]).toMatchObject({
+      firstRunOn: recurringDate,
+      nextRunOn: recurringDate,
+      template: { note: 'ديزل' },
+    })
   })
 
   it('accepts a Telegram photo and stores it in the private ledger attachment path', async () => {
@@ -575,7 +582,7 @@ describe('telegram movement flow safety', () => {
   })
 
   it('saves a cash deposit through the dedicated cash-to-bank route', async () => {
-    const base = createMohammadFallbackState()
+    const base = createFallbackLedgerState()
     const ctx = createCtx()
     ctx.repository = memoryRepository({
       ...base,
@@ -806,6 +813,7 @@ describe('telegram movement flow safety', () => {
     ['note', 'destination'],
     ['attachment', 'note'],
     ['recurring', 'attachment'],
+    ['recurring_date', 'recurring'],
     ['review', 'recurring'],
   ])('returns safely from %s to %s', async (step, expectedStep) => {
     const ctx = createCtx()
@@ -831,6 +839,61 @@ describe('telegram movement flow safety', () => {
     await handleMovementCallback(ctx, 'mv:back')
 
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe(expectedStep)
+  })
+
+  it('returns from a monthly review to its chosen date without losing it', async () => {
+    const ctx = createCtx()
+    const recurringFirstRunOn = '2027-01-12'
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      mode: 'create',
+      step: 'review',
+      sessionId: 'back-monthly-review',
+      uiMessageId: ctx.messageId,
+      choices: {},
+      draft: {
+        type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+        amount: 2_500,
+        currency: CURRENCIES.DINAR,
+        destinationAccountId: 'me-cash',
+        note: 'راتب',
+        recurringEnabled: true,
+        recurringFirstRunOn,
+      },
+    })
+
+    await handleMovementCallback(ctx, 'mv:back')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.step).toBe('recurring_date')
+    expect(session.draft.recurringFirstRunOn).toBe(recurringFirstRunOn)
+  })
+
+  it('rejects an expired monthly date without advancing to review', async () => {
+    const ctx = createCtx()
+    ctx.sessions.set(ctx.chatId, ctx.userId, {
+      flow: 'movement',
+      mode: 'create',
+      step: 'recurring_date',
+      sessionId: 'expired-monthly-date',
+      uiMessageId: ctx.messageId,
+      choices: {},
+      recurringMonth: '2020-01',
+      draft: {
+        type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+        amount: 2_500,
+        currency: CURRENCIES.DINAR,
+        destinationAccountId: 'me-cash',
+        note: 'راتب',
+        recurringEnabled: true,
+        recurringFirstRunOn: '',
+      },
+    })
+
+    await handleMovementCallback(ctx, 'mv:recurring-date:2020-01-12')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('recurring_date')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).draft.recurringFirstRunOn).toBe('')
   })
 
   it('keeps unexpected text inside the active button step without opening another menu', async () => {
@@ -876,7 +939,7 @@ describe('telegram movement flow safety', () => {
     await handleMovementCallback(ctx, callbackData)
 
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe(expectedStep)
-    expect(ctx.repository.state.movements).toHaveLength(createMohammadFallbackState().movements.length)
+    expect(ctx.repository.state.movements).toHaveLength(createFallbackLedgerState().movements.length)
   })
 
   it('shows account search as one compact question without repeated instructions', async () => {
