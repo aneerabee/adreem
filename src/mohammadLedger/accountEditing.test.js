@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
-import { accountEditChanges, accountStructureUsage, prepareAccountUpdate } from './accountEditing.js'
+import { accountDeletionEligibility, accountEditChanges, accountStructureUsage, deleteUnusedAccountFromLedgerState, prepareAccountUpdate } from './accountEditing.js'
 import { buildCounterpartyAccountBundle } from './counterpartyAccounts.js'
 import { emptyAccountDraft } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements } from './ledgerCore.js'
@@ -15,6 +15,126 @@ const EDIT_CASES = [
 ]
 
 describe('account editing', () => {
+  it('allows deleting a completely unused standalone account', () => {
+    const account = createAccount({
+      id: 'unused-cash',
+      ownerName: 'أنا',
+      subAccountName: 'خزنة إضافية',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+    })
+
+    expect(accountDeletionEligibility(account, { accounts: [account] })).toEqual({
+      canDelete: true,
+      accountIds: ['unused-cash'],
+      blockers: [],
+      isCounterpartyBundle: false,
+    })
+  })
+
+  it('deletes a linked person only as one complete unused bundle', () => {
+    const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
+
+    expect(accountDeletionEligibility(accounts[1], { accounts })).toMatchObject({
+      canDelete: true,
+      accountIds: expect.arrayContaining(accounts.map((account) => account.id)),
+      isCounterpartyBundle: true,
+    })
+  })
+
+  it('keeps the requested linked account in scope when the loaded account list is incomplete', () => {
+    const account = { id: 'person-cash', counterpartyId: 'person-1', valueKind: VALUE_KINDS.RECEIVABLE }
+
+    expect(accountDeletionEligibility(account, { accounts: [] })).toMatchObject({
+      canDelete: true,
+      accountIds: ['person-cash'],
+      isCounterpartyBundle: true,
+    })
+  })
+
+  it.each([
+    ['movement', { movements: [{ id: 'draft', status: MOVEMENT_STATUSES.NEEDS_REVIEW, sourceAccountId: 'unused' }] }],
+    ['attachment', { attachments: [{ id: 'file', accountId: 'unused' }] }],
+    ['reconciliation', { reconciliations: [{ id: 'match', accountId: 'unused' }] }],
+    ['recurring-rule', { recurringRules: [{ id: 'rule', template: { destinationAccountId: 'unused' } }] }],
+  ])('blocks deletion when the account has a %s link', (blocker, context) => {
+    const account = createAccount({
+      id: 'unused',
+      ownerName: 'حساب',
+      subAccountName: 'كاش',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+    })
+
+    expect(accountDeletionEligibility(account, { accounts: [account], ...context })).toMatchObject({
+      canDelete: false,
+      blockers: expect.arrayContaining([blocker]),
+    })
+  })
+
+  it('blocks the full person bundle when only one linked balance was used', () => {
+    const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
+    const movement = { id: 'person-movement', status: MOVEMENT_STATUSES.POSTED, destinationAccountId: accounts[2].id }
+
+    expect(accountDeletionEligibility(accounts[0], { accounts, movements: [movement] })).toMatchObject({
+      canDelete: false,
+      blockers: expect.arrayContaining(['movement']),
+    })
+  })
+
+  it('blocks deletion when a generated project dimension is used', () => {
+    const project = createAccount({
+      id: 'unused-project',
+      ownerName: 'مشروع',
+      subAccountName: 'متابعة',
+      type: ACCOUNT_TYPES.PROJECT,
+      valueKind: VALUE_KINDS.PROJECT,
+    })
+
+    expect(accountDeletionEligibility(project, {
+      accounts: [project],
+      dimensions: [{ id: 'project-dimension', linkedAccountId: project.id }],
+      recurringRules: [{ id: 'rule', template: { dimensionId: 'project-dimension' } }],
+    })).toMatchObject({ canDelete: false, blockers: expect.arrayContaining(['recurring-rule']) })
+  })
+
+  it('removes an unused person bundle and its operational traces from legacy state', () => {
+    const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
+    const accountIds = accounts.map((account) => account.id)
+    const result = deleteUnusedAccountFromLedgerState({
+      accounts: [...accounts, createAccount({ id: 'kept', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH })],
+      movements: [],
+      attachments: [],
+      reconciliations: [],
+      recurringRules: [],
+      dimensions: [{ id: 'linked', linkedAccountId: accountIds[0] }, { id: 'kept-dimension' }],
+      ignoredExternalAccounts: [accountIds[1], 'kept'],
+      auditEvents: [
+        { id: 'created', details: { accountIds } },
+        { id: 'kept-event', details: { accountId: 'kept' } },
+      ],
+      futureField: { preserved: true },
+    }, accountIds[0])
+
+    expect(result).toMatchObject({ ok: true, isCounterpartyBundle: true })
+    expect(result.deletedAccountIds).toEqual(expect.arrayContaining(accountIds))
+    expect(result.state.accounts.map((account) => account.id)).toEqual(['kept'])
+    expect(result.state.dimensions.map((dimension) => dimension.id)).toEqual(['kept-dimension'])
+    expect(result.state.ignoredExternalAccounts).toEqual(['kept'])
+    expect(result.state.auditEvents.map((event) => event.id)).toEqual(['kept-event'])
+    expect(result.state.futureField).toEqual({ preserved: true })
+  })
+
+  it('does not change legacy state when any deletion blocker exists', () => {
+    const account = createAccount({ id: 'linked', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH })
+    const state = { accounts: [account], movements: [], attachments: [{ id: 'file', accountId: account.id }] }
+
+    const result = deleteUnusedAccountFromLedgerState(state, account.id)
+
+    expect(result).toMatchObject({ ok: false, blockers: expect.arrayContaining(['attachment']) })
+    expect(result.state).toBe(state)
+  })
+
   it.each(EDIT_CASES)('edits the visible name of every active account kind', ({ type, valueKind, ownerName, subAccountName, nextName, field }) => {
     const account = {
       ...createAccount({

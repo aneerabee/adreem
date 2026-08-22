@@ -539,6 +539,104 @@ describe('ADREEM web API auth helpers', () => {
     expect(payload.state.movements.map((movement) => movement.id).sort()).toEqual(['bot-movement', 'web-movement'])
   })
 
+  it('deletes an unused legacy account through a versioned protected request', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'main',
+        displayName: 'Main',
+        email: 'main@example.com',
+        password: 'main-pass-123',
+        ledgerId: 'main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
+    const currentState = {
+      accounts: [{
+        id: 'unused account',
+        ownerName: 'أنا',
+        subAccountName: 'إضافي',
+        type: 'cash',
+        valueKind: 'cash',
+        currencyKind: 'LYD',
+        status: 'active',
+      }],
+      movements: [],
+      auditEvents: [{ id: 'created', details: { accountId: 'unused account' } }],
+    }
+    let updateOptions = null
+    api.__setRepositoryForTest?.({
+      ledgerConfig: { identity: { ledgerId: 'main' } },
+      async update(callback, options) {
+        updateOptions = options
+        const result = await callback(currentState)
+        return { ...result, updatedAt: 'cloud-version-2' }
+      },
+    })
+    const request = createJsonRequest({ baseUpdatedAt: 'cloud-version-1' }, {
+      token,
+      method: 'DELETE',
+      url: '/api/accounts/unused%20account',
+    })
+    const response = createMockResponse()
+
+    const promise = api(request, response)
+    request.emitBody()
+    await promise
+
+    const payload = JSON.parse(response.body)
+    expect(response.statusCode).toBe(200)
+    expect(updateOptions).toEqual({
+      expectedUpdatedAt: 'cloud-version-1',
+      allowUnusedAccountDeletion: true,
+    })
+    expect(payload.state.accounts).toEqual([])
+    expect(payload.state.auditEvents).toEqual([])
+    expect(payload.deletedAccountIds).toEqual(['unused account'])
+    expect(payload.storageMode).toBe('legacy')
+  })
+
+  it('rejects deleting a legacy account linked to any record', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'main',
+        displayName: 'Main',
+        email: 'main@example.com',
+        password: 'main-pass-123',
+        ledgerId: 'main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_TELEGRAM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
+    const account = { id: 'used', type: 'cash', valueKind: 'cash', currencyKind: 'LYD', status: 'active' }
+    api.__setRepositoryForTest?.({
+      async update(callback) {
+        return callback({ accounts: [account], movements: [], attachments: [{ id: 'file', accountId: account.id }] })
+      },
+    })
+    const request = createJsonRequest({ baseUpdatedAt: 'cloud-version-1' }, {
+      token,
+      method: 'DELETE',
+      url: '/api/accounts/used',
+    })
+    const response = createMockResponse()
+
+    const promise = api(request, response)
+    request.emitBody()
+    await promise
+
+    expect(response.statusCode).toBe(409)
+    expect(JSON.parse(response.body).error).toContain('ارتبط')
+  })
+
   it('records committed movement changes with safe server-derived before and after values', async () => {
     const file = tempRegistry([
       registryPasswordUser({

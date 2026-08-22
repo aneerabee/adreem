@@ -123,9 +123,10 @@ export function nextLedgerVersionTimestamp(expectedUpdatedAt = null, now = Date.
   return new Date(Math.max(now, minimumTime)).toISOString()
 }
 
-export function assertLedgerStateTransition(nextState, currentState, ledgerConfig = {}) {
+export function assertLedgerStateTransition(nextState, currentState, ledgerConfig = {}, options = {}) {
   const validation = validateLedgerStateTransition(nextState, currentState, {
     ledgerId: ledgerConfig.identity?.ledgerId,
+    allowedDeletedAccountIds: options.allowedDeletedAccountIds,
   })
   if (!validation.ok) throw new LedgerIntegrityError(validation)
   return validation
@@ -351,7 +352,8 @@ export function writeLedgerBackup(env, ledgerConfig, phase, state) {
   }
 }
 
-async function updateLedgerState(client, updater, ledgerConfig, env = process.env, { expectedUpdatedAt } = {}) {
+async function updateLedgerState(client, updater, ledgerConfig, env = process.env, updateOptions = {}) {
+  const { expectedUpdatedAt } = updateOptions
   let lastConflict = null
   const checksClientVersion = expectedUpdatedAt !== undefined
 
@@ -365,7 +367,11 @@ async function updateLedgerState(client, updater, ledgerConfig, env = process.en
 
     const nextState = prepareLedgerStateForSave(result.state, current.state, new Date().toISOString(), ledgerConfig.identity)
     try {
-      assertLedgerStateTransition(nextState, current.state, ledgerConfig)
+      assertLedgerStateTransition(nextState, current.state, ledgerConfig, {
+        allowedDeletedAccountIds: updateOptions.allowUnusedAccountDeletion
+          ? result.deletedAccountIds
+          : [],
+      })
     } catch (error) {
       if (!(error instanceof LedgerIntegrityError)) throw error
       return {

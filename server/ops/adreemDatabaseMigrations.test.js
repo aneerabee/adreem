@@ -7,6 +7,7 @@ const botCasSql = readFileSync(new URL('../../supabase/migrations/20260820213629
 const botEffectCasSql = readFileSync(new URL('../../supabase/migrations/20260820213631_add_adreem_bot_effect_cas.sql', import.meta.url), 'utf8')
 const legacyCleanupSql = readFileSync(new URL('../../supabase/migrations/20260820213833_remove_empty_legacy_state_from_v3.sql', import.meta.url), 'utf8')
 const summaryScopeSql = readFileSync(new URL('../../supabase/migrations/20260822090000_add_summary_scope_and_record_only.sql', import.meta.url), 'utf8')
+const accountDeletionSql = readFileSync(new URL('../../supabase/migrations/20260822170000_add_unused_account_deletion.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -103,5 +104,20 @@ describe('ADREEM v3 database migration invariants', () => {
     expect(summaryScopeSql).toContain('ADREEM_MOVEMENT_POSTING_MODE_IMMUTABLE')
     expect(summaryScopeSql).toContain('create trigger adreem_prevent_record_only_mode_flip')
     expect(summaryScopeSql).toContain("when 'record_only' then")
+  })
+
+  it('deletes only unused accounts under an owner-scoped revision lock', () => {
+    expect(accountDeletionSql).toContain('function public.adreem_delete_unused_account')
+    expect(accountDeletionSql).toContain('for update;')
+    expect(accountDeletionSql).toContain('ADREEM_REVISION_CONFLICT')
+    expect(accountDeletionSql).toContain('ADREEM_ACCOUNT_DELETE_IN_USE')
+    expect(accountDeletionSql).toContain('ADREEM_ACCOUNT_DELETE_LINKED')
+    expect(accountDeletionSql).toContain('from public.adreem_movement_entries')
+    expect(accountDeletionSql).toContain('from public.adreem_attachments')
+    expect(accountDeletionSql).toContain('from public.adreem_reconciliations')
+    expect(accountDeletionSql).toContain('from public.adreem_recurring_rules')
+    expect(accountDeletionSql).toContain('delete from public.adreem_audit_events')
+    expect(accountDeletionSql).toContain("'unused_account_deleted'")
+    expect(accountDeletionSql).toContain('to authenticated, service_role;')
   })
 })

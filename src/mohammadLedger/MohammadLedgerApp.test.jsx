@@ -1040,6 +1040,40 @@ describe('MohammadLedgerApp history filtering', () => {
     expect(markup).toContain('الرصيد الفعلي بالدينار')
     expect(markup).not.toContain('داخل الصافي')
     expect(markup).not.toContain('>حفظ التعديل</button>')
+    expect(markup).not.toContain('حذف الحساب')
+  })
+
+  it('shows permanent deletion only for a completely unused account', () => {
+    const account = {
+      id: 'unused',
+      ownerName: 'أنا',
+      subAccountName: 'خزنة إضافية',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      currencyKind: CURRENCIES.DINAR,
+      status: ACCOUNT_STATUSES.ACTIVE,
+      postedCount: 0,
+      structureLocked: false,
+    }
+
+    const markup = renderToStaticMarkup(
+      <AccountProfile
+        bucket={{ account, dinar: 0, usd: 0, postedCount: 0 }}
+        movements={[]}
+        accounts={[account]}
+        onClose={() => {}}
+        onEditMovement={() => {}}
+        onUpdateAccount={() => {}}
+        onDeleteAccount={() => {}}
+        onReconcile={() => {}}
+        onAddAttachment={() => {}}
+        onDeleteAttachment={() => {}}
+        onLoadMoreMovements={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('حذف الحساب')
+    expect(markup).not.toContain('تأكيد الحذف')
   })
 })
 

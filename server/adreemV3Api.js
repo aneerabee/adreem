@@ -218,6 +218,35 @@ function userIdFromPath(pathname = '') {
   }
 }
 
+function accountIdFromPath(pathname = '') {
+  const match = pathname.match(/^\/api\/accounts\/([^/]+)$/)
+  if (!match) return ''
+  try {
+    return decodeURIComponent(match[1]).trim()
+  } catch {
+    return ''
+  }
+}
+
+function accountDeletionApiError(error) {
+  if (error?.code === 'account-not-found') {
+    const mapped = new V3ApiError('الحساب غير موجود.', 404)
+    mapped.code = 'account-not-found'
+    return mapped
+  }
+  if (error?.code === 'account-protected') {
+    const mapped = new V3ApiError('هذا الحساب محمي ولا يمكن حذفه.', 409)
+    mapped.code = 'account-protected'
+    return mapped
+  }
+  if (error?.code === 'account-in-use') {
+    const mapped = new V3ApiError('لا يمكن حذف الحساب لأنه استُخدم أو ارتبط بسجل آخر.', 409)
+    mapped.code = 'account-in-use'
+    return mapped
+  }
+  return error
+}
+
 function createRateLimiter(now = Date.now) {
   const buckets = new Map()
   let checks = 0
@@ -760,6 +789,33 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
           occurredBefore: movementDateFilter(url.searchParams.get('occurredBefore')),
         })
         return reply(200, result)
+      }
+
+      const accountId = accountIdFromPath(url.pathname)
+      if (accountId) {
+        if (req.method !== 'DELETE') throw new V3ApiError('Method not allowed.', 405)
+        const body = await readJson(req)
+        const expectedRevision = Number(body.baseRevision)
+        if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+          throw new V3ApiError('أعد تحميل الدفتر قبل حذف الحساب.', 428)
+        }
+        let deletion
+        try {
+          deletion = await withAttachmentLock(context.ledger.id, () => repository.deleteUnusedAccount(accountId, expectedRevision))
+        } catch (error) {
+          throw accountDeletionApiError(error)
+        }
+        const { result, reports } = await loadConsistentLedgerView(repository)
+        return reply(200, {
+          state: result.state,
+          source: 'relational-account-deletion',
+          storageMode: result.storageMode,
+          revision: result.revision,
+          updatedAt: result.updatedAt,
+          movementPage: result.movementPage,
+          reports,
+          deletedAccountIds: deletion.deletedAccountIds,
+        })
       }
 
       if (url.pathname === '/api/attachments') {

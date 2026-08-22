@@ -115,6 +115,7 @@ function fixture(overrides = {}) {
       movementPage: { offset: 0, limit: 100, total: 0, hasMore: false },
     })),
     applyDelta: vi.fn(async () => ({ revision: 8 })),
+    deleteUnusedAccount: vi.fn(async (accountId) => ({ revision: 8, deletedAccountIds: [accountId] })),
     loadMovements: vi.fn(async () => ({
       movements: [{ id: 'm1' }],
       page: { offset: 50, limit: 50, total: 101, hasMore: true },
@@ -175,6 +176,54 @@ describe('ADREEM v3 API', () => {
     await pending
     expect(res.statusCode).toBe(200)
     expect(repository.applyDelta).toHaveBeenCalledWith({ movements: [{ id: 'm2' }] }, 7)
+  })
+
+  it('deletes an unused account and returns the authoritative ledger state', async () => {
+    const { handler, repository } = fixture()
+    const req = request({ method: 'DELETE', url: '/api/accounts/unused%20cash', body: { baseRevision: 7 } })
+    const res = response()
+    const pending = handler(req, res)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    req.emitBody()
+    await pending
+
+    expect(res.statusCode).toBe(200)
+    expect(repository.deleteUnusedAccount).toHaveBeenCalledWith('unused cash', 7)
+    expect(JSON.parse(res.body)).toMatchObject({
+      storageMode: 'relational',
+      revision: 7,
+      deletedAccountIds: ['unused cash'],
+    })
+  })
+
+  it('refuses account deletion without a current ledger revision', async () => {
+    const { handler, repository } = fixture()
+    const req = request({ method: 'DELETE', url: '/api/accounts/unused', body: {} })
+    const res = response()
+    const pending = handler(req, res)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    req.emitBody()
+    await pending
+
+    expect(res.statusCode).toBe(428)
+    expect(repository.deleteUnusedAccount).not.toHaveBeenCalled()
+  })
+
+  it('returns a safe conflict when the database finds an account link', async () => {
+    const { handler, repository } = fixture()
+    repository.deleteUnusedAccount.mockRejectedValueOnce(Object.assign(new Error('raw database detail'), { code: 'account-in-use' }))
+    const req = request({ method: 'DELETE', url: '/api/accounts/used', body: { baseRevision: 7 } })
+    const res = response()
+    const pending = handler(req, res)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    req.emitBody()
+    await pending
+
+    expect(res.statusCode).toBe(409)
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'لا يمكن حذف الحساب لأنه استُخدم أو ارتبط بسجل آخر.',
+      code: 'account-in-use',
+    })
   })
 
   it('rejects legacy full-state replacement requests', async () => {

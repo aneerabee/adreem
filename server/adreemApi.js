@@ -10,6 +10,7 @@ import { validateLedgerStateTransition } from './mohammadLedger/stateValidation.
 import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './mohammadLedger/attachmentValidation.js'
 import { mergeLedgerStates } from '../src/mohammadLedger/ledgerState.js'
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/mohammadLedger/ledgerOperations.js'
+import { deleteUnusedAccountFromLedgerState } from '../src/mohammadLedger/accountEditing.js'
 import { isSupportedUiLanguage, normalizeUiLanguage } from '../src/mohammadLedger/uiLanguage.js'
 import {
   createTelegramUserAccess,
@@ -234,6 +235,16 @@ function rejectRateLimited(res, origin, result) {
 
 export function userIdFromAdminPath(pathname = '') {
   const match = String(pathname || '').match(/^\/api\/admin\/users\/([^/]+)$/)
+  if (!match) return ''
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return ''
+  }
+}
+
+function accountIdFromPath(pathname = '') {
+  const match = String(pathname || '').match(/^\/api\/accounts\/([^/]+)$/)
   if (!match) return ''
   try {
     return decodeURIComponent(match[1])
@@ -632,7 +643,8 @@ export function createAdreemApiHandler(env = process.env) {
         return sendJson(res, 500, { error: 'Attachment request failed.' }, allowedOrigin)
       }
     }
-    if (url.pathname !== '/api/ledger') {
+    const requestedAccountId = accountIdFromPath(url.pathname)
+    if (url.pathname !== '/api/ledger' && !requestedAccountId) {
       return sendJson(res, 404, { error: 'Not found.' }, allowedOrigin)
     }
 
@@ -644,6 +656,45 @@ export function createAdreemApiHandler(env = process.env) {
     }
 
     try {
+      if (requestedAccountId) {
+        if (req.method !== 'DELETE') return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
+        const limit = rateLimiter.check(rateKey(req, 'ledger-write'), RATE_LIMITS.ledgerWrite)
+        if (!limit.ok) {
+          audit(env, { action: 'account.delete.rate_limited', ip: clientIp(req), ledgerId })
+          return rejectRateLimited(res, allowedOrigin, limit)
+        }
+        const body = await readJsonBody(req)
+        if (!Object.prototype.hasOwnProperty.call(body, 'baseUpdatedAt')) {
+          throw new ApiRequestError('أعد تحميل الدفتر قبل حذف الحساب.', 428)
+        }
+        const result = await repository.update((currentState) => {
+          const deletion = deleteUnusedAccountFromLedgerState(currentState, requestedAccountId)
+          if (!deletion.ok) {
+            const missing = deletion.blockers?.includes('missing-account')
+            throw new ApiRequestError(
+              missing ? 'الحساب غير موجود.' : 'لا يمكن حذف الحساب لأنه استُخدم أو ارتبط بسجل آخر.',
+              missing ? 404 : 409,
+            )
+          }
+          return deletion
+        }, {
+          expectedUpdatedAt: body.baseUpdatedAt || null,
+          allowUnusedAccountDeletion: true,
+        })
+        audit(env, {
+          action: 'account.deleted',
+          ledgerId,
+          deletedAccountIds: result.deletedAccountIds || [requestedAccountId],
+          source: 'web-api',
+        })
+        return sendJson(res, 200, {
+          state: result.state,
+          source: 'api-account-delete',
+          storageMode: 'legacy',
+          updatedAt: result.updatedAt || null,
+          deletedAccountIds: result.deletedAccountIds || [requestedAccountId],
+        }, allowedOrigin)
+      }
       if (req.method === 'GET') {
         const limit = rateLimiter.check(rateKey(req, 'ledger-read'), RATE_LIMITS.ledgerRead)
         if (!limit.ok) return rejectRateLimited(res, allowedOrigin, limit)

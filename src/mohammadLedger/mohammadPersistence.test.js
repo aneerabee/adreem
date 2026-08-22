@@ -108,6 +108,83 @@ describe('ADREEM cloud-only persistence', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ baseUpdatedAt: null })
   })
 
+  it('deletes an unused account at the loaded revision and remembers the authoritative response', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'cookie-v3' })
+    const initialState = { accounts: [{ id: 'unused' }, { id: 'kept' }], movements: [] }
+    const deletedState = { accounts: [{ id: 'kept' }], movements: [] }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ state: initialState, storageMode: 'relational', revision: 4 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          state: deletedState,
+          storageMode: 'relational',
+          revision: 5,
+          deletedAccountIds: ['unused'],
+          movementPage: { hasMore: false, nextCursor: null },
+          reports: { dimensions: [], expenseCategories: [] },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+    const result = await module.deleteAdreemUnusedAccount('unused', 4)
+
+    expect(fetchMock.mock.calls[1]).toEqual([
+      'https://example.com/adreem-api/api/accounts/unused',
+      expect.objectContaining({
+        method: 'DELETE',
+        credentials: 'include',
+        body: JSON.stringify({ baseRevision: 4 }),
+      }),
+    ])
+    expect(result).toMatchObject({
+      revision: 5,
+      deletedAccountIds: ['unused'],
+      state: { accounts: [{ id: 'kept' }] },
+    })
+  })
+
+  it('deletes an unused account from the current production ledger at its loaded timestamp', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const initialState = { accounts: [{ id: 'unused' }, { id: 'kept' }], movements: [] }
+    const deletedState = { accounts: [{ id: 'kept' }], movements: [] }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ state: initialState, updatedAt: 'cloud-version-1' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          state: deletedState,
+          storageMode: 'legacy',
+          updatedAt: 'cloud-version-2',
+          deletedAccountIds: ['unused'],
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await module.loadMohammadPersistedState({ accounts: [], movements: [] })
+    const result = await module.deleteAdreemUnusedAccount('unused')
+
+    expect(fetchMock.mock.calls[1]).toEqual([
+      'https://example.com/adreem-api/api/accounts/unused',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ baseUpdatedAt: 'cloud-version-1' }),
+      }),
+    ])
+    expect(result).toMatchObject({
+      storageMode: 'legacy',
+      deletedAccountIds: ['unused'],
+      state: { accounts: [{ id: 'kept' }] },
+    })
+  })
+
   it('does not fall back to browser data when the login token is missing', async () => {
     const { browser, module } = await persistenceWithApi({
       'adreem-ledger-v1': JSON.stringify({ accounts: [{ id: 'old-local' }] }),

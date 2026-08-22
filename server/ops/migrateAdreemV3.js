@@ -83,6 +83,12 @@ with target_tables(table_name) as (
   from pg_proc as procedure
   join pg_namespace as namespace on namespace.oid = procedure.pronamespace
   where namespace.nspname = 'public' and procedure.proname = 'adreem_apply_ledger_delta'
+), delete_account_function as (
+  select procedure.oid, procedure.prosecdef, procedure.proacl, procedure.proowner,
+         pg_get_function_identity_arguments(procedure.oid) as identity_arguments
+  from pg_proc as procedure
+  join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+  where namespace.nspname = 'public' and procedure.proname = 'adreem_delete_unused_account'
 ), bot_cas_function_names(function_name) as (
   values
     ('adreem_bot_state_claim'),
@@ -161,6 +167,20 @@ select json_build_object(
       )
     )
     from apply_function as apply_proc
+  ),
+  'deleteAccountFunction', (
+    select json_build_object(
+      'securityDefiner', delete_proc.prosecdef,
+      'identityArguments', delete_proc.identity_arguments,
+      'anonExecute', has_function_privilege('anon', delete_proc.oid, 'EXECUTE'),
+      'authenticatedExecute', has_function_privilege('authenticated', delete_proc.oid, 'EXECUTE'),
+      'serviceRoleExecute', has_function_privilege('service_role', delete_proc.oid, 'EXECUTE'),
+      'publicExecute', exists (
+        select 1 from aclexplode(coalesce(delete_proc.proacl, acldefault('f', delete_proc.proowner))) as acl
+        where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
+      )
+    )
+    from delete_account_function as delete_proc
   ),
   'botCasFunctions', (
     select json_agg(json_build_object(
@@ -325,6 +345,15 @@ export function verifyTargetSecurityManifest(manifest) {
     applyFunction.anonExecute || applyFunction.publicExecute ||
     !applyFunction.authenticatedExecute || !applyFunction.serviceRoleExecute
   ) errors.push('invalid adreem_apply_ledger_delta security or grants')
+
+  const deleteAccountFunction = manifest?.deleteAccountFunction
+  if (!deleteAccountFunction) errors.push('missing adreem_delete_unused_account function')
+  else if (
+    !deleteAccountFunction.securityDefiner ||
+    deleteAccountFunction.identityArguments !== 'p_ledger_id uuid, p_account_id text, p_expected_revision bigint, p_owner_id uuid' ||
+    deleteAccountFunction.anonExecute || deleteAccountFunction.publicExecute ||
+    !deleteAccountFunction.authenticatedExecute || !deleteAccountFunction.serviceRoleExecute
+  ) errors.push('invalid adreem_delete_unused_account security or grants')
 
   const expectedBotCasFunctions = [
     'adreem_bot_state_claim',

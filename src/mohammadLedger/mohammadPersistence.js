@@ -535,6 +535,53 @@ export async function updateAdreemUserProfile({ language }) {
   return data?.user || null
 }
 
+export async function deleteAdreemUnusedAccount(accountId, expectedVersion) {
+  const id = String(accountId || '').trim()
+  if (!id) throw new Error('اختر حسابًا صالحًا للحذف.')
+  const relational = cloudStorageMode === 'relational'
+  const revision = Number(expectedVersion === undefined ? cloudRevision : expectedVersion)
+  const updatedAt = expectedVersion === undefined ? cloudUpdatedAt : expectedVersion
+  if (
+    (relational && (!Number.isSafeInteger(revision) || revision < 0))
+    || (!relational && cloudUpdatedAt === undefined)
+  ) {
+    const error = new Error('أعد تحميل الدفتر قبل حذف الحساب.')
+    error.status = 428
+    error.retryable = false
+    throw error
+  }
+  if (
+    (relational && Number.isSafeInteger(cloudRevision) && revision !== cloudRevision)
+    || (!relational && String(updatedAt || '') !== String(cloudUpdatedAt || ''))
+  ) {
+    const error = new Error('تغيّر الدفتر. أعد تحميل الصفحة قبل حذف الحساب.')
+    error.status = 409
+    error.retryable = false
+    throw error
+  }
+
+  invalidateMovementPageRequests()
+  const data = await apiJson(`/api/accounts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(relational
+      ? { baseRevision: revision }
+      : { baseUpdatedAt: updatedAt || null }),
+  })
+  const state = rememberCloudState(data, cloudState || { accounts: [], movements: [] })
+  return {
+    mode: 'api',
+    localOk: false,
+    supabaseOk: true,
+    state,
+    storageMode: cloudStorageMode,
+    revision: cloudRevision,
+    movementPage: cloudMovementPage,
+    reports: cloudReports,
+    deletedAccountIds: Array.isArray(data?.deletedAccountIds) ? data.deletedAccountIds : [id],
+  }
+}
+
 export async function saveMohammadPersistedState(state) {
   const mode = getMohammadPersistenceMode()
   const normalizedState = normalizeLedgerState({ ...state, savedAt: new Date().toISOString() }, state)

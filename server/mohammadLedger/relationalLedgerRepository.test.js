@@ -128,6 +128,41 @@ describe('relational ledger repository', () => {
     })
   })
 
+  it('deletes an unused account through the owner-scoped revision function', async () => {
+    const client = clientFixture()
+    client.rpc.mockResolvedValueOnce({
+      data: [{ revision: 5, updated_at: '2026-08-20T12:01:00.000Z', deleted_account_ids: ['person-cash', 'person-cheque', 'person-usd'] }],
+      error: null,
+    })
+    const repository = createRelationalLedgerRepository(client, {
+      ownerId: '22222222-2222-2222-2222-222222222222',
+    })
+
+    const result = await repository.deleteUnusedAccount('person-cash', 4)
+
+    expect(client.rpc).toHaveBeenCalledWith('adreem_delete_unused_account', {
+      p_ledger_id: '11111111-1111-1111-1111-111111111111',
+      p_account_id: 'person-cash',
+      p_expected_revision: 4,
+      p_owner_id: '22222222-2222-2222-2222-222222222222',
+    })
+    expect(result).toEqual({
+      revision: 5,
+      updatedAt: '2026-08-20T12:01:00.000Z',
+      deletedAccountIds: ['person-cash', 'person-cheque', 'person-usd'],
+    })
+  })
+
+  it('maps database account-use protection without exposing raw details', async () => {
+    const client = clientFixture()
+    client.rpc.mockResolvedValueOnce({ data: null, error: { code: '23503', message: 'ADREEM_ACCOUNT_DELETE_LINKED' } })
+    const repository = createRelationalLedgerRepository(client, {
+      ownerId: '22222222-2222-2222-2222-222222222222',
+    })
+
+    await expect(repository.deleteUnusedAccount('used', 4)).rejects.toMatchObject({ code: 'account-in-use' })
+  })
+
   it('loads account attachments plus only attachments for movements in the normal snapshot', async () => {
     const client = clientFixture({
       adreem_attachments: [{ record_id: 'account-file', payload: { id: 'account-file', accountId: 'cash' } }],

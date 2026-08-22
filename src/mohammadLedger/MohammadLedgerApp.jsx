@@ -12,11 +12,11 @@ import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
-import { accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
+import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
 import { formatZonedDate, formatZonedDateTime, formatZonedTime, isZonedToday, isZonedYesterday, zonedDayKey, zonedDayRange } from './dateRange'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, createOpeningMovements, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, validateMovementBalanceTransition, voidMovement } from './ledgerCore'
-import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUploadedAttachment, getMohammadPersistenceMode, loadAdreemMovementPage, loadMohammadPersistedState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
+import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUnusedAccount, deleteAdreemUploadedAttachment, getMohammadPersistenceMode, loadAdreemMovementPage, loadMohammadPersistedState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
 import { buildNetPosition, convertNetPosition, isAccountIncludedInNet } from './ledgerScope'
@@ -1924,7 +1924,9 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
   )
 }
 
-export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements }) {
+export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, isDeletingAccount = false, onClose, onEditMovement, onUpdateAccount, onDeleteAccount, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements }) {
+  const [deleteConfirmationAccountId, setDeleteConfirmationAccountId] = useState('')
+  const profileAccountId = bucket?.account?.id || ''
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
@@ -1940,6 +1942,9 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
   const canReconcileBalance = account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK
   const primaryBalance = accountPrimaryBalance(bucket)
   const profileBalanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
+  const deletion = accountDeletionEligibility(account, { accounts, movements, attachments, reconciliations, recurringRules, dimensions })
+  const deleteLabel = deletion.isCounterpartyBundle ? 'حذف الشخص وحساباته' : 'حذف الحساب'
+  const isDeleteConfirmationOpen = deleteConfirmationAccountId === profileAccountId
 
   return (
     <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
@@ -2050,6 +2055,30 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
             </details>
 
             <AccountEditHistory accountId={account.id} auditEvents={auditEvents} />
+
+            {deletion.canDelete ? (
+              <div className={`ml3-profile-danger${isDeleteConfirmationOpen ? ' is-confirming' : ''}`}>
+                {isDeleteConfirmationOpen ? (
+                  <>
+                    <div>
+                      <Trash2 aria-hidden="true" size={16} />
+                      <span><strong>حذف نهائي</strong><small>لا يمكن التراجع.</small></span>
+                    </div>
+                    <div className="ml3-profile-danger-actions">
+                      <button type="button" onClick={() => setDeleteConfirmationAccountId('')} disabled={isDeletingAccount}>تراجع</button>
+                      <button type="button" className="is-danger" onClick={() => onDeleteAccount(account.id)} disabled={isDeletingAccount}>
+                        {isDeletingAccount ? 'جاري الحذف' : 'تأكيد الحذف'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => setDeleteConfirmationAccountId(profileAccountId)}>
+                    <Trash2 aria-hidden="true" size={15} />
+                    <span>{deleteLabel}</span>
+                  </button>
+                )}
+              </div>
+            ) : null}
           </section>
 
           <section className="ml3-profile-activity">
@@ -2440,6 +2469,7 @@ export default function MohammadLedgerApp() {
   const [editingMovementId, setEditingMovementId] = useState('')
   const [isSavingMovement, setIsSavingMovement] = useState(false)
   const [isAddingAccountAttachment, setIsAddingAccountAttachment] = useState(false)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [historyQuery, setHistoryQuery] = useState('')
   const [historyType, setHistoryType] = useState('')
   const [historyStatus, setHistoryStatus] = useState('')
@@ -4211,6 +4241,71 @@ export default function MohammadLedgerApp() {
     setFeedback('تم إخفاء الحساب.')
   }
 
+  async function deleteAccountPermanently(accountId) {
+    if (isDeletingAccount) return
+    const account = accounts.find((item) => item.id === accountId)
+    const deletion = accountDeletionEligibility(account, {
+      accounts,
+      movements,
+      attachments: ledgerExtras.attachments || [],
+      reconciliations: ledgerExtras.reconciliations || [],
+      recurringRules: ledgerExtras.recurringRules || [],
+      dimensions: ledgerExtras.dimensions || [],
+    })
+    if (!deletion.canDelete) {
+      setFeedback('لا يمكن حذف الحساب لأنه استُخدم أو ارتبط بسجل آخر.')
+      return
+    }
+    if (
+      (ledgerStorageMode === 'relational' && !Number.isSafeInteger(ledgerRevision))
+      || !['legacy', 'relational'].includes(ledgerStorageMode)
+    ) {
+      setFeedback('أعد تحميل الدفتر قبل حذف الحساب.')
+      return
+    }
+    if (saveCoordinatorRef.current?.hasPending() || pendingUploadedAttachmentPathsRef.current.size) {
+      setFeedback('انتظر اكتمال الحفظ ثم حاول حذف الحساب.')
+      return
+    }
+
+    setIsDeletingAccount(true)
+    try {
+      const result = await deleteAdreemUnusedAccount(
+        accountId,
+        ledgerStorageMode === 'relational' ? ledgerRevision : undefined,
+      )
+      const normalizedState = normalizeLedgerState(result.state, initialState)
+      const deletedIds = new Set(result.deletedAccountIds || deletion.accountIds)
+      setAccounts(normalizeMohammadAccounts(normalizedState.accounts))
+      setMovements(normalizedState.movements)
+      setLedgerExtras(ledgerExtrasFromState(normalizedState))
+      setLedgerRevision(Number.isSafeInteger(Number(result.revision)) ? Number(result.revision) : null)
+      setMovementPage({
+        ...(result.movementPage || {}),
+        hasMore: Boolean(result.movementPage?.hasMore),
+        nextCursor: result.movementPage?.nextCursor || null,
+        loaded: normalizedState.movements.length,
+      })
+      setServerReports(result.reports || null)
+      setHistoryRemoteMovements(null)
+      setHistoryPage(null)
+      setReviewPage(null)
+      setTodayRemoteSummary(null)
+      setAccountProfilePage(null)
+      setHistoryAccountId((current) => deletedIds.has(current) ? '' : current)
+      setFocusedCounterpartyId((current) => current === account?.counterpartyId ? '' : current)
+      setSelectedAccountId('')
+      setSaveStatus('saved')
+      setSyncProblem(false)
+      setFeedback(deletion.isCounterpartyBundle ? 'تم حذف الشخص وحساباته نهائيًا.' : 'تم حذف الحساب نهائيًا.')
+    } catch (error) {
+      console.warn('[adreem-ledger] account deletion failed:', error?.message || error)
+      setFeedback(error?.message || 'تعذر حذف الحساب.')
+    } finally {
+      setIsDeletingAccount(false)
+    }
+  }
+
   function mergeReviewAccount(sourceAccountId, targetAccountId) {
     if (!targetAccountId || sourceAccountId === targetAccountId) return false
     const sourceAccount = accounts.find((account) => account.id === sourceAccountId)
@@ -5404,7 +5499,7 @@ export default function MohammadLedgerApp() {
           </section>
         ) : null}
       </section>
-      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
+      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} isDeletingAccount={isDeletingAccount} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onDeleteAccount={deleteAccountPermanently} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
       </AdreemChrome>
     </MotionConfig>
   )

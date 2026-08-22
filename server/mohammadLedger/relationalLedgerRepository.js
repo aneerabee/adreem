@@ -578,6 +578,37 @@ export function createRelationalLedgerRepository(client, options = {}) {
     }
   }
 
+  async function deleteUnusedAccount(accountId, expectedRevision) {
+    const id = String(accountId || '').trim()
+    if (!id) throw new Error('Account id is required for deletion.')
+    const ledger = await ledgerRow()
+    const revision = normalizeRevision(expectedRevision)
+    if (revision === null) throw new ConcurrentLedgerUpdateError('Reload the ledger before deleting an account.')
+    const { data, error } = await client.rpc('adreem_delete_unused_account', {
+      p_ledger_id: ledger.id,
+      p_account_id: id,
+      p_expected_revision: revision,
+      p_owner_id: requestedOwnerId || null,
+    })
+    if (error) {
+      const message = String(error.message || '')
+      if (error.code === '40001' || message.includes('ADREEM_REVISION_CONFLICT')) {
+        throw new ConcurrentLedgerUpdateError('Ledger was updated by another session. Reload before deleting the account.')
+      }
+      const nextError = repositoryError(error, 'Failed to delete the unused account.')
+      if (message.includes('ADREEM_ACCOUNT_NOT_FOUND')) nextError.code = 'account-not-found'
+      if (message.includes('ADREEM_ACCOUNT_DELETE_PROTECTED')) nextError.code = 'account-protected'
+      if (message.includes('ADREEM_ACCOUNT_DELETE_IN_USE') || message.includes('ADREEM_ACCOUNT_DELETE_LINKED')) nextError.code = 'account-in-use'
+      throw nextError
+    }
+    const row = data?.[0] || {}
+    return {
+      revision: normalizeRevision(row.revision),
+      updatedAt: row.updated_at || null,
+      deletedAccountIds: Array.isArray(row.deleted_account_ids) ? row.deleted_account_ids : [id],
+    }
+  }
+
   async function update(updater, updateOptions = {}) {
     const current = await load({
       includeAllMovements: Boolean(updateOptions.includeAllMovements),
@@ -674,6 +705,7 @@ export function createRelationalLedgerRepository(client, options = {}) {
       throw new ConcurrentLedgerUpdateError('Ledger changed repeatedly while movements were loading. Retry the request.')
     },
     applyDelta,
+    deleteUnusedAccount,
     update,
     uploadAttachmentFile,
     deleteAttachmentFile,

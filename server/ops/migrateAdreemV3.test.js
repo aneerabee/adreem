@@ -86,6 +86,14 @@ function securityManifest() {
       serviceRoleExecute: true,
       publicExecute: false,
     },
+    deleteAccountFunction: {
+      securityDefiner: true,
+      identityArguments: 'p_ledger_id uuid, p_account_id text, p_expected_revision bigint, p_owner_id uuid',
+      anonExecute: false,
+      authenticatedExecute: true,
+      serviceRoleExecute: true,
+      publicExecute: false,
+    },
     botCasFunctions: [
       'adreem_bot_state_claim',
       'adreem_bot_state_claim_effect',
@@ -462,6 +470,9 @@ describe('ADREEM v3 migration safety', () => {
     const weakGrant = securityManifest()
     weakGrant.applyFunction.publicExecute = true
     expect(() => verifyTargetSecurityManifest(weakGrant)).toThrow('apply_ledger_delta security or grants')
+    const weakDeleteGrant = securityManifest()
+    weakDeleteGrant.deleteAccountFunction.anonExecute = true
+    expect(() => verifyTargetSecurityManifest(weakDeleteGrant)).toThrow('delete_unused_account security or grants')
     const missingBotCas = securityManifest()
     missingBotCas.botCasFunctions = missingBotCas.botCasFunctions.filter(({ name }) => name !== 'adreem_bot_state_complete_claim')
     expect(() => verifyTargetSecurityManifest(missingBotCas)).toThrow('invalid or missing adreem_bot_state_complete_claim')

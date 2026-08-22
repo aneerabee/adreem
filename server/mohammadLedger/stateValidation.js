@@ -455,7 +455,7 @@ function duplicateOrMissingIdErrors(state) {
   return errors
 }
 
-export function validateLedgerStateTransition(nextState = {}, currentState = {}, { ledgerId = '', now } = {}) {
+export function validateLedgerStateTransition(nextState = {}, currentState = {}, { ledgerId = '', now, allowedDeletedAccountIds = [] } = {}) {
   const errors = duplicateOrMissingIdErrors(nextState)
   const accounts = Array.isArray(nextState.accounts) ? nextState.accounts : []
   const movements = Array.isArray(nextState.movements) ? nextState.movements : []
@@ -468,6 +468,9 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   const previousReconciliations = recordsById(currentState.reconciliations)
   const previousRecurringRules = recordsById(currentState.recurringRules)
   const accountById = recordsById(accounts)
+  const allowedDeletedAccounts = new Set((Array.isArray(allowedDeletedAccountIds) ? allowedDeletedAccountIds : [])
+    .map(cleanId)
+    .filter(Boolean))
   const reconciliationById = recordsById(reconciliations)
   const recurringRuleById = recordsById(recurringRules)
   const dimensionMaps = buildDimensionMaps(accounts, dimensions)
@@ -479,6 +482,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   validateCounterpartyGroups(accounts, errors)
   for (const previousAccount of previousAccounts.values()) {
     if (accountById.has(cleanId(previousAccount.id))) continue
+    if (allowedDeletedAccounts.has(cleanId(previousAccount.id))) continue
     errors.push({
       code: 'account-deletion-not-allowed',
       recordType: 'accounts',

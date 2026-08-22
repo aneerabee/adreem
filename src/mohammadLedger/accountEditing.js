@@ -70,6 +70,110 @@ function referencesAnyAccount(record = {}, accountIds = new Set()) {
   return [record.sourceAccountId, record.destinationAccountId, record.expenseCategoryId].some((accountId) => accountIds.has(accountId))
 }
 
+function accountDeletionDimensions(targetAccounts = [], dimensions = []) {
+  const accountIds = new Set(targetAccounts.map((account) => account.id).filter(Boolean))
+  const dimensionIds = new Set(targetAccounts.flatMap((account) => [
+    account.dimensionId,
+    `dimension-account-${account.id}`,
+  ]).filter(Boolean))
+  for (const dimension of dimensions) {
+    if (accountIds.has(dimension?.linkedAccountId)) dimensionIds.add(dimension.id)
+  }
+  return dimensionIds
+}
+
+function auditEventReferencesAccounts(event = {}, accountIds = new Set()) {
+  const details = event?.details && typeof event.details === 'object' ? event.details : {}
+  if ([details.accountId, details.sourceAccountId, details.targetAccountId]
+    .some((accountId) => accountIds.has(accountId))) return true
+  return Array.isArray(details.accountIds) && details.accountIds.some((accountId) => accountIds.has(accountId))
+}
+
+export function accountDeletionEligibility(accountOrId, {
+  accounts = [],
+  movements = [],
+  attachments = [],
+  reconciliations = [],
+  recurringRules = [],
+  dimensions = [],
+} = {}) {
+  const account = accountOrId && typeof accountOrId === 'object'
+    ? accountOrId
+    : accounts.find((item) => item.id === accountOrId)
+  if (!account?.id) return { canDelete: false, accountIds: [], blockers: ['missing-account'], isCounterpartyBundle: false }
+
+  const relatedAccounts = account.counterpartyId
+    ? accounts.filter((item) => item.counterpartyId === account.counterpartyId)
+    : [account]
+  const targetAccounts = relatedAccounts.length ? relatedAccounts : [account]
+  const accountIds = new Set(targetAccounts.map((item) => item.id).filter(Boolean))
+  const dimensionIds = accountDeletionDimensions(targetAccounts, dimensions)
+  const blockers = new Set()
+
+  if (targetAccounts.some((item) => [VALUE_KINDS.SUMMARY, VALUE_KINDS.REVIEW].includes(item.valueKind))) blockers.add('protected-account')
+  if (targetAccounts.some((item) => (
+    Number(item.balanceDinar || item.openingDinar || 0) !== 0
+    || Number(item.balanceUsd || item.openingUsd || 0) !== 0
+    || Number(item.postedCount || 0) > 0
+    || item.structureLocked
+  ))) blockers.add('account-used')
+  if (movements.some((item) => referencesAnyAccount(item, accountIds) || dimensionIds.has(item?.dimensionId))) blockers.add('movement')
+  if (attachments.some((item) => accountIds.has(item?.accountId))) blockers.add('attachment')
+  if (reconciliations.some((item) => accountIds.has(item?.accountId))) blockers.add('reconciliation')
+  if (recurringRules.some((item) => (
+    referencesAnyAccount(item?.template, accountIds)
+    || dimensionIds.has(item?.template?.dimensionId)
+  ))) blockers.add('recurring-rule')
+  if (accounts.some((item) => !accountIds.has(item.id) && [
+    item.mergedIntoAccountId,
+    item.mergedFromAccountId,
+    item.linkedAccountId,
+  ].some((accountId) => accountIds.has(accountId)))) blockers.add('account-link')
+
+  return {
+    canDelete: blockers.size === 0,
+    accountIds: Array.from(accountIds),
+    blockers: Array.from(blockers),
+    isCounterpartyBundle: Boolean(account.counterpartyId),
+  }
+}
+
+export function deleteUnusedAccountFromLedgerState(state = {}, accountOrId) {
+  const accounts = Array.isArray(state.accounts) ? state.accounts : []
+  const movements = Array.isArray(state.movements) ? state.movements : []
+  const attachments = Array.isArray(state.attachments) ? state.attachments : []
+  const reconciliations = Array.isArray(state.reconciliations) ? state.reconciliations : []
+  const recurringRules = Array.isArray(state.recurringRules) ? state.recurringRules : []
+  const dimensions = Array.isArray(state.dimensions) ? state.dimensions : []
+  const eligibility = accountDeletionEligibility(accountOrId, {
+    accounts,
+    movements,
+    attachments,
+    reconciliations,
+    recurringRules,
+    dimensions,
+  })
+  if (!eligibility.canDelete) return { ok: false, state, ...eligibility }
+
+  const accountIds = new Set(eligibility.accountIds)
+  const targetAccounts = accounts.filter((account) => accountIds.has(account.id))
+  const dimensionIds = accountDeletionDimensions(targetAccounts, dimensions)
+  return {
+    ok: true,
+    deletedAccountIds: eligibility.accountIds,
+    isCounterpartyBundle: eligibility.isCounterpartyBundle,
+    state: {
+      ...state,
+      accounts: accounts.filter((account) => !accountIds.has(account.id)),
+      dimensions: dimensions.filter((dimension) => !dimensionIds.has(dimension.id)),
+      ignoredExternalAccounts: (Array.isArray(state.ignoredExternalAccounts) ? state.ignoredExternalAccounts : [])
+        .filter((accountId) => !accountIds.has(accountId)),
+      auditEvents: (Array.isArray(state.auditEvents) ? state.auditEvents : [])
+        .filter((event) => !auditEventReferencesAccounts(event, accountIds)),
+    },
+  }
+}
+
 export function accountStructureUsage(accountOrId, {
   accounts = [],
   movements = [],

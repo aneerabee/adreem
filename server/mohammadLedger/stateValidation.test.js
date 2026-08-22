@@ -144,6 +144,23 @@ describe('server ledger state validation', () => {
     expect(allRemoved.errors.filter((error) => error.code === 'account-deletion-not-allowed')).toHaveLength(3)
   })
 
+  it('allows only the exact account ids authorized by the protected deletion path', () => {
+    const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
+    const current = { ...createEmptyAdreemState(at), accounts }
+    const allowed = validateLedgerStateTransition({ ...current, accounts: [] }, current, {
+      allowedDeletedAccountIds: accounts.map((account) => account.id),
+    })
+    const incomplete = validateLedgerStateTransition({ ...current, accounts: [] }, current, {
+      allowedDeletedAccountIds: accounts.slice(1).map((account) => account.id),
+    })
+
+    expect(allowed.ok).toBe(true)
+    expect(incomplete.errors).toContainEqual(expect.objectContaining({
+      code: 'account-deletion-not-allowed',
+      id: accounts[0].id,
+    }))
+  })
+
   it('accepts one matching opening movement only while its account is first created', () => {
     const current = createEmptyAdreemState(at)
     const account = {
