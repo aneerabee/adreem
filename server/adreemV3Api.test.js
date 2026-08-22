@@ -209,6 +209,19 @@ describe('ADREEM v3 API', () => {
     expect(JSON.parse(res.body)).toMatchObject({ revision: 7, page: { hasMore: true } })
   })
 
+  it('passes the main movement type list to the isolated repository', async () => {
+    const { handler, repository } = fixture()
+    const req = request({ url: '/api/movements?limit=8&types=transfer%2Cexpense' })
+    const res = response()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(repository.loadMovements).toHaveBeenCalledWith(expect.objectContaining({
+      movementType: null,
+      movementTypes: ['transfer', 'expense'],
+    }))
+  })
+
   it('returns a clean 413 response after draining an oversized request', async () => {
     const { handler, repository } = fixture()
     const req = request({ method: 'PUT', body: 'x'.repeat(1_000_001) })

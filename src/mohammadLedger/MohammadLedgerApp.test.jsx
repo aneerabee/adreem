@@ -7,6 +7,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpe
 import {
   AccountProfile,
   NetPositionPanel,
+  SeparateLedgerPanel,
   AccountRow,
   AccountSearchSelect,
   AccountClassificationEditorFields,
@@ -98,6 +99,41 @@ describe('MohammadLedgerApp net position controls', () => {
     expect(markup).toContain('11,250 د.ل')
     expect(markup).toContain('كاش عندي')
     expect(markup).toContain('سعيد')
+  })
+})
+
+describe('MohammadLedgerApp separate accounts', () => {
+  it('offers existing names while keeping a new name available in the dedicated editor', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <SeparateLedgerPanel
+        records={[]}
+        names={['شخص أ', 'شركة جديدة']}
+        totals={{
+          [CURRENCIES.DINAR]: { receivable: 0, payable: 0 },
+          [CURRENCIES.USD]: { receivable: 0, payable: 0 },
+        }}
+        query=""
+        draft={{ relatedName: 'شخص', recordDirection: 'receivable', amount: '', currency: CURRENCIES.DINAR, note: '' }}
+        editorOpen
+        editingId=""
+        isSaving={false}
+        hasMore={false}
+        isLoadingMore={false}
+        onQueryChange={() => {}}
+        onDraftChange={() => {}}
+        onOpenEditor={() => {}}
+        onCloseEditor={() => {}}
+        onSave={() => {}}
+        onEdit={() => {}}
+        onVoid={() => {}}
+        onLoadMore={() => {}}
+      />,
+    ))
+
+    expect(markup).toContain('أسماء موجودة')
+    expect(markup).toContain('شخص أ')
+    expect(markup).not.toContain('شركة جديدة')
+    expect(markup).not.toContain('فصله عن الصافي')
   })
 })
 
@@ -1000,7 +1036,7 @@ describe('MohammadLedgerApp history filtering', () => {
     expect(markup).toContain('· ملغي')
     expect(markup).toContain('مطابقة الرصيد')
     expect(markup).toContain('الرصيد الفعلي بالدينار')
-    expect(markup).toContain('داخل الصافي')
+    expect(markup).not.toContain('داخل الصافي')
     expect(markup).not.toContain('>حفظ التعديل</button>')
   })
 })

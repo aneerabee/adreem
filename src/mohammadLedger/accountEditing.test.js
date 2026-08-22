@@ -4,7 +4,6 @@ import { accountEditChanges, accountStructureUsage, prepareAccountUpdate } from 
 import { buildCounterpartyAccountBundle } from './counterpartyAccounts.js'
 import { emptyAccountDraft } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements } from './ledgerCore.js'
-import { ACCOUNT_SUMMARY_SCOPES } from './ledgerScope.js'
 
 const EDIT_CASES = [
   { type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE, ownerName: 'سعيد', subAccountName: 'كاش بيننا', nextName: 'شركة سعيد', field: 'ownerName' },
@@ -245,7 +244,7 @@ describe('account editing', () => {
     })
   })
 
-  it('allows changing only the summary scope after movements and records the change clearly', () => {
+  it('ignores the retired account separation flag after movements', () => {
     const account = createAccount({
       id: 'used-cash-scope',
       ownerName: 'أنا',
@@ -258,13 +257,13 @@ describe('account editing', () => {
       accounts: [account],
       movements: createOpeningMovements([account]),
       accountId: account.id,
-      draft: { ...account, summaryScope: ACCOUNT_SUMMARY_SCOPES.SEPARATE },
+      draft: { ...account, summaryScope: 'separate' },
     })
 
     expect(result).toMatchObject({
       ok: true,
-      account: { summaryScope: ACCOUNT_SUMMARY_SCOPES.SEPARATE },
-      changes: [expect.objectContaining({ key: 'summaryScope', before: 'داخل الصافي', after: 'حساب منفصل' })],
+      account: { summaryScope: 'included' },
+      changes: [],
     })
   })
 })

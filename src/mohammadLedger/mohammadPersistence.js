@@ -575,6 +575,7 @@ export async function loadAdreemMovementPage({
   accountId = '',
   status = '',
   type = '',
+  types = [],
   dimensionId = '',
   expenseCategoryId = '',
   occurredFrom = '',
@@ -593,6 +594,7 @@ export async function loadAdreemMovementPage({
   if (accountId) params.set('accountId', accountId)
   if (status) params.set('status', status)
   if (type) params.set('type', type)
+  if (!type && Array.isArray(types) && types.length) params.set('types', types.join(','))
   if (dimensionId) params.set('dimensionId', dimensionId)
   if (expenseCategoryId) params.set('expenseCategoryId', expenseCategoryId)
   if (occurredFrom) params.set('occurredFrom', occurredFrom)

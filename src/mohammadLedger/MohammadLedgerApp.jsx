@@ -3,7 +3,7 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, ReceiptText, Search, SlidersHorizontal, UserRound, WalletCards, Wrench, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Plus, ReceiptText, Search, SlidersHorizontal, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
@@ -19,10 +19,11 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, can
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUploadedAttachment, getMohammadPersistenceMode, loadAdreemMovementPage, loadMohammadPersistedState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
-import { ACCOUNT_SUMMARY_SCOPES, accountSummaryScope, accountSupportsNetScope, buildNetPosition, convertNetPosition, isAccountIncludedInNet, splitBalanceRowsByScope } from './ledgerScope'
+import { buildNetPosition, convertNetPosition, isAccountIncludedInNet } from './ledgerScope'
 import { ledgerNavigationSearch, readLedgerNavigation } from './ledgerNavigation'
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
 import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccountsForRole, sameLogicalAccount } from './movementAccounts'
+import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateRecords, isMainLedgerMovement, normalizeSeparateRecordDirection, normalizeSeparateRecordName, separateRecordCancellationDraft, separateRecordDirectionOptions, separateRecordNames, separateRecordTotals } from './separateRecords'
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, buildReconciliationCorrectionDrafts, createAttachment, createAuditEvent, createReconciliation, createRecurringRuleFromMovement, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, lastReconciliationForAccount, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
@@ -31,6 +32,8 @@ const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
 const USD_MAXIMUM_FRACTION_DIGITS = 6
 const REVIEW_MOVEMENT_PAGE_SIZE = 50
+const SEPARATE_RECORD_PAGE_SIZE = 250
+const MAX_SEPARATE_RECORD_PAGES = 100
 const UI_MOTION_TRANSITION = Object.freeze({ duration: 0.2, ease: [0.22, 1, 0.36, 1] })
 const FLOW_STAGE_MOTION = Object.freeze({
   initial: { opacity: 0, y: 8 },
@@ -56,6 +59,7 @@ const MOVEMENT_REQUEST_KEYS = Object.freeze({
   history: 'history',
   ledgerFeed: 'ledger-feed',
   review: 'review',
+  separate: 'separate',
   todaySummary: 'today-summary',
 })
 
@@ -70,7 +74,7 @@ const accountGroupTabs = [
   { key: 'people', label: 'الناس', title: 'الناس' },
   { key: 'assets', label: 'متابعة', title: 'الأصول والمشاريع' },
   { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
-  { key: 'separate', label: 'منفصل', title: 'الحسابات المنفصلة' },
+  { key: 'separate', label: 'منفصل', title: 'السجل المنفصل' },
   { key: 'review', label: 'ناقص', title: 'مراجعة' },
 ]
 
@@ -110,12 +114,6 @@ const movementOptionGroups = [
     title: 'الدولار',
     hint: 'بيع أو شراء',
     types: [MOVEMENT_TYPES.USD_SALE, MOVEMENT_TYPES.USD_PURCHASE],
-  },
-  {
-    key: 'records',
-    title: 'متابعة',
-    hint: 'دون تغيير الأرصدة',
-    types: [MOVEMENT_TYPES.RECORD_ONLY],
   },
 ]
 
@@ -353,6 +351,16 @@ function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
     attachmentUrl: '',
     recurringEnabled: false,
     recurringFrequency: RECURRING_FREQUENCIES.MONTHLY,
+  }
+}
+
+function emptySeparateRecordDraft() {
+  return {
+    relatedName: '',
+    recordDirection: SEPARATE_RECORD_DIRECTIONS.RECEIVABLE,
+    amount: '',
+    currency: CURRENCIES.DINAR,
+    note: '',
   }
 }
 
@@ -1030,6 +1038,107 @@ export function NetPositionPanel({ position, rate, targetCurrency, onRateChange,
         </div>
       </details>
     </Motion.section>
+  )
+}
+
+function separateRecordDirectionLabel(direction) {
+  return separateRecordDirectionOptions.find((option) => option.value === normalizeSeparateRecordDirection(direction))?.label || 'معلومة'
+}
+
+export function SeparateLedgerPanel({ records, names, totals, query, draft, editorOpen, editingId, isSaving, hasMore, isLoadingMore, onQueryChange, onDraftChange, onOpenEditor, onCloseEditor, onSave, onEdit, onVoid, onLoadMore }) {
+  const normalizedDraftName = normalizeSeparateRecordName(draft.relatedName).toLocaleLowerCase('ar')
+  const suggestedNames = names
+    .filter((name) => !normalizedDraftName || name.toLocaleLowerCase('ar').includes(normalizedDraftName))
+    .slice(0, 6)
+  return (
+    <section className="adreem-separate-ledger">
+      <div className="adreem-separate-summary" aria-label="ملخص السجل المنفصل">
+        <span className="is-positive"><ArrowDownToLine aria-hidden="true" size={16} /><small>لي</small><strong>{money(totals[CURRENCIES.DINAR].receivable)}</strong><b>{money(totals[CURRENCIES.USD].receivable, CURRENCIES.USD)}</b></span>
+        <span className="is-negative"><ArrowUpFromLine aria-hidden="true" size={16} /><small>عليّ</small><strong>{money(totals[CURRENCIES.DINAR].payable)}</strong><b>{money(totals[CURRENCIES.USD].payable, CURRENCIES.USD)}</b></span>
+      </div>
+
+      <div className="adreem-separate-toolbar">
+        <label>
+          <Search aria-hidden="true" size={15} />
+          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="ابحث بالاسم أو الملاحظة" />
+        </label>
+        <button type="button" className="adreem-separate-add" onClick={editorOpen ? onCloseEditor : onOpenEditor}>
+          {editorOpen ? <X aria-hidden="true" size={16} /> : <Plus aria-hidden="true" size={16} />}
+          {editorOpen ? 'إغلاق' : 'حساب جديد'}
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {editorOpen ? (
+          <Motion.form className="adreem-separate-editor" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={UI_MOTION_TRANSITION} onSubmit={onSave}>
+            <div className="adreem-separate-name">
+              <label>
+                <span>الاسم</span>
+                <input value={draft.relatedName} onChange={(event) => onDraftChange('relatedName', event.target.value)} placeholder="اختر أو اكتب اسمًا" autoComplete="off" />
+              </label>
+              {suggestedNames.length ? (
+                <div className="adreem-separate-name-options" aria-label="أسماء موجودة">
+                  {suggestedNames.map((name) => (
+                    <button type="button" key={name} aria-pressed={name === normalizeSeparateRecordName(draft.relatedName)} onClick={() => onDraftChange('relatedName', name)}>
+                      {preserveUiData(name)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="adreem-separate-direction" aria-label="اتجاه السجل">
+              {separateRecordDirectionOptions.map((option) => (
+                <button type="button" key={option.value} className={`is-${option.value} ${draft.recordDirection === option.value ? 'is-active' : ''}`} aria-pressed={draft.recordDirection === option.value} onClick={() => onDraftChange('recordDirection', option.value)}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <NumericEntry compact hideLabel label="المبلغ" value={draft.amount} onChange={(value) => onDraftChange('amount', value)} />
+            <label className="adreem-separate-currency">
+              <span>العملة</span>
+              <select value={draft.currency} onChange={(event) => onDraftChange('currency', event.target.value)}>
+                <option value={CURRENCIES.DINAR}>دينار</option>
+                <option value={CURRENCIES.USD}>دولار</option>
+              </select>
+            </label>
+            <label className="adreem-separate-note">
+              <span>ملاحظة</span>
+              <input value={draft.note} onChange={(event) => onDraftChange('note', event.target.value)} placeholder="مختصرة وواضحة" />
+            </label>
+            <button className="adreem-separate-save" type="submit" disabled={isSaving || !normalizeSeparateRecordName(draft.relatedName) || !Number(draft.amount) || !draft.note.trim()}>
+              <Check aria-hidden="true" size={16} /> {isSaving ? 'جاري الحفظ' : editingId ? 'حفظ التعديل' : 'حفظ'}
+            </button>
+          </Motion.form>
+        ) : null}
+      </AnimatePresence>
+
+      <div className="adreem-separate-list">
+        {!records.length ? <p className="ml3-empty">لا توجد سجلات منفصلة.</p> : null}
+        <AnimatePresence initial={false}>
+          {records.map((movement) => {
+            const direction = normalizeSeparateRecordDirection(movement.recordDirection)
+            return (
+              <Motion.article layout="position" key={movement.id} className={`is-${direction}`} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={UI_MOTION_TRANSITION}>
+                <i>{direction === SEPARATE_RECORD_DIRECTIONS.RECEIVABLE ? <ArrowDownToLine aria-hidden="true" size={16} /> : direction === SEPARATE_RECORD_DIRECTIONS.PAYABLE ? <ArrowUpFromLine aria-hidden="true" size={16} /> : <NotebookPen aria-hidden="true" size={16} />}</i>
+                <span className="adreem-separate-record-copy">
+                  <strong>{preserveUiData(movement.relatedName || 'بدون اسم')}</strong>
+                  <small>{preserveUiData(movement.note)}</small>
+                </span>
+                <span className="adreem-separate-record-value">
+                  <b>{separateRecordDirectionLabel(direction)} · {money(movement.amount, movement.currency)}</b>
+                  <small>{movementDateTime(movement.createdAt || movement.updatedAt)}</small>
+                </span>
+                <span className="adreem-separate-record-actions">
+                  <button type="button" aria-label="تعديل" title="تعديل" onClick={() => onEdit(movement)}><Pencil aria-hidden="true" size={15} /></button>
+                  <button type="button" aria-label="إلغاء" title="إلغاء" onClick={() => onVoid(movement.id)}><Trash2 aria-hidden="true" size={15} /></button>
+                </span>
+              </Motion.article>
+            )
+          })}
+        </AnimatePresence>
+        {hasMore ? <button type="button" className="ml3-history-more" disabled={isLoadingMore} onClick={onLoadMore}>{isLoadingMore ? 'جاري التحميل' : 'أقدم'}</button> : null}
+      </div>
+    </section>
   )
 }
 
@@ -1823,7 +1932,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
   )
 }
 
-export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onUpdateSummaryScope, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements }) {
+export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements }) {
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
@@ -1839,8 +1948,6 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
   const canReconcileBalance = account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK
   const primaryBalance = accountPrimaryBalance(bucket)
   const profileBalanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
-  const supportsSummaryScope = accountSupportsNetScope(account)
-  const summaryScope = accountSummaryScope(account)
 
   return (
     <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
@@ -1881,17 +1988,6 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
           </section>
 
           <section className="ml3-profile-tools">
-            {supportsSummaryScope ? (
-              <div className={`ml3-profile-scope ${summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? 'is-separate' : 'is-included'}`}>
-                <span>
-                  {summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? <EyeOff aria-hidden="true" size={17} /> : <Calculator aria-hidden="true" size={17} />}
-                  <span><strong>{summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? 'حساب منفصل' : 'داخل الصافي'}</strong><small>الرصيد والحركات محفوظة دائمًا</small></span>
-                </span>
-                <button type="button" onClick={() => onUpdateSummaryScope?.(account.id, summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? ACCOUNT_SUMMARY_SCOPES.INCLUDED : ACCOUNT_SUMMARY_SCOPES.SEPARATE)}>
-                  {summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? 'إدخاله' : 'فصله'}
-                </button>
-              </div>
-            ) : null}
             {canReconcileBalance ? (
               <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
                 <h3>مطابقة الرصيد</h3>
@@ -2371,6 +2467,13 @@ export default function MohammadLedgerApp() {
   const [accountProfilePage, setAccountProfilePage] = useState(null)
   const [isLoadingAccountProfile, setIsLoadingAccountProfile] = useState(false)
   const [accountQuery, setAccountQuery] = useState('')
+  const [separateQuery, setSeparateQuery] = useState('')
+  const [separateDraft, setSeparateDraft] = useState(emptySeparateRecordDraft)
+  const [isSeparateEditorOpen, setIsSeparateEditorOpen] = useState(false)
+  const [editingSeparateRecordId, setEditingSeparateRecordId] = useState('')
+  const [separatePage, setSeparatePage] = useState(null)
+  const [isSavingSeparateRecord, setIsSavingSeparateRecord] = useState(false)
+  const [isLoadingSeparateRecords, setIsLoadingSeparateRecords] = useState(false)
   const [counterpartyBalanceFilter, setCounterpartyBalanceFilter] = useState('all')
   const [focusedCounterpartyId, setFocusedCounterpartyId] = useState('')
   const [isNetOpen, setIsNetOpen] = useState(false)
@@ -2387,6 +2490,7 @@ export default function MohammadLedgerApp() {
   const accountAttachmentLockRef = useRef(false)
   const accountCreationLockRef = useRef('')
   const reconciliationLockRef = useRef('')
+  const separateRecordSaveLockRef = useRef(false)
   const activeEntryModeRef = useRef(activeEntryMode)
   const motionTimerRef = useRef(null)
   const viewTransitionRef = useRef(null)
@@ -2395,6 +2499,7 @@ export default function MohammadLedgerApp() {
   const historyRequestSequenceRef = useRef(0)
   const accountProfileRequestSequenceRef = useRef(0)
   const reviewRequestSequenceRef = useRef(0)
+  const separateRequestSequenceRef = useRef(0)
   const reviewLoadInProgressRef = useRef(false)
   const normalizedUiLanguage = normalizeUiLanguage(uiLanguage)
   const uiDirection = uiLanguageDirection(normalizedUiLanguage)
@@ -2558,7 +2663,6 @@ export default function MohammadLedgerApp() {
   const accountWizardHint = currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING
     ? 'اكتب صفرًا إذا لا يوجد رصيد سابق.'
     : ''
-  const scopedBalances = useMemo(() => splitBalanceRowsByScope(balances), [balances])
   const balancesByKind = useMemo(() => {
     const groups = {
       people: [],
@@ -2571,7 +2675,6 @@ export default function MohammadLedgerApp() {
     for (const bucket of balances) {
       const kind = bucket.account.valueKind
       if (bucket.account.status === ACCOUNT_STATUSES.NEEDS_REVIEW || kind === VALUE_KINDS.REVIEW) groups.review.push(bucket)
-      else if (accountSummaryScope(bucket.account) === ACCOUNT_SUMMARY_SCOPES.SEPARATE) groups.separate.push(bucket)
       else if (kind === VALUE_KINDS.RECEIVABLE) groups.people.push(bucket)
       else if (kind === VALUE_KINDS.CASH || kind === VALUE_KINDS.BANK) groups.money.push(bucket)
       else if (kind === VALUE_KINDS.ASSET || kind === VALUE_KINDS.PROJECT) groups.assets.push(bucket)
@@ -2582,6 +2685,10 @@ export default function MohammadLedgerApp() {
     }
     return groups
   }, [balances])
+  const separateRecords = useMemo(() => filterSeparateRecords(movements, separateQuery), [movements, separateQuery])
+  const allSeparateRecords = useMemo(() => filterSeparateRecords(movements), [movements])
+  const separateNames = useMemo(() => separateRecordNames(accounts, movements), [accounts, movements])
+  const separateTotals = useMemo(() => separateRecordTotals(movements), [movements])
 
   const reviewMovements = movements.filter((movement) => movement.status === MOVEMENT_STATUSES.NEEDS_REVIEW)
   const activeReviewPage = reviewPage?.revision === ledgerRevision ? reviewPage : null
@@ -2621,7 +2728,7 @@ export default function MohammadLedgerApp() {
   const reviewMovementTotal = ledgerStorageMode === 'relational' ? activeReviewPage?.total ?? reviewMovements.length : reviewMovements.length
   const reviewItemTotal = (balancesByKind.review || []).length + unresolvedExternalAccounts.length + reviewMovementTotal
   const postedUserMovements = movements
-    .filter((movement) => !movement.id?.startsWith('opening-'))
+    .filter(isMainLedgerMovement)
     .slice()
     .reverse()
   const locallyFilteredHistoryMovements = useMemo(() => filterMovementHistory({
@@ -2636,7 +2743,7 @@ export default function MohammadLedgerApp() {
     dimensionById,
   }), [accountById, dimensionById, historyAccountId, historyDimensionId, historyExpenseCategoryId, historyQuery, historyStatus, historyType, postedUserMovements])
   const filteredHistoryMovements = ledgerStorageMode === 'relational' && Array.isArray(historyRemoteMovements)
-    ? historyRemoteMovements
+    ? historyRemoteMovements.filter(isMainLedgerMovement)
     : locallyFilteredHistoryMovements
   const activeHistoryPage = ledgerStorageMode === 'relational' ? historyPage : movementPage
   const historyGroups = useMemo(() => {
@@ -2658,7 +2765,7 @@ export default function MohammadLedgerApp() {
   const todayMovements = postedUserMovements.filter((movement) => isToday(movement.createdAt || movement.updatedAt))
   const currentTodayRemoteSummary = todayRemoteSummary?.revision === ledgerRevision ? todayRemoteSummary : null
   const todayMovementCount = currentTodayRemoteSummary?.total ?? todayMovements.length
-  const todayPreviewMovements = currentTodayRemoteSummary?.movements || todayMovements.slice(0, 3)
+  const todayPreviewMovements = currentTodayRemoteSummary?.movements.filter(isMainLedgerMovement) || todayMovements.slice(0, 3)
   const activeAccountProfilePage = accountProfilePage?.accountId === selectedAccountId ? accountProfilePage : null
   const totals = useMemo(() => {
     return balances.reduce(
@@ -2685,7 +2792,7 @@ export default function MohammadLedgerApp() {
       },
     )
   }, [balances])
-  const balanceOverview = useMemo(() => buildBalanceOverview(scopedBalances.included), [scopedBalances.included])
+  const balanceOverview = useMemo(() => buildBalanceOverview(balances), [balances])
   const netPosition = useMemo(() => buildNetPosition(balances), [balances])
 
   const movementConfig = movementConfigFor(movementDraft.type)
@@ -2768,6 +2875,7 @@ export default function MohammadLedgerApp() {
     const dayRange = zonedDayRange()
     void loadAdreemMovementPage({
       limit: 3,
+      types: MAIN_LEDGER_MOVEMENT_TYPES,
       occurredFrom: dayRange.from,
       occurredBefore: dayRange.before,
       requestKey: MOVEMENT_REQUEST_KEYS.todaySummary,
@@ -2863,6 +2971,55 @@ export default function MohammadLedgerApp() {
   }, [ledgerStorageMode, selectedAccountId])
 
   useEffect(() => {
+    const requestSequence = separateRequestSequenceRef.current + 1
+    separateRequestSequenceRef.current = requestSequence
+    if (!isHydrated || activeSection !== 'accounts' || activeAccountGroup !== 'separate' || ledgerStorageMode !== 'relational') return undefined
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled && separateRequestSequenceRef.current === requestSequence) setIsLoadingSeparateRecords(true)
+    })
+    void (async () => {
+      let before = null
+      let loaded = 0
+      let firstTotal = null
+      const seenCursors = new Set()
+      for (let pageIndex = 0; pageIndex < MAX_SEPARATE_RECORD_PAGES; pageIndex += 1) {
+        const result = await loadAdreemMovementPage({
+          before,
+          limit: SEPARATE_RECORD_PAGE_SIZE,
+          type: MOVEMENT_TYPES.RECORD_ONLY,
+          requestKey: MOVEMENT_REQUEST_KEYS.separate,
+        })
+        if (cancelled || result.stale || separateRequestSequenceRef.current !== requestSequence) return
+        setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+        setMovements((current) => {
+          const merged = mergeMovementHistoryPages(current, result.movements).reverse()
+          return sameRecordVersions(current, merged) ? current : merged
+        })
+        loaded += result.movements.length
+        if (firstTotal === null) firstTotal = result.page?.total ?? null
+        setSeparatePage({ ...(result.page || {}), total: firstTotal, loaded })
+        if (!result.page?.hasMore) return
+        const nextCursor = Number(result.page?.nextCursor)
+        if (!Number.isSafeInteger(nextCursor) || nextCursor <= 0 || seenCursors.has(nextCursor)) {
+          throw new Error('Invalid separate ledger cursor.')
+        }
+        seenCursors.add(nextCursor)
+        before = nextCursor
+      }
+      throw new Error('Separate ledger page limit exceeded.')
+    })().catch((error) => {
+      if (!cancelled && separateRequestSequenceRef.current === requestSequence) {
+        console.warn('[adreem-ledger] separate records load failed:', error?.message || error)
+        setFeedback('تعذر تحميل السجل المنفصل كاملًا. حاول مرة أخرى.')
+      }
+    }).finally(() => {
+      if (!cancelled && separateRequestSequenceRef.current === requestSequence) setIsLoadingSeparateRecords(false)
+    })
+    return () => { cancelled = true }
+  }, [activeAccountGroup, activeSection, isHydrated, ledgerStorageMode])
+
+  useEffect(() => {
     const requestSequence = historyRequestSequenceRef.current + 1
     historyRequestSequenceRef.current = requestSequence
     if (!isHydrated || activeSection !== 'history' || ledgerStorageMode !== 'relational') return undefined
@@ -2874,6 +3031,7 @@ export default function MohammadLedgerApp() {
       try {
         const result = await loadAdreemMovementPage({
           limit: 100,
+          types: MAIN_LEDGER_MOVEMENT_TYPES,
           query: historyQuery,
           type: historyType,
           status: historyStatus,
@@ -3028,6 +3186,7 @@ export default function MohammadLedgerApp() {
         const result = await loadAdreemMovementPage({
           before: activePage.nextCursor,
           limit: activePage.limit || 100,
+          types: MAIN_LEDGER_MOVEMENT_TYPES,
           query: historyQuery,
           type: historyType,
           status: historyStatus,
@@ -3101,6 +3260,36 @@ export default function MohammadLedgerApp() {
         reviewLoadInProgressRef.current = false
         setIsLoadingReview(false)
       }
+    }
+  }
+
+  async function loadOlderSeparateRecords() {
+    if (isLoadingSeparateRecords || !separatePage?.hasMore) return
+    const requestSequence = separateRequestSequenceRef.current
+    setIsLoadingSeparateRecords(true)
+    try {
+      const result = await loadAdreemMovementPage({
+        before: separatePage.nextCursor,
+        limit: separatePage.limit || SEPARATE_RECORD_PAGE_SIZE,
+        type: MOVEMENT_TYPES.RECORD_ONLY,
+        requestKey: MOVEMENT_REQUEST_KEYS.separate,
+      })
+      if (result.stale || separateRequestSequenceRef.current !== requestSequence) return
+      setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+      setMovements((current) => {
+        const merged = mergeMovementHistoryPages(current, result.movements).reverse()
+        return sameRecordVersions(current, merged) ? current : merged
+      })
+      setSeparatePage((current) => ({
+        ...(result.page || {}),
+        total: current?.total ?? result.page?.total ?? null,
+        loaded: Number(current?.loaded || 0) + result.movements.length,
+      }))
+    } catch (error) {
+      console.warn('[adreem-ledger] older separate records load failed:', error?.message || error)
+      setFeedback('تعذر جلب السجلات الأقدم.')
+    } finally {
+      if (separateRequestSequenceRef.current === requestSequence) setIsLoadingSeparateRecords(false)
     }
   }
 
@@ -3449,6 +3638,118 @@ export default function MohammadLedgerApp() {
     }, 'forward')
   }
 
+  function updateSeparateDraft(key, value) {
+    setSeparateDraft((current) => ({ ...current, [key]: value }))
+  }
+
+  function closeSeparateEditor() {
+    setIsSeparateEditorOpen(false)
+    setEditingSeparateRecordId('')
+    setSeparateDraft(emptySeparateRecordDraft())
+  }
+
+  function editSeparateRecord(movement) {
+    setEditingSeparateRecordId(movement.id)
+    setSeparateDraft({
+      relatedName: movement.relatedName || '',
+      recordDirection: normalizeSeparateRecordDirection(movement.recordDirection),
+      amount: String(Math.abs(Number(movement.amount || 0)) || ''),
+      currency: movement.currency === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR,
+      note: movement.note || '',
+    })
+    setIsSeparateEditorOpen(true)
+  }
+
+  function saveSeparateRecord(event) {
+    event.preventDefault()
+    if (separateRecordSaveLockRef.current) return
+    const relatedName = normalizeSeparateRecordName(separateDraft.relatedName)
+    const amount = parseMoneyAmount(separateDraft.amount)
+    const note = separateDraft.note.trim()
+    if (!relatedName || amount <= 0 || !note) {
+      setFeedback('أكمل الاسم والمبلغ والملاحظة.')
+      return
+    }
+    separateRecordSaveLockRef.current = true
+    setIsSavingSeparateRecord(true)
+    try {
+      const originalMovement = editingSeparateRecordId
+        ? movements.find((movement) => movement.id === editingSeparateRecordId && movement.type === MOVEMENT_TYPES.RECORD_ONLY)
+        : null
+      const movement = postMovement({
+        type: MOVEMENT_TYPES.RECORD_ONLY,
+        amount,
+        currency: separateDraft.currency === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR,
+        sourceAccountId: null,
+        destinationAccountId: null,
+        separateAccountId: originalMovement?.separateAccountId || `separate-account-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        relatedName,
+        recordDirection: normalizeSeparateRecordDirection(separateDraft.recordDirection),
+        note,
+        ...(originalMovement ? { supersedesSeparateRecordId: originalMovement.id } : {}),
+      }, accounts, movements)
+      if (!movement.validation.ok) {
+        setFeedback(movement.validation.errors.map((error) => error.message).join(' ') || 'تعذر حفظ السجل.')
+        return
+      }
+      setMovements((current) => [...current, movement])
+      setLedgerExtras((current) => ({
+        ...current,
+        auditEvents: [
+          ...(current.auditEvents || []),
+          createAuditEvent('movement.created', {
+            movementId: movement.id,
+            status: movement.status,
+            recordOnly: true,
+            ...(originalMovement ? { supersedesMovementId: originalMovement.id } : {}),
+          }),
+        ],
+      }))
+      setPendingUndo({ movementId: movement.id, label: `${relatedName} · ${money(amount, movement.currency)}` })
+      setFeedback(originalMovement ? 'تم تعديل السجل المنفصل.' : 'تم حفظ السجل المنفصل.')
+      closeSeparateEditor()
+    } finally {
+      separateRecordSaveLockRef.current = false
+      setIsSavingSeparateRecord(false)
+    }
+  }
+
+  function archiveSeparateRecord(movementId) {
+    if (separateRecordSaveLockRef.current) return
+    const target = movements.find((movement) => movement.id === movementId && movement.type === MOVEMENT_TYPES.RECORD_ONLY)
+    if (!target) return
+    if (typeof window !== 'undefined' && !window.confirm(`${translateUiText('إلغاء الحساب المنفصل')} «${target.relatedName || translateUiText('بدون اسم')}»؟`)) return
+    separateRecordSaveLockRef.current = true
+    setIsSavingSeparateRecord(true)
+    try {
+      const movement = postMovement(separateRecordCancellationDraft(target), accounts, movements)
+      if (!movement.validation.ok) {
+        setFeedback(movement.validation.errors.map((error) => error.message).join(' ') || 'تعذر إلغاء الحساب المنفصل.')
+        return
+      }
+      setMovements((current) => [...current, movement])
+      setLedgerExtras((current) => ({
+        ...current,
+        auditEvents: [
+          ...(current.auditEvents || []),
+          createAuditEvent('movement.created', {
+            movementId: movement.id,
+            status: movement.status,
+            recordOnly: true,
+            supersedesMovementId: target.id,
+            separateRecordAction: 'void',
+          }),
+        ],
+      }))
+      setPendingUndo({ movementId: movement.id, label: `إلغاء ${target.relatedName || 'حساب منفصل'}` })
+      if (editingSeparateRecordId === target.id) closeSeparateEditor()
+      setFeedback('تم إلغاء الحساب المنفصل.')
+    } finally {
+      separateRecordSaveLockRef.current = false
+      setIsSavingSeparateRecord(false)
+    }
+  }
+
   async function saveMovement(event) {
     event.preventDefault()
     if (movementSaveLockRef.current) return
@@ -3737,44 +4038,6 @@ export default function MohammadLedgerApp() {
     }))
     setAccountQuery('')
     setFeedback('تم تعديل الحساب.')
-  }
-
-  function updateAccountSummaryScope(accountId, nextScope) {
-    const currentAccount = accounts.find((account) => account.id === accountId)
-    if (!currentAccount || !accountSupportsNetScope(currentAccount)) return
-    const nextIsSeparate = nextScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE
-    const confirmation = nextIsSeparate
-      ? 'سيبقى الرصيد والحركات محفوظين، وسيخرج هذا الحساب من الصافي فقط. هل تريد المتابعة؟'
-      : 'سيعود هذا الحساب إلى الأرصدة والصافي العام. هل تريد المتابعة؟'
-    if (typeof window !== 'undefined' && !window.confirm(translateUiText(confirmation))) return
-    const result = prepareAccountUpdate({
-      accounts,
-      movements,
-      reconciliations: ledgerExtras.reconciliations || [],
-      recurringRules: ledgerExtras.recurringRules || [],
-      dimensions: ledgerExtras.dimensions || [],
-      accountId,
-      draft: { ...currentAccount, summaryScope: nextScope },
-    })
-    if (!result.ok) {
-      setFeedback(result.errors.map((error) => error.message).join(' '))
-      return
-    }
-    setAccounts(result.accounts)
-    setLedgerExtras((current) => ({
-      ...current,
-      auditEvents: [
-        ...(current.auditEvents || []),
-        createAuditEvent('account.updated', {
-          accountId,
-          accountIds: [accountId],
-          before: accountEditSnapshot(currentAccount),
-          after: accountEditSnapshot(result.account),
-          source: 'web',
-        }),
-      ],
-    }))
-    setFeedback(nextIsSeparate ? 'تم فصل الحساب عن الصافي.' : 'تم إدخال الحساب في الصافي.')
   }
 
   function reconcileAccount(event, accountId, currentDinar, currentUsd) {
@@ -4139,12 +4402,12 @@ export default function MohammadLedgerApp() {
       money: filterRows(moneyRows),
       assets: filterRows(balancesByKind.assets || []),
       expenses: filterRows(balancesByKind.expenses || []),
-      separate: filterRows(balancesByKind.separate || []),
+      separate: [],
       review: filterRows(balancesByKind.review || []),
     }
     const rows = accountRowsByGroup[activeGroup.key] || []
     const visibleRows = activeGroup.key === 'people' ? visiblePeopleGroups : rows
-    const activeGroupCount = visibleRows.length
+    const activeGroupCount = activeGroup.key === 'separate' ? allSeparateRecords.length : visibleRows.length
     return (
       <section className={`ml3-panel ml3-balances-surface ml3-balances-surface--${activeGroup.key}`}>
         <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة بالدينار والدولار">
@@ -4176,13 +4439,6 @@ export default function MohammadLedgerApp() {
             <span>عرض الصافي</span>
             <b>{formatCount(netPosition.accountCount)}</b>
           </button>
-          {balancesByKind.separate.length ? (
-            <button type="button" className="is-separate" onClick={() => setActiveAccountGroup('separate')}>
-              <EyeOff aria-hidden="true" size={16} />
-              <span>حسابات منفصلة</span>
-              <b>{formatCount(balancesByKind.separate.length)}</b>
-            </button>
-          ) : null}
         </div>
 
         <AnimatePresence initial={false}>
@@ -4201,7 +4457,11 @@ export default function MohammadLedgerApp() {
         <div className="ml3-balances-workspace">
           <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
             {accountGroupTabs.map((group) => {
-              const groupCount = group.key === 'people' ? visiblePeopleGroups.length : accountRowsByGroup[group.key]?.length || 0
+              const groupCount = group.key === 'people'
+                ? visiblePeopleGroups.length
+                : group.key === 'separate'
+                  ? allSeparateRecords.length
+                  : accountRowsByGroup[group.key]?.length || 0
               return (
                 <button type="button" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-current={activeAccountGroup === group.key ? 'true' : undefined} onClick={() => setActiveAccountGroup(group.key)}>
                   {activeAccountGroup === group.key ? <Motion.i className="adreem-motion-selection" layoutId="adreem-balance-group" transition={UI_MOTION_TRANSITION} /> : null}
@@ -4215,28 +4475,51 @@ export default function MohammadLedgerApp() {
           <div className="ml3-balance-pane">
             <AnimatePresence mode="wait" initial={false}>
               <Motion.div key={activeGroup.key} className="adreem-balance-pane-motion" {...BALANCE_PANE_MOTION}>
-                <div className="ml3-balance-pane-head">
+                <div className={`ml3-balance-pane-head ${activeGroup.key === 'separate' ? 'is-separate' : ''}`}>
                   <div className="ml3-balance-pane-title">
                     <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
                     <h2>{activeGroup.key === 'people' ? 'الناس' : activeGroup.title}</h2>
                     <span>{formatCount(activeGroupCount)}</span>
                   </div>
-                  <label className="ml3-account-toolbar">
-                    <Search aria-hidden="true" size={15} />
-                    <input
-                      aria-label="بحث في الأرصدة"
-                      value={accountQuery}
-                      onChange={(event) => {
-                        setAccountQuery(event.target.value)
-                        setFocusedCounterpartyId('')
-                        if (activeGroup.key === 'people') setCounterpartyBalanceFilter('all')
-                      }}
-                      placeholder="ابحث عن حساب"
-                    />
-                  </label>
+                  {activeGroup.key !== 'separate' ? (
+                    <label className="ml3-account-toolbar">
+                      <Search aria-hidden="true" size={15} />
+                      <input
+                        aria-label="بحث في الأرصدة"
+                        value={accountQuery}
+                        onChange={(event) => {
+                          setAccountQuery(event.target.value)
+                          setFocusedCounterpartyId('')
+                          if (activeGroup.key === 'people') setCounterpartyBalanceFilter('all')
+                        }}
+                        placeholder="ابحث عن حساب"
+                      />
+                    </label>
+                  ) : null}
                 </div>
 
-                {activeGroup.key === 'people' ? (
+                {activeGroup.key === 'separate' ? (
+                  <SeparateLedgerPanel
+                    records={separateRecords}
+                    names={separateNames}
+                    totals={separateTotals}
+                    query={separateQuery}
+                    draft={separateDraft}
+                    editorOpen={isSeparateEditorOpen}
+                    editingId={editingSeparateRecordId}
+                    isSaving={isSavingSeparateRecord}
+                    hasMore={Boolean(separatePage?.hasMore)}
+                    isLoadingMore={isLoadingSeparateRecords}
+                    onQueryChange={setSeparateQuery}
+                    onDraftChange={updateSeparateDraft}
+                    onOpenEditor={() => setIsSeparateEditorOpen(true)}
+                    onCloseEditor={closeSeparateEditor}
+                    onSave={saveSeparateRecord}
+                    onEdit={editSeparateRecord}
+                    onVoid={archiveSeparateRecord}
+                    onLoadMore={loadOlderSeparateRecords}
+                  />
+                ) : activeGroup.key === 'people' ? (
                   <>
                     <div className="adreem-people-controls">
                       <CounterpartyFilters groups={peopleSource} value={counterpartyBalanceFilter} onChange={(nextFilter) => {
@@ -5129,7 +5412,7 @@ export default function MohammadLedgerApp() {
           </section>
         ) : null}
       </section>
-      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onUpdateSummaryScope={updateAccountSummaryScope} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
+      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
       </AdreemChrome>
     </MotionConfig>
   )

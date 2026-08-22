@@ -322,6 +322,10 @@ export function validateMovement(movement, accounts = [], movements = [], option
     if (sourceId) errors.push({ field: 'sourceAccountId', message: 'التسجيل فقط لا يرتبط بحساب مصدر.' })
     if (destinationId) errors.push({ field: 'destinationAccountId', message: 'التسجيل فقط لا يرتبط بحساب وجهة.' })
     if (!String(movement?.note || '').trim()) errors.push({ field: 'note', message: 'اكتب ملاحظة توضح ما تريد تسجيله.' })
+    if (String(movement?.relatedName || '').trim().length > 120) errors.push({ field: 'relatedName', message: 'الاسم المرتبط أطول من الحد المسموح.' })
+    if (movement?.recordDirection && !['receivable', 'payable', 'note'].includes(movement.recordDirection)) {
+      errors.push({ field: 'recordDirection', message: 'اتجاه السجل المنفصل غير معروف.' })
+    }
   }
   if ((type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) && movement?.expenseCategoryId) {
     const category = accountMap.get(movement.expenseCategoryId)

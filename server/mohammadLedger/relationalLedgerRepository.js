@@ -331,15 +331,21 @@ async function loadMovementSearchPage(client, ledger, ownerId, options = {}) {
     'Failed to search movements.',
   )
   const rows = Array.isArray(data) ? data : []
-  const visibleRows = rows.slice(0, limit)
+  const scannedRows = rows.slice(0, limit)
+  const allowedTypes = Array.isArray(options.movementTypes) && options.movementTypes.length
+    ? new Set(options.movementTypes.map(String))
+    : null
+  const visibleRows = allowedTypes
+    ? scannedRows.filter((row) => allowedTypes.has(String(row.payload?.type || '')))
+    : scannedRows
   return {
     movements: visibleRows.map(payloadFromRow),
     page: {
       offset: 0,
       limit,
-      total: rows[0]?.total_count === null || rows[0]?.total_count === undefined ? null : Number(rows[0].total_count),
+      total: allowedTypes || rows[0]?.total_count === null || rows[0]?.total_count === undefined ? null : Number(rows[0].total_count),
       hasMore: rows.length > limit,
-      nextCursor: visibleRows.length ? Number(visibleRows[visibleRows.length - 1].sequence) : null,
+      nextCursor: scannedRows.length ? Number(scannedRows[scannedRows.length - 1].sequence) : null,
     },
   }
 }

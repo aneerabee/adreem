@@ -18,18 +18,15 @@ export function accountSupportsNetScope(account = {}) {
 
 export function accountSummaryScope(account = {}) {
   if (!accountSupportsNetScope(account)) return null
-  if (Object.values(ACCOUNT_SUMMARY_SCOPES).includes(account.summaryScope)) return account.summaryScope
-  return account.valueKind === VALUE_KINDS.ASSET
-    ? ACCOUNT_SUMMARY_SCOPES.SEPARATE
-    : ACCOUNT_SUMMARY_SCOPES.INCLUDED
+  return ACCOUNT_SUMMARY_SCOPES.INCLUDED
 }
 
 export function isAccountIncludedInNet(account = {}) {
   return accountSummaryScope(account) === ACCOUNT_SUMMARY_SCOPES.INCLUDED
 }
 
-export function isAccountSeparateFromNet(account = {}) {
-  return accountSummaryScope(account) === ACCOUNT_SUMMARY_SCOPES.SEPARATE
+export function isAccountSeparateFromNet() {
+  return false
 }
 
 export function splitBalanceRowsByScope(rows = []) {

@@ -2,6 +2,7 @@ import { MOVEMENT_STATUSES, MOVEMENT_TYPES, validateMovementBalanceTransition, v
 import { appendMovementAuditEvent, findTelegramUpdateAuditEvent } from '../mohammadLedger/ledgerService.js'
 import { createActionSessionId, stableActionToken } from './actionTokens.js'
 import { zonedDayKey } from './dateRange.js'
+import { isMainLedgerMovement } from '../../src/mohammadLedger/separateRecords.js'
 
 export const HISTORY_ACTION_LIMIT = 8
 export const CANCEL_WINDOW_HOURS = 24
@@ -34,7 +35,7 @@ export function buildHistorySession(state, limit = HISTORY_ACTION_LIMIT, request
 
 export function recentHistoryMovements(state = {}) {
   return (state.movements || [])
-    .filter((movement) => movement && !movement.id?.startsWith('opening-'))
+    .filter(isMainLedgerMovement)
     .slice()
     .reverse()
 }

@@ -895,6 +895,26 @@ describe('mohammad ledger core', () => {
     expect(linkedAccount.errors).toContainEqual(expect.objectContaining({ field: 'sourceAccountId' }))
   })
 
+  it('rejects invalid separate record metadata without requiring it on legacy records', () => {
+    const legacy = validateMovement({
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      note: 'قديم',
+    }, [], [])
+    const invalid = validateMovement({
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      note: 'جديد',
+      relatedName: 'سعيد',
+      recordDirection: 'unknown',
+    }, [], [])
+
+    expect(legacy.ok).toBe(true)
+    expect(invalid.errors).toContainEqual(expect.objectContaining({ field: 'recordDirection' }))
+  })
+
   it('does not allow a posted movement to change between financial and record-only modes', () => {
     const posted = {
       id: 'posted-income',

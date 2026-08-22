@@ -30,6 +30,7 @@ describe('telegram history actions', () => {
     const session = buildHistorySession({
       movements: [
         movement({ id: 'opening-me-cash', type: MOVEMENT_TYPES.OPENING_BALANCE }),
+        movement({ id: 'separate-1', type: MOVEMENT_TYPES.RECORD_ONLY, sourceAccountId: '' }),
         movement({ id: 'posted-1' }),
         movement({ id: 'voided-1', status: MOVEMENT_STATUSES.VOIDED }),
         movement({ id: 'review-1', status: MOVEMENT_STATUSES.NEEDS_REVIEW }),

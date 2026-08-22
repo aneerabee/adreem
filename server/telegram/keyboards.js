@@ -199,11 +199,67 @@ export function movementTypeKeyboard(selectedType = '') {
     [buttonFor(optionsByTone.get('income'))],
     [buttonFor(optionsByTone.get('deposit')), buttonFor(optionsByTone.get('withdrawal'))],
     [buttonFor(optionsByTone.get('sale')), buttonFor(optionsByTone.get('purchase'))],
-    [buttonFor(optionsByTone.get('record'))],
   ]
   rows.push([{ text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
   return {
     inline_keyboard: rows,
+  }
+}
+
+export function separateNameKeyboard(items = [], query = '') {
+  const rows = items.map((item) => ([{
+    text: `${item.selected ? '✓ ' : ''}${preserveUiData(item.name)}`,
+    callback_data: `mv:link:${item.token}`,
+    style: item.selected ? 'success' : 'primary',
+  }]))
+  if (query) rows.push([{ text: `استخدام «${preserveUiData(query)}»`, callback_data: 'mv:link:use', style: 'success' }])
+  rows.push([{ text: 'اكتب اسمًا للبحث أو الإضافة', callback_data: 'mv:link:hint', style: 'primary' }])
+  rows.push([{ text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
+  return { inline_keyboard: rows }
+}
+
+export function separateDirectionKeyboard(selected = '') {
+  const button = (label, value, style) => ({
+    text: `${selected === value ? '✓ ' : ''}${label}`,
+    callback_data: `mv:direction:${value}`,
+    style: selected === value ? 'success' : style,
+  })
+  return {
+    inline_keyboard: [
+      [button('🟢 لي', 'receivable', 'success'), button('🔴 عليّ', 'payable', 'danger')],
+      [button('📝 معلومة', 'note', 'primary')],
+      [{ text: '↩️ رجوع', callback_data: 'mv:back', style: 'primary' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }],
+    ],
+  }
+}
+
+export function separateLedgerKeyboard(session = {}) {
+  const filterButton = (label, value) => ({
+    text: `${session.balanceFilter === value ? '✓ ' : ''}${label}`,
+    callback_data: `accounts:filter:${value}`,
+    style: session.balanceFilter === value ? 'success' : 'primary',
+  })
+  return {
+    inline_keyboard: [
+      [filterButton('فلوسي', 'money'), filterButton('لي', 'collect')],
+      [filterButton('عليّ', 'pay'), filterButton('منفصل', 'separate')],
+      [{ text: '➕ حساب منفصل', callback_data: 'accounts:separate:add', style: 'success' }],
+      ...(session.items || []).map((item) => ([
+        { text: `تعديل #${item.number}`, callback_data: `accounts:separate:edit:${item.token}`, style: 'primary' },
+        { text: `إلغاء #${item.number}`, callback_data: `accounts:separate:void:${item.token}`, style: 'danger' },
+      ])),
+      ...paginationRows('accounts:separate', session.page, session.pageCount),
+      [{ text: '↩️ الأرصدة', callback_data: 'accounts:filter:money', style: 'primary' }, { text: 'الرئيسية', callback_data: 'main:home' }],
+    ],
+  }
+}
+
+export function separateVoidConfirmKeyboard(session = {}, token = '') {
+  return {
+    inline_keyboard: [
+      [{ text: 'نعم، إلغاء الحساب', callback_data: `accounts:separate:void-confirm:${token}`, style: 'danger' }],
+      [{ text: '↩️ تراجع', callback_data: `accounts:separate:page:${Math.max(0, Number(session.page) || 0)}`, style: 'primary' }],
+    ],
   }
 }
 
@@ -283,15 +339,9 @@ export function accountsBrowserKeyboard(buckets = [], session = {}) {
 }
 
 export function accountProfileKeyboard(page = 0, accountToken = '', options = {}) {
-  const summaryScope = options.summaryScope === 'separate' ? 'separate' : options.summaryScope === 'included' ? 'included' : ''
   return {
     inline_keyboard: [
       ...(accountToken && options.canEdit !== false ? [[{ text: 'تعديل الحساب', callback_data: `accounts:edit:${accountToken}`, style: 'success' }]] : []),
-      ...(accountToken && summaryScope ? [[{
-        text: summaryScope === 'separate' ? 'إدخاله في الصافي' : 'فصله عن الصافي',
-        callback_data: `accounts:scope:${accountToken}:${summaryScope === 'separate' ? 'included' : 'separate'}`,
-        style: 'primary',
-      }]] : []),
       [{ text: '↩️ الأرصدة', callback_data: `accounts:page:${Math.max(0, Number(page) || 0)}`, style: 'primary' }],
       [{ text: 'الرئيسية', callback_data: 'main:home' }],
     ],

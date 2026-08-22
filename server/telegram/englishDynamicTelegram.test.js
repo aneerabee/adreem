@@ -38,6 +38,8 @@ import {
   reportKeyboard,
   reportListKeyboard,
   reviewKeyboard,
+  separateLedgerKeyboard,
+  separateVoidConfirmKeyboard,
 } from './keyboards.js'
 import { localizeTelegramPayload, preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
 
@@ -306,6 +308,27 @@ const routeCases = [
         ]),
       ].join('\n\n'),
       reply_markup: mainMenuKeyboard(),
+    },
+  },
+  {
+    name: 'separate accounts, actions, and cancellation confirmation',
+    payload: {
+      text: [
+        '<b>ADREEM · منفصل</b>',
+        '<code>1 حساب · صفحة 1/1</code>',
+        `<blockquote>#1 · 🟢 ${preserveUiData(ALLOWED_ARABIC_USER_NAME)}\nلي · ${formatMoney(850)}\n${preserveUiData(COLLIDING_NOTE)}</blockquote>`,
+        '<b>إلغاء الحساب المنفصل؟</b>',
+        '<blockquote>لن تتأثر الأرصدة الرئيسية.</blockquote>',
+      ].join('\n'),
+      reply_markup: combineKeyboards(
+        separateLedgerKeyboard({
+          balanceFilter: 'separate',
+          page: 0,
+          pageCount: 1,
+          items: [{ number: 1, token: 'side' }],
+        }),
+        separateVoidConfirmKeyboard({ page: 0 }, 'side'),
+      ),
     },
   },
   {

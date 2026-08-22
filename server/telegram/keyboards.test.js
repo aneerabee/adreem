@@ -16,6 +16,10 @@ import {
   reportListKeyboard,
   recurringRulesKeyboard,
   reviewKeyboard,
+  separateDirectionKeyboard,
+  separateLedgerKeyboard,
+  separateNameKeyboard,
+  separateVoidConfirmKeyboard,
 } from './keyboards.js'
 
 function bucket(id, value = 0) {
@@ -60,7 +64,7 @@ describe('telegram browsing keyboards', () => {
 
   it('renders stable navigation for empty and paged account lists', () => {
     const empty = accountsBrowserKeyboard([], { page: 0, pageCount: 1 })
-    const profile = accountProfileKeyboard(3, 'account-token', { summaryScope: 'included' })
+    const profile = accountProfileKeyboard(3, 'account-token')
     const lockedProfile = accountProfileKeyboard(3, '')
 
     expect(empty.inline_keyboard).toHaveLength(4)
@@ -73,9 +77,30 @@ describe('telegram browsing keyboards', () => {
       'accounts:net',
     ]))
     expect(profile.inline_keyboard[0][0].callback_data).toBe('accounts:edit:account-token')
-    expect(profile.inline_keyboard[1][0].callback_data).toBe('accounts:scope:account-token:separate')
-    expect(profile.inline_keyboard[2][0].callback_data).toBe('accounts:page:3')
+    expect(profile.inline_keyboard[1][0].callback_data).toBe('accounts:page:3')
+    expect(profile.inline_keyboard.flat().some((button) => button.callback_data.startsWith('accounts:scope:'))).toBe(false)
     expect(lockedProfile.inline_keyboard.flat().some((button) => button.callback_data.startsWith('accounts:edit:'))).toBe(false)
+  })
+
+  it('keeps separate accounts inside their dedicated bot screen', () => {
+    const nameKeyboard = separateNameKeyboard([{ name: 'شخص أ', token: '0' }], 'اسم جديد')
+    const directionKeyboard = separateDirectionKeyboard('receivable')
+    const ledgerKeyboard = separateLedgerKeyboard({ balanceFilter: 'separate', page: 1, pageCount: 3, items: [{ number: 9, token: 'side-token' }] })
+    const voidKeyboard = separateVoidConfirmKeyboard({ page: 1 }, 'side-token')
+
+    expect(nameKeyboard.inline_keyboard.flat().map((button) => button.callback_data)).toEqual(expect.arrayContaining(['mv:link:0', 'mv:link:use']))
+    expect(directionKeyboard.inline_keyboard.flat().map((button) => button.callback_data)).toEqual(expect.arrayContaining(['mv:direction:receivable', 'mv:direction:payable', 'mv:direction:note']))
+    expect(ledgerKeyboard.inline_keyboard.flat().map((button) => button.callback_data)).toEqual(expect.arrayContaining([
+      'accounts:separate:add',
+      'accounts:separate:edit:side-token',
+      'accounts:separate:void:side-token',
+      'accounts:separate:page:0',
+      'accounts:separate:page:2',
+    ]))
+    expect(voidKeyboard.inline_keyboard.flat().map((button) => button.callback_data)).toEqual([
+      'accounts:separate:void-confirm:side-token',
+      'accounts:separate:page:1',
+    ])
   })
 
   it('keeps record-only notes mandatory and exposes the net calculator controls', () => {
@@ -84,7 +109,7 @@ describe('telegram browsing keyboards', () => {
     const requiredNoteCallbacks = noteKeyboard({ required: true }).inline_keyboard.flat().map((button) => button.callback_data)
     const netCallbacks = netTargetKeyboard('LYD', { showAccounts: true, page: 1, pageCount: 3 }).inline_keyboard.flat().map((button) => button.callback_data)
 
-    expect(movementCallbacks).toContain('mv:type:record_only')
+    expect(movementCallbacks).not.toContain('mv:type:record_only')
     expect(optionalNoteCallbacks).toContain('mv:note:skip')
     expect(requiredNoteCallbacks).not.toContain('mv:note:skip')
     expect(netCallbacks).toEqual(expect.arrayContaining(['net:target:LYD', 'net:target:USD', 'net:accounts', 'net:accounts:page:0', 'net:accounts:page:2', 'net:rate']))

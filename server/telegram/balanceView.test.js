@@ -27,20 +27,20 @@ describe('Telegram balance view', () => {
     bucket('expense', VALUE_KINDS.EXPENSE, 300),
   ]
 
-  it('keeps separate accounts out of the general list and every summary', () => {
+  it('keeps every active account in its normal balance group', () => {
     const result = buildTelegramBalanceView(balances, TELEGRAM_BALANCE_FILTERS.ALL)
 
-    expect(result.filteredBuckets.map((item) => item.account.id)).toEqual(['cash', 'collect', 'pay', 'expense'])
+    expect(result.filteredBuckets.map((item) => item.account.id)).toEqual(['private', 'asset', 'cash', 'collect', 'pay', 'expense'])
     expect(result.summary).toEqual({
-      money: { dinar: 10_000, usd: 0 },
+      money: { dinar: 100_000, usd: 0 },
       collect: { dinar: 2_000, usd: 0 },
       pay: { dinar: 750, usd: 0 },
     })
   })
 
-  it('shows explicitly separate money and default-separate assets in one dedicated filter', () => {
+  it('does not use accounts as separate records', () => {
     const result = buildTelegramBalanceView(balances, TELEGRAM_BALANCE_FILTERS.SEPARATE)
 
-    expect(result.filteredBuckets.map((item) => item.account.id)).toEqual(['private', 'asset'])
+    expect(result.filteredBuckets).toEqual([])
   })
 })

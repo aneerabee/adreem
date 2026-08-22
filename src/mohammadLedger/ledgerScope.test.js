@@ -17,16 +17,16 @@ function bucket(id, valueKind, dinar = 0, usd = 0, summaryScope) {
 }
 
 describe('ADREEM account summary scope', () => {
-  it('includes money and people by default while keeping assets separate', () => {
+  it('includes every real balance account by default', () => {
     expect(accountSummaryScope({ valueKind: VALUE_KINDS.CASH })).toBe(ACCOUNT_SUMMARY_SCOPES.INCLUDED)
     expect(accountSummaryScope({ valueKind: VALUE_KINDS.BANK })).toBe(ACCOUNT_SUMMARY_SCOPES.INCLUDED)
     expect(accountSummaryScope({ valueKind: VALUE_KINDS.RECEIVABLE })).toBe(ACCOUNT_SUMMARY_SCOPES.INCLUDED)
-    expect(accountSummaryScope({ valueKind: VALUE_KINDS.ASSET })).toBe(ACCOUNT_SUMMARY_SCOPES.SEPARATE)
+    expect(accountSummaryScope({ valueKind: VALUE_KINDS.ASSET })).toBe(ACCOUNT_SUMMARY_SCOPES.INCLUDED)
     expect(accountSummaryScope({ valueKind: VALUE_KINDS.EXPENSE })).toBe(null)
     expect(accountSummaryScope({ valueKind: VALUE_KINDS.PROJECT })).toBe(null)
   })
 
-  it('splits explicitly separate accounts without hiding or changing their balances', () => {
+  it('ignores the retired account separation flag without changing balances', () => {
     const rows = [
       bucket('cash', VALUE_KINDS.CASH, 1_000),
       bucket('private-cash', VALUE_KINDS.CASH, 500, 0, ACCOUNT_SUMMARY_SCOPES.SEPARATE),
@@ -36,12 +36,12 @@ describe('ADREEM account summary scope', () => {
 
     const result = splitBalanceRowsByScope(rows)
 
-    expect(result.included.map((row) => row.account.id)).toEqual(['cash'])
-    expect(result.separate.map((row) => row.account.id)).toEqual(['private-cash', 'asset'])
+    expect(result.included.map((row) => row.account.id)).toEqual(['cash', 'private-cash', 'asset'])
+    expect(result.separate).toEqual([])
     expect(result.ineligible.map((row) => row.account.id)).toEqual(['fuel'])
   })
 
-  it('builds the raw net from included accounts only and keeps its audit contributions', () => {
+  it('builds the raw net from all eligible accounts and keeps its audit contributions', () => {
     const position = buildNetPosition([
       bucket('cash', VALUE_KINDS.CASH, 10_000),
       bucket('bank', VALUE_KINDS.BANK, 2_000),
@@ -52,8 +52,8 @@ describe('ADREEM account summary scope', () => {
       bucket('expense', VALUE_KINDS.EXPENSE, 800),
     ])
 
-    expect(position).toMatchObject({ dinar: 10_500, usd: 100, accountCount: 4 })
-    expect(position.contributions.map((item) => item.accountId)).toEqual(['cash', 'bank', 'friend-lyd', 'friend-usd'])
+    expect(position).toMatchObject({ dinar: 150_500, usd: 100, accountCount: 6 })
+    expect(position.contributions.map((item) => item.accountId)).toEqual(['cash', 'bank', 'friend-lyd', 'friend-usd', 'private', 'asset'])
   })
 
   it('converts the net in both directions only with a valid positive rate', () => {

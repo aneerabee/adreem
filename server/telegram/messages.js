@@ -1,4 +1,4 @@
-import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
 import {
   accountChoiceKind,
   accountChoiceKindLabel,
@@ -31,6 +31,7 @@ import {
 } from '../../src/mohammadLedger/movementConfig.js'
 import { formatMoney, formatRate } from '../mohammadLedger/ledgerService.js'
 import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
+import { SEPARATE_RECORD_DIRECTIONS, normalizeSeparateRecordDirection } from '../../src/mohammadLedger/separateRecords.js'
 import { formatZonedDate, formatZonedTime } from './dateRange.js'
 import { numericBufferDisplay } from './numericKeypad.js'
 
@@ -121,6 +122,8 @@ function currentStepTitle(session) {
   const draft = session?.draft || {}
   const config = movementConfigFor(draft.type)
   if (session?.step === 'type') return 'اختر نوع الحركة'
+  if (session?.step === 'link') return 'اختر الاسم أو اكتبه'
+  if (session?.step === 'direction') return 'ما اتجاه الحساب؟'
   if (session?.step === 'amount') return config.amountLabel || 'اكتب المبلغ'
   if (session?.step === 'currency') return 'اختر العملة'
   if (session?.step === 'rate') return config.rateLabel || 'اكتب سعر الصرف'
@@ -137,6 +140,8 @@ function currentStepTitle(session) {
 
 function currentStepHelp(session) {
   if (session?.step === 'type') return ''
+  if (session?.step === 'link') return 'الاسم للربط فقط ولن ينشئ حسابًا رئيسيًا.'
+  if (session?.step === 'direction') return ''
   if (session?.step === 'amount') return ''
   if (session?.step === 'currency') return ''
   if (session?.step === 'rate') return ''
@@ -345,24 +350,29 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   const destination = accountsById.get(draft.destinationAccountId)
   const dimension = dimensionsById.get(draft.dimensionId)
   const expenseCategory = expenseCategoriesById.get(draft.expenseCategoryId)
-  const steps = [
-    'type',
-    'amount',
-    ...(config.currencyLocked ? [] : ['currency']),
-    ...(movementNeedsRate(draft.type) ? ['rate'] : []),
-    ...(movementNeedsSource(draft.type) ? ['source'] : []),
-    ...(movementNeedsDestination(draft.type) ? ['destination'] : []),
-    'note',
-    ...(movementSupportsDimension(draft.type) ? ['dimension'] : []),
-    ...(movementSupportsExpenseCategory(draft.type) ? ['category'] : []),
-    'attachment',
-    'recurring',
-    'review',
-  ]
+  const separateAccount = draft.type === MOVEMENT_TYPES.RECORD_ONLY
+  const steps = separateAccount
+    ? ['link', 'direction', 'amount', 'currency', 'note', 'review']
+    : [
+        'type',
+        'amount',
+        ...(config.currencyLocked ? [] : ['currency']),
+        ...(movementNeedsRate(draft.type) ? ['rate'] : []),
+        ...(movementNeedsSource(draft.type) ? ['source'] : []),
+        ...(movementNeedsDestination(draft.type) ? ['destination'] : []),
+        'note',
+        ...(movementSupportsDimension(draft.type) ? ['dimension'] : []),
+        ...(movementSupportsExpenseCategory(draft.type) ? ['category'] : []),
+        'attachment',
+        'recurring',
+        'review',
+      ]
   const currentIndex = Math.max(0, steps.indexOf(session?.step))
   const progress = `${currentIndex + 1}/${steps.length}`
   const summary = []
   if (session?.mode === 'review' && draft.type) summary.push(htmlLine('الحركة', movementLabels[draft.type] || draft.type))
+  if (separateAccount && draft.relatedName) summary.push(htmlDataLine('الاسم', draft.relatedName))
+  if (separateAccount && currentIndex > steps.indexOf('direction')) summary.push(htmlLine('الاتجاه', separateRecordDirectionLabel(draft.recordDirection)))
   if (amountText) summary.push(htmlLine('المبلغ', amountText))
   if (movementNeedsRate(draft.type) && draft.rate) summary.push(htmlLine('السعر', formatRate(draft.rate)))
   if (!movementNeedsRate(draft.type) && draft.currencyConfirmed) summary.push(htmlLine('العملة', currencyLabel(draft.currency)))
@@ -373,8 +383,8 @@ export function movementStepText(session, accountsById = new Map(), dimensionsBy
   if (expenseCategory) summary.push(htmlDataLine('نوع المصروف', accountPrimaryName(expenseCategory)))
   if (draft.attachmentLabel || draft.attachmentUrl) summary.push(htmlDataLine('مرفق', draft.attachmentLabel || draft.attachmentUrl))
   if (draft.recurringEnabled) summary.push(htmlLine('تكرار', 'شهري'))
-  const movementTitle = draft.type ? movementLabels[draft.type] || draft.type : 'حركة جديدة'
-  const title = session?.mode === 'review' ? 'ADREEM · إصلاح حركة' : `ADREEM · ${movementTitle}`
+  const movementTitle = separateAccount ? 'حساب منفصل' : draft.type ? movementLabels[draft.type] || draft.type : 'حركة جديدة'
+  const title = session?.mode === 'review' ? `ADREEM · إصلاح ${separateAccount ? 'حساب منفصل' : 'حركة'}` : `ADREEM · ${movementTitle}`
   const help = currentStepHelp(session)
   const lines = [
     `<b>${escapeHtml(title)}</b> · <code>${progress}</code>`,
@@ -538,6 +548,11 @@ export function movementBlockquote(movement, accountsById = new Map(), options =
   const header = headerParts.join(' · ')
   const lines = [header]
 
+  if (movement?.type === MOVEMENT_TYPES.RECORD_ONLY) {
+    if (movement.relatedName) lines.push(`الاسم: ${preserveUiData(movement.relatedName)}`)
+    lines.push(`الاتجاه: ${separateRecordDirectionLabel(movement.recordDirection)}`)
+  }
+
   if (time) lines.push(`الوقت: ${time}`)
   if (movementNeedsRate(movement?.type) && movement?.rate) lines.push(`السعر: ${formatRate(movement.rate)}`)
 
@@ -623,13 +638,16 @@ export function reviewMovementText(session, preview, context = {}) {
   const destination = context.accountsById?.get(draft.destinationAccountId)
   const dimension = context.dimensionsById?.get(draft.dimensionId)
   const expenseCategory = context.expenseCategoriesById?.get(draft.expenseCategoryId)
+  const separateAccount = draft.type === MOVEMENT_TYPES.RECORD_ONLY
   const lines = [
-    '<b>تأكيد الحركة</b>',
-    '<code>راجع التأثير قبل الحفظ</code>',
+    `<b>${separateAccount ? 'تأكيد الحساب المنفصل' : 'تأكيد الحركة'}</b>`,
+    `<code>${separateAccount ? 'لن يدخل في الأرصدة الرئيسية' : 'راجع التأثير قبل الحفظ'}</code>`,
     '',
     `<blockquote>${escapeHtml(`${movementLabels[draft.type] || draft.type} ${formatMoney(draft.amount, draft.currency)}`)}</blockquote>`,
   ]
   if (draft.rate) lines.push(htmlLine('السعر', formatRate(draft.rate)))
+  if (separateAccount && draft.relatedName) lines.push(htmlDataLine('الاسم', draft.relatedName))
+  if (separateAccount) lines.push(htmlLine('الاتجاه', separateRecordDirectionLabel(draft.recordDirection)))
   if (dimension) lines.push(htmlDataLine('مشروع', dimension.name))
   if (expenseCategory) lines.push(htmlDataLine('نوع المصروف', accountPrimaryName(expenseCategory)))
   if (draft.note) lines.push(htmlDataLine('ملاحظة', draft.note))
@@ -646,8 +664,8 @@ export function reviewMovementText(session, preview, context = {}) {
     return lines.join('\n')
   }
 
-  if (draft.type === 'record_only') {
-    lines.push('<blockquote>تسجيل للمتابعة فقط\nلا يغيّر أي رصيد</blockquote>')
+  if (separateAccount) {
+    lines.push('<blockquote>محفوظ في «منفصل» فقط\nلا يغيّر أي رصيد</blockquote>')
     return lines.join('\n').trim()
   }
 
@@ -657,6 +675,13 @@ export function reviewMovementText(session, preview, context = {}) {
     lines.push('')
   })
   return lines.join('\n').trim()
+}
+
+function separateRecordDirectionLabel(direction) {
+  const normalized = normalizeSeparateRecordDirection(direction)
+  if (normalized === SEPARATE_RECORD_DIRECTIONS.RECEIVABLE) return 'لي'
+  if (normalized === SEPARATE_RECORD_DIRECTIONS.PAYABLE) return 'عليّ'
+  return 'معلومة'
 }
 
 function movementEffectBlockquote(title, effect) {

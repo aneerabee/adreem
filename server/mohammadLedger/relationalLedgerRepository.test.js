@@ -353,6 +353,29 @@ describe('relational ledger repository', () => {
     })
   })
 
+  it('keeps excluded movement types out of direct and searched pages', async () => {
+    const directClient = clientFixture()
+    const directRepository = createRelationalLedgerRepository(directClient, {
+      ledgerId: '11111111-1111-1111-1111-111111111111',
+      ownerId: '22222222-2222-2222-2222-222222222222',
+    })
+
+    await directRepository.loadMovements({ movementTypes: ['transfer', 'expense'] })
+    const movementRequest = directClient.from.mock.results.find((entry, index) => (
+      directClient.from.mock.calls[index][0] === 'adreem_movements'
+    ))?.value
+    expect(movementRequest.in).toHaveBeenCalledWith('movement_type', ['transfer', 'expense'])
+
+    const searchClient = clientFixture()
+    const searchRepository = createRelationalLedgerRepository(searchClient, {
+      ledgerId: '11111111-1111-1111-1111-111111111111',
+      ownerId: '22222222-2222-2222-2222-222222222222',
+    })
+    const searchResult = await searchRepository.loadMovements({ query: 'fuel', movementTypes: ['transfer'] })
+    expect(searchResult.movements).toEqual([])
+    expect(searchResult.page).toMatchObject({ total: null, nextCursor: 1 })
+  })
+
   it('returns movement attachments with each page', async () => {
     const client = clientFixture()
     const attachmentRequests = queueAttachmentResults(client, [[{

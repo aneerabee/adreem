@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { VALUE_KINDS } from '../../../src/mohammadLedger/accountCatalog.js'
-import { CURRENCIES } from '../../../src/mohammadLedger/ledgerCore.js'
+import { CURRENCIES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import {
   movementAccountCurrencyForRole,
   movementConfigFor,
@@ -18,6 +18,12 @@ import {
   ATTACHMENT_MAX_SIZE_BYTES,
   dimensionsFromAccounts,
 } from '../../../src/mohammadLedger/ledgerOperations.js'
+import {
+  SEPARATE_RECORD_DIRECTIONS,
+  normalizeSeparateRecordDirection,
+  normalizeSeparateRecordName,
+  separateRecordNames,
+} from '../../../src/mohammadLedger/separateRecords.js'
 import {
   appendTelegramMovement,
   buildLedgerSnapshot,
@@ -42,6 +48,8 @@ import {
   noteKeyboard,
   numericKeypadKeyboard,
   recurringKeyboard,
+  separateDirectionKeyboard,
+  separateNameKeyboard,
 } from '../keyboards.js'
 import { accountChoiceLegendText, escapeHtml, movementStepText, reviewMovementText } from '../messages.js'
 import { preserveUiData } from '../../../src/mohammadLedger/uiTranslation.js'
@@ -51,6 +59,8 @@ const ACCOUNT_PAGE_SIZE = 6
 
 const STEPS = {
   TYPE: 'type',
+  LINK: 'link',
+  DIRECTION: 'direction',
   AMOUNT: 'amount',
   CURRENCY: 'currency',
   RATE: 'rate',
@@ -72,7 +82,7 @@ function createMovementSession(options = {}) {
   return {
     flow: 'movement',
     mode: options.mode || 'create',
-    step: STEPS.TYPE,
+    step: options.step || STEPS.TYPE,
     sessionId: randomUUID(),
     reviewMovementId: options.reviewMovementId || '',
     draft: options.draft || {
@@ -93,6 +103,9 @@ function createMovementSession(options = {}) {
       attachmentSizeBytes: 0,
       attachmentPending: null,
       recurringEnabled: false,
+      separateAccountId: '',
+      relatedName: '',
+      recordDirection: SEPARATE_RECORD_DIRECTIONS.RECEIVABLE,
     },
     choices: {},
     accountPicker: null,
@@ -134,6 +147,7 @@ function nextAfterSource(type) {
 }
 
 function nextAfterNote(type) {
+  if (type === MOVEMENT_TYPES.RECORD_ONLY) return STEPS.REVIEW
   if (movementSupportsDimension(type)) return STEPS.DIMENSION
   if (movementSupportsExpenseCategory(type)) return STEPS.CATEGORY
   return STEPS.ATTACHMENT
@@ -146,7 +160,9 @@ function nextAfterDimension(type) {
 async function sendStep(ctx, session, textPrefix = '') {
   let state
   try {
-    const loaded = await ctx.repository.load()
+    const loaded = await ctx.repository.load(session.draft.type === MOVEMENT_TYPES.RECORD_ONLY
+      ? { movementType: MOVEMENT_TYPES.RECORD_ONLY, movementLimit: 50 }
+      : {})
     state = loaded.state
   } catch (error) {
     console.error('[adreem-telegram-bot] ledger load failed', error?.message || error)
@@ -165,6 +181,27 @@ async function sendStep(ctx, session, textPrefix = '') {
 
   if (session.step === STEPS.TYPE) {
     return upsertFlowMessage(ctx, session, { text, reply_markup: movementTypeKeyboard(session.draft.type) })
+  }
+  if (session.step === STEPS.LINK) {
+    const query = normalizeSeparateRecordName(session.linkQuery)
+    const normalizedQuery = query.toLocaleLowerCase('ar')
+    const names = separateRecordNames(state.accounts, state.movements)
+      .filter((name) => !normalizedQuery || name.toLocaleLowerCase('ar').includes(normalizedQuery))
+      .slice(0, 8)
+    const items = names.map((name, index) => ({
+      name,
+      token: String(index),
+      selected: name === session.draft.relatedName,
+    }))
+    session.choices = {
+      ...session.choices,
+      link: Object.fromEntries(items.map((item) => [item.token, item.name])),
+    }
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return upsertFlowMessage(ctx, session, { text, reply_markup: separateNameKeyboard(items, query) })
+  }
+  if (session.step === STEPS.DIRECTION) {
+    return upsertFlowMessage(ctx, session, { text, reply_markup: separateDirectionKeyboard(session.draft.recordDirection) })
   }
   if (session.step === STEPS.AMOUNT) {
     const numericInput = prepareNumericInput(session)
@@ -324,6 +361,39 @@ export async function startMovement(ctx) {
   return sendStep(ctx, session)
 }
 
+export async function startSeparateRecord(ctx, existingMovement = null) {
+  const editingMovement = existingMovement?.type === MOVEMENT_TYPES.RECORD_ONLY ? existingMovement : null
+  const session = createMovementSession({
+    mode: editingMovement ? 'separate-edit' : 'create',
+    step: STEPS.LINK,
+    draft: {
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: editingMovement?.amount || 0,
+      currency: editingMovement?.currency === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR,
+      currencyConfirmed: Boolean(editingMovement?.currency),
+      sourceAccountId: '',
+      destinationAccountId: '',
+      rate: undefined,
+      note: editingMovement?.note || '',
+      dimensionId: '',
+      expenseCategoryId: '',
+      attachmentLabel: '',
+      attachmentUrl: '',
+      attachmentStoragePath: '',
+      attachmentMimeType: '',
+      attachmentSizeBytes: 0,
+      attachmentPending: null,
+      recurringEnabled: false,
+      separateAccountId: editingMovement?.separateAccountId || randomUUID(),
+      relatedName: editingMovement?.relatedName || '',
+      recordDirection: normalizeSeparateRecordDirection(editingMovement?.recordDirection || SEPARATE_RECORD_DIRECTIONS.RECEIVABLE),
+      ...(editingMovement ? { supersedesSeparateRecordId: editingMovement.id } : {}),
+    },
+  })
+  ctx.sessions.set(ctx.chatId, ctx.userId, session)
+  return sendStep(ctx, session)
+}
+
 export async function startReviewMovement(ctx, movementId) {
   const { state } = await ctx.repository.load({ movementIds: [movementId] })
   const movement = state.movements.find((item) => item.id === movementId)
@@ -337,6 +407,7 @@ export async function startReviewMovement(ctx, movementId) {
   }
   const session = createMovementSession({
     mode: 'review',
+    step: movement.type === MOVEMENT_TYPES.RECORD_ONLY ? STEPS.LINK : STEPS.TYPE,
     reviewMovementId: movement.id,
     draft: {
       type: movement.type || '',
@@ -356,6 +427,9 @@ export async function startReviewMovement(ctx, movementId) {
       attachmentSizeBytes: 0,
       attachmentPending: null,
       recurringEnabled: false,
+      separateAccountId: movement.separateAccountId || randomUUID(),
+      relatedName: movement.relatedName || '',
+      recordDirection: normalizeSeparateRecordDirection(movement.recordDirection),
     },
   })
   ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -371,7 +445,11 @@ export async function handleMovementCallback(ctx, data) {
   }
 
   if (data === 'mv:cancel') {
-    const cancelText = session.mode === 'review' ? 'تم إلغاء إصلاح الحركة.' : 'تم إلغاء الإدخال.'
+    const cancelText = session.mode === 'review'
+      ? 'تم إلغاء إصلاح الحركة.'
+      : session.mode === 'separate-edit'
+        ? 'تم ترك تعديل الحساب المنفصل.'
+        : 'تم إلغاء الإدخال.'
     await removeRejectedUploadedAttachment(ctx, session)
     ctx.sessions.clear(ctx.chatId, ctx.userId)
     try {
@@ -399,6 +477,9 @@ export async function handleMovementCallback(ctx, data) {
 
   if (data.startsWith('mv:type:')) {
     const type = data.slice('mv:type:'.length)
+    if (type === MOVEMENT_TYPES.RECORD_ONLY) {
+      return sendStep(ctx, session, 'الحساب المنفصل يُضاف من قسم «منفصل» في الأرصدة.')
+    }
     if (!movementTypeOptions.some((option) => option.type === type)) {
       return sendStep(ctx, session, 'نوع الحركة غير صالح. اختر من الأزرار الظاهرة.')
     }
@@ -423,6 +504,42 @@ export async function handleMovementCallback(ctx, data) {
     }
     session.numericInput = null
     session.accountPicker = null
+    session.step = STEPS.AMOUNT
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
+  if (data === 'mv:link:hint') {
+    return sendStep(ctx, session, 'اكتب الاسم للبحث، أو اكتب اسمًا جديدًا.')
+  }
+
+  if (data === 'mv:link:use') {
+    const relatedName = normalizeSeparateRecordName(session.linkQuery)
+    if (!relatedName) return sendStep(ctx, session, 'اكتب اسمًا أولًا.')
+    session.draft.relatedName = relatedName
+    session.linkQuery = ''
+    session.step = STEPS.DIRECTION
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
+  if (data.startsWith('mv:link:')) {
+    const token = data.slice('mv:link:'.length)
+    const relatedName = normalizeSeparateRecordName(session.choices?.link?.[token])
+    if (!relatedName) return sendStep(ctx, session, 'الاسم غير متاح. أعد الاختيار.')
+    session.draft.relatedName = relatedName
+    session.linkQuery = ''
+    session.step = STEPS.DIRECTION
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    return sendStep(ctx, session)
+  }
+
+  if (data.startsWith('mv:direction:')) {
+    const direction = data.slice('mv:direction:'.length)
+    if (!Object.values(SEPARATE_RECORD_DIRECTIONS).includes(direction)) {
+      return sendStep(ctx, session, 'اختر الاتجاه من الأزرار.')
+    }
+    session.draft.recordDirection = direction
     session.step = STEPS.AMOUNT
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
     return sendStep(ctx, session)
@@ -526,7 +643,11 @@ export async function handleMovementCallback(ctx, data) {
   }
 
   if (data === 'mv:confirm') {
-    const operation = session.mode === 'review' ? 'movement-review' : 'movement-create'
+    const operation = session.mode === 'review'
+      ? 'movement-review'
+      : session.mode === 'separate-edit'
+        ? 'separate-record-edit'
+        : 'movement-create'
     const idempotencyKey = telegramUpdateIdempotencyKey(ctx.updateId, operation)
     session.draft.currency = session.draft.currency || movementCurrencyFor(session.draft.type, CURRENCIES.DINAR)
     session.draft.attachmentIdempotencyKey = telegramUpdateIdempotencyKey(ctx.updateId, `${operation}-attachment`)
@@ -656,6 +777,8 @@ function callbackMatchesCurrentStep(data, step) {
   if (data === 'mv:cancel' || data === 'mv:back') return true
   if (data.startsWith('mv:num:')) return step === STEPS.AMOUNT || step === STEPS.RATE
   if (data.startsWith('mv:type:')) return step === STEPS.TYPE
+  if (data.startsWith('mv:link:')) return step === STEPS.LINK
+  if (data.startsWith('mv:direction:')) return step === STEPS.DIRECTION
   if (data.startsWith('mv:currency:')) return step === STEPS.CURRENCY
   if (data.startsWith('mv:searchhint:')) return step === STEPS.SOURCE || step === STEPS.DESTINATION
   if (data.startsWith('mv:accounts:source:page:')) return step === STEPS.SOURCE
@@ -673,6 +796,7 @@ function callbackMatchesCurrentStep(data, step) {
 
 function savedMovementSuffix(result, session = {}) {
   if (session.mode === 'review') return result.needsReview ? 'ما زالت في المراجعة.' : 'تم إصلاح الحركة وتحديث الدفتر.'
+  if (session.mode === 'separate-edit') return result.needsReview ? 'تعذر اعتماد التعديل.' : 'تم تعديل الحساب المنفصل.'
   if (result.duplicate) return result.needsReview ? 'كانت محفوظة سابقًا في المراجعة.' : 'كانت محفوظة سابقًا ولم تتكرر.'
   if (!result.needsReview && result.movement?.type === 'record_only') return 'تم حفظ التسجيل دون تغيير الأرصدة.'
   return result.needsReview ? 'تم حفظها في المراجعة.' : 'تم الحفظ وتحديث الدفتر.'
@@ -703,6 +827,13 @@ async function sendExpiredMovementMessage(ctx) {
 export async function handleMovementText(ctx, text) {
   const session = ctx.sessions.get(ctx.chatId, ctx.userId)
   if (!session || session.flow !== 'movement') return false
+
+  if (session.step === STEPS.LINK) {
+    session.linkQuery = normalizeSeparateRecordName(text)
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    await sendStep(ctx, session)
+    return true
+  }
 
   if (session.step === STEPS.AMOUNT) {
     const amount = parseAmountText(text)
@@ -870,7 +1001,8 @@ export function attachmentPathIsReferenced(state = {}, storagePath = '') {
 }
 
 function previousStep(session) {
-  if (session.step === STEPS.AMOUNT) return STEPS.TYPE
+  if (session.step === STEPS.DIRECTION) return STEPS.LINK
+  if (session.step === STEPS.AMOUNT) return session.draft.type === MOVEMENT_TYPES.RECORD_ONLY ? STEPS.DIRECTION : STEPS.TYPE
   if (session.step === STEPS.CURRENCY) return STEPS.AMOUNT
   if (session.step === STEPS.RATE) return STEPS.AMOUNT
   if (session.step === STEPS.SOURCE) return movementNeedsRate(session.draft.type) ? STEPS.RATE : (movementConfigFor(session.draft.type).currencyLocked ? STEPS.AMOUNT : STEPS.CURRENCY)
@@ -880,7 +1012,7 @@ function previousStep(session) {
   if (session.step === STEPS.CATEGORY) return movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.NOTE
   if (session.step === STEPS.ATTACHMENT) return movementSupportsExpenseCategory(session.draft.type) ? STEPS.CATEGORY : (movementSupportsDimension(session.draft.type) ? STEPS.DIMENSION : STEPS.NOTE)
   if (session.step === STEPS.RECURRING) return STEPS.ATTACHMENT
-  if (session.step === STEPS.REVIEW) return STEPS.RECURRING
+  if (session.step === STEPS.REVIEW) return session.draft.type === MOVEMENT_TYPES.RECORD_ONLY ? STEPS.NOTE : STEPS.RECURRING
   return STEPS.TYPE
 }
 

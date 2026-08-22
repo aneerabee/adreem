@@ -751,6 +751,7 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
           accountId: url.searchParams.get('accountId'),
           status: url.searchParams.get('status'),
           movementType: url.searchParams.get('type'),
+          movementTypes: String(url.searchParams.get('types') || '').split(',').map((type) => type.trim()).filter(Boolean),
           query: url.searchParams.get('q'),
           dimensionId: url.searchParams.get('dimensionId'),
           expenseCategoryId: url.searchParams.get('expenseCategoryId'),

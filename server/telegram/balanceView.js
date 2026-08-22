@@ -1,5 +1,5 @@
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
-import { isAccountIncludedInNet, isAccountSeparateFromNet } from '../../src/mohammadLedger/ledgerScope.js'
+import { isAccountIncludedInNet } from '../../src/mohammadLedger/ledgerScope.js'
 
 export const TELEGRAM_BALANCE_FILTERS = Object.freeze({
   MONEY: 'money',
@@ -28,8 +28,8 @@ export function buildTelegramBalanceView(balances = [], requestedFilter = TELEGR
   const allBuckets = balances
     .filter((bucket) => bucket.account?.status === ACCOUNT_STATUSES.ACTIVE)
     .sort((left, right) => Math.abs(Number(right.dinar || 0)) - Math.abs(Number(left.dinar || 0)) || Math.abs(Number(right.usd || 0)) - Math.abs(Number(left.usd || 0)))
-  const regularBuckets = allBuckets.filter((bucket) => !isAccountSeparateFromNet(bucket.account))
-  const separateBuckets = allBuckets.filter((bucket) => isAccountSeparateFromNet(bucket.account))
+  const regularBuckets = allBuckets
+  const separateBuckets = []
   const includedBuckets = allBuckets.filter((bucket) => isAccountIncludedInNet(bucket.account))
   const people = includedBuckets.filter((bucket) => bucket.account.valueKind === VALUE_KINDS.RECEIVABLE)
   const ownMoney = includedBuckets.filter((bucket) => bucket.account.valueKind === VALUE_KINDS.CASH || bucket.account.valueKind === VALUE_KINDS.BANK)

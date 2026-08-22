@@ -166,6 +166,30 @@ describe('telegram movement presentation', () => {
     expect(mainMenuText({ todayCount: 2, reviewCount: 1 })).toContain('اليوم: 2 حركة')
   })
 
+  it('localizes the complete separate-account card without changing its name', () => {
+    const localized = localizeTelegramPayload({
+      text: movementStepText({
+        step: 'amount',
+        draft: {
+          type: MOVEMENT_TYPES.RECORD_ONLY,
+          relatedName: 'حساب خاص',
+          recordDirection: 'receivable',
+          amount: 0,
+          currency: CURRENCIES.DINAR,
+          currencyConfirmed: false,
+        },
+      }),
+    }, 'en')
+    const visible = stripUiDataProtection(localized.text)
+    const plainText = visible.replace(/<[^>]+>/g, '')
+
+    expect(plainText).toContain('ADREEM · Separate account')
+    expect(plainText).toContain('Name: حساب خاص')
+    expect(plainText).toContain('Direction: Owed to me')
+    expect(plainText).toContain('Reference amount')
+    expect(plainText).not.toMatch(/[\u0600-\u06ff].*(اختر|اتجاه|حساب منفصل)/u)
+  })
+
   it('aligns the main bot menu with the web work areas', () => {
     const labels = mainMenuKeyboard().inline_keyboard.flat().map((button) => button.text)
 
@@ -319,7 +343,7 @@ describe('telegram movement presentation', () => {
   })
 
   it('keeps movement choices in compact visual rows', () => {
-    expect(movementTypeKeyboard().inline_keyboard.map((row) => row.length)).toEqual([2, 1, 2, 2, 1, 1])
+    expect(movementTypeKeyboard().inline_keyboard.map((row) => row.length)).toEqual([2, 1, 2, 2, 1])
     expect(movementTextStepKeyboard().inline_keyboard.flat().map((button) => button.callback_data)).toEqual(['mv:back', 'mv:cancel'])
   })
 

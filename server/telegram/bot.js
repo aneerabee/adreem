@@ -1,13 +1,9 @@
-import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { accountStructureUsage } from '../../src/mohammadLedger/accountEditing.js'
 import { normalizeAccountSearchText } from '../../src/mohammadLedger/movementAccounts.js'
-import {
-  ACCOUNT_SUMMARY_SCOPES,
-  accountSummaryScope,
-  buildNetPosition,
-  convertNetPosition,
-} from '../../src/mohammadLedger/ledgerScope.js'
+import { buildNetPosition, convertNetPosition } from '../../src/mohammadLedger/ledgerScope.js'
+import { MAIN_LEDGER_MOVEMENT_TYPES, normalizeSeparateRecordDirection, separateRecordCancellationDraft } from '../../src/mohammadLedger/separateRecords.js'
 import {
   buildDimensionReports,
   buildExpenseCategoryReports,
@@ -19,6 +15,7 @@ import {
 import { createLedgerRepository } from '../mohammadLedger/ledgerRepository.js'
 import { createSupabaseTelegramLedgerAccess } from './supabaseLedgerAccess.js'
 import {
+  appendTelegramMovement,
   buildLedgerSnapshot,
   formatMoney,
   runTelegramIdempotentStateAction,
@@ -41,6 +38,8 @@ import {
   reportKeyboard,
   reportListKeyboard,
   reviewKeyboard,
+  separateLedgerKeyboard,
+  separateVoidConfirmKeyboard,
 } from './keyboards.js'
 import {
   accountBlockquote,
@@ -67,7 +66,7 @@ import { createTelegramClient } from './telegramClient.js'
 import { createLocalizedTelegramClient } from './localizedTelegram.js'
 import { preserveUiData } from '../../src/mohammadLedger/uiTranslation.js'
 import { handleAccountCallback, handleAccountText, startAccount, startEditAccount, startReviewAccount } from './handlers/account.js'
-import { handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './handlers/movement.js'
+import { handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement, startSeparateRecord } from './handlers/movement.js'
 import { handleReconciliationCallback, handleReconciliationText, startReconciliation } from './handlers/reconciliation.js'
 import { createTelegramUserAccess, validateTelegramLedgerAssignments } from './userRegistry.js'
 import { buildRecurringSession, disableRecurringRuleInState } from './recurringActions.js'
@@ -82,8 +81,8 @@ import {
 import { createDurableBotRuntime, hydrateDurableSession } from './durableBotRuntime.js'
 import { zonedDayRange } from './dateRange.js'
 import { applyNumericKey, numericBufferDisplay, numericBufferValue } from './numericKeypad.js'
-import { buildTelegramBalanceView, TELEGRAM_BALANCE_FILTERS } from './balanceView.js'
-import { updateTelegramAccount } from '../mohammadLedger/accountService.js'
+import { buildTelegramBalanceView } from './balanceView.js'
+import { loadSeparateLedgerRecords, paginateSeparateLedgerRecords } from './separateLedgerView.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
 if (!token) {
@@ -241,6 +240,7 @@ async function showMainMenu(ctx) {
       occurredFrom: range.from,
       occurredBefore: range.before,
       movementLimit: 1,
+      movementTypes: MAIN_LEDGER_MOVEMENT_TYPES,
       excludeOpening: true,
     })
     today = Number(result.page?.total || 0)
@@ -263,6 +263,7 @@ async function showMoreMenu(ctx) {
 
 async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money') {
   sessions.clear(ctx.chatId, ctx.userId)
+  if (requestedFilter === 'separate') return showSeparateAccounts(ctx, requestedPage)
   const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
   const balanceView = buildTelegramBalanceView(snapshot.balances, requestedFilter)
@@ -290,33 +291,95 @@ async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money') {
   return sendScreen(ctx, text, accountsBrowserKeyboard(visibleBuckets, session))
 }
 
+async function showSeparateAccounts(ctx, requestedPage = 0, notice = '') {
+  const records = await loadSeparateLedgerRecords(ctx.repository)
+  const { visibleRecords, total, page, pageCount } = paginateSeparateLedgerRecords(
+    records,
+    requestedPage,
+    ACCOUNT_PAGE_SIZE,
+  )
+  const items = visibleRecords.map((movement, index) => ({
+    id: movement.id,
+    number: page * ACCOUNT_PAGE_SIZE + index + 1,
+    token: accountChoiceToken(movement),
+  }))
+  const session = {
+    flow: 'accounts',
+    page,
+    pageCount,
+    balanceFilter: 'separate',
+    items,
+    choices: { separate: Object.fromEntries(items.map((item) => [item.token, item.id])) },
+    uiMessageId: ctx.isCallback ? ctx.messageId : null,
+  }
+  sessions.set(ctx.chatId, ctx.userId, session)
+  const recordsText = visibleRecords.map((movement, index) => {
+    const direction = normalizeSeparateRecordDirection(movement.recordDirection)
+    const icon = direction === 'receivable' ? '🟢' : direction === 'payable' ? '🔴' : '📝'
+    const label = direction === 'receivable' ? 'لي' : direction === 'payable' ? 'عليّ' : 'معلومة'
+    return `<blockquote>${escapeHtml(`#${items[index].number} · ${icon} ${preserveUiData(movement.relatedName || 'بدون اسم')}\n${label} · ${formatMoney(movement.amount, movement.currency)}\n${preserveUiData(movement.note || '')}`)}</blockquote>`
+  })
+  const text = [
+    '<b>ADREEM · منفصل</b>',
+    `<code>${total} حساب · صفحة ${page + 1}/${pageCount}</code>`,
+    ...(notice ? ['', `<blockquote>${escapeHtml(notice)}</blockquote>`] : []),
+    '',
+    ...(recordsText.length ? recordsText : ['<blockquote>لا توجد حسابات منفصلة.</blockquote>']),
+  ].join('\n')
+  return sendScreen(ctx, text, separateLedgerKeyboard(session))
+}
+
 async function handleAccountsCallback(ctx, data) {
   const session = sessions.get(ctx.chatId, ctx.userId)
   if (session?.flow !== 'accounts') return showAccounts(ctx)
   if (data === 'accounts:net') return startNetPosition(ctx)
+  if (data === 'accounts:separate:add') return startSeparateRecord(ctx)
+  if (data.startsWith('accounts:separate:page:')) return showAccounts(ctx, Number(data.slice('accounts:separate:page:'.length)), 'separate')
+  if (data.startsWith('accounts:separate:edit:')) {
+    const token = data.slice('accounts:separate:edit:'.length)
+    const movementId = session.choices?.separate?.[token]
+    const records = await loadSeparateLedgerRecords(ctx.repository)
+    const target = records.find((movement) => movement.id === movementId)
+    if (!target) return showSeparateAccounts(ctx, session.page, 'هذا الحساب تغيّر. عُرضت أحدث نسخة.')
+    return startSeparateRecord(ctx, target)
+  }
+  if (data.startsWith('accounts:separate:void-confirm:')) {
+    const token = data.slice('accounts:separate:void-confirm:'.length)
+    const movementId = session.choices?.separate?.[token]
+    if (!movementId || session.pendingSeparateVoidId !== movementId) {
+      return showSeparateAccounts(ctx, session.page, 'انتهى طلب الإلغاء. لم يتغير شيء.')
+    }
+    const records = await loadSeparateLedgerRecords(ctx.repository)
+    const target = records.find((movement) => movement.id === movementId)
+    if (!target) return showSeparateAccounts(ctx, session.page, 'هذا الحساب تغيّر. لم يتكرر الإلغاء.')
+    try {
+      const result = await appendTelegramMovement(ctx.repository, separateRecordCancellationDraft(target), {
+        idempotencyKey: telegramUpdateIdempotencyKey(ctx.updateId, 'separate-record-void'),
+        telegramUserId: ctx.userId,
+        telegramChatId: ctx.chatId,
+      })
+      return showSeparateAccounts(ctx, session.page, result.duplicate ? 'كان الحساب ملغيًا بالفعل.' : 'تم إلغاء الحساب المنفصل.')
+    } catch (error) {
+      console.error('[adreem-telegram-bot] separate account cancellation failed', error?.message || error)
+      return showSeparateAccounts(ctx, session.page, 'تعذر الإلغاء الآن. لم يتغير الحساب.')
+    }
+  }
+  if (data.startsWith('accounts:separate:void:')) {
+    const token = data.slice('accounts:separate:void:'.length)
+    const movementId = session.choices?.separate?.[token]
+    const records = await loadSeparateLedgerRecords(ctx.repository)
+    const target = records.find((movement) => movement.id === movementId)
+    if (!target) return showSeparateAccounts(ctx, session.page, 'هذا الحساب تغيّر. عُرضت أحدث نسخة.')
+    const nextSession = { ...session, pendingSeparateVoidId: target.id }
+    sessions.set(ctx.chatId, ctx.userId, nextSession)
+    return sendScreen(
+      ctx,
+      `<b>إلغاء الحساب المنفصل؟</b>\n<blockquote>${escapeHtml(`${preserveUiData(target.relatedName || 'بدون اسم')}\n${formatMoney(target.amount, target.currency)}\nلن تتأثر الأرصدة الرئيسية.`)}</blockquote>`,
+      separateVoidConfirmKeyboard(nextSession, token),
+    )
+  }
   if (data.startsWith('accounts:filter:')) return showAccounts(ctx, 0, data.slice('accounts:filter:'.length))
   if (data.startsWith('accounts:page:')) return showAccounts(ctx, Number(data.slice('accounts:page:'.length)), session.balanceFilter)
-  if (data.startsWith('accounts:scope:')) {
-    const [, , token, requestedScope] = data.split(':')
-    const accountId = session.choices?.accounts?.[token]
-    const summaryScope = requestedScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE
-      ? ACCOUNT_SUMMARY_SCOPES.SEPARATE
-      : ACCOUNT_SUMMARY_SCOPES.INCLUDED
-    if (!accountId) return showAccounts(ctx, session.page, session.balanceFilter)
-    const { state } = await ctx.repository.load()
-    const account = state.accounts.find((item) => item.id === accountId)
-    if (!account) return showAccounts(ctx, session.page, session.balanceFilter)
-    const result = await updateTelegramAccount(ctx.repository, accountId, { ...account, summaryScope }, {
-      idempotencyKey: telegramUpdateIdempotencyKey(ctx.updateId, 'account-summary-scope'),
-      telegramUserId: ctx.userId,
-      telegramChatId: ctx.chatId,
-    })
-    if (result.rejected) return sendScreen(ctx, `<b>لم يتغير الحساب.</b>\n<blockquote>${escapeHtml(result.validation?.errors?.[0]?.message || 'تعذر حفظ الاختيار.')}</blockquote>`, accountProfileKeyboard(session.page, token, {
-      canEdit: false,
-      summaryScope: accountSummaryScope(account),
-    }))
-    return showAccounts(ctx, 0, summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? TELEGRAM_BALANCE_FILTERS.SEPARATE : session.balanceFilter)
-  }
   if (data.startsWith('accounts:edit:')) {
     const editToken = data.slice('accounts:edit:'.length)
     const editAccountId = session.choices?.accounts?.[editToken]
@@ -358,7 +421,6 @@ async function handleAccountsCallback(ctx, data) {
   }).movement
   return sendScreen(ctx, text, accountProfileKeyboard(session.page, token, {
     canEdit: !accountLocked,
-    summaryScope: accountSummaryScope(account),
   }))
 }
 
@@ -475,6 +537,7 @@ async function showToday(ctx) {
       occurredFrom: range.from,
       occurredBefore: range.before,
       movementLimit: TODAY_PREVIEW_LIMIT,
+      movementTypes: MAIN_LEDGER_MOVEMENT_TYPES,
       excludeOpening: true,
     })
     visibleMovements = result.movements || []
@@ -505,6 +568,7 @@ async function showHistory(ctx, notice = '', requestedPage = 0) {
     if (page > 0 && !beforeSequence) return showHistory(ctx, notice, Math.max(0, page - 1))
     const result = await ctx.repository.loadMovements({
       movementLimit: HISTORY_ACTION_LIMIT,
+      movementTypes: MAIN_LEDGER_MOVEMENT_TYPES,
       beforeSequence,
       excludeOpening: true,
     })

@@ -371,26 +371,140 @@
 .adreem-net-accounts article > span { min-width: 0; overflow: hidden; color: var(--finance-muted); font-size: 0.58rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-net-accounts article > span:first-child { display: inline-flex; align-items: center; gap: 5px; color: var(--finance-ink); }
 
-.ml3-profile-scope {
+/* Separate accounts live only in this panel and never affect main balances. */
+.ml3-balance-pane-head.is-separate { grid-template-columns: 1fr; }
+.adreem-separate-ledger { min-width: 0; display: grid; gap: 8px; }
+.adreem-separate-summary {
   min-width: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.adreem-separate-summary > span {
+  --record-tone: var(--finance-neutral);
+  --record-soft: var(--finance-neutral-soft);
+  min-width: 0;
+  min-height: 47px;
+  display: grid;
+  grid-template-columns: 24px auto minmax(0, 1fr) minmax(0, 0.82fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 8px;
-  border: 1px solid color-mix(in srgb, var(--finance-blue) 18%, var(--finance-line));
-  border-inline-start: 3px solid var(--finance-blue);
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--record-tone) 20%, var(--finance-line));
   border-radius: 7px;
-  background: color-mix(in srgb, var(--finance-blue-soft) 45%, white);
+  background: color-mix(in srgb, var(--record-soft) 48%, white);
+  color: var(--record-tone);
+}
+.adreem-separate-summary > span.is-positive { --record-tone: var(--finance-green-dark); --record-soft: var(--finance-green-soft); }
+.adreem-separate-summary > span.is-negative { --record-tone: var(--finance-debt); --record-soft: var(--finance-debt-soft); }
+.adreem-separate-summary svg { width: 24px; }
+.adreem-separate-summary small { font-size: 0.61rem; font-weight: 820; }
+.adreem-separate-summary strong,
+.adreem-separate-summary b { min-width: 0; overflow: hidden; font-size: 0.68rem; font-variant-numeric: tabular-nums; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-separate-summary b { font-size: 0.61rem; opacity: 0.82; }
+
+.adreem-separate-toolbar {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+.adreem-separate-toolbar > label {
+  min-width: 0;
+  height: 38px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding-inline: 9px;
+  border: 1px solid var(--finance-line);
+  border-radius: 7px;
+  background: var(--finance-surface);
+  color: #685b82;
+}
+.adreem-separate-toolbar > label:focus-within { border-color: #685b82; box-shadow: 0 0 0 3px color-mix(in srgb, #685b82 12%, transparent); }
+.adreem-separate-toolbar input { min-width: 0; width: 100%; border: 0; background: transparent; color: var(--finance-ink); font-size: 0.75rem; outline: 0; }
+.adreem-separate-add {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1px solid #685b82;
+  border-radius: 7px;
+  background: #685b82;
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 820;
 }
 
-.ml3-profile-scope.is-separate { border-color: #d8d1e4; border-inline-start-color: #685b82; background: #f5f2f8; }
-.ml3-profile-scope > span { min-width: 0; display: inline-flex; align-items: center; gap: 7px; color: var(--finance-blue-dark); }
-.ml3-profile-scope.is-separate > span { color: #594b72; }
-.ml3-profile-scope > span > span { min-width: 0; display: grid; gap: 1px; }
-.ml3-profile-scope strong { font-size: 0.68rem; }
-.ml3-profile-scope small { color: var(--finance-muted); font-size: 0.56rem; }
-.ml3-profile-scope > button { min-height: 31px; padding: 4px 9px; border: 1px solid currentColor; border-radius: 6px; background: white; color: inherit; font-size: 0.62rem; font-weight: 800; }
+.adreem-separate-editor {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(130px, 1.2fr) minmax(150px, auto) minmax(90px, 0.6fr) minmax(88px, 0.55fr) minmax(150px, 1.2fr) auto;
+  align-items: end;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #d8d1e4;
+  border-inline-start: 3px solid #685b82;
+  border-radius: 7px;
+  background: color-mix(in srgb, #f1eef6 48%, white);
+}
+.adreem-separate-editor > label { min-width: 0; display: grid; gap: 4px; color: var(--finance-muted); font-size: 0.58rem; font-weight: 760; }
+.adreem-separate-name { min-width: 0; display: grid; gap: 4px; }
+.adreem-separate-name > label { min-width: 0; display: grid; gap: 4px; color: var(--finance-muted); font-size: 0.58rem; font-weight: 760; }
+.adreem-separate-name-options { min-width: 0; display: flex; gap: 3px; overflow-x: auto; scrollbar-width: none; }
+.adreem-separate-name-options::-webkit-scrollbar { display: none; }
+.adreem-separate-name-options button { flex: 0 0 auto; max-width: 112px; min-height: 25px; overflow: hidden; padding: 3px 7px; border: 1px solid #d8d1e4; border-radius: 5px; background: white; color: #594b72; font-size: 0.58rem; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-separate-name-options button[aria-pressed="true"] { border-color: #685b82; background: #685b82; color: white; }
+.adreem-separate-editor input,
+.adreem-separate-editor select { min-width: 0; width: 100%; height: 38px; padding: 6px 8px; border: 1px solid var(--finance-line); border-radius: 6px; background: white; color: var(--finance-ink); font-size: 0.72rem; outline: 0; }
+.adreem-separate-editor input:focus,
+.adreem-separate-editor select:focus { border-color: #685b82; box-shadow: 0 0 0 3px color-mix(in srgb, #685b82 10%, transparent); }
+.adreem-separate-editor .ml3-number-compact input { height: 38px; min-height: 38px; border-color: var(--finance-line); background: white; font-size: 0.82rem; }
+.adreem-separate-direction { min-width: 0; height: 38px; display: grid; grid-template-columns: repeat(3, minmax(42px, 1fr)); gap: 2px; padding: 2px; border: 1px solid #d8d1e4; border-radius: 7px; background: #ebe7f1; }
+.adreem-separate-direction button { min-width: 0; border: 0; border-radius: 5px; background: transparent; color: #685b82; font-size: 0.61rem; font-weight: 800; }
+.adreem-separate-direction button.is-receivable.is-active { background: var(--finance-green-soft); color: var(--finance-green-dark); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--finance-green) 28%, transparent); }
+.adreem-separate-direction button.is-payable.is-active { background: var(--finance-debt-soft); color: var(--finance-debt-dark); box-shadow: inset 0 0 0 1px var(--finance-debt-border); }
+.adreem-separate-direction button.is-note.is-active { background: white; color: #493d61; box-shadow: 0 2px 6px rgba(50, 39, 67, 0.1); }
+.adreem-separate-save { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; border: 1px solid #685b82; border-radius: 7px; background: #685b82; color: white; font-size: 0.65rem; font-weight: 820; }
+.adreem-separate-save:disabled { opacity: 0.45; }
+
+.adreem-separate-list { min-width: 0; display: grid; gap: 4px; }
+.adreem-separate-list > article {
+  --record-tone: var(--finance-neutral);
+  --record-soft: var(--finance-neutral-soft);
+  min-width: 0;
+  min-height: 49px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) minmax(132px, auto) auto;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in srgb, var(--record-tone) 16%, var(--finance-line));
+  border-inline-start: 3px solid var(--record-tone);
+  border-radius: 7px;
+  background: white;
+}
+.adreem-separate-list > article.is-receivable { --record-tone: var(--finance-green); --record-soft: var(--finance-green-soft); }
+.adreem-separate-list > article.is-payable { --record-tone: var(--finance-debt); --record-soft: var(--finance-debt-soft); }
+.adreem-separate-list > article > i { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 7px; background: var(--record-soft); color: var(--record-tone); }
+.adreem-separate-record-copy,
+.adreem-separate-record-value { min-width: 0; display: grid; gap: 2px; }
+.adreem-separate-record-copy strong,
+.adreem-separate-record-copy small,
+.adreem-separate-record-value b,
+.adreem-separate-record-value small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-separate-record-copy strong { color: var(--finance-ink); font-size: 0.73rem; }
+.adreem-separate-record-copy small,
+.adreem-separate-record-value small { color: var(--finance-muted); font-size: 0.57rem; }
+.adreem-separate-record-value { justify-items: end; }
+.adreem-separate-record-value b { color: var(--record-tone); font-size: 0.67rem; font-variant-numeric: tabular-nums; }
+.adreem-separate-record-actions { display: flex; gap: 3px; }
+.adreem-separate-record-actions button { width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid var(--finance-line); border-radius: 6px; background: var(--finance-surface); color: var(--finance-muted); }
+.adreem-separate-record-actions button:last-child { color: var(--finance-debt); }
 
 .ml3-effect--record-only { grid-template-columns: 20px minmax(0, 1fr) auto; color: #594b72; }
 .ml3-effect--record-only strong { color: #594b72; }
@@ -1068,13 +1182,25 @@
   .ml3-account-switcher button > strong { max-width: 100%; font-size: 0.59rem; }
   .ml3-account-switcher button > span { position: absolute; z-index: 2; inset-block-start: 3px; inset-inline-end: 4px; font-size: 0.53rem; }
   .adreem-net-panel > header > button { width: 38px; height: 38px; min-height: 38px; }
-  .ml3-profile-scope > button { min-height: 38px; padding-inline: 11px; }
   .adreem-balance-pane-motion { padding: 8px; }
   .ml3-balance-pane-head { grid-template-columns: minmax(0, 1fr) minmax(132px, 45%); gap: 6px; margin-bottom: 7px; padding-bottom: 7px; }
   .ml3-balance-pane-title { gap: 6px; }
   .ml3-balance-pane-title > i { width: 28px; height: 28px; flex-basis: 28px; }
   .ml3-balance-pane-title h2 { font-size: 0.82rem; }
   .ml3-account-toolbar { height: 36px; padding-inline: 7px; }
+  .adreem-separate-summary > span { grid-template-columns: 21px auto minmax(0, 1fr); gap: 4px; }
+  .adreem-separate-summary > span b { grid-column: 3; }
+  .adreem-separate-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; padding: 7px; }
+  .adreem-separate-name,
+  .adreem-separate-note { grid-column: 1 / -1; }
+  .adreem-separate-direction { grid-column: 1 / -1; }
+  .adreem-separate-save { min-height: var(--finance-control-touch); }
+  .adreem-separate-list > article { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "icon copy actions" "icon value actions"; gap: 2px 6px; padding-inline: 6px; }
+  .adreem-separate-list > article > i { grid-area: icon; width: 28px; height: 28px; }
+  .adreem-separate-record-copy { grid-area: copy; }
+  .adreem-separate-record-value { grid-area: value; justify-items: start; grid-template-columns: auto auto; align-items: baseline; gap: 6px; }
+  .adreem-separate-record-actions { grid-area: actions; }
+  .adreem-separate-record-actions button { width: 36px; height: 36px; }
   .ml3-account-sections { grid-template-columns: 1fr; gap: 7px; }
   .adreem-people-controls { grid-template-columns: 1fr; gap: 5px; margin-bottom: 7px; }
   .adreem-counterparty-filters { gap: 2px; padding: 2px; }
@@ -1146,6 +1272,15 @@
   .ml3-account-switcher button > strong { font-size: 0.57rem; }
   .ml3-balance-pane-head { grid-template-columns: 1fr; }
   .ml3-account-toolbar { width: 100%; }
+  .adreem-separate-summary { grid-template-columns: 1fr; }
+  .adreem-separate-summary > span { min-height: 43px; }
+  .adreem-separate-toolbar { grid-template-columns: minmax(0, 1fr) 76px; }
+  .adreem-separate-editor { grid-template-columns: 1fr 1fr; }
+  .adreem-separate-direction,
+  .adreem-separate-name,
+  .adreem-separate-note,
+  .adreem-separate-save { grid-column: 1 / -1; }
+  .adreem-separate-record-value { grid-template-columns: 1fr; gap: 1px; }
   .adreem-counterparty-focus { grid-template-columns: 27px minmax(0, 1fr) 16px; padding-inline: 6px; }
   .adreem-counterparty-avatar { width: 27px; height: 27px; }
   .adreem-counterparty-channels button { grid-template-columns: 21px minmax(62px, 0.55fr) minmax(86px, 1fr) 12px; padding-inline: 6px; }

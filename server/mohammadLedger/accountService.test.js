@@ -352,7 +352,7 @@ describe('telegram account service', () => {
     expect(repository.state.auditEvents).toEqual([])
   })
 
-  it('allows separating a used account from the net while preserving structure and audit history', async () => {
+  it('ignores the retired account separation flag without changing the account', async () => {
     const cash = createAccount({
       id: 'cash-used-scope',
       ownerName: 'أنا',
@@ -391,19 +391,12 @@ describe('telegram account service', () => {
     }, { idempotencyKey: 'scope-after-use' })
 
     expect(result.rejected).toBeFalsy()
-    expect(result.changes).toEqual([expect.objectContaining({ key: 'summaryScope', before: 'داخل الصافي', after: 'حساب منفصل' })])
+    expect(result.changes).toEqual([])
     expect(repository.state.accounts.find((account) => account.id === person.id)).toMatchObject({
       currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
       valueKind: VALUE_KINDS.RECEIVABLE,
-      summaryScope: 'separate',
+      summaryScope: 'included',
     })
-    expect(repository.state.auditEvents.at(-1)).toMatchObject({
-      action: 'account.updated',
-      details: {
-        accountId: person.id,
-        before: { summaryScope: 'included' },
-        after: { summaryScope: 'separate' },
-      },
-    })
+    expect(repository.state.auditEvents).toEqual([])
   })
 })

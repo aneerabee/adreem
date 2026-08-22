@@ -4,7 +4,7 @@ import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerS
 import { buildLedgerSnapshot } from '../../mohammadLedger/ledgerService.js'
 import { createSessionStore } from '../sessionStore.js'
 import { createLocalizedTelegramClient } from '../localizedTelegram.js'
-import { attachmentPathIsReferenced, handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './movement.js'
+import { attachmentPathIsReferenced, handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement, startSeparateRecord } from './movement.js'
 
 function memoryRepository(initialState = createMohammadFallbackState()) {
   let state = initialState
@@ -682,7 +682,7 @@ describe('telegram movement flow safety', () => {
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
   })
 
-  it('posts a complete record-only path without selecting accounts or changing any balance', async () => {
+  it('creates a separate account from an existing name without changing any main balance', async () => {
     const ctx = createCtx()
     const before = buildLedgerSnapshot(ctx.repository.state).balances.map((bucket) => ({
       accountId: bucket.account.id,
@@ -690,8 +690,12 @@ describe('telegram movement flow safety', () => {
       usd: bucket.usd,
     }))
 
-    await startMovement(ctx)
-    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.RECORD_ONLY}`)
+    await startSeparateRecord(ctx)
+    const linkChoices = ctx.sessions.get(ctx.chatId, ctx.userId).choices.link
+    const existingNameToken = Object.entries(linkChoices).find(([, name]) => name === 'شخص أ')?.[0]
+    expect(existingNameToken).toBeTruthy()
+    await handleMovementCallback(ctx, `mv:link:${existingNameToken}`)
+    await handleMovementCallback(ctx, 'mv:direction:payable')
     await handleMovementCallback(ctx, 'mv:num:8')
     await handleMovementCallback(ctx, 'mv:num:5')
     await handleMovementCallback(ctx, 'mv:num:0')
@@ -704,8 +708,6 @@ describe('telegram movement flow safety', () => {
     await handleMovementCallback(ctx, 'mv:note:skip')
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('note')
     await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, 'قيمة مرجعية لعقد منفصل')
-    await handleMovementCallback(ctx, 'mv:attachment:skip')
-    await handleMovementCallback(ctx, 'mv:recurring:no')
 
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('review')
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('لا يغيّر أي رصيد')
@@ -722,12 +724,78 @@ describe('telegram movement flow safety', () => {
       amount: 850,
       currency: CURRENCIES.USD,
       note: 'قيمة مرجعية لعقد منفصل',
+      relatedName: 'شخص أ',
+      recordDirection: 'payable',
       sourceAccountId: '',
       destinationAccountId: '',
       status: MOVEMENT_STATUSES.POSTED,
     })
+    expect(saved.separateAccountId).toBeTruthy()
     expect(after).toEqual(before)
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('دون تغيير الأرصدة')
+  })
+
+  it('accepts a new name for a separate account without creating a main account', async () => {
+    const ctx = createCtx()
+    const accountIdsBefore = ctx.repository.state.accounts.map((account) => account.id)
+
+    await startSeparateRecord(ctx)
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, 'حساب خارجي جديد')
+
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    expect(session.step).toBe('link')
+    expect(ctx.telegram.calls.at(-1).payload.reply_markup.inline_keyboard.flat().map((button) => button.callback_data)).toContain('mv:link:use')
+
+    await handleMovementCallback(ctx, 'mv:link:use')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({
+      step: 'direction',
+      draft: { relatedName: 'حساب خارجي جديد' },
+    })
+    expect(ctx.repository.state.accounts.map((account) => account.id)).toEqual(accountIdsBefore)
+  })
+
+  it('edits a separate account by appending a revision and preserving the original', async () => {
+    const ctx = createCtx()
+    const original = {
+      id: 'side-original',
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 300,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: '',
+      destinationAccountId: '',
+      separateAccountId: 'side-account-a',
+      relatedName: 'شخص أ',
+      recordDirection: 'receivable',
+      note: 'قديم',
+      createdAt: '2026-08-20T10:00:00.000Z',
+    }
+    ctx.repository = memoryRepository({
+      ...ctx.repository.state,
+      movements: [...ctx.repository.state.movements, original],
+    })
+
+    await startSeparateRecord(ctx, original)
+    const session = ctx.sessions.get(ctx.chatId, ctx.userId)
+    session.step = 'review'
+    session.draft.amount = 450
+    session.draft.note = 'معدل'
+    ctx.sessions.set(ctx.chatId, ctx.userId, session)
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const originalAfter = ctx.repository.state.movements.find((movement) => movement.id === original.id)
+    const revision = ctx.repository.state.movements.find((movement) => movement.source === 'telegram')
+    expect(originalAfter).toEqual(original)
+    expect(revision).toMatchObject({
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 450,
+      note: 'معدل',
+      separateAccountId: 'side-account-a',
+      supersedesSeparateRecordId: 'side-original',
+      status: MOVEMENT_STATUSES.POSTED,
+    })
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('تم تعديل الحساب المنفصل')
   })
 
   it.each([
