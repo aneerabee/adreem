@@ -1030,15 +1030,6 @@
   outline: 0;
 }
 
-.ml3-people-view-switch {
-  width: min(280px, 100%);
-  margin-bottom: 8px;
-  border-color: color-mix(in srgb, var(--entry) 15%, var(--line));
-  background: #e7eeeb;
-}
-.ml3-people-view-switch button.is-active { color: var(--entry); }
-.ml3-balances-surface .ml3-people-view-switch button::after { content: none; }
-
 .ml3-account-sections { gap: 10px; }
 .ml3-list-block {
   min-width: 0;

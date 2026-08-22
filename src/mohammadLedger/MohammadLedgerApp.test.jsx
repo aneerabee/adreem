@@ -27,6 +27,7 @@ import {
   filterMovementHistory,
   filterCounterpartyGroups,
   filterCounterpartyGroupsByQuery,
+  unifiedCounterpartyGroups,
   mergeAccountsConfirmation,
   mergeAccountReferenceErrors,
   mergeLedgerAccountState,
@@ -562,6 +563,27 @@ describe('MohammadLedgerApp people account views', () => {
     expect(byChannel[0].rows).toHaveLength(3)
   })
 
+  it('finds a settled person through the unified people search without a second directory', () => {
+    const settled = {
+      id: 'person:settled',
+      ownerName: 'شخص مسكر',
+      receivable: { dinar: 0, usd: 0 },
+      payable: { dinar: 0, usd: 0 },
+      rows: [{ account: { ownerName: 'شخص مسكر', subAccountName: 'كاش بيننا' }, dinar: 0, usd: 0 }],
+    }
+    const active = {
+      id: 'person:active',
+      ownerName: 'شخص نشط',
+      receivable: { dinar: 500, usd: 0 },
+      payable: { dinar: 0, usd: 0 },
+      rows: [{ account: { ownerName: 'شخص نشط', subAccountName: 'كاش بيننا' }, dinar: 500, usd: 0 }],
+    }
+    const views = { all: [active, settled], withBalance: [active] }
+
+    expect(unifiedCounterpartyGroups(views).map((group) => group.id)).toEqual(['person:active'])
+    expect(unifiedCounterpartyGroups(views, 'مسكر').map((group) => group.id)).toEqual(['person:settled'])
+  })
+
   it('separates cash, cheque, and dollar balances before opening a person', () => {
     const account = (id, counterpartyKind, subAccountName, currencyKind) => ({
       id,
@@ -597,7 +619,7 @@ describe('MohammadLedgerApp people account views', () => {
     expect(markup.match(/لي 80 \$/g)).toHaveLength(1)
   })
 
-  it('uses a compact directory card for all people instead of repeating the balances view', () => {
+  it('shows a settled search result in the same people card without empty balance rows', () => {
     const group = {
       id: 'person:zero',
       ownerName: 'شخص جديد',
@@ -619,13 +641,11 @@ describe('MohammadLedgerApp people account views', () => {
       }],
     }
 
-    const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} mode="directory" />))
+    const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} />))
 
-    expect(markup).toContain('is-directory-view')
-    expect(markup).toContain('adreem-counterparty-directory-summary')
+    expect(markup).toContain('is-balances-view')
     expect(markup).toContain('مسكر')
     expect(markup).not.toContain('adreem-counterparty-channel-preview')
-    expect(markup).not.toContain('adreem-counterparty-totals')
   })
 
   it('spotlights one person and reveals all three balances while dimming the rest', () => {

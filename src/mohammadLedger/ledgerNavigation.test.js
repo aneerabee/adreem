@@ -7,13 +7,11 @@ describe('ADREEM ledger navigation', () => {
       section: 'accounts',
       entryMode: 'movement',
       accountGroup: 'people',
-      peopleView: 'all',
     })
     expect(readLedgerNavigation('?entry=account')).toEqual({
       section: 'entry',
       entryMode: 'account',
       accountGroup: 'money',
-      peopleView: 'balances',
     })
   })
 
@@ -22,6 +20,14 @@ describe('ADREEM ledger navigation', () => {
       ...DEFAULT_LEDGER_NAVIGATION,
       section: 'history',
     })).toBe('?source=phone&section=history')
+  })
+
+  it('removes the retired all-people subview from refreshed links', () => {
+    expect(ledgerNavigationSearch('?section=accounts&group=people&people=all', {
+      ...DEFAULT_LEDGER_NAVIGATION,
+      section: 'accounts',
+      accountGroup: 'people',
+    })).toBe('?section=accounts&group=people')
   })
 
   it('falls back safely when a link contains unknown navigation values', () => {
