@@ -319,7 +319,7 @@ describe('telegram movement presentation', () => {
   })
 
   it('keeps movement choices in compact visual rows', () => {
-    expect(movementTypeKeyboard().inline_keyboard.map((row) => row.length)).toEqual([2, 1, 2, 2, 1])
+    expect(movementTypeKeyboard().inline_keyboard.map((row) => row.length)).toEqual([2, 1, 2, 2, 1, 1])
     expect(movementTextStepKeyboard().inline_keyboard.flat().map((button) => button.callback_data)).toEqual(['mv:back', 'mv:cancel'])
   })
 

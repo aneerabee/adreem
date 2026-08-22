@@ -91,6 +91,7 @@ function movementIcon(type) {
   if (tone === 'transfer') return '🔁'
   if (tone === 'deposit') return '🏦'
   if (tone === 'withdrawal') return '💵'
+  if (tone === 'record') return '📝'
   return '◼'
 }
 
@@ -141,7 +142,7 @@ function currentStepHelp(session) {
   if (session?.step === 'rate') return ''
   if (session?.step === 'source') return ''
   if (session?.step === 'destination') return ''
-  if (session?.step === 'note') return 'اختياري.'
+  if (session?.step === 'note') return movementConfigFor(session?.draft?.type).requiresNote ? 'مطلوبة لهذا التسجيل.' : 'اختياري.'
   if (session?.step === 'dimension') return 'اختياري.'
   if (session?.step === 'category') return 'اختياري.'
   if (session?.step === 'attachment') return 'اختياري.'
@@ -643,6 +644,11 @@ export function reviewMovementText(session, preview, context = {}) {
     lines.push('<b>الحركة ناقصة</b>')
     preview.validation.errors.forEach((error) => lines.push(`- ${escapeHtml(error.message)}`))
     return lines.join('\n')
+  }
+
+  if (draft.type === 'record_only') {
+    lines.push('<blockquote>تسجيل للمتابعة فقط\nلا يغيّر أي رصيد</blockquote>')
+    return lines.join('\n').trim()
   }
 
   preview.effects.forEach((effect) => {

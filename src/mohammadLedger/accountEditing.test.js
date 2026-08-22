@@ -4,6 +4,7 @@ import { accountEditChanges, accountStructureUsage, prepareAccountUpdate } from 
 import { buildCounterpartyAccountBundle } from './counterpartyAccounts.js'
 import { emptyAccountDraft } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements } from './ledgerCore.js'
+import { ACCOUNT_SUMMARY_SCOPES } from './ledgerScope.js'
 
 const EDIT_CASES = [
   { type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE, ownerName: 'سعيد', subAccountName: 'كاش بيننا', nextName: 'شركة سعيد', field: 'ownerName' },
@@ -241,6 +242,29 @@ describe('account editing', () => {
       movement: true,
       linkedBundle: true,
       locked: true,
+    })
+  })
+
+  it('allows changing only the summary scope after movements and records the change clearly', () => {
+    const account = createAccount({
+      id: 'used-cash-scope',
+      ownerName: 'أنا',
+      subAccountName: 'خزنة خاصة',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      openingDinar: 500,
+    })
+    const result = prepareAccountUpdate({
+      accounts: [account],
+      movements: createOpeningMovements([account]),
+      accountId: account.id,
+      draft: { ...account, summaryScope: ACCOUNT_SUMMARY_SCOPES.SEPARATE },
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      account: { summaryScope: ACCOUNT_SUMMARY_SCOPES.SEPARATE },
+      changes: [expect.objectContaining({ key: 'summaryScope', before: 'داخل الصافي', after: 'حساب منفصل' })],
     })
   })
 })

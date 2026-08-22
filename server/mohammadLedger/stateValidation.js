@@ -650,6 +650,19 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
       })
     }
     if (
+      previousMovement?.status === MOVEMENT_STATUSES.POSTED &&
+      previousMovement.type !== movement.type &&
+      (previousMovement.type === MOVEMENT_TYPES.RECORD_ONLY || movement.type === MOVEMENT_TYPES.RECORD_ONLY)
+    ) {
+      errors.push({
+        code: 'movement-posting-mode-immutable',
+        recordType: 'movements',
+        id: movement.id,
+        field: 'type',
+        message: 'لا يمكن تحويل حركة مالية إلى تسجيل فقط أو العكس. ألغ الحركة وأنشئ واحدة جديدة.',
+      })
+    }
+    if (
       changedRecord(movement, previousMovements) ||
       changedDimensionIds.has(cleanId(movement.dimensionId)) ||
       changedReconciliationIds.has(cleanId(movement.reconciliationId)) ||

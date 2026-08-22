@@ -199,6 +199,7 @@ export function movementTypeKeyboard(selectedType = '') {
     [buttonFor(optionsByTone.get('income'))],
     [buttonFor(optionsByTone.get('deposit')), buttonFor(optionsByTone.get('withdrawal'))],
     [buttonFor(optionsByTone.get('sale')), buttonFor(optionsByTone.get('purchase'))],
+    [buttonFor(optionsByTone.get('record'))],
   ]
   rows.push([{ text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }])
   return {
@@ -214,6 +215,7 @@ function movementTypeButtonText(option) {
   if (option.tone === 'income') return `🟢 ${option.label}`
   if (option.tone === 'sale') return `🟢 ${option.label}`
   if (option.tone === 'purchase') return `🔵 ${option.label}`
+  if (option.tone === 'record') return `📝 ${option.label}`
   return option.label
 }
 
@@ -272,17 +274,24 @@ export function accountsBrowserKeyboard(buckets = [], session = {}) {
   }]))
   rows.unshift(
     [filterButton('فلوسي', 'money'), filterButton('لي', 'collect')],
-    [filterButton('عليّ', 'pay'), filterButton('الكل', 'all')],
+    [filterButton('عليّ', 'pay'), filterButton('منفصل', 'separate')],
+    [filterButton('الكل', 'all'), { text: 'الصافي', callback_data: 'accounts:net', style: 'primary' }],
   )
   rows.push(...paginationRows('accounts', session.page, session.pageCount))
   rows.push([{ text: '🔎 بحث', callback_data: 'main:search', style: 'primary' }, { text: '↩️ الرئيسية', callback_data: 'main:home' }])
   return { inline_keyboard: rows }
 }
 
-export function accountProfileKeyboard(page = 0, accountToken = '') {
+export function accountProfileKeyboard(page = 0, accountToken = '', options = {}) {
+  const summaryScope = options.summaryScope === 'separate' ? 'separate' : options.summaryScope === 'included' ? 'included' : ''
   return {
     inline_keyboard: [
-      ...(accountToken ? [[{ text: 'تعديل الحساب', callback_data: `accounts:edit:${accountToken}`, style: 'success' }]] : []),
+      ...(accountToken && options.canEdit !== false ? [[{ text: 'تعديل الحساب', callback_data: `accounts:edit:${accountToken}`, style: 'success' }]] : []),
+      ...(accountToken && summaryScope ? [[{
+        text: summaryScope === 'separate' ? 'إدخاله في الصافي' : 'فصله عن الصافي',
+        callback_data: `accounts:scope:${accountToken}:${summaryScope === 'separate' ? 'included' : 'separate'}`,
+        style: 'primary',
+      }]] : []),
       [{ text: '↩️ الأرصدة', callback_data: `accounts:page:${Math.max(0, Number(page) || 0)}`, style: 'primary' }],
       [{ text: 'الرئيسية', callback_data: 'main:home' }],
     ],
@@ -356,11 +365,28 @@ export function accountChoiceToken(account) {
   return createHash('sha1').update(String(account?.id || '')).digest('base64url').slice(0, 10)
 }
 
-export function noteKeyboard() {
+export function noteKeyboard({ required = false } = {}) {
   return {
     inline_keyboard: [
-      [{ text: 'بدون ملاحظة', callback_data: 'mv:note:skip', style: 'primary' }],
+      ...(required ? [] : [[{ text: 'بدون ملاحظة', callback_data: 'mv:note:skip', style: 'primary' }]]),
       [{ text: '↩️ رجوع', callback_data: 'mv:back' }, { text: 'إلغاء', callback_data: 'mv:cancel', style: 'danger' }],
+    ],
+  }
+}
+
+export function netTargetKeyboard(targetCurrency = CURRENCIES.DINAR, options = {}) {
+  const showAccounts = Boolean(options.showAccounts)
+  const page = Math.max(0, Number(options.page) || 0)
+  const pageCount = Math.max(1, Number(options.pageCount) || 1)
+  return {
+    inline_keyboard: [
+      [
+        { text: `${targetCurrency === CURRENCIES.DINAR ? '✓ ' : ''}بالدينار`, callback_data: `net:target:${CURRENCIES.DINAR}`, style: targetCurrency === CURRENCIES.DINAR ? 'success' : 'primary' },
+        { text: `${targetCurrency === CURRENCIES.USD ? '✓ ' : ''}بالدولار`, callback_data: `net:target:${CURRENCIES.USD}`, style: targetCurrency === CURRENCIES.USD ? 'success' : 'primary' },
+      ],
+      [{ text: showAccounts ? 'إخفاء الحسابات' : 'الحسابات الداخلة', callback_data: 'net:accounts' }],
+      ...(showAccounts ? paginationRows('net:accounts', page, pageCount) : []),
+      [{ text: 'تغيير السعر', callback_data: 'net:rate' }, { text: '↩️ الأرصدة', callback_data: 'main:accounts', style: 'primary' }],
     ],
   }
 }

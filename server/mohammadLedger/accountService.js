@@ -18,6 +18,7 @@ import {
 } from '../../src/mohammadLedger/counterpartyAccounts.js'
 import { createAccount, createOpeningMovements, validateAccount, validateMovement } from '../../src/mohammadLedger/ledgerCore.js'
 import { createAuditEvent } from '../../src/mohammadLedger/ledgerOperations.js'
+import { accountSummaryScope } from '../../src/mohammadLedger/ledgerScope.js'
 import { findTelegramUpdateAuditEvent } from './ledgerService.js'
 
 function telegramAuditDetails(metadata = {}) {
@@ -39,6 +40,7 @@ export function normalizeAccountDraft(draft = {}) {
     counterpartyOpenings: draft.counterpartyOpenings || emptyCounterpartyOpenings(),
     ...openingAmounts,
     notes: String(draft.notes || '').trim(),
+    summaryScope: accountSummaryScope({ valueKind: preset.valueKind, summaryScope: draft.summaryScope }),
   }
 }
 

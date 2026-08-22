@@ -8,6 +8,7 @@ import {
   sameLogicalAccount,
   transferCompatibilityMessage,
 } from './accountCompatibility.js'
+import { ACCOUNT_SUMMARY_SCOPES, accountSummaryScope, accountSupportsNetScope } from './ledgerScope.js'
 
 export const CURRENCIES = {
   DINAR: 'LYD',
@@ -29,6 +30,7 @@ export const MOVEMENT_TYPES = {
   USD_PURCHASE: 'usd_purchase',
   EXTERNAL_INCOME: 'external_income',
   CORRECTION: 'correction',
+  RECORD_ONLY: 'record_only',
 }
 
 export const MOVEMENT_STATUSES = {
@@ -316,6 +318,11 @@ export function validateMovement(movement, accounts = [], movements = [], option
   if (type === MOVEMENT_TYPES.CORRECTION && !movement?.note) {
     errors.push({ field: 'note', message: 'التصحيح يحتاج ملاحظة توضح السبب.' })
   }
+  if (type === MOVEMENT_TYPES.RECORD_ONLY) {
+    if (sourceId) errors.push({ field: 'sourceAccountId', message: 'التسجيل فقط لا يرتبط بحساب مصدر.' })
+    if (destinationId) errors.push({ field: 'destinationAccountId', message: 'التسجيل فقط لا يرتبط بحساب وجهة.' })
+    if (!String(movement?.note || '').trim()) errors.push({ field: 'note', message: 'اكتب ملاحظة توضح ما تريد تسجيله.' })
+  }
   if ((type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) && movement?.expenseCategoryId) {
     const category = accountMap.get(movement.expenseCategoryId)
     if (!category || category.valueKind !== VALUE_KINDS.EXPENSE || category.status !== ACCOUNT_STATUSES.ACTIVE) {
@@ -376,6 +383,8 @@ export function buildPostingEntries(movement) {
       ]
     case MOVEMENT_TYPES.CORRECTION:
       return [{ accountId: movement.destinationAccountId, currency, delta: amount }]
+    case MOVEMENT_TYPES.RECORD_ONLY:
+      return []
     default:
       return []
   }
@@ -486,6 +495,7 @@ export function createAccount({
   status = ACCOUNT_STATUSES.ACTIVE,
   counterpartyId = '',
   counterpartyKind = '',
+  summaryScope,
 }) {
   const normalizedOwner = normalizeAccountText(ownerName)
   const normalizedSub = canonicalAccountDetail(subAccountName)
@@ -502,6 +512,7 @@ export function createAccount({
     openingUsd,
   }))
   const stableCurrencySuffix = normalizedCurrencyKind === 'multi' ? 'multi' : normalizedCurrencyKind.toLowerCase()
+  const normalizedSummaryScope = accountSummaryScope({ valueKind: normalizedValueKind, summaryScope })
 
   return {
     id: id || `account-${stableBase || Date.now()}-${stableCurrencySuffix}`,
@@ -517,6 +528,7 @@ export function createAccount({
     notes,
     ...(counterpartyId ? { counterpartyId: String(counterpartyId).trim() } : {}),
     ...(counterpartyKind ? { counterpartyKind: String(counterpartyKind).trim() } : {}),
+    ...(normalizedSummaryScope ? { summaryScope: normalizedSummaryScope } : {}),
     createdFrom: 'manual',
     createdAt: isoNow(),
   }
@@ -552,6 +564,12 @@ export function validateAccount(account, existingAccounts = []) {
     errors.push({ field: 'openingUsd', message: 'فلوسك أو قيمة الأصل لا يمكن أن تبدأ بالسالب.' })
   }
   const currencyKind = normalizeAccountCurrencyKind(account?.currencyKind, inferAccountCurrencyKind(account))
+  if (accountSupportsNetScope(account) && account?.summaryScope && !Object.values(ACCOUNT_SUMMARY_SCOPES).includes(account.summaryScope)) {
+    errors.push({ field: 'summaryScope', message: 'حالة الحساب في الصافي غير معروفة.' })
+  }
+  if (!accountSupportsNetScope(account) && account?.summaryScope) {
+    errors.push({ field: 'summaryScope', message: 'هذا النوع لا يدخل في الصافي العام.' })
+  }
   if (currencyKind === CURRENCIES.DINAR && openingUsd !== 0) {
     errors.push({ field: 'openingUsd', message: 'الرصيد الافتتاحي يجب أن يطابق عملة الحساب.' })
   }
@@ -615,6 +633,10 @@ export function voidMovement(movement, reason = '', voidedAt = isoNow()) {
 
 export function canCommitMovementEdit(originalMovement, candidateMovement) {
   if (!originalMovement) return true
+  const changesPostingMode = originalMovement.type !== candidateMovement?.type && (
+    originalMovement.type === MOVEMENT_TYPES.RECORD_ONLY || candidateMovement?.type === MOVEMENT_TYPES.RECORD_ONLY
+  )
+  if (changesPostingMode) return false
   if (originalMovement.status === MOVEMENT_STATUSES.POSTED) {
     return candidateMovement?.status === MOVEMENT_STATUSES.POSTED
   }

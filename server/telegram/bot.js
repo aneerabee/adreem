@@ -1,8 +1,13 @@
 import { CURRENCIES, MOVEMENT_STATUSES } from '../../src/mohammadLedger/ledgerCore.js'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/mohammadLedger/accountCatalog.js'
 import { accountStructureUsage } from '../../src/mohammadLedger/accountEditing.js'
-import { buildCounterpartyBalanceViews } from '../../src/mohammadLedger/counterpartyAccounts.js'
 import { normalizeAccountSearchText } from '../../src/mohammadLedger/movementAccounts.js'
+import {
+  ACCOUNT_SUMMARY_SCOPES,
+  accountSummaryScope,
+  buildNetPosition,
+  convertNetPosition,
+} from '../../src/mohammadLedger/ledgerScope.js'
 import {
   buildDimensionReports,
   buildExpenseCategoryReports,
@@ -29,6 +34,8 @@ import {
   historyKeyboard,
   mainMenuKeyboard,
   moreMenuKeyboard,
+  netTargetKeyboard,
+  numericKeypadKeyboard,
   recurringRulesKeyboard,
   reportDetailKeyboard,
   reportKeyboard,
@@ -74,6 +81,9 @@ import {
 } from './updateSafety.js'
 import { createDurableBotRuntime, hydrateDurableSession } from './durableBotRuntime.js'
 import { zonedDayRange } from './dateRange.js'
+import { applyNumericKey, numericBufferDisplay, numericBufferValue } from './numericKeypad.js'
+import { buildTelegramBalanceView, TELEGRAM_BALANCE_FILTERS } from './balanceView.js'
+import { updateTelegramAccount } from '../mohammadLedger/accountService.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
 if (!token) {
@@ -96,6 +106,7 @@ const ACCOUNT_PAGE_SIZE = 8
 const MOVEMENT_PICKER_PAGE_SIZE = 8
 const REPORT_PAGE_SIZE = 8
 const TODAY_PREVIEW_LIMIT = 10
+const NET_ACCOUNT_PAGE_SIZE = 8
 const LEDGER_TIME_ZONE = process.env.ADREEM_TIME_ZONE || 'Africa/Tripoli'
 
 let offset = 0
@@ -254,20 +265,8 @@ async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money') {
   sessions.clear(ctx.chatId, ctx.userId)
   const { state } = await ctx.repository.load()
   const snapshot = buildLedgerSnapshot(state)
-  const allBuckets = snapshot.balances
-    .filter((bucket) => bucket.account.status === ACCOUNT_STATUSES.ACTIVE)
-    .sort((a, b) => Math.abs(b.dinar) - Math.abs(a.dinar) || Math.abs(b.usd) - Math.abs(a.usd))
-  const people = allBuckets.filter((bucket) => bucket.account.valueKind === VALUE_KINDS.RECEIVABLE)
-  const ownMoney = allBuckets.filter((bucket) => bucket.account.valueKind === VALUE_KINDS.CASH || bucket.account.valueKind === VALUE_KINDS.BANK)
-  const bucketAmount = (bucket) => bucket.account.currencyKind === CURRENCIES.USD ? Number(bucket.usd || 0) : Number(bucket.dinar || 0)
-  const filter = ['money', 'collect', 'pay', 'all'].includes(requestedFilter) ? requestedFilter : 'money'
-  const filteredBuckets = filter === 'money'
-    ? ownMoney
-    : filter === 'collect'
-      ? people.filter((bucket) => bucketAmount(bucket) > 0)
-      : filter === 'pay'
-        ? people.filter((bucket) => bucketAmount(bucket) < 0)
-        : allBuckets
+  const balanceView = buildTelegramBalanceView(snapshot.balances, requestedFilter)
+  const { allBuckets, filteredBuckets, filter, summary } = balanceView
   const pageCount = Math.max(1, Math.ceil(filteredBuckets.length / ACCOUNT_PAGE_SIZE))
   const page = Math.min(Math.max(0, Number(requestedPage) || 0), pageCount - 1)
   const visibleBuckets = filteredBuckets.slice(page * ACCOUNT_PAGE_SIZE, (page + 1) * ACCOUNT_PAGE_SIZE)
@@ -282,24 +281,11 @@ async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money') {
     uiMessageId: ctx.isCallback ? ctx.messageId : null,
   }
   sessions.set(ctx.chatId, ctx.userId, session)
-  const money = ownMoney.reduce((total, bucket) => ({
-    dinar: total.dinar + Number(bucket.dinar || 0),
-    usd: total.usd + Number(bucket.usd || 0),
-  }), { dinar: 0, usd: 0 })
-  const peopleViews = buildCounterpartyBalanceViews(people)
-  const collect = peopleViews.all.reduce((total, group) => ({
-    dinar: total.dinar + group.receivable.dinar,
-    usd: total.usd + group.receivable.usd,
-  }), { dinar: 0, usd: 0 })
-  const pay = peopleViews.all.reduce((total, group) => ({
-    dinar: total.dinar + group.payable.dinar,
-    usd: total.usd + group.payable.usd,
-  }), { dinar: 0, usd: 0 })
   const balancePair = (value) => `${formatMoney(value.dinar, CURRENCIES.DINAR)} · ${formatMoney(value.usd, CURRENCIES.USD)}`
   const accountLegend = accountChoiceLegendText(visibleBuckets.map((bucket) => bucket.account))
-  const filterLabel = { money: 'فلوسي', collect: 'لي عند الناس', pay: 'عليّ للناس', all: 'كل الحسابات' }[filter]
+  const filterLabel = { money: 'فلوسي', collect: 'لي عند الناس', pay: 'عليّ للناس', separate: 'حسابات منفصلة', all: 'كل الحسابات' }[filter]
   const text = allBuckets.length
-    ? `<b>ADREEM · الأرصدة</b>\n<blockquote>${escapeHtml(`فلوسي\n${balancePair(money)}\n\nلي عند الناس\n${balancePair(collect)}\n\nعليّ للناس\n${balancePair(pay)}`)}</blockquote>\n\n<b>${escapeHtml(filterLabel)}</b>\n<code>${filteredBuckets.length} حساب · ${page + 1}/${pageCount}</code>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}${visibleBuckets.length ? '' : '\n<blockquote>لا توجد حسابات في هذا القسم.</blockquote>'}`
+    ? `<b>ADREEM · الأرصدة</b>\n<blockquote>${escapeHtml(`فلوسي\n${balancePair(summary.money)}\n\nلي عند الناس\n${balancePair(summary.collect)}\n\nعليّ للناس\n${balancePair(summary.pay)}`)}</blockquote>\n\n<b>${escapeHtml(filterLabel)}</b>\n<code>${filteredBuckets.length} حساب · ${page + 1}/${pageCount}</code>${accountLegend ? `\n<code>${escapeHtml(accountLegend)}</code>` : ''}${visibleBuckets.length ? '' : '\n<blockquote>لا توجد حسابات في هذا القسم.</blockquote>'}`
     : '<b>ADREEM · الأرصدة</b>\n<blockquote>لا توجد حسابات.\nأنشئ حسابًا من «المزيد».</blockquote>'
   return sendScreen(ctx, text, accountsBrowserKeyboard(visibleBuckets, session))
 }
@@ -307,8 +293,30 @@ async function showAccounts(ctx, requestedPage = 0, requestedFilter = 'money') {
 async function handleAccountsCallback(ctx, data) {
   const session = sessions.get(ctx.chatId, ctx.userId)
   if (session?.flow !== 'accounts') return showAccounts(ctx)
+  if (data === 'accounts:net') return startNetPosition(ctx)
   if (data.startsWith('accounts:filter:')) return showAccounts(ctx, 0, data.slice('accounts:filter:'.length))
   if (data.startsWith('accounts:page:')) return showAccounts(ctx, Number(data.slice('accounts:page:'.length)), session.balanceFilter)
+  if (data.startsWith('accounts:scope:')) {
+    const [, , token, requestedScope] = data.split(':')
+    const accountId = session.choices?.accounts?.[token]
+    const summaryScope = requestedScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE
+      ? ACCOUNT_SUMMARY_SCOPES.SEPARATE
+      : ACCOUNT_SUMMARY_SCOPES.INCLUDED
+    if (!accountId) return showAccounts(ctx, session.page, session.balanceFilter)
+    const { state } = await ctx.repository.load()
+    const account = state.accounts.find((item) => item.id === accountId)
+    if (!account) return showAccounts(ctx, session.page, session.balanceFilter)
+    const result = await updateTelegramAccount(ctx.repository, accountId, { ...account, summaryScope }, {
+      idempotencyKey: telegramUpdateIdempotencyKey(ctx.updateId, 'account-summary-scope'),
+      telegramUserId: ctx.userId,
+      telegramChatId: ctx.chatId,
+    })
+    if (result.rejected) return sendScreen(ctx, `<b>لم يتغير الحساب.</b>\n<blockquote>${escapeHtml(result.validation?.errors?.[0]?.message || 'تعذر حفظ الاختيار.')}</blockquote>`, accountProfileKeyboard(session.page, token, {
+      canEdit: false,
+      summaryScope: accountSummaryScope(account),
+    }))
+    return showAccounts(ctx, 0, summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? TELEGRAM_BALANCE_FILTERS.SEPARATE : session.balanceFilter)
+  }
   if (data.startsWith('accounts:edit:')) {
     const editToken = data.slice('accounts:edit:'.length)
     const editAccountId = session.choices?.accounts?.[editToken]
@@ -348,7 +356,111 @@ async function handleAccountsCallback(ctx, data) {
     recurringRules: state.recurringRules || [],
     dimensions: state.dimensions || [],
   }).movement
-  return sendScreen(ctx, text, accountProfileKeyboard(session.page, accountLocked ? '' : token))
+  return sendScreen(ctx, text, accountProfileKeyboard(session.page, token, {
+    canEdit: !accountLocked,
+    summaryScope: accountSummaryScope(account),
+  }))
+}
+
+async function startNetPosition(ctx) {
+  const session = {
+    flow: 'net',
+    step: 'rate',
+    rateBuffer: '',
+    rate: null,
+    targetCurrency: CURRENCIES.DINAR,
+    showAccounts: false,
+    accountsPage: 0,
+    uiMessageId: ctx.isCallback ? ctx.messageId : null,
+  }
+  sessions.set(ctx.chatId, ctx.userId, session)
+  return renderNetPosition(ctx, session)
+}
+
+async function renderNetPosition(ctx, session, notice = '') {
+  const { state } = await ctx.repository.load()
+  const snapshot = buildLedgerSnapshot(state)
+  const activeBalances = snapshot.balances.filter((bucket) => bucket.account.status === ACCOUNT_STATUSES.ACTIVE)
+  const position = buildNetPosition(activeBalances)
+  const rawText = `دينار: ${formatMoney(position.dinar, CURRENCIES.DINAR)}\nدولار: ${formatMoney(position.usd, CURRENCIES.USD)}`
+  if (session.step === 'rate') {
+    const text = [
+      '<b>ADREEM · الصافي</b>',
+      `<blockquote>${escapeHtml(rawText)}</blockquote>`,
+      ...(notice ? ['', `<b>${escapeHtml(notice)}</b>`] : []),
+      '',
+      '<b>سعر الدولار بالدينار</b>',
+      `<blockquote>${escapeHtml(numericBufferDisplay(session.rateBuffer))}</blockquote>`,
+    ].join('\n')
+    return sendScreen(ctx, text, numericKeypadKeyboard('net', { allowDecimal: true }))
+  }
+
+  const converted = convertNetPosition(position, session.rate, session.targetCurrency)
+  const pageCount = Math.max(1, Math.ceil(position.contributions.length / NET_ACCOUNT_PAGE_SIZE))
+  const page = Math.min(Math.max(0, Number(session.accountsPage) || 0), pageCount - 1)
+  session.accountsPage = page
+  sessions.set(ctx.chatId, ctx.userId, session)
+  const visibleAccounts = session.showAccounts
+    ? position.contributions.slice(page * NET_ACCOUNT_PAGE_SIZE, (page + 1) * NET_ACCOUNT_PAGE_SIZE)
+    : []
+  const accountLines = visibleAccounts.map((item) => {
+    const values = [
+      item.dinar ? formatMoney(item.dinar, CURRENCIES.DINAR) : '',
+      item.usd ? formatMoney(item.usd, CURRENCIES.USD) : '',
+    ].filter(Boolean)
+    return `${protectedAccountLabel(item.account)} · ${values.join(' · ') || 'صفر'}`
+  })
+  const resultText = converted.ok
+    ? `الصافي: ${formatMoney(converted.amount, converted.currency)}\nالسعر: ${converted.rate}`
+    : converted.error
+  const text = [
+    '<b>ADREEM · الصافي</b>',
+    `<blockquote>${escapeHtml(`${rawText}\n\n${resultText}`)}</blockquote>`,
+    ...(session.showAccounts
+      ? ['', `<b>الحسابات الداخلة · ${position.accountCount}</b>`, `<code>صفحة ${page + 1}/${pageCount}</code>`, `<blockquote>${escapeHtml(accountLines.join('\n') || 'لا توجد حسابات داخلة.')}</blockquote>`]
+      : []),
+  ].join('\n')
+  return sendScreen(ctx, text, netTargetKeyboard(session.targetCurrency, {
+    showAccounts: session.showAccounts,
+    page,
+    pageCount,
+  }))
+}
+
+async function handleNetPositionCallback(ctx, data) {
+  const session = sessions.get(ctx.chatId, ctx.userId)
+  if (session?.flow !== 'net') return showAccounts(ctx)
+  if (data === 'net:cancel') return showMainMenu(ctx)
+  if (data === 'net:back') return showAccounts(ctx)
+  if (data.startsWith('net:num:')) {
+    if (session.step !== 'rate') return renderNetPosition(ctx, session)
+    const key = data.slice('net:num:'.length)
+    if (key !== 'done') {
+      session.rateBuffer = applyNumericKey(session.rateBuffer, key, { allowDecimal: true })
+      sessions.set(ctx.chatId, ctx.userId, session)
+      return renderNetPosition(ctx, session)
+    }
+    const rate = numericBufferValue(session.rateBuffer, { allowDecimal: true })
+    if (rate === null) return renderNetPosition(ctx, session, 'أدخل سعرًا أكبر من صفر.')
+    session.rate = rate
+    session.step = 'result'
+    sessions.set(ctx.chatId, ctx.userId, session)
+    return renderNetPosition(ctx, session)
+  }
+  if (data === 'net:rate') {
+    session.step = 'rate'
+    session.rateBuffer = session.rate ? String(session.rate) : ''
+  } else if (data.startsWith('net:target:')) {
+    session.targetCurrency = data.slice('net:target:'.length) === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+  } else if (data === 'net:accounts') {
+    session.showAccounts = !session.showAccounts
+    session.accountsPage = 0
+  } else if (data.startsWith('net:accounts:page:')) {
+    session.showAccounts = true
+    session.accountsPage = Number(data.slice('net:accounts:page:'.length)) || 0
+  }
+  sessions.set(ctx.chatId, ctx.userId, session)
+  return renderNetPosition(ctx, session)
 }
 
 async function showToday(ctx) {
@@ -978,6 +1090,7 @@ async function dispatchCallback(ctx, data) {
   if (data === 'main:reports') return showReports(ctx)
   if (data === 'main:recurring') return showRecurring(ctx)
   if (data.startsWith('accounts:')) return handleAccountsCallback(ctx, data)
+  if (data.startsWith('net:')) return handleNetPositionCallback(ctx, data)
   if (data.startsWith('reports:')) return handleReportsCallback(ctx, data)
   if (data.startsWith('repeat:')) return handleRecurringCallback(ctx, data)
   if (data.startsWith('review:')) return handleReviewCallback(ctx, data)

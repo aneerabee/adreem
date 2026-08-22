@@ -7,6 +7,9 @@ import {
   dimensionKeyboard,
   expenseCategoryKeyboard,
   historyKeyboard,
+  movementTypeKeyboard,
+  netTargetKeyboard,
+  noteKeyboard,
   numericKeypadKeyboard,
   reportDetailKeyboard,
   reportKeyboard,
@@ -57,19 +60,34 @@ describe('telegram browsing keyboards', () => {
 
   it('renders stable navigation for empty and paged account lists', () => {
     const empty = accountsBrowserKeyboard([], { page: 0, pageCount: 1 })
-    const profile = accountProfileKeyboard(3, 'account-token')
+    const profile = accountProfileKeyboard(3, 'account-token', { summaryScope: 'included' })
     const lockedProfile = accountProfileKeyboard(3, '')
 
-    expect(empty.inline_keyboard).toHaveLength(3)
+    expect(empty.inline_keyboard).toHaveLength(4)
     expect(empty.inline_keyboard.flat().map((button) => button.callback_data)).toEqual(expect.arrayContaining([
       'accounts:filter:money',
       'accounts:filter:collect',
       'accounts:filter:pay',
+      'accounts:filter:separate',
       'accounts:filter:all',
+      'accounts:net',
     ]))
     expect(profile.inline_keyboard[0][0].callback_data).toBe('accounts:edit:account-token')
-    expect(profile.inline_keyboard[1][0].callback_data).toBe('accounts:page:3')
+    expect(profile.inline_keyboard[1][0].callback_data).toBe('accounts:scope:account-token:separate')
+    expect(profile.inline_keyboard[2][0].callback_data).toBe('accounts:page:3')
     expect(lockedProfile.inline_keyboard.flat().some((button) => button.callback_data.startsWith('accounts:edit:'))).toBe(false)
+  })
+
+  it('keeps record-only notes mandatory and exposes the net calculator controls', () => {
+    const movementCallbacks = movementTypeKeyboard().inline_keyboard.flat().map((button) => button.callback_data)
+    const optionalNoteCallbacks = noteKeyboard().inline_keyboard.flat().map((button) => button.callback_data)
+    const requiredNoteCallbacks = noteKeyboard({ required: true }).inline_keyboard.flat().map((button) => button.callback_data)
+    const netCallbacks = netTargetKeyboard('LYD', { showAccounts: true, page: 1, pageCount: 3 }).inline_keyboard.flat().map((button) => button.callback_data)
+
+    expect(movementCallbacks).toContain('mv:type:record_only')
+    expect(optionalNoteCallbacks).toContain('mv:note:skip')
+    expect(requiredNoteCallbacks).not.toContain('mv:note:skip')
+    expect(netCallbacks).toEqual(expect.arrayContaining(['net:target:LYD', 'net:target:USD', 'net:accounts', 'net:accounts:page:0', 'net:accounts:page:2', 'net:rate']))
   })
 
   it('adds bounded history pagination without changing movement choices', () => {

@@ -6,6 +6,7 @@ import {
   normalizeAccountCurrencyKind,
 } from './accountCatalog.js'
 import { createOpeningMovements } from './ledgerCore.js'
+import { accountSummaryScope } from './ledgerScope.js'
 
 export const ADREEM_APP_ID = 'adreem'
 export const ADREEM_LEDGER_VERSION = 2
@@ -69,6 +70,9 @@ export function normalizeMohammadAccounts(accounts = []) {
       valueKind: account.type === ACCOUNT_TYPES.PROJECT ? VALUE_KINDS.PROJECT : account.valueKind,
       currencyKind: normalizeAccountCurrencyKind(account.currencyKind, inferAccountCurrencyKind(account)),
     }
+    const summaryScope = accountSummaryScope(normalizedAccount)
+    if (summaryScope) normalizedAccount.summaryScope = summaryScope
+    else delete normalizedAccount.summaryScope
     if (
       account.ownerName &&
       account.ownerName !== 'أنا' &&

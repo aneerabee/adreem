@@ -846,4 +846,66 @@ describe('mohammad ledger core', () => {
     expect(dinarAccount.id).not.toBe(usdAccount.id)
     expect(validateAccount(usdAccount, [dinarAccount]).ok).toBe(true)
   })
+
+  it('posts a record-only movement without changing any account balance', () => {
+    const accounts = [createAccount({
+      id: 'cash-record-only',
+      ownerName: 'أنا',
+      subAccountName: 'كاش',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      openingDinar: 1_000,
+    })]
+    const movements = createOpeningMovements(accounts)
+    const record = postMovement({
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 250,
+      currency: CURRENCIES.DINAR,
+      note: 'وعد دفع لم يدخل الحسابات',
+    }, accounts, movements)
+
+    expect(record.status).toBe(MOVEMENT_STATUSES.POSTED)
+    expect(buildPostingEntries(record)).toEqual([])
+    expect(previewMovement(record, accounts, movements)).toMatchObject({ validation: { ok: true }, effects: [] })
+    expect(summarizeBalances(accounts, [...movements, record])[0].dinar).toBe(1_000)
+  })
+
+  it('requires a note and rejects account links for record-only movements', () => {
+    const account = createAccount({
+      id: 'record-only-account',
+      ownerName: 'أنا',
+      subAccountName: 'كاش',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+    })
+    const missingNote = validateMovement({
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+    }, [account], [])
+    const linkedAccount = validateMovement({
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      note: 'تسجيل',
+      sourceAccountId: account.id,
+    }, [account], [])
+
+    expect(missingNote.errors).toContainEqual(expect.objectContaining({ field: 'note' }))
+    expect(linkedAccount.errors).toContainEqual(expect.objectContaining({ field: 'sourceAccountId' }))
+  })
+
+  it('does not allow a posted movement to change between financial and record-only modes', () => {
+    const posted = {
+      id: 'posted-income',
+      type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: 'cash',
+    }
+
+    expect(canCommitMovementEdit(posted, { ...posted, type: MOVEMENT_TYPES.RECORD_ONLY, destinationAccountId: null, note: 'تسجيل' })).toBe(false)
+    expect(canCommitMovementEdit({ ...posted, type: MOVEMENT_TYPES.RECORD_ONLY }, posted)).toBe(false)
+  })
 })

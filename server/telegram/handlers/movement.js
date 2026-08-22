@@ -189,7 +189,7 @@ async function sendStep(ctx, session, textPrefix = '') {
     return sendAccountChoices(ctx, session, state, session.step, '', 0, textPrefix)
   }
   if (session.step === STEPS.NOTE) {
-    return upsertFlowMessage(ctx, session, { text, reply_markup: noteKeyboard() })
+    return upsertFlowMessage(ctx, session, { text, reply_markup: noteKeyboard({ required: Boolean(movementConfigFor(session.draft.type).requiresNote) }) })
   }
   if (session.step === STEPS.DIMENSION) {
     if (!movementSupportsDimension(session.draft.type) || !dimensions.length) {
@@ -476,6 +476,7 @@ export async function handleMovementCallback(ctx, data) {
   }
 
   if (data === 'mv:note:skip') {
+    if (movementConfigFor(session.draft.type).requiresNote) return sendStep(ctx, session, 'اكتب ملاحظة واضحة لهذا التسجيل.')
     session.draft.note = ''
     session.step = nextAfterNote(session.draft.type)
     ctx.sessions.set(ctx.chatId, ctx.userId, session)
@@ -673,6 +674,7 @@ function callbackMatchesCurrentStep(data, step) {
 function savedMovementSuffix(result, session = {}) {
   if (session.mode === 'review') return result.needsReview ? 'ما زالت في المراجعة.' : 'تم إصلاح الحركة وتحديث الدفتر.'
   if (result.duplicate) return result.needsReview ? 'كانت محفوظة سابقًا في المراجعة.' : 'كانت محفوظة سابقًا ولم تتكرر.'
+  if (!result.needsReview && result.movement?.type === 'record_only') return 'تم حفظ التسجيل دون تغيير الأرصدة.'
   return result.needsReview ? 'تم حفظها في المراجعة.' : 'تم الحفظ وتحديث الدفتر.'
 }
 

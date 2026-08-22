@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../../src/mohammadLedger/ledgerCore.js'
 import { createMohammadFallbackState } from '../../../src/mohammadLedger/ledgerState.js'
+import { buildLedgerSnapshot } from '../../mohammadLedger/ledgerService.js'
 import { createSessionStore } from '../sessionStore.js'
 import { createLocalizedTelegramClient } from '../localizedTelegram.js'
 import { attachmentPathIsReferenced, handleMovementCallback, handleMovementMedia, handleMovementText, startMovement, startReviewMovement } from './movement.js'
@@ -679,6 +680,54 @@ describe('telegram movement flow safety', () => {
     const saved = ctx.repository.state.movements.find((movement) => movement.source === 'telegram')
     expect(saved).toMatchObject({ type, status: MOVEMENT_STATUSES.POSTED })
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
+  })
+
+  it('posts a complete record-only path without selecting accounts or changing any balance', async () => {
+    const ctx = createCtx()
+    const before = buildLedgerSnapshot(ctx.repository.state).balances.map((bucket) => ({
+      accountId: bucket.account.id,
+      dinar: bucket.dinar,
+      usd: bucket.usd,
+    }))
+
+    await startMovement(ctx)
+    await handleMovementCallback(ctx, `mv:type:${MOVEMENT_TYPES.RECORD_ONLY}`)
+    await handleMovementCallback(ctx, 'mv:num:8')
+    await handleMovementCallback(ctx, 'mv:num:5')
+    await handleMovementCallback(ctx, 'mv:num:0')
+    await handleMovementCallback(ctx, 'mv:num:done')
+    await handleMovementCallback(ctx, `mv:currency:${CURRENCIES.USD}`)
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toMatchObject({ step: 'note', draft: { sourceAccountId: '', destinationAccountId: '' } })
+    expect(ctx.telegram.calls.at(-1).payload.reply_markup.inline_keyboard.flat().map((button) => button.callback_data)).not.toContain('mv:note:skip')
+
+    await handleMovementCallback(ctx, 'mv:note:skip')
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('note')
+    await handleMovementText({ ...ctx, isCallback: false, messageId: 56 }, 'قيمة مرجعية لعقد منفصل')
+    await handleMovementCallback(ctx, 'mv:attachment:skip')
+    await handleMovementCallback(ctx, 'mv:recurring:no')
+
+    expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('review')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('لا يغيّر أي رصيد')
+    await handleMovementCallback(ctx, 'mv:confirm')
+
+    const saved = ctx.repository.state.movements.find((movement) => movement.source === 'telegram')
+    const after = buildLedgerSnapshot(ctx.repository.state).balances.map((bucket) => ({
+      accountId: bucket.account.id,
+      dinar: bucket.dinar,
+      usd: bucket.usd,
+    }))
+    expect(saved).toMatchObject({
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 850,
+      currency: CURRENCIES.USD,
+      note: 'قيمة مرجعية لعقد منفصل',
+      sourceAccountId: '',
+      destinationAccountId: '',
+      status: MOVEMENT_STATUSES.POSTED,
+    })
+    expect(after).toEqual(before)
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('دون تغيير الأرصدة')
   })
 
   it.each([

@@ -6,6 +6,7 @@ import { COUNTERPARTY_ACCOUNT_KINDS } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement, previewMovement } from './ledgerCore.js'
 import {
   AccountProfile,
+  NetPositionPanel,
   AccountRow,
   AccountSearchSelect,
   AccountClassificationEditorFields,
@@ -67,6 +68,36 @@ describe('MohammadLedgerApp movement account balances', () => {
     expect(accountBalanceChip(account, bucket, CURRENCIES.USD)).toEqual({ tone: 'positive', text: '500 $' })
     expect(accountBalanceChip(account, bucket, CURRENCIES.DINAR)).toEqual({ tone: 'positive', text: '50,000 د.ل' })
     expect(accountBalanceChip(account, { dinar: 50_000, usd: 0 }, CURRENCIES.USD)).toEqual({ tone: 'zero', text: '0 $' })
+  })
+})
+
+describe('MohammadLedgerApp net position controls', () => {
+  it('reveals raw currencies, the converted result, and every included account', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <NetPositionPanel
+        position={{
+          dinar: 10_500,
+          usd: 100,
+          accountCount: 2,
+          contributions: [
+            { accountId: 'cash', account: { id: 'cash', ownerName: 'أنا', subAccountName: 'كاش', valueKind: VALUE_KINDS.CASH }, dinar: 12_000, usd: 0 },
+            { accountId: 'friend', account: { id: 'friend', ownerName: 'سعيد', subAccountName: 'كاش بيننا', valueKind: VALUE_KINDS.RECEIVABLE }, dinar: -1_500, usd: 100 },
+          ],
+        }}
+        rate="7.5"
+        targetCurrency={CURRENCIES.DINAR}
+        onRateChange={() => {}}
+        onTargetCurrencyChange={() => {}}
+        onClose={() => {}}
+      />,
+    ))
+
+    expect(markup).toContain('الصافي')
+    expect(markup).toContain('10,500 د.ل')
+    expect(markup).toContain('100 $')
+    expect(markup).toContain('11,250 د.ل')
+    expect(markup).toContain('كاش عندي')
+    expect(markup).toContain('سعيد')
   })
 })
 
@@ -956,6 +987,7 @@ describe('MohammadLedgerApp history filtering', () => {
         onClose={() => {}}
         onEditMovement={() => {}}
         onUpdateAccount={() => {}}
+        onUpdateSummaryScope={() => {}}
         onReconcile={() => {}}
         onAddAttachment={() => {}}
         onDeleteAttachment={() => {}}
@@ -968,6 +1000,7 @@ describe('MohammadLedgerApp history filtering', () => {
     expect(markup).toContain('· ملغي')
     expect(markup).toContain('مطابقة الرصيد')
     expect(markup).toContain('الرصيد الفعلي بالدينار')
+    expect(markup).toContain('داخل الصافي')
     expect(markup).not.toContain('>حفظ التعديل</button>')
   })
 })

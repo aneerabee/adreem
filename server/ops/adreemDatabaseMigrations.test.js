@@ -6,6 +6,7 @@ const ledgerSql = readFileSync(new URL('../../supabase/migrations/20260820213628
 const botCasSql = readFileSync(new URL('../../supabase/migrations/20260820213629_add_adreem_bot_state_claim_cas.sql', import.meta.url), 'utf8')
 const botEffectCasSql = readFileSync(new URL('../../supabase/migrations/20260820213631_add_adreem_bot_effect_cas.sql', import.meta.url), 'utf8')
 const legacyCleanupSql = readFileSync(new URL('../../supabase/migrations/20260820213833_remove_empty_legacy_state_from_v3.sql', import.meta.url), 'utf8')
+const summaryScopeSql = readFileSync(new URL('../../supabase/migrations/20260822090000_add_summary_scope_and_record_only.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -93,5 +94,14 @@ describe('ADREEM v3 database migration invariants', () => {
       .toBeLessThan(legacyCleanupSql.indexOf("execute 'drop table public.ml_state'"))
     expect(legacyCleanupSql.indexOf("raise exception 'ADREEM_LEGACY_BACKUP_NOT_EMPTY'"))
       .toBeLessThan(legacyCleanupSql.indexOf("execute 'drop table adreem_private.ml_state_backup_20260819'"))
+  })
+
+  it('supports record-only movements without permitting a silent posting-mode change', () => {
+    expect(summaryScopeSql).toContain("'record_only'")
+    expect(summaryScopeSql).toContain('ADREEM_RECORD_ONLY_NOTE_REQUIRED')
+    expect(summaryScopeSql).toContain('ADREEM_RECORD_ONLY_ACCOUNTS_NOT_ALLOWED')
+    expect(summaryScopeSql).toContain('ADREEM_MOVEMENT_POSTING_MODE_IMMUTABLE')
+    expect(summaryScopeSql).toContain('create trigger adreem_prevent_record_only_mode_flip')
+    expect(summaryScopeSql).toContain("when 'record_only' then")
   })
 })

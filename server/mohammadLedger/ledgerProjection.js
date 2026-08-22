@@ -257,7 +257,11 @@ export function validateLedgerProjection(sourceState = {}, options = {}) {
       errors.push({ code: 'invalid-movement-entry-amount', movementId: movement.id })
       continue
     }
-    if (!entries.length) errors.push({ code: 'posted-movement-without-entries', movementId: movement.id })
+    if (!entries.length && movement.type !== 'record_only') errors.push({ code: 'posted-movement-without-entries', movementId: movement.id })
+    if (movement.type === 'record_only') {
+      if (!String(movement.note || '').trim()) errors.push({ code: 'record-only-note-required', movementId: movement.id })
+      if (movement.sourceAccountId || movement.destinationAccountId) errors.push({ code: 'record-only-account-reference', movementId: movement.id })
+    }
     for (const entry of entries) {
       if (!accountById.has(entry.accountId)) {
         errors.push({ code: 'missing-posting-account', movementId: movement.id, accountId: entry.accountId })

@@ -29,6 +29,7 @@ import {
   historyKeyboard,
   mainMenuKeyboard,
   movementTypeKeyboard,
+  netTargetKeyboard,
   reconciliationAccountKeyboard,
   reconciliationConfirmKeyboard,
   reconciliationCurrencyKeyboard,
@@ -148,6 +149,19 @@ const routeCases = [
         accountBlockquote(personAccount, personBucket),
       ].join('\n'),
       reply_markup: accountsBrowserKeyboard([cashBucket, personBucket], { page: 0, pageCount: 2 }),
+    },
+  },
+  {
+    name: 'net calculator and separate account controls',
+    payload: {
+      text: [
+        '<b>ADREEM · الصافي</b>',
+        '<blockquote>دينار: 10,000 د.ل\nدولار: 250 $\n\nالصافي: 11,875 د.ل\nالسعر: 7.5</blockquote>',
+        '<b>الحسابات الداخلة · 2</b>',
+        '<code>صفحة 1/2</code>',
+        '<blockquote>لا توجد حسابات داخلة.</blockquote>',
+      ].join('\n'),
+      reply_markup: netTargetKeyboard(CURRENCIES.DINAR, { showAccounts: true, page: 0, pageCount: 2 }),
     },
   },
   {

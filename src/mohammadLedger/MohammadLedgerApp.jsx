@@ -3,7 +3,7 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, Landmark, ReceiptText, Search, SlidersHorizontal, UserRound, WalletCards, Wrench, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, ReceiptText, Search, SlidersHorizontal, UserRound, WalletCards, Wrench, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
@@ -19,6 +19,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, can
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUploadedAttachment, getMohammadPersistenceMode, loadAdreemMovementPage, loadMohammadPersistedState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, saveMohammadPersistedState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './mohammadPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeMohammadAccounts, sameRecordVersions } from './ledgerState'
+import { ACCOUNT_SUMMARY_SCOPES, accountSummaryScope, accountSupportsNetScope, buildNetPosition, convertNetPosition, isAccountIncludedInNet, splitBalanceRowsByScope } from './ledgerScope'
 import { ledgerNavigationSearch, readLedgerNavigation } from './ledgerNavigation'
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
 import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccountsForRole, sameLogicalAccount } from './movementAccounts'
@@ -69,6 +70,7 @@ const accountGroupTabs = [
   { key: 'people', label: 'الناس', title: 'الناس' },
   { key: 'assets', label: 'متابعة', title: 'الأصول والمشاريع' },
   { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
+  { key: 'separate', label: 'منفصل', title: 'الحسابات المنفصلة' },
   { key: 'review', label: 'ناقص', title: 'مراجعة' },
 ]
 
@@ -109,6 +111,12 @@ const movementOptionGroups = [
     hint: 'بيع أو شراء',
     types: [MOVEMENT_TYPES.USD_SALE, MOVEMENT_TYPES.USD_PURCHASE],
   },
+  {
+    key: 'records',
+    title: 'متابعة',
+    hint: 'دون تغيير الأرصدة',
+    types: [MOVEMENT_TYPES.RECORD_ONLY],
+  },
 ]
 
 function MovementTypeIcon({ type }) {
@@ -119,6 +127,7 @@ function MovementTypeIcon({ type }) {
   if (type === MOVEMENT_TYPES.CASH_DEPOSIT) return <Landmark {...props} />
   if (type === MOVEMENT_TYPES.CASH_WITHDRAWAL) return <ArrowUpFromLine {...props} />
   if (type === MOVEMENT_TYPES.USD_SALE || type === MOVEMENT_TYPES.USD_PURCHASE) return <CircleDollarSign {...props} />
+  if (type === MOVEMENT_TYPES.RECORD_ONLY) return <NotebookPen {...props} />
   return <Banknote {...props} />
 }
 
@@ -159,6 +168,7 @@ function AccountGroupIcon({ groupKey }) {
   if (groupKey === 'money') return <WalletCards {...props} />
   if (groupKey === 'expenses') return <ReceiptText {...props} />
   if (groupKey === 'review') return <CircleAlert {...props} />
+  if (groupKey === 'separate') return <EyeOff {...props} />
   return <Boxes {...props} />
 }
 
@@ -985,6 +995,44 @@ function BalanceAmountPair({ value }) {
   )
 }
 
+export function NetPositionPanel({ position, rate, targetCurrency, onRateChange, onTargetCurrencyChange, onClose }) {
+  const conversion = convertNetPosition(position, rate, targetCurrency)
+  return (
+    <Motion.section className="adreem-net-panel" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={UI_MOTION_TRANSITION} aria-label="الصافي العام">
+      <header>
+        <span><Calculator aria-hidden="true" size={17} /><strong>الصافي</strong></span>
+        <button type="button" aria-label="إغلاق الصافي" title="إغلاق" onClick={onClose}><X aria-hidden="true" size={16} /></button>
+      </header>
+      <div className="adreem-net-raw">
+        <span><small>دينار</small><strong>{money(position.dinar, CURRENCIES.DINAR)}</strong></span>
+        <span><small>دولار</small><strong>{money(position.usd, CURRENCIES.USD)}</strong></span>
+      </div>
+      <div className="adreem-net-calc">
+        <NumericEntry compact hideLabel label="سعر الدولار" value={rate} onChange={onRateChange} placeholder="0" allowDecimal />
+        <div className="adreem-net-target" aria-label="عملة الصافي">
+          <button type="button" className={targetCurrency === CURRENCIES.DINAR ? 'is-active' : ''} onClick={() => onTargetCurrencyChange(CURRENCIES.DINAR)}>دينار</button>
+          <button type="button" className={targetCurrency === CURRENCIES.USD ? 'is-active' : ''} onClick={() => onTargetCurrencyChange(CURRENCIES.USD)}>دولار</button>
+        </div>
+        <output className={conversion.ok && conversion.amount < 0 ? 'is-negative' : ''}>
+          <small>النتيجة</small>
+          <strong>{conversion.ok ? money(conversion.amount, conversion.currency) : 'أدخل السعر'}</strong>
+        </output>
+      </div>
+      <details className="adreem-net-accounts">
+        <summary><span>داخل الصافي</span><b>{formatCount(position.accountCount)}</b><ChevronDown aria-hidden="true" size={15} /></summary>
+        <div>
+          {position.contributions.map((item) => (
+            <article key={item.accountId}>
+              <span><AccountChoiceIcon account={item.account} size={15} /><strong>{protectedAccountPrimaryName(item.account)}</strong></span>
+              <span>{money(item.dinar, CURRENCIES.DINAR)} · {money(item.usd, CURRENCIES.USD)}</span>
+            </article>
+          ))}
+        </div>
+      </details>
+    </Motion.section>
+  )
+}
+
 function compactDisplayValue(account, amount, currency) {
   const value = Number(amount || 0)
   if (account?.valueKind === VALUE_KINDS.RECEIVABLE) return value > 0 ? `لي ${money(value, currency)}` : `عليّ ${money(Math.abs(value), currency)}`
@@ -1775,7 +1823,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
   )
 }
 
-export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements }) {
+export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, onClose, onEditMovement, onUpdateAccount, onUpdateSummaryScope, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements }) {
   if (!bucket) return null
 
   const { account, dinar, usd, postedCount } = bucket
@@ -1791,6 +1839,8 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
   const canReconcileBalance = account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK
   const primaryBalance = accountPrimaryBalance(bucket)
   const profileBalanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
+  const supportsSummaryScope = accountSupportsNetScope(account)
+  const summaryScope = accountSummaryScope(account)
 
   return (
     <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
@@ -1831,6 +1881,17 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
           </section>
 
           <section className="ml3-profile-tools">
+            {supportsSummaryScope ? (
+              <div className={`ml3-profile-scope ${summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? 'is-separate' : 'is-included'}`}>
+                <span>
+                  {summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? <EyeOff aria-hidden="true" size={17} /> : <Calculator aria-hidden="true" size={17} />}
+                  <span><strong>{summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? 'حساب منفصل' : 'داخل الصافي'}</strong><small>الرصيد والحركات محفوظة دائمًا</small></span>
+                </span>
+                <button type="button" onClick={() => onUpdateSummaryScope?.(account.id, summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? ACCOUNT_SUMMARY_SCOPES.INCLUDED : ACCOUNT_SUMMARY_SCOPES.SEPARATE)}>
+                  {summaryScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE ? 'إدخاله' : 'فصله'}
+                </button>
+              </div>
+            ) : null}
             {canReconcileBalance ? (
               <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
                 <h3>مطابقة الرصيد</h3>
@@ -1922,7 +1983,9 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
                     <div>
                       <strong>{movementLabels[movement.type] || movement.type}</strong>
                       <span>
-                        {source ? protectedAccountLabel(source) : 'بدون مصدر'} ← {destination ? protectedAccountLabel(destination) : 'بدون وجهة'}
+                        {movement.type === MOVEMENT_TYPES.RECORD_ONLY
+                          ? preserveUiData(movement.note || 'تسجيل للمتابعة فقط')
+                          : <>{source ? protectedAccountLabel(source) : 'بدون مصدر'} ← {destination ? protectedAccountLabel(destination) : 'بدون وجهة'}</>}
                       </span>
                       <small>{movementDateTime(movement.createdAt || movement.updatedAt)} · {movementStatusLabel(movement.status)}</small>
                       {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
@@ -2310,6 +2373,9 @@ export default function MohammadLedgerApp() {
   const [accountQuery, setAccountQuery] = useState('')
   const [counterpartyBalanceFilter, setCounterpartyBalanceFilter] = useState('all')
   const [focusedCounterpartyId, setFocusedCounterpartyId] = useState('')
+  const [isNetOpen, setIsNetOpen] = useState(false)
+  const [netRate, setNetRate] = useState('')
+  const [netTargetCurrency, setNetTargetCurrency] = useState(CURRENCIES.DINAR)
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
   const [activeAccountDetail, setActiveAccountDetail] = useState('')
@@ -2492,17 +2558,20 @@ export default function MohammadLedgerApp() {
   const accountWizardHint = currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING
     ? 'اكتب صفرًا إذا لا يوجد رصيد سابق.'
     : ''
+  const scopedBalances = useMemo(() => splitBalanceRowsByScope(balances), [balances])
   const balancesByKind = useMemo(() => {
     const groups = {
       people: [],
       money: [],
       assets: [],
       expenses: [],
+      separate: [],
       review: [],
     }
     for (const bucket of balances) {
       const kind = bucket.account.valueKind
       if (bucket.account.status === ACCOUNT_STATUSES.NEEDS_REVIEW || kind === VALUE_KINDS.REVIEW) groups.review.push(bucket)
+      else if (accountSummaryScope(bucket.account) === ACCOUNT_SUMMARY_SCOPES.SEPARATE) groups.separate.push(bucket)
       else if (kind === VALUE_KINDS.RECEIVABLE) groups.people.push(bucket)
       else if (kind === VALUE_KINDS.CASH || kind === VALUE_KINDS.BANK) groups.money.push(bucket)
       else if (kind === VALUE_KINDS.ASSET || kind === VALUE_KINDS.PROJECT) groups.assets.push(bucket)
@@ -2595,13 +2664,14 @@ export default function MohammadLedgerApp() {
     return balances.reduce(
       (acc, bucket) => {
         const kind = bucket.account.valueKind
-        if (kind === VALUE_KINDS.CASH) acc.cash += bucket.dinar
-        if (kind === VALUE_KINDS.BANK) acc.bank += bucket.dinar
-        if (kind === VALUE_KINDS.RECEIVABLE && bucket.dinar > 0) acc.peopleOweMe += bucket.dinar
-        if (kind === VALUE_KINDS.RECEIVABLE && bucket.dinar < 0) acc.iOwePeople += Math.abs(bucket.dinar)
-        if (kind === VALUE_KINDS.ASSET) acc.assets += bucket.dinar
+        const included = isAccountIncludedInNet(bucket.account)
+        if (included && kind === VALUE_KINDS.CASH) acc.cash += bucket.dinar
+        if (included && kind === VALUE_KINDS.BANK) acc.bank += bucket.dinar
+        if (included && kind === VALUE_KINDS.RECEIVABLE && bucket.dinar > 0) acc.peopleOweMe += bucket.dinar
+        if (included && kind === VALUE_KINDS.RECEIVABLE && bucket.dinar < 0) acc.iOwePeople += Math.abs(bucket.dinar)
+        if (included && kind === VALUE_KINDS.ASSET) acc.assets += bucket.dinar
         if (kind === VALUE_KINDS.EXPENSE) acc.expenses += bucket.dinar
-        acc.usd += bucket.usd
+        if (included) acc.usd += bucket.usd
         return acc
       },
       {
@@ -2615,7 +2685,8 @@ export default function MohammadLedgerApp() {
       },
     )
   }, [balances])
-  const balanceOverview = useMemo(() => buildBalanceOverview(balances), [balances])
+  const balanceOverview = useMemo(() => buildBalanceOverview(scopedBalances.included), [scopedBalances.included])
+  const netPosition = useMemo(() => buildNetPosition(balances), [balances])
 
   const movementConfig = movementConfigFor(movementDraft.type)
   const movementSourceRequired = movementNeedsSource(movementDraft.type)
@@ -3414,7 +3485,11 @@ export default function MohammadLedgerApp() {
         }
       }
       setMovements((current) => (originalMovement ? current.map((item) => (item.id === originalMovement.id ? movement : item)) : [...current, movement]))
-      const baseFeedback = movement.status === MOVEMENT_STATUSES.POSTED ? (originalMovement ? 'تم تعديل الحركة وتحديث الأرصدة.' : 'تم الحفظ وتحديث الأرصدة.') : 'الحركة ناقصة وتحتاج مراجعة.'
+      const baseFeedback = movement.status === MOVEMENT_STATUSES.POSTED
+        ? movement.type === MOVEMENT_TYPES.RECORD_ONLY
+          ? originalMovement ? 'تم تعديل التسجيل دون تغيير الأرصدة.' : 'تم حفظ التسجيل دون تغيير الأرصدة.'
+          : originalMovement ? 'تم تعديل الحركة وتحديث الأرصدة.' : 'تم الحفظ وتحديث الأرصدة.'
+        : 'الحركة ناقصة وتحتاج مراجعة.'
       setFeedback(attachmentError ? `${baseFeedback} لم يتم رفع المرفق: ${attachmentError}` : baseFeedback)
       const attachment = createAttachment({
         movementId: movement.id,
@@ -3662,6 +3737,44 @@ export default function MohammadLedgerApp() {
     }))
     setAccountQuery('')
     setFeedback('تم تعديل الحساب.')
+  }
+
+  function updateAccountSummaryScope(accountId, nextScope) {
+    const currentAccount = accounts.find((account) => account.id === accountId)
+    if (!currentAccount || !accountSupportsNetScope(currentAccount)) return
+    const nextIsSeparate = nextScope === ACCOUNT_SUMMARY_SCOPES.SEPARATE
+    const confirmation = nextIsSeparate
+      ? 'سيبقى الرصيد والحركات محفوظين، وسيخرج هذا الحساب من الصافي فقط. هل تريد المتابعة؟'
+      : 'سيعود هذا الحساب إلى الأرصدة والصافي العام. هل تريد المتابعة؟'
+    if (typeof window !== 'undefined' && !window.confirm(translateUiText(confirmation))) return
+    const result = prepareAccountUpdate({
+      accounts,
+      movements,
+      reconciliations: ledgerExtras.reconciliations || [],
+      recurringRules: ledgerExtras.recurringRules || [],
+      dimensions: ledgerExtras.dimensions || [],
+      accountId,
+      draft: { ...currentAccount, summaryScope: nextScope },
+    })
+    if (!result.ok) {
+      setFeedback(result.errors.map((error) => error.message).join(' '))
+      return
+    }
+    setAccounts(result.accounts)
+    setLedgerExtras((current) => ({
+      ...current,
+      auditEvents: [
+        ...(current.auditEvents || []),
+        createAuditEvent('account.updated', {
+          accountId,
+          accountIds: [accountId],
+          before: accountEditSnapshot(currentAccount),
+          after: accountEditSnapshot(result.account),
+          source: 'web',
+        }),
+      ],
+    }))
+    setFeedback(nextIsSeparate ? 'تم فصل الحساب عن الصافي.' : 'تم إدخال الحساب في الصافي.')
   }
 
   function reconcileAccount(event, accountId, currentDinar, currentUsd) {
@@ -4026,6 +4139,7 @@ export default function MohammadLedgerApp() {
       money: filterRows(moneyRows),
       assets: filterRows(balancesByKind.assets || []),
       expenses: filterRows(balancesByKind.expenses || []),
+      separate: filterRows(balancesByKind.separate || []),
       review: filterRows(balancesByKind.review || []),
     }
     const rows = accountRowsByGroup[activeGroup.key] || []
@@ -4055,6 +4169,34 @@ export default function MohammadLedgerApp() {
             <span><b>عليّ للناس</b><BalanceAmountPair value={balanceOverview.payable} /></span>
           </Motion.button>
         </div>
+
+        <div className="adreem-net-bar">
+          <button type="button" aria-expanded={isNetOpen} onClick={() => setIsNetOpen((current) => !current)}>
+            <Calculator aria-hidden="true" size={16} />
+            <span>عرض الصافي</span>
+            <b>{formatCount(netPosition.accountCount)}</b>
+          </button>
+          {balancesByKind.separate.length ? (
+            <button type="button" className="is-separate" onClick={() => setActiveAccountGroup('separate')}>
+              <EyeOff aria-hidden="true" size={16} />
+              <span>حسابات منفصلة</span>
+              <b>{formatCount(balancesByKind.separate.length)}</b>
+            </button>
+          ) : null}
+        </div>
+
+        <AnimatePresence initial={false}>
+          {isNetOpen ? (
+            <NetPositionPanel
+              position={netPosition}
+              rate={netRate}
+              targetCurrency={netTargetCurrency}
+              onRateChange={setNetRate}
+              onTargetCurrencyChange={setNetTargetCurrency}
+              onClose={() => setIsNetOpen(false)}
+            />
+          ) : null}
+        </AnimatePresence>
 
         <div className="ml3-balances-workspace">
           <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
@@ -4616,7 +4758,7 @@ export default function MohammadLedgerApp() {
                   <section className="ml3-step ml3-step--note is-open">
                     <label>
                       ملاحظة
-                      <textarea value={movementDraft.note} onChange={(event) => updateMovementDraft('note', event.target.value)} placeholder="اختياري" />
+                      <textarea value={movementDraft.note} onChange={(event) => updateMovementDraft('note', event.target.value)} placeholder={movementConfig.requiresNote ? 'اكتب ما تريد تسجيله' : 'اختياري'} />
                     </label>
                     <div className="ml3-extra-grid">
                       {movementUsesDimension ? (
@@ -4667,7 +4809,7 @@ export default function MohammadLedgerApp() {
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
                         <ChevronRight aria-hidden="true" size={17} /> رجوع
                       </button>
-                      <button type="button" className="ml3-step-next" onClick={advanceMovementStep}>
+                      <button type="button" className="ml3-step-next" disabled={movementConfig.requiresNote && !movementDraft.note.trim()} onClick={advanceMovementStep}>
                         مراجعة <ChevronLeft aria-hidden="true" size={17} />
                       </button>
                     </div>
@@ -4688,6 +4830,13 @@ export default function MohammadLedgerApp() {
                           <strong>{money(effect.after, effect.currency)}</strong>
                         </div>
                       ))}
+                      {preview.validation.ok && movementDraft.type === MOVEMENT_TYPES.RECORD_ONLY ? (
+                        <div className="ml3-effect ml3-effect--record-only">
+                          <NotebookPen aria-hidden="true" size={17} />
+                          <span>تسجيل للمتابعة فقط</span>
+                          <strong>لا يغيّر أي رصيد</strong>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="ml3-step-controls">
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
@@ -4980,7 +5129,7 @@ export default function MohammadLedgerApp() {
           </section>
         ) : null}
       </section>
-      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
+      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onUpdateSummaryScope={updateAccountSummaryScope} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
       </AdreemChrome>
     </MotionConfig>
   )

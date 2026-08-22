@@ -215,6 +215,25 @@ describe('telegram and web movement parity', () => {
     expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
   })
 
+  it('keeps record-only movements identical and posting-free in web and Telegram', async () => {
+    const state = createMohammadFallbackState()
+    const draft = {
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 3_200,
+      currency: CURRENCIES.USD,
+      sourceAccountId: '',
+      destinationAccountId: '',
+      note: 'مرجع لا يدخل في الأرصدة',
+    }
+
+    const webMovement = postMovement(draft, state.accounts, state.movements)
+    const telegramMovement = await telegramMovementFor(draft, state)
+
+    expect(comparableMovement(telegramMovement)).toEqual(comparableMovement(webMovement))
+    expect(buildPostingEntries(telegramMovement)).toEqual([])
+    expect(telegramMovement.status).toBe(MOVEMENT_STATUSES.POSTED)
+  })
+
   it('posts a USD transfer with the same compatible-account effect as core/web', async () => {
     const state = {
       ...createMohammadFallbackState(),

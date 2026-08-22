@@ -296,4 +296,21 @@ describe('ADREEM relational migration projection', () => {
     expect(result.errors).toContainEqual(expect.objectContaining({ code: 'missing-posting-account', movementId: 'fractional' }))
     expect(result.errors).toContainEqual(expect.objectContaining({ code: 'negative-owned-balance', accountId: 'cash' }))
   })
+
+  it('accepts posted record-only movements without materialized entries', () => {
+    const source = sourceFixture()
+    source.movements.push({
+      id: 'record-only-note',
+      type: 'record_only',
+      status: 'posted',
+      amount: 700,
+      currency: 'LYD',
+      note: 'متابعة فقط دون أثر مالي',
+    })
+
+    const result = validateLedgerProjection(source)
+
+    expect(result.ok).toBe(true)
+    expect(projectMovementEntries(result.state).filter((entry) => entry.movementId === 'record-only-note')).toEqual([])
+  })
 })

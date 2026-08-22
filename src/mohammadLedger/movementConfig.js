@@ -12,6 +12,7 @@ export const movementLabels = {
   [MOVEMENT_TYPES.USD_PURCHASE]: 'اشتريت دولار',
   [MOVEMENT_TYPES.EXTERNAL_INCOME]: 'دخل',
   [MOVEMENT_TYPES.CORRECTION]: 'تعديل رصيد',
+  [MOVEMENT_TYPES.RECORD_ONLY]: 'تسجيل فقط',
 }
 
 export const movementTypeOptions = [
@@ -56,6 +57,12 @@ export const movementTypeOptions = [
     label: 'اشتريت دولار',
     detail: 'دينار يخرج ودولار يدخل',
     tone: 'purchase',
+  },
+  {
+    type: MOVEMENT_TYPES.RECORD_ONLY,
+    label: 'تسجيل فقط',
+    detail: 'معلومة للمتابعة دون تغيير الأرصدة',
+    tone: 'record',
   },
 ]
 
@@ -175,6 +182,17 @@ export const movementConfigs = {
     destinationQuestion: 'أي حساب تريد تصحيحه؟',
     routeTitle: 'التصحيح',
   },
+  [MOVEMENT_TYPES.RECORD_ONLY]: {
+    amountLabel: 'القيمة المرجعية',
+    currencyLocked: false,
+    needsSource: false,
+    needsDestination: false,
+    needsRate: false,
+    requiresNote: true,
+    sourceLabel: 'بدون حساب',
+    sourceQuestion: 'لا يحتاج حسابًا.',
+    routeTitle: 'تسجيل فقط',
+  },
 }
 
 export const movementDefaultAccounts = {
@@ -188,6 +206,7 @@ export const movementDefaultAccounts = {
   [MOVEMENT_TYPES.USD_PURCHASE]: { sourceAccountId: '', destinationAccountId: '' },
   [MOVEMENT_TYPES.EXTERNAL_INCOME]: { sourceAccountId: '', destinationAccountId: '' },
   [MOVEMENT_TYPES.CORRECTION]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.RECORD_ONLY]: { sourceAccountId: '', destinationAccountId: '' },
 }
 
 export const MOVEMENT_ENTRY_STEPS = {
@@ -257,5 +276,6 @@ export function movementTone(type) {
   if (type === MOVEMENT_TYPES.TRANSFER) return 'transfer'
   if (type === MOVEMENT_TYPES.CASH_DEPOSIT) return 'deposit'
   if (type === MOVEMENT_TYPES.CASH_WITHDRAWAL) return 'withdrawal'
+  if (type === MOVEMENT_TYPES.RECORD_ONLY) return 'record'
   return 'neutral'
 }

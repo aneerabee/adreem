@@ -69,6 +69,12 @@
   --balance-focus-soft: var(--finance-coral-soft);
 }
 
+.ml3-balances-surface--separate {
+  --balance-focus: #685b82;
+  --balance-focus-dark: #493d61;
+  --balance-focus-soft: #f1eef6;
+}
+
 .ml3-balance-ledger {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -252,6 +258,142 @@
 .ml3-account-switcher--assets { --group-tone: var(--finance-blue); --group-soft: var(--finance-blue-soft); }
 .ml3-account-switcher--expenses,
 .ml3-account-switcher--review { --group-tone: var(--finance-coral); --group-soft: var(--finance-coral-soft); }
+.ml3-account-switcher--separate { --group-tone: #685b82; --group-soft: #f1eef6; }
+
+.adreem-net-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.adreem-net-bar button {
+  min-height: 34px;
+  display: inline-grid;
+  grid-template-columns: 17px auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--finance-blue) 22%, var(--finance-line));
+  border-radius: 7px;
+  background: var(--finance-paper);
+  color: var(--finance-blue-dark);
+  font-size: 0.68rem;
+  font-weight: 780;
+  box-shadow: var(--finance-shadow-small);
+}
+
+.adreem-net-bar button b {
+  min-width: 18px;
+  color: var(--finance-muted);
+  font-size: 0.6rem;
+  text-align: center;
+}
+
+.adreem-net-bar button.is-separate {
+  border-color: #d8d1e4;
+  color: #594b72;
+}
+
+.adreem-net-panel {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.65fr) minmax(330px, 1.35fr);
+  gap: 8px 14px;
+  padding: 10px;
+  border: 1px solid #d8d1e4;
+  border-inline-start: 3px solid #685b82;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f1eef6 55%, white);
+  box-shadow: 0 9px 22px rgba(50, 39, 67, 0.08);
+}
+
+.adreem-net-panel > header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adreem-net-panel > header > span { display: inline-flex; align-items: center; gap: 6px; color: #493d61; font-size: 0.76rem; }
+.adreem-net-panel > header > button { width: 30px; height: 30px; min-height: 30px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #685b82; }
+
+.adreem-net-raw {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.adreem-net-raw > span,
+.adreem-net-calc > output {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-height: 48px;
+  padding: 6px 8px;
+  border: 1px solid #e1dce9;
+  border-radius: 7px;
+  background: white;
+}
+
+.adreem-net-raw small,
+.adreem-net-calc output small { color: var(--finance-muted); font-size: 0.56rem; }
+.adreem-net-raw strong,
+.adreem-net-calc output strong { overflow: hidden; color: var(--finance-ink); font-size: 0.76rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-net-calc output.is-negative strong { color: var(--finance-debt-dark); }
+
+.adreem-net-calc {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(90px, 0.8fr) auto minmax(115px, 1fr);
+  align-items: stretch;
+  gap: 6px;
+}
+
+.adreem-net-calc .ml3-number-compact input { height: 48px; min-height: 48px; border-color: #d8d1e4; background: white; }
+.adreem-net-target { display: grid; grid-template-columns: repeat(2, minmax(46px, 1fr)); gap: 2px; padding: 2px; border: 1px solid #d8d1e4; border-radius: 7px; background: #ebe7f1; }
+.adreem-net-target button { min-height: 42px; border: 0; border-radius: 5px; background: transparent; color: #685b82; font-size: 0.62rem; font-weight: 800; }
+.adreem-net-target button.is-active { background: white; color: #493d61; box-shadow: 0 2px 7px rgba(50, 39, 67, 0.11); }
+
+.adreem-net-accounts {
+  grid-column: 1 / -1;
+  border-top: 1px solid #ddd7e6;
+}
+
+.adreem-net-accounts > summary { min-height: 32px; display: grid; grid-template-columns: auto auto 16px; justify-content: start; align-items: center; gap: 6px; color: #594b72; font-size: 0.66rem; cursor: pointer; list-style: none; }
+.adreem-net-accounts > summary::-webkit-details-marker { display: none; }
+.adreem-net-accounts > summary b { font-size: 0.6rem; }
+.adreem-net-accounts[open] > summary svg { transform: rotate(180deg); }
+.adreem-net-accounts > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 10px; padding-top: 4px; }
+.adreem-net-accounts article { min-width: 0; display: grid; grid-template-columns: minmax(90px, 1fr) auto; align-items: center; gap: 7px; min-height: 31px; border-top: 1px solid #e6e1ec; }
+.adreem-net-accounts article > span { min-width: 0; overflow: hidden; color: var(--finance-muted); font-size: 0.58rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-net-accounts article > span:first-child { display: inline-flex; align-items: center; gap: 5px; color: var(--finance-ink); }
+
+.ml3-profile-scope {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--finance-blue) 18%, var(--finance-line));
+  border-inline-start: 3px solid var(--finance-blue);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--finance-blue-soft) 45%, white);
+}
+
+.ml3-profile-scope.is-separate { border-color: #d8d1e4; border-inline-start-color: #685b82; background: #f5f2f8; }
+.ml3-profile-scope > span { min-width: 0; display: inline-flex; align-items: center; gap: 7px; color: var(--finance-blue-dark); }
+.ml3-profile-scope.is-separate > span { color: #594b72; }
+.ml3-profile-scope > span > span { min-width: 0; display: grid; gap: 1px; }
+.ml3-profile-scope strong { font-size: 0.68rem; }
+.ml3-profile-scope small { color: var(--finance-muted); font-size: 0.56rem; }
+.ml3-profile-scope > button { min-height: 31px; padding: 4px 9px; border: 1px solid currentColor; border-radius: 6px; background: white; color: inherit; font-size: 0.62rem; font-weight: 800; }
+
+.ml3-effect--record-only { grid-template-columns: 20px minmax(0, 1fr) auto; color: #594b72; }
+.ml3-effect--record-only strong { color: #594b72; }
 
 .ml3-account-switcher button .adreem-motion-selection {
   inset: 0;
@@ -913,7 +1055,7 @@
 
   .ml3-balances-workspace { min-height: 0; grid-template-columns: 1fr; border-radius: 8px; }
   .ml3-account-switcher {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 2px;
     padding: 4px;
     border-inline-end: 0;
@@ -925,6 +1067,8 @@
   .ml3-account-switcher button > svg { width: 16px; height: 16px; }
   .ml3-account-switcher button > strong { max-width: 100%; font-size: 0.59rem; }
   .ml3-account-switcher button > span { position: absolute; z-index: 2; inset-block-start: 3px; inset-inline-end: 4px; font-size: 0.53rem; }
+  .adreem-net-panel > header > button { width: 38px; height: 38px; min-height: 38px; }
+  .ml3-profile-scope > button { min-height: 38px; padding-inline: 11px; }
   .adreem-balance-pane-motion { padding: 8px; }
   .ml3-balance-pane-head { grid-template-columns: minmax(0, 1fr) minmax(132px, 45%); gap: 6px; margin-bottom: 7px; padding-bottom: 7px; }
   .ml3-balance-pane-title { gap: 6px; }
@@ -999,7 +1143,7 @@
   .ml3-balance-ledger button { min-height: var(--finance-summary); }
   .ml3-balance-pair strong,
   .ml3-balance-pair small { font-size: 0.58rem; }
-  .ml3-account-switcher button > strong { font-size: 0.56rem; }
+  .ml3-account-switcher button > strong { font-size: 0.57rem; }
   .ml3-balance-pane-head { grid-template-columns: 1fr; }
   .ml3-account-toolbar { width: 100%; }
   .adreem-counterparty-focus { grid-template-columns: 27px minmax(0, 1fr) 16px; padding-inline: 6px; }
@@ -1010,6 +1154,18 @@
   .ml3-balances-surface .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(88px, auto); }
   .ml3-number-entry { grid-template-columns: minmax(96px, 0.5fr) minmax(0, 1.5fr); }
   .ml3-number-display { min-height: 131px; }
+  .adreem-net-panel { grid-template-columns: 1fr; gap: 6px; padding: 8px; }
+  .adreem-net-panel > header,
+  .adreem-net-accounts { grid-column: 1; }
+  .adreem-net-calc { grid-template-columns: minmax(80px, 0.8fr) minmax(92px, auto) minmax(105px, 1fr); }
+  .adreem-net-accounts > div { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 390px) {
+  .adreem-net-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adreem-net-bar button { width: 100%; grid-template-columns: 16px minmax(0, 1fr) auto; padding-inline: 7px; }
+  .adreem-net-calc { grid-template-columns: 1fr 1fr; }
+  .adreem-net-calc output { grid-column: 1 / -1; }
 }
 
 /* Mobile uses one page scroll; fixed nested viewports caused clipped cards and a stranded header. */

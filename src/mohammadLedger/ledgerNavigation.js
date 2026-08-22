@@ -1,6 +1,6 @@
 const SECTION_KEYS = new Set(['entry', 'accounts', 'history', 'review'])
 const ENTRY_MODE_KEYS = new Set(['movement', 'account'])
-const ACCOUNT_GROUP_KEYS = new Set(['money', 'people', 'assets', 'expenses', 'review'])
+const ACCOUNT_GROUP_KEYS = new Set(['money', 'people', 'assets', 'expenses', 'separate', 'review'])
 
 export const DEFAULT_LEDGER_NAVIGATION = Object.freeze({
   section: 'entry',

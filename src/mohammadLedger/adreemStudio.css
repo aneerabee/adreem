@@ -1842,7 +1842,7 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   .ml3-profile-identity > i { width: 31px; height: 31px; }
   .ml3-profile-head h2 { font-size: 0.9rem; }
   .ml3-profile-head p { font-size: 0.59rem; }
-  .ml3-profile-head > button { width: 33px; height: 33px; min-height: 33px; }
+  .ml3-profile-head > button { width: 40px; height: 40px; min-height: 40px; }
   .ml3-profile-body {
     display: grid;
     grid-template-columns: 1fr;

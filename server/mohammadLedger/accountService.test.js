@@ -351,4 +351,59 @@ describe('telegram account service', () => {
     expect(repository.state.accounts.find((item) => item.id === person.id).currencyKind).toBe(ACCOUNT_CURRENCY_KINDS.DINAR)
     expect(repository.state.auditEvents).toEqual([])
   })
+
+  it('allows separating a used account from the net while preserving structure and audit history', async () => {
+    const cash = createAccount({
+      id: 'cash-used-scope',
+      ownerName: 'أنا',
+      subAccountName: 'كاش',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+      openingDinar: 500,
+    })
+    const person = createAccount({
+      id: 'person-used-scope',
+      ownerName: 'مالك',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+    })
+    const transfer = postMovement({
+      id: 'posted-scope',
+      type: MOVEMENT_TYPES.TRANSFER,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: cash.id,
+      destinationAccountId: person.id,
+    }, [cash, person], [])
+    const repository = memoryRepository({
+      ...emptyState(),
+      accounts: [cash, person],
+      movements: [transfer],
+      auditEvents: [],
+    })
+
+    const result = await updateTelegramAccount(repository, person.id, {
+      ...person,
+      summaryScope: 'separate',
+    }, { idempotencyKey: 'scope-after-use' })
+
+    expect(result.rejected).toBeFalsy()
+    expect(result.changes).toEqual([expect.objectContaining({ key: 'summaryScope', before: 'داخل الصافي', after: 'حساب منفصل' })])
+    expect(repository.state.accounts.find((account) => account.id === person.id)).toMatchObject({
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      summaryScope: 'separate',
+    })
+    expect(repository.state.auditEvents.at(-1)).toMatchObject({
+      action: 'account.updated',
+      details: {
+        accountId: person.id,
+        before: { summaryScope: 'included' },
+        after: { summaryScope: 'separate' },
+      },
+    })
+  })
 })

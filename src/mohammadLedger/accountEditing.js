@@ -1,6 +1,7 @@
 import { ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog.js'
 import { accountDetailName, accountNeedsCurrency, accountPresetFor, accountPrimaryName } from './accountConfig.js'
 import { MOVEMENT_STATUSES, validateAccount, validateMovement } from './ledgerCore.js'
+import { ACCOUNT_SUMMARY_SCOPES, accountSummaryScope, accountSupportsNetScope } from './ledgerScope.js'
 
 const STRUCTURE_LOCKING_MOVEMENT_STATUSES = new Set([
   MOVEMENT_STATUSES.POSTED,
@@ -14,6 +15,7 @@ export function accountEditSnapshot(account = {}) {
     type: account.type || '',
     valueKind: account.valueKind || '',
     currencyKind: account.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR,
+    ...(accountSupportsNetScope(account) ? { summaryScope: accountSummaryScope(account) } : {}),
   }
 }
 
@@ -40,6 +42,17 @@ export function accountEditChanges(before = {}, after = {}) {
   const beforeCurrency = accountEditCurrencyLabel(before)
   const afterCurrency = accountEditCurrencyLabel(after)
   if (beforeCurrency !== afterCurrency) changes.push({ key: 'currency', label: 'العملة', before: beforeCurrency || 'بدون عملة', after: afterCurrency || 'بدون عملة' })
+  const beforeScope = accountSummaryScope(before)
+  const afterScope = accountSummaryScope(after)
+  if (beforeScope && afterScope && beforeScope !== afterScope) {
+    changes.push({
+      key: 'summaryScope',
+      label: 'الصافي العام',
+      before: beforeScope === ACCOUNT_SUMMARY_SCOPES.INCLUDED ? 'داخل الصافي' : 'حساب منفصل',
+      after: afterScope === ACCOUNT_SUMMARY_SCOPES.INCLUDED ? 'داخل الصافي' : 'حساب منفصل',
+      protectsUserData: true,
+    })
+  }
   return changes
 }
 
@@ -175,8 +188,12 @@ export function prepareAccountUpdate({
     valueKind: classification.valueKind,
     currencyKind: accountUpdateCurrency(currentAccount, classification, draft.currencyKind),
     notes: draft.notes === undefined ? currentAccount.notes : String(draft.notes || '').trim(),
+    ...(accountSupportsNetScope({ valueKind: classification.valueKind })
+      ? { summaryScope: Object.values(ACCOUNT_SUMMARY_SCOPES).includes(draft.summaryScope) ? draft.summaryScope : accountSummaryScope(currentAccount) }
+      : {}),
     updatedAt,
   }
+  if (!accountSupportsNetScope(nextAccount)) delete nextAccount.summaryScope
   const linkedAccountIds = new Set(currentAccount.counterpartyId
     ? accounts.filter((account) => account.counterpartyId === currentAccount.counterpartyId).map((account) => account.id)
     : [accountId])

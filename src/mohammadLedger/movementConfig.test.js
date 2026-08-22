@@ -45,4 +45,12 @@ describe('mohammad movement config', () => {
     expect(movementAccountCurrencyForRole(MOVEMENT_TYPES.USD_PURCHASE, 'source', CURRENCIES.USD)).toBe(CURRENCIES.DINAR)
     expect(movementAccountCurrencyForRole(MOVEMENT_TYPES.USD_PURCHASE, 'destination', CURRENCIES.DINAR)).toBe(CURRENCIES.USD)
   })
+
+  it('configures record-only as a note-based movement without account sides', () => {
+    const config = movementConfigFor(MOVEMENT_TYPES.RECORD_ONLY)
+
+    expect(config).toMatchObject({ needsSource: false, needsDestination: false, requiresNote: true })
+    expect(movementNeedsSource(MOVEMENT_TYPES.RECORD_ONLY)).toBe(false)
+    expect(movementSupportsDimension(MOVEMENT_TYPES.RECORD_ONLY)).toBe(false)
+  })
 })
