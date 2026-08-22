@@ -1329,10 +1329,9 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
   const previewRows = group.rows.filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
   return (
     <Motion.article
-      layout
       initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: isDimmed ? 0.32 : 1, y: 0, scale: isDimmed ? 0.992 : 1 }}
-      exit={{ opacity: 0, y: -3, scale: 0.99 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -3 }}
       transition={UI_MOTION_TRANSITION}
       className={['adreem-counterparty-card', `is-${tone}`, 'is-balances-view', isFocused && 'is-focused', isDimmed && 'is-dimmed'].filter(Boolean).join(' ')}
       data-counterparty-id={group.id}
@@ -1345,40 +1344,33 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
         </span>
         <ChevronDown className="adreem-counterparty-chevron" aria-hidden="true" size={16} />
       </button>
-      <AnimatePresence initial={false}>
-        {previewRows.length && !isFocused ? (
-          <Motion.div
-            key="channel-preview"
-            layout
-            className="adreem-counterparty-channel-preview"
-            aria-label="تفصيل الرصيد"
-            initial={{ opacity: 0, y: -3 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -3 }}
-            transition={UI_MOTION_TRANSITION}
-          >
-            {previewRows.map((bucket) => <CounterpartyChannel key={bucket.account.id} bucket={bucket} />)}
-          </Motion.div>
-        ) : null}
-      </AnimatePresence>
-      <AnimatePresence initial={false}>
-        {isFocused ? (
-          <Motion.div className="adreem-counterparty-channels" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }} transition={UI_MOTION_TRANSITION}>
-            {group.rows.map((bucket) => {
-              const { amount, currency } = counterpartyBucketAmount(bucket)
-              const rowTone = amount > 0 ? 'is-positive' : amount < 0 ? 'is-negative' : 'is-zero'
-              return (
-                <button type="button" key={bucket.account.id} className={rowTone} onClick={() => onOpen?.(bucket.account.id)}>
-                  <i><AccountChoiceIcon account={bucket.account} size={15} /></i>
-                  <span>{accountChoiceKindLabel(bucket.account)}</span>
-                  <b>{amount === 0 ? 'صفر' : `${amount > 0 ? 'لي' : 'عليّ'} ${money(Math.abs(amount), currency)}`}</b>
-                  <ChevronLeft aria-hidden="true" size={14} />
-                </button>
-              )
-            })}
-          </Motion.div>
-        ) : null}
-      </AnimatePresence>
+      {isFocused ? (
+        <Motion.div key="channels" className="adreem-counterparty-channels" initial={{ opacity: 0, y: -2 }} animate={{ opacity: 1, y: 0 }} transition={UI_MOTION_TRANSITION}>
+          {group.rows.map((bucket) => {
+            const { amount, currency } = counterpartyBucketAmount(bucket)
+            const rowTone = amount > 0 ? 'is-positive' : amount < 0 ? 'is-negative' : 'is-zero'
+            return (
+              <button type="button" key={bucket.account.id} className={rowTone} onClick={() => onOpen?.(bucket.account.id)}>
+                <i><AccountChoiceIcon account={bucket.account} size={15} /></i>
+                <span>{accountChoiceKindLabel(bucket.account)}</span>
+                <b>{amount === 0 ? 'صفر' : `${amount > 0 ? 'لي' : 'عليّ'} ${money(Math.abs(amount), currency)}`}</b>
+                <ChevronLeft aria-hidden="true" size={14} />
+              </button>
+            )
+          })}
+        </Motion.div>
+      ) : previewRows.length ? (
+        <Motion.div
+          key="channel-preview"
+          className="adreem-counterparty-channel-preview"
+          aria-label="تفصيل الرصيد"
+          initial={{ opacity: 0, y: -2 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={UI_MOTION_TRANSITION}
+        >
+          {previewRows.map((bucket) => <CounterpartyChannel key={bucket.account.id} bucket={bucket} />)}
+        </Motion.div>
+      ) : null}
     </Motion.article>
   )
 }

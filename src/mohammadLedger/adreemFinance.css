@@ -747,7 +747,7 @@
   border-radius: 8px;
   background: var(--finance-paper);
   box-shadow: 0 3px 10px color-mix(in srgb, var(--finance-ink) 5%, transparent);
-  transition: border-color 200ms ease, box-shadow 200ms ease, filter 200ms ease;
+  transition: border-color 180ms ease, box-shadow 180ms ease, opacity 160ms ease;
 }
 .adreem-counterparty-card.is-receivable { --counterparty-tone: var(--finance-green); --counterparty-ink: var(--finance-green-dark); --counterparty-soft: var(--finance-green-soft); }
 .adreem-counterparty-card.is-payable { --counterparty-tone: var(--finance-debt); --counterparty-ink: var(--finance-debt-dark); --counterparty-soft: var(--finance-debt-soft); }
@@ -758,7 +758,7 @@
   border-color: color-mix(in srgb, var(--counterparty-tone) 58%, var(--finance-line));
   box-shadow: 0 12px 28px color-mix(in srgb, var(--counterparty-tone) 16%, transparent), 0 0 0 2px color-mix(in srgb, var(--counterparty-tone) 10%, transparent);
 }
-.adreem-counterparty-card.is-dimmed { filter: saturate(0.42); }
+.adreem-counterparty-card.is-dimmed { opacity: 0.38 !important; }
 .adreem-counterparty-focus {
   width: 100%;
   min-width: 0;
@@ -790,7 +790,6 @@
   gap: 4px;
   padding: 0 7px 7px;
   transform-origin: top center;
-  will-change: opacity, transform;
 }
 .adreem-counterparty-channel {
   --channel-tone: var(--finance-neutral);
@@ -817,7 +816,7 @@
 .adreem-counterparty-channel > b { grid-area: value; min-width: 0; overflow: hidden; color: var(--channel-tone); font-size: 0.59rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-counterparty-channel.is-negative > b { color: var(--finance-debt-dark); }
 .adreem-counterparty-channel.is-zero { opacity: 0.72; }
-.adreem-counterparty-channels { min-width: 0; display: grid; transform-origin: top center; will-change: opacity, transform; }
+.adreem-counterparty-channels { min-width: 0; display: grid; transform-origin: top center; }
 .adreem-counterparty-channels button {
   min-width: 0;
   min-height: var(--finance-control);

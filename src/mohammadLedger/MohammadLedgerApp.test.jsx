@@ -752,6 +752,8 @@ describe('MohammadLedgerApp people account views', () => {
     expect(markup).toContain('is-mixed is-balances-view is-focused')
     expect(markup).toContain('is-receivable is-balances-view is-dimmed')
     expect(markup).toContain('aria-expanded="true"')
+    expect(markup.match(/adreem-counterparty-channel-preview/g)).toHaveLength(1)
+    expect(markup.match(/adreem-counterparty-channels/g)).toHaveLength(1)
     expect(markup).toContain('كاش بيننا')
     expect(markup).toContain('شيك بيننا')
     expect(markup).toContain('دولار')
