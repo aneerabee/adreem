@@ -688,6 +688,24 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
         message: 'لا يمكن تغيير وقت إنشاء حركة موجودة.',
       })
     }
+    if (previousMovement?.status === MOVEMENT_STATUSES.POSTED && movement.type !== previousMovement.type) {
+      errors.push({
+        code: 'movement-type-immutable',
+        recordType: 'movements',
+        id: movement.id,
+        field: 'type',
+        message: 'نوع الحركة ثابت بعد الحفظ. ألغ الحركة وأنشئ حركة صحيحة بدل تغييره.',
+      })
+    }
+    if (previousMovement?.status === MOVEMENT_STATUSES.POSTED && movement.currency !== previousMovement.currency) {
+      errors.push({
+        code: 'movement-currency-immutable',
+        recordType: 'movements',
+        id: movement.id,
+        field: 'currency',
+        message: 'عملة الحركة ثابتة بعد الحفظ. ألغ الحركة وأنشئ حركة صحيحة بدل تغييرها.',
+      })
+    }
     if (
       previousMovement?.status === MOVEMENT_STATUSES.POSTED &&
       previousMovement.type !== movement.type &&

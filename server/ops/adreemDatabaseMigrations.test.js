@@ -9,6 +9,7 @@ const legacyCleanupSql = readFileSync(new URL('../../supabase/migrations/2026082
 const summaryScopeSql = readFileSync(new URL('../../supabase/migrations/20260822090000_add_summary_scope_and_record_only.sql', import.meta.url), 'utf8')
 const accountDeletionSql = readFileSync(new URL('../../supabase/migrations/20260822170000_add_unused_account_deletion.sql', import.meta.url), 'utf8')
 const movementInvariantSql = readFileSync(new URL('../../supabase/migrations/20260822193000_harden_movement_invariants.sql', import.meta.url), 'utf8')
+const movementIdentitySql = readFileSync(new URL('../../supabase/migrations/20260822232245_lock_movement_type_and_currency.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -152,5 +153,18 @@ describe('ADREEM v3 database migration invariants', () => {
     expect(movementInvariantSql).toContain('create trigger adreem_protect_account_opening_amounts')
     expect(movementInvariantSql).toContain('create constraint trigger adreem_require_account_opening_movements')
     expect(movementInvariantSql).toContain('deferrable initially deferred')
+  })
+
+  it('locks the movement type and currency in both columns and payload', () => {
+    expect(movementIdentitySql).toContain('function adreem_private.protect_movement_identity()')
+    expect(movementIdentitySql.match(/old\.status = 'posted'/g)).toHaveLength(2)
+    expect(movementIdentitySql).toContain('old.movement_type is distinct from new.movement_type')
+    expect(movementIdentitySql).toContain("old.payload ->> 'type'")
+    expect(movementIdentitySql).toContain('ADREEM_MOVEMENT_TYPE_IMMUTABLE')
+    expect(movementIdentitySql).toContain('old.currency is distinct from new.currency')
+    expect(movementIdentitySql).toContain("old.payload ->> 'currency'")
+    expect(movementIdentitySql).toContain('ADREEM_MOVEMENT_CURRENCY_IMMUTABLE')
+    expect(movementIdentitySql).toContain('before update on public.adreem_movements')
+    expect(movementIdentitySql).toContain('revoke all on function adreem_private.protect_movement_identity()')
   })
 })

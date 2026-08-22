@@ -581,7 +581,7 @@ export function movementEditChanges(originalMovement = {}, candidateMovement = {
     { field: 'destinationAccountId', label: 'إلى', format: (value) => labels.accounts?.get(value) || 'بدون' },
     { field: 'note', label: 'الملاحظة', format: (value) => String(value || '').trim() || 'بدون' },
     { field: 'dimensionId', label: 'المشروع / الأصل', format: (value) => labels.dimensions?.get(value) || 'بدون' },
-    { field: 'expenseCategoryId', label: 'نوع المصروف', format: (value) => labels.accounts?.get(value) || 'بدون' },
+    { field: 'expenseCategoryId', label: 'نوع المصروف', format: (value) => labels.expenseCategories?.get(value) || 'بدون' },
   ]
 
   return entries.flatMap((entry) => {
@@ -3359,7 +3359,8 @@ export default function LedgerApp() {
   const movementEditLabels = useMemo(() => ({
     accounts: new Map(accounts.map((account) => [account.id, protectedAccountLabel(account)])),
     dimensions: new Map(activeDimensions.map((dimension) => [dimension.id, preserveUiData(dimension.name)])),
-  }), [accounts, activeDimensions])
+    expenseCategories: new Map(activeExpenseCategories.map((category) => [category.id, preserveUiData(category.ownerName)])),
+  }), [accounts, activeDimensions, activeExpenseCategories])
   const editingMovementCandidate = editingMovement ? {
     ...editingMovement,
     ...normalizedDraft,

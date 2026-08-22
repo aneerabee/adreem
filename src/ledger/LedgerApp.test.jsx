@@ -466,13 +466,17 @@ describe('LedgerApp movement editing', () => {
       createdAt: '2026-08-22T10:00:00.000Z',
       updatedAt: '2026-08-22T10:00:00.000Z',
     }
-    const candidate = { ...original, amount: 150, destinationAccountId: 'person', note: 'جديد' }
-    const labels = { accounts: new Map([['cash', 'كاش'], ['bank', 'المصرف'], ['person', 'سعيد']]) }
+    const candidate = { ...original, amount: 150, destinationAccountId: 'person', note: 'جديد', expenseCategoryId: 'fuel' }
+    const labels = {
+      accounts: new Map([['cash', 'كاش'], ['bank', 'المصرف'], ['person', 'سعيد']]),
+      expenseCategories: new Map([['fuel', 'وقود']]),
+    }
 
     expect(movementEditChanges(original, candidate, labels)).toEqual([
       { field: 'amount', label: 'المبلغ', before: '100 د.ل', after: '150 د.ل' },
       { field: 'destinationAccountId', label: 'إلى', before: 'المصرف', after: 'سعيد' },
       { field: 'note', label: 'الملاحظة', before: 'قديم', after: 'جديد' },
+      { field: 'expenseCategoryId', label: 'نوع المصروف', before: 'بدون', after: 'وقود' },
     ])
     expect(movementEditChanges(original, original, labels)).toEqual([])
   })

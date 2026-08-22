@@ -546,6 +546,73 @@ describe('server ledger state validation', () => {
     }))
   })
 
+  it('keeps movement type and currency immutable after the first save', () => {
+    const expense = {
+      id: 'expense-locked-fields',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash-main',
+      createdAt: '2026-08-19T11:30:00.000Z',
+      updatedAt: '2026-08-19T11:30:00.000Z',
+    }
+    const current = {
+      ...createEmptyAdreemState(at),
+      accounts: [cashAccount()],
+      movements: [opening(), expense],
+    }
+    const changed = {
+      ...expense,
+      type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+      currency: CURRENCIES.USD,
+      sourceAccountId: null,
+      destinationAccountId: 'cash-main',
+      updatedAt: validationNow,
+    }
+
+    const result = validateLedgerStateTransition({ ...current, movements: [opening(), changed] }, current, {
+      now: validationNow,
+    })
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'movement-type-immutable',
+      id: expense.id,
+      field: 'type',
+    }))
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'movement-currency-immutable',
+      id: expense.id,
+      field: 'currency',
+    }))
+  })
+
+  it('allows correcting type and currency while a movement is still under review', () => {
+    const incomplete = {
+      id: 'review-currency-fix',
+      type: MOVEMENT_TYPES.EXPENSE,
+      status: MOVEMENT_STATUSES.NEEDS_REVIEW,
+      amount: 10,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: null,
+      createdAt: '2026-08-19T11:30:00.000Z',
+      updatedAt: '2026-08-19T11:30:00.000Z',
+    }
+    const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [incomplete] }
+    const repaired = {
+      ...incomplete,
+      type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+      currency: CURRENCIES.USD,
+      destinationAccountId: 'cash-main',
+      updatedAt: validationNow,
+    }
+
+    const result = validateLedgerStateTransition({ ...current, movements: [repaired] }, current, { now: validationNow })
+
+    expect(result.errors).not.toContainEqual(expect.objectContaining({ code: 'movement-type-immutable' }))
+    expect(result.errors).not.toContainEqual(expect.objectContaining({ code: 'movement-currency-immutable' }))
+  })
+
   it('rejects invalid dimension records and missing linked project accounts', () => {
     const current = { ...createEmptyAdreemState(at), accounts: [projectAccount()] }
     const invalidDimension = {
