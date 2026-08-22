@@ -1485,6 +1485,282 @@
   }
 }
 
+/* Protected movement actions */
+.ml3-history-actions,
+.ml3-movement-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.ml3-history-actions > button,
+.ml3-movement-actions > button {
+  min-height: 29px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--finance-line);
+  border-radius: 6px;
+  background: var(--finance-paper);
+  font-size: 0.65rem;
+  font-weight: 780;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.ml3-history-actions > .is-edit,
+.ml3-movement-actions > .is-edit {
+  border-color: color-mix(in srgb, var(--finance-blue) 24%, var(--finance-line));
+  background: color-mix(in srgb, var(--finance-blue-soft) 48%, var(--finance-paper));
+  color: var(--finance-blue-dark);
+}
+
+.ml3-history-actions > .is-cancel,
+.ml3-movement-actions > .is-cancel {
+  border-color: color-mix(in srgb, var(--finance-debt) 28%, var(--finance-line));
+  background: color-mix(in srgb, var(--finance-debt-soft) 52%, var(--finance-paper));
+  color: var(--finance-debt-dark);
+}
+
+.ml3-today-row > .ml3-movement-actions {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+.adreem-movement-dialog-layer {
+  position: fixed;
+  z-index: 180;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgba(20, 31, 29, 0.46);
+  backdrop-filter: blur(7px) saturate(0.9);
+  overscroll-behavior: contain;
+}
+
+.adreem-movement-action-dialog,
+.adreem-movement-edit-dialog {
+  width: min(760px, 100%);
+  max-height: min(820px, calc(100dvh - 24px));
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--finance-blue) 18%, var(--finance-line));
+  border-radius: 10px;
+  background: var(--finance-paper);
+  color: var(--finance-ink);
+  box-shadow: 0 26px 70px rgba(18, 31, 28, 0.24);
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.adreem-movement-action-dialog { width: min(520px, 100%); }
+
+.adreem-movement-action-dialog > header,
+.adreem-movement-edit-dialog > header {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--finance-line);
+  background: color-mix(in srgb, var(--finance-blue-soft) 36%, var(--finance-paper));
+}
+
+.adreem-movement-action-dialog > header > i,
+.adreem-movement-edit-dialog > header > i {
+  width: 38px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--finance-blue-soft);
+  color: var(--finance-blue-dark);
+}
+
+.adreem-movement-action-dialog.is-void > header > i { background: var(--finance-debt-soft); color: var(--finance-debt-dark); }
+
+.adreem-movement-action-dialog > header span,
+.adreem-movement-edit-dialog > header span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--finance-muted);
+  font-size: 0.62rem;
+  font-weight: 760;
+}
+
+.adreem-movement-action-dialog > header h2,
+.adreem-movement-edit-dialog > header h2 { margin: 0; color: var(--finance-ink); font-size: 1rem; line-height: 1.2; }
+
+.adreem-movement-action-dialog > header > button,
+.adreem-movement-edit-dialog > header > button {
+  width: 34px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--finance-line);
+  border-radius: 7px;
+  background: var(--finance-paper);
+  color: var(--finance-muted);
+}
+
+.adreem-movement-action-dialog > footer,
+.adreem-movement-edit-dialog > footer {
+  position: sticky;
+  z-index: 4;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--finance-line);
+  background: color-mix(in srgb, var(--finance-paper) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.adreem-movement-action-dialog > footer button,
+.adreem-movement-edit-dialog > footer button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1px solid var(--finance-line);
+  border-radius: 7px;
+  background: var(--finance-paper);
+  color: var(--finance-ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.adreem-movement-action-dialog > footer .is-danger { border-color: var(--finance-debt); background: var(--finance-debt); color: white; }
+.adreem-movement-action-dialog > footer .is-restore,
+.adreem-movement-edit-dialog > footer .is-save { border-color: var(--finance-blue); background: var(--finance-blue); color: white; }
+.adreem-movement-edit-dialog > footer .is-review { border-color: var(--finance-blue); background: var(--finance-blue-soft); color: var(--finance-blue-dark); }
+
+.adreem-movement-action-summary {
+  margin: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  padding: 11px;
+  border: 1px solid var(--finance-line);
+  border-radius: 8px;
+  background: var(--finance-surface);
+}
+
+.adreem-movement-action-summary > span { min-width: 0; }
+.adreem-movement-action-summary > span strong,
+.adreem-movement-action-summary > span small { display: block; }
+.adreem-movement-action-summary > span strong { font-size: 0.82rem; }
+.adreem-movement-action-summary > span small,
+.adreem-movement-action-summary > small { color: var(--finance-muted); font-size: 0.64rem; }
+.adreem-movement-action-summary > b { color: var(--finance-ink); font-size: 0.92rem; white-space: nowrap; }
+.adreem-movement-action-summary > p,
+.adreem-movement-action-summary > small { grid-column: 1 / -1; margin: 0; }
+.adreem-movement-action-summary > p { font-size: 0.7rem; font-weight: 720; }
+
+.adreem-movement-action-impact {
+  margin: 0 12px 12px;
+  padding: 11px;
+  border-inline-start: 3px solid var(--finance-debt);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--finance-debt-soft) 52%, var(--finance-paper));
+}
+
+.adreem-movement-action-dialog.is-restore .adreem-movement-action-impact { border-inline-start-color: var(--finance-blue); background: color-mix(in srgb, var(--finance-blue-soft) 46%, var(--finance-paper)); }
+.adreem-movement-action-impact > strong { display: block; font-size: 0.72rem; line-height: 1.55; }
+.adreem-movement-action-impact > div { display: grid; gap: 5px; margin-top: 8px; }
+.adreem-movement-action-impact > div > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.68rem; }
+.adreem-movement-action-impact > div em { color: var(--finance-debt-dark); font-style: normal; font-weight: 800; }
+
+.adreem-movement-edit-locks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 10px 12px 0;
+}
+
+.adreem-movement-edit-locks > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid var(--finance-line);
+  border-radius: 7px;
+  background: var(--finance-surface);
+}
+
+.adreem-movement-edit-locks small { color: var(--finance-muted); font-size: 0.58rem; font-weight: 720; }
+.adreem-movement-edit-locks strong { overflow: hidden; font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
+
+.adreem-movement-edit-fields,
+.adreem-movement-edit-review { display: grid; gap: 10px; padding: 10px 12px 12px; }
+.adreem-movement-edit-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.adreem-movement-edit-amount { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; grid-column: 1 / -1; }
+.adreem-movement-edit-party { min-width: 0; }
+.adreem-movement-edit-note { grid-column: 1 / -1; display: grid; gap: 5px; color: var(--finance-muted); font-size: 0.66rem; font-weight: 760; }
+.adreem-movement-edit-note textarea { min-height: 64px; resize: vertical; }
+.adreem-movement-edit-links { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.adreem-movement-edit-links label { display: grid; gap: 5px; color: var(--finance-muted); font-size: 0.64rem; font-weight: 760; }
+.adreem-movement-edit-hint { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; color: var(--finance-blue-dark); font-size: 0.67rem; font-weight: 720; }
+
+.adreem-movement-edit-changes { display: grid; gap: 6px; }
+.adreem-movement-edit-changes > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--finance-line);
+  border-radius: 7px;
+  background: var(--finance-surface);
+}
+.adreem-movement-edit-changes > div > strong { font-size: 0.67rem; }
+.adreem-movement-edit-changes > div > span { min-width: 0; display: grid; gap: 2px; }
+.adreem-movement-edit-changes small { color: var(--finance-muted); font-size: 0.56rem; }
+.adreem-movement-edit-changes b { overflow-wrap: anywhere; font-size: 0.68rem; }
+.adreem-movement-edit-changes svg { color: var(--finance-blue); }
+.adreem-movement-edit-preview { margin: 0; }
+
+@media (max-width: 620px) {
+  .ml3-history-actions > button,
+  .ml3-movement-actions > button { width: 31px; min-height: 31px; padding: 0; font-size: 0; }
+  .ml3-history-actions > button svg,
+  .ml3-movement-actions > button svg { width: 15px; height: 15px; }
+  .adreem-movement-dialog-layer { place-items: end center; padding: 0; }
+  .adreem-movement-action-dialog,
+  .adreem-movement-edit-dialog { width: 100%; max-height: calc(100dvh - max(8px, env(safe-area-inset-top))); border-width: 1px 0 0; border-radius: 12px 12px 0 0; scrollbar-gutter: auto; }
+  .adreem-movement-action-dialog > header,
+  .adreem-movement-edit-dialog > header { min-height: 56px; padding: 8px 10px; }
+  .adreem-movement-edit-locks { padding: 8px 9px 0; }
+  .adreem-movement-edit-locks > span { padding: 6px; }
+  .adreem-movement-edit-locks strong { font-size: 0.62rem; }
+  .adreem-movement-edit-fields,
+  .adreem-movement-edit-review { grid-template-columns: 1fr; gap: 8px; padding: 8px 9px 10px; }
+  .adreem-movement-edit-amount { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adreem-movement-edit-party,
+  .adreem-movement-edit-note,
+  .adreem-movement-edit-links,
+  .adreem-movement-edit-hint { grid-column: 1; }
+  .adreem-movement-edit-links { grid-template-columns: 1fr 1fr; }
+  .adreem-movement-edit-changes > div { grid-template-columns: 66px minmax(0, 1fr) 14px minmax(0, 1fr); gap: 5px; padding: 7px; }
+  .adreem-movement-action-dialog > footer,
+  .adreem-movement-edit-dialog > footer { padding: 8px 9px max(8px, env(safe-area-inset-bottom)); }
+  .adreem-movement-action-dialog > footer button,
+  .adreem-movement-edit-dialog > footer button { flex: 1; min-width: 0; padding-inline: 8px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ml3-balance-ledger button,
   .ml3-account-row,

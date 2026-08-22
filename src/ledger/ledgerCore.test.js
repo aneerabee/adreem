@@ -226,6 +226,52 @@ describe('adreem ledger core', () => {
     expect(edited.validation.ok).toBe(true)
   })
 
+  it('restores the exact balances after editing the amount and parties', () => {
+    const accounts = [
+      createAccount({ id: 'cash', ownerName: 'أنا', subAccountName: 'كاش', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.DINAR, openingDinar: 1_000 }),
+      createAccount({ id: 'cash-2', ownerName: 'الخزنة الثانية', subAccountName: 'كاش', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.DINAR }),
+      createAccount({ id: 'cash-3', ownerName: 'الخزنة الثالثة', subAccountName: 'كاش', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.DINAR }),
+    ]
+    const openings = createOpeningMovements(accounts)
+    const original = postMovement({
+      id: 'transfer-1',
+      type: MOVEMENT_TYPES.TRANSFER,
+      amount: 200,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash',
+      destinationAccountId: 'cash-2',
+      note: 'الأصل',
+    }, accounts, openings)
+    const edited = postMovement({
+      ...original,
+      amount: 350,
+      destinationAccountId: 'cash-3',
+      note: 'بعد التعديل',
+    }, accounts, openings, { originalMovement: original })
+    const restored = postMovement({
+      ...edited,
+      ...original,
+      id: edited.id,
+      createdAt: edited.createdAt,
+      status: edited.status,
+    }, accounts, openings, { originalMovement: edited })
+
+    expect(edited.validation.ok).toBe(true)
+    expect(restored.validation.ok).toBe(true)
+    expect(restored).toMatchObject({
+      id: original.id,
+      amount: original.amount,
+      sourceAccountId: original.sourceAccountId,
+      destinationAccountId: original.destinationAccountId,
+      note: original.note,
+    })
+    expect(summarizeBalances(accounts, [...openings, restored]).map(({ account, dinar }) => [account.id, dinar])).toEqual([
+      ['cash', 800],
+      ['cash-2', 200],
+      ['cash-3', 0],
+    ])
+  })
+
   it('rejects voiding income that has already been spent from owned money', () => {
     const accounts = [{
       id: 'cash',

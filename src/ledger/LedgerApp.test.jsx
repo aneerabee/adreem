@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import { COUNTERPARTY_ACCOUNT_KINDS } from './accountConfig.js'
-import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement, previewMovement } from './ledgerCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement } from './ledgerCore.js'
 import {
   AccountProfile,
   NumericEntry,
@@ -15,6 +15,7 @@ import {
   AccountClassificationEditorFields,
   ExternalAccountCard,
   HistoryMovementRow,
+  MovementActionDialog,
   ReviewAccountCard,
   CounterpartyCard,
   CounterpartyList,
@@ -28,6 +29,7 @@ import {
   buildBalanceOverview,
   balanceAmountIsWide,
   buildPeopleAccountViews,
+  canEditMovement,
   cancelMovementConfirmation,
   claimSubmission,
   filterMovementHistory,
@@ -35,6 +37,8 @@ import {
   filterCounterpartyGroupsByQuery,
   filterMoneyBalanceRows,
   formatMoneyNumber,
+  compareBalanceBuckets,
+  counterpartyMagnitudeForFilter,
   unifiedCounterpartyGroups,
   mergeAccountsConfirmation,
   mergeAccountReferenceErrors,
@@ -44,7 +48,10 @@ import {
   mergeReviewMovementPage,
   money,
   movementStatusLabel,
-  movementHistoryForPreview,
+  previewMovementEdit,
+  movementChangedWhileOpen,
+  movementEditChanges,
+  movementRecordVersion,
   normalizeLocalizedNumericInput,
   parseMoneyAmount,
   parseWholeAmount,
@@ -330,10 +337,64 @@ describe('LedgerApp compact history rows', () => {
     expect(markup).toContain('ناقص')
     expect(markup).toContain('اختر المستلم')
   })
+
+  it('shows distinct edit and cancellation actions only for recent posted movements', () => {
+    const recent = {
+      id: 'recent-1',
+      type: MOVEMENT_TYPES.TRANSFER,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash',
+      destinationAccountId: 'bank',
+      createdAt: new Date().toISOString(),
+    }
+    const markup = renderToStaticMarkup(
+      <HistoryMovementRow accountById={new Map()} movement={recent} onEdit={() => {}} onCancel={() => {}} />,
+    )
+
+    expect(canEditMovement(recent)).toBe(true)
+    expect(markup).toContain('ml3-history-actions')
+    expect(markup).toContain('is-edit')
+    expect(markup).toContain('is-cancel')
+    expect(markup).toContain('تعديل')
+    expect(markup).toContain('إلغاء')
+
+    const oldMarkup = renderToStaticMarkup(
+      <HistoryMovementRow accountById={new Map()} movement={{ ...recent, id: 'old-1', createdAt: '2020-01-01T00:00:00.000Z' }} onEdit={() => {}} onCancel={() => {}} />,
+    )
+    expect(oldMarkup).not.toContain('ml3-history-actions')
+  })
+
+  it('renders a protected confirmation before reversing a movement', () => {
+    const accountById = new Map([
+      ['cash', { id: 'cash', ownerName: 'أنا', subAccountName: 'كاش', valueKind: VALUE_KINDS.CASH }],
+      ['person', { id: 'person', ownerName: 'سعيد', subAccountName: 'كاش بيننا', valueKind: VALUE_KINDS.RECEIVABLE }],
+    ])
+    const movement = {
+      id: 'recent-2',
+      type: MOVEMENT_TYPES.TRANSFER,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 300,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash',
+      destinationAccountId: 'person',
+      createdAt: new Date().toISOString(),
+    }
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <MovementActionDialog action={{ kind: 'void', movement }} accountById={accountById} onClose={() => {}} onConfirm={() => {}} />,
+    ))
+
+    expect(markup).toContain('role="alertdialog"')
+    expect(markup).toContain('تأكيد إلغاء الحركة')
+    expect(markup).toContain('نعم، إلغاء الحركة')
+    expect(markup).toContain('لن تُحذف من السجل')
+    expect(markup).toContain('سعيد')
+  })
 })
 
 describe('LedgerApp movement editing', () => {
-  it('previews an edit after removing the stored version of the movement', () => {
+  it('previews the exact balance difference when replacing a local or cloud movement', () => {
     const accounts = [
       createAccount({
         id: 'cash',
@@ -364,23 +425,88 @@ describe('LedgerApp movement editing', () => {
       destinationAccountId: 'bank',
     }, accounts, openingMovements)
 
-    const preview = previewMovement(
-      { ...original, amount: 150 },
-      accounts,
-      movementHistoryForPreview([...openingMovements, original], original.id),
-    )
+    const preview = previewMovementEdit({ ...original, amount: 150 }, original, accounts, [...openingMovements, original])
 
     expect(preview.validation.ok).toBe(true)
     expect(preview.effects.find((effect) => effect.accountId === 'cash')).toMatchObject({
-      before: 1_000,
-      delta: -150,
+      before: 900,
+      delta: -50,
       after: 850,
     })
     expect(preview.effects.find((effect) => effect.accountId === 'bank')).toMatchObject({
-      before: 500,
-      delta: 150,
+      before: 600,
+      delta: 50,
       after: 650,
     })
+
+    const databaseAccounts = accounts.map((account) => ({
+      ...account,
+      balanceSource: 'database',
+      balanceDinar: account.id === 'cash' ? 900 : 600,
+      balanceUsd: 0,
+      postedCount: 2,
+    }))
+    const cloudPreview = previewMovementEdit({ ...original, amount: 150 }, original, databaseAccounts, [])
+    expect(cloudPreview.effects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ accountId: 'cash', before: 900, delta: -50, after: 850 }),
+      expect.objectContaining({ accountId: 'bank', before: 600, delta: 50, after: 650 }),
+    ]))
+  })
+
+  it('detects exactly which protected movement fields changed', () => {
+    const original = {
+      id: 'movement-1',
+      type: MOVEMENT_TYPES.TRANSFER,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      sourceAccountId: 'cash',
+      destinationAccountId: 'bank',
+      note: 'قديم',
+      createdAt: '2026-08-22T10:00:00.000Z',
+      updatedAt: '2026-08-22T10:00:00.000Z',
+    }
+    const candidate = { ...original, amount: 150, destinationAccountId: 'person', note: 'جديد' }
+    const labels = { accounts: new Map([['cash', 'كاش'], ['bank', 'المصرف'], ['person', 'سعيد']]) }
+
+    expect(movementEditChanges(original, candidate, labels)).toEqual([
+      { field: 'amount', label: 'المبلغ', before: '100 د.ل', after: '150 د.ل' },
+      { field: 'destinationAccountId', label: 'إلى', before: 'المصرف', after: 'سعيد' },
+      { field: 'note', label: 'الملاحظة', before: 'قديم', after: 'جديد' },
+    ])
+    expect(movementEditChanges(original, original, labels)).toEqual([])
+  })
+
+  it('blocks a stale edit after the stored movement changes', () => {
+    const baseline = { id: 'movement-1', status: MOVEMENT_STATUSES.POSTED, amount: 100, updatedAt: 'v1' }
+    const current = { ...baseline, amount: 120, updatedAt: 'v2' }
+
+    expect(movementRecordVersion(baseline)).not.toBe(movementRecordVersion(current))
+    expect(movementChangedWhileOpen(baseline, current)).toBe(true)
+    expect(movementChangedWhileOpen(baseline, { ...baseline })).toBe(false)
+    expect(movementChangedWhileOpen(baseline, null)).toBe(true)
+  })
+})
+
+describe('LedgerApp balance ordering', () => {
+  it('places larger active values first and keeps ties deterministic', () => {
+    const rows = [
+      { account: { id: 'small', ownerName: 'ب', currencyKind: CURRENCIES.DINAR }, dinar: 100, usd: 0 },
+      { account: { id: 'zero', ownerName: 'ج', currencyKind: CURRENCIES.DINAR }, dinar: 0, usd: 0 },
+      { account: { id: 'large', ownerName: 'أ', currencyKind: CURRENCIES.DINAR }, dinar: -900, usd: 0 },
+    ]
+
+    expect(rows.sort(compareBalanceBuckets).map((row) => row.account.id)).toEqual(['large', 'small', 'zero'])
+  })
+
+  it('uses the selected people direction when ranking a filtered list', () => {
+    const group = {
+      rows: [],
+      receivable: { dinar: 1_500, usd: 0 },
+      payable: { dinar: 300, usd: 0 },
+    }
+    expect(counterpartyMagnitudeForFilter(group, 'receivable')).toBe(1_500)
+    expect(counterpartyMagnitudeForFilter(group, 'payable')).toBe(300)
   })
 })
 

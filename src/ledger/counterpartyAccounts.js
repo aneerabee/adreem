@@ -101,16 +101,27 @@ function groupMagnitude(group = {}) {
   )
 }
 
+function directionMagnitude(group = {}, direction) {
+  const bucket = group?.[direction] || {}
+  return Math.max(Number(bucket.dinar || 0), Number(bucket.usd || 0))
+}
+
+function compareGroupsByMagnitude(left, right, direction = '') {
+  const leftMagnitude = direction ? directionMagnitude(left, direction) : groupMagnitude(left)
+  const rightMagnitude = direction ? directionMagnitude(right, direction) : groupMagnitude(right)
+  return rightMagnitude - leftMagnitude || left.ownerName.localeCompare(right.ownerName, 'ar') || left.id.localeCompare(right.id)
+}
+
 export function buildCounterpartyBalanceViews(rows = []) {
   const groups = groupCounterpartyBalanceBuckets(rows)
-    .sort((left, right) => groupMagnitude(right) - groupMagnitude(left) || left.ownerName.localeCompare(right.ownerName, 'ar'))
+    .sort((left, right) => compareGroupsByMagnitude(left, right))
   const hasReceivable = (group) => group.receivable.dinar > 0 || group.receivable.usd > 0
   const hasPayable = (group) => group.payable.dinar > 0 || group.payable.usd > 0
   return {
     all: groups,
     withBalance: groups.filter((group) => hasReceivable(group) || hasPayable(group)),
-    receivable: groups.filter(hasReceivable),
-    payable: groups.filter(hasPayable),
+    receivable: groups.filter(hasReceivable).sort((left, right) => compareGroupsByMagnitude(left, right, 'receivable')),
+    payable: groups.filter(hasPayable).sort((left, right) => compareGroupsByMagnitude(left, right, 'payable')),
     zero: groups.filter((group) => !hasReceivable(group) && !hasPayable(group)),
   }
 }

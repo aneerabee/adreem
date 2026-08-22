@@ -88,4 +88,18 @@ describe('counterparty account bundles', () => {
     expect(views.all[0].receivable).toEqual({ dinar: 1200, usd: 80 })
     expect(views.all[0].payable).toEqual({ dinar: 450, usd: 0 })
   })
+
+  it('sorts each direction by its own largest value instead of the opposite balance', () => {
+    const firstAccounts = buildCounterpartyAccountBundle(personDraft({ ownerName: 'الأول' }))
+    const secondAccounts = buildCounterpartyAccountBundle(personDraft({ ownerName: 'الثاني' }))
+    const views = buildCounterpartyBalanceViews([
+      { account: firstAccounts[0], dinar: 10_000, usd: 0 },
+      { account: firstAccounts[1], dinar: -100, usd: 0 },
+      { account: secondAccounts[0], dinar: 500, usd: 0 },
+      { account: secondAccounts[1], dinar: -4_000, usd: 0 },
+    ])
+
+    expect(views.receivable.map((group) => group.ownerName)).toEqual(['الأول', 'الثاني'])
+    expect(views.payable.map((group) => group.ownerName)).toEqual(['الثاني', 'الأول'])
+  })
 })
