@@ -3,7 +3,7 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Plus, ReceiptText, Search, SlidersHorizontal, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
@@ -19,7 +19,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, can
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUnusedAccount, deleteAdreemUploadedAttachment, getLedgerPersistenceMode, loadAdreemMovementPage, loadPersistedLedgerState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, savePersistedLedgerState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './ledgerPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeLedgerAccounts, sameRecordVersions, sameSerializableContent } from './ledgerState'
-import { buildNetPosition, convertNetPosition, isAccountIncludedInNet } from './ledgerScope'
+import { buildNetPosition, convertNetPosition, filterNetContributions, isAccountIncludedInNet } from './ledgerScope'
 import { ledgerNavigationSearch, readLedgerNavigation } from './ledgerNavigation'
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
 import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccountsForRole, sameLogicalAccount } from './movementAccounts'
@@ -34,6 +34,7 @@ const USD_MAXIMUM_FRACTION_DIGITS = 6
 const REVIEW_MOVEMENT_PAGE_SIZE = 50
 const SEPARATE_RECORD_PAGE_SIZE = 250
 const MAX_SEPARATE_RECORD_PAGES = 100
+export const TEMPORARY_NET_RESET_MS = 5 * 60 * 1000
 const UI_MOTION_TRANSITION = Object.freeze({ duration: 0.2, ease: [0.22, 1, 0.36, 1] })
 const FLOW_STAGE_MOTION = Object.freeze({
   initial: { opacity: 0, y: 8 },
@@ -1029,12 +1030,28 @@ export function activeRecurringRuleForMovement(rules = [], movementId = '') {
   )) || null
 }
 
-export function NetPositionPanel({ position, rate, targetCurrency, onRateChange, onTargetCurrencyChange, onClose }) {
+export function NetPositionPanel({
+  position,
+  allContributions = position?.contributions || [],
+  excludedAccountIds = [],
+  query = '',
+  rate,
+  targetCurrency,
+  onRateChange,
+  onTargetCurrencyChange,
+  onQueryChange = () => {},
+  onToggleAccount = () => {},
+  onResetExclusions = () => {},
+  onClose,
+}) {
   const conversion = convertNetPosition(position, rate, targetCurrency)
+  const excluded = new Set(excludedAccountIds)
+  const excludedCount = allContributions.reduce((count, item) => count + (excluded.has(item.accountId) ? 1 : 0), 0)
+  const visibleContributions = filterNetContributions(allContributions, query)
   return (
     <Motion.section className="adreem-net-panel" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={UI_MOTION_TRANSITION} aria-label="الصافي العام">
       <header>
-        <span><Calculator aria-hidden="true" size={17} /><strong>الصافي</strong></span>
+        <span><Calculator aria-hidden="true" size={17} /><strong>الصافي</strong><small>مؤقت</small></span>
         <button type="button" aria-label="إغلاق الصافي" title="إغلاق" onClick={onClose}><X aria-hidden="true" size={16} /></button>
       </header>
       <div className="adreem-net-raw">
@@ -1053,14 +1070,39 @@ export function NetPositionPanel({ position, rate, targetCurrency, onRateChange,
         </output>
       </div>
       <details className="adreem-net-accounts">
-        <summary><span>داخل الصافي</span><b>{formatCount(position.accountCount)}</b><ChevronDown aria-hidden="true" size={15} /></summary>
-        <div>
-          {position.contributions.map((item) => (
-            <article key={item.accountId}>
-              <span><AccountChoiceIcon account={item.account} size={15} /><strong>{protectedAccountPrimaryName(item.account)}</strong></span>
-              <span>{money(item.dinar, CURRENCIES.DINAR)} · {money(item.usd, CURRENCIES.USD)}</span>
-            </article>
-          ))}
+        <summary>
+          <span>اختيار الحسابات</span>
+          <span className="adreem-net-counts"><b>داخل {formatCount(position.accountCount)}</b>{excludedCount ? <b className="is-excluded">مستبعد {formatCount(excludedCount)}</b> : null}</span>
+          <ChevronDown aria-hidden="true" size={15} />
+        </summary>
+        <div className="adreem-net-account-editor">
+          <div className="adreem-net-account-tools">
+            <label>
+              <Search aria-hidden="true" size={15} />
+              <input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="ابحث عن حساب" />
+            </label>
+            {excludedCount ? (
+              <button type="button" onClick={onResetExclusions}>
+                <RotateCcw aria-hidden="true" size={14} /> إرجاع الكل
+              </button>
+            ) : null}
+          </div>
+          <div className="adreem-net-account-list">
+            {visibleContributions.map((item) => {
+              const isExcluded = excluded.has(item.accountId)
+              return (
+                <button type="button" key={item.accountId} className={isExcluded ? 'is-excluded' : ''} aria-pressed={isExcluded} title={isExcluded ? 'مستبعد مؤقتًا' : 'داخل الصافي'} onClick={() => onToggleAccount(item.accountId)}>
+                  <i className="adreem-net-exclusion-mark">{isExcluded ? <Check aria-hidden="true" size={13} /> : null}</i>
+                  <span className="adreem-net-account-copy">
+                    <AccountChoiceIcon account={item.account} size={15} />
+                    <span><strong>{protectedAccountPrimaryName(item.account)}</strong><small>{protectedAccountContext(item.account)}</small></span>
+                  </span>
+                  <span className="adreem-net-account-values"><strong>{money(item.dinar, CURRENCIES.DINAR)}</strong><small>{money(item.usd, CURRENCIES.USD)}</small></span>
+                </button>
+              )
+            })}
+            {visibleContributions.length === 0 ? <p className="ml3-empty">لا توجد نتيجة.</p> : null}
+          </div>
         </div>
       </details>
     </Motion.section>
@@ -2591,6 +2633,8 @@ export default function LedgerApp() {
   const [counterpartyBalanceFilter, setCounterpartyBalanceFilter] = useState('all')
   const [focusedCounterpartyId, setFocusedCounterpartyId] = useState('')
   const [isNetOpen, setIsNetOpen] = useState(false)
+  const [netExcludedAccountIds, setNetExcludedAccountIds] = useState([])
+  const [netAccountQuery, setNetAccountQuery] = useState('')
   const [netRate, setNetRate] = useState('')
   const [netTargetCurrency, setNetTargetCurrency] = useState(CURRENCIES.DINAR)
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
@@ -2654,6 +2698,19 @@ export default function LedgerApp() {
     if (typeof document === 'undefined') return
     scrollLedgerToTop('auto')
   }, [activeSection])
+
+  useEffect(() => {
+    if (
+      !isNetOpen
+      || typeof window === 'undefined'
+      || (netExcludedAccountIds.length === 0 && !netAccountQuery)
+    ) return undefined
+    const resetTimer = window.setTimeout(() => {
+      setNetExcludedAccountIds([])
+      setNetAccountQuery('')
+    }, TEMPORARY_NET_RESET_MS)
+    return () => window.clearTimeout(resetTimer)
+  }, [isNetOpen, netAccountQuery, netExcludedAccountIds])
 
   useLayoutEffect(() => {
     const location = `${activeEntryMode}:${movementStep}:${accountWizardStep}`
@@ -2907,7 +2964,8 @@ export default function LedgerApp() {
     )
   }, [balances])
   const balanceOverview = useMemo(() => buildBalanceOverview(balances), [balances])
-  const netPosition = useMemo(() => buildNetPosition(balances), [balances])
+  const fullNetPosition = useMemo(() => buildNetPosition(balances), [balances])
+  const netPosition = useMemo(() => buildNetPosition(balances, netExcludedAccountIds), [balances, netExcludedAccountIds])
 
   const movementConfig = movementConfigFor(movementDraft.type)
   const movementSourceRequired = movementNeedsSource(movementDraft.type)
@@ -3678,6 +3736,33 @@ export default function LedgerApp() {
     window.requestAnimationFrame(() => scrollLedgerToTop(behavior))
   }
 
+  function resetTemporaryNet() {
+    setNetExcludedAccountIds([])
+    setNetAccountQuery('')
+  }
+
+  function closeNetPanel() {
+    resetTemporaryNet()
+    setIsNetOpen(false)
+  }
+
+  function toggleNetPanel() {
+    if (isNetOpen) {
+      closeNetPanel()
+      return
+    }
+    resetTemporaryNet()
+    setIsNetOpen(true)
+  }
+
+  function toggleTemporaryNetAccount(accountId) {
+    setNetExcludedAccountIds((current) => (
+      current.includes(accountId)
+        ? current.filter((id) => id !== accountId)
+        : [...current, accountId]
+    ))
+  }
+
   function switchSection(section) {
     if (section === activeSection) {
       const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -3688,6 +3773,7 @@ export default function LedgerApp() {
     const targetIndex = sectionOrder.indexOf(section)
     commitFlowChange(
       () => {
+        if (section !== 'accounts') closeNetPanel()
         setActiveSection(section)
         resetSectionScroll('auto')
       },
@@ -4665,7 +4751,7 @@ export default function LedgerApp() {
         </div>
 
         <div className="adreem-net-bar">
-          <button type="button" aria-expanded={isNetOpen} onClick={() => setIsNetOpen((current) => !current)}>
+          <button type="button" aria-expanded={isNetOpen} onClick={toggleNetPanel}>
             <Calculator aria-hidden="true" size={16} />
             <span>عرض الصافي</span>
             <b>{formatCount(netPosition.accountCount)}</b>
@@ -4676,11 +4762,17 @@ export default function LedgerApp() {
           {isNetOpen ? (
             <NetPositionPanel
               position={netPosition}
+              allContributions={fullNetPosition.contributions}
+              excludedAccountIds={netExcludedAccountIds}
+              query={netAccountQuery}
               rate={netRate}
               targetCurrency={netTargetCurrency}
               onRateChange={setNetRate}
               onTargetCurrencyChange={setNetTargetCurrency}
-              onClose={() => setIsNetOpen(false)}
+              onQueryChange={setNetAccountQuery}
+              onToggleAccount={toggleTemporaryNetAccount}
+              onResetExclusions={resetTemporaryNet}
+              onClose={closeNetPanel}
             />
           ) : null}
         </AnimatePresence>

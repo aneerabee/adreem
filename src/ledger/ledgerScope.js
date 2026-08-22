@@ -1,4 +1,4 @@
-import { VALUE_KINDS } from './accountCatalog.js'
+import { ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog.js'
 
 export const ACCOUNT_SUMMARY_SCOPES = Object.freeze({
   INCLUDED: 'included',
@@ -11,6 +11,16 @@ const NET_ELIGIBLE_VALUE_KINDS = new Set([
   VALUE_KINDS.RECEIVABLE,
   VALUE_KINDS.ASSET,
 ])
+
+const NET_SEARCH_LABELS = Object.freeze({
+  [VALUE_KINDS.CASH]: 'كاش نقد فلوسي',
+  [VALUE_KINDS.BANK]: 'مصرف حساب بنكي شيك',
+  [VALUE_KINDS.RECEIVABLE]: 'شخص جهة بيننا',
+  [VALUE_KINDS.ASSET]: 'اصل ممتلكات',
+  [ACCOUNT_CURRENCY_KINDS.DINAR]: 'دينار د ل',
+  [ACCOUNT_CURRENCY_KINDS.USD]: 'دولار امريكي',
+  [ACCOUNT_CURRENCY_KINDS.MULTI]: 'دينار دولار متعدد',
+})
 
 export function accountSupportsNetScope(account = {}) {
   return NET_ELIGIBLE_VALUE_KINDS.has(account.valueKind)
@@ -39,9 +49,52 @@ export function splitBalanceRowsByScope(rows = []) {
   }, { included: [], separate: [], ineligible: [] })
 }
 
-export function buildNetPosition(rows = []) {
+function normalizedNetSearchText(value) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('ar')
+    .replace(/[\u064B-\u065F\u0670]/gu, '')
+    .replace(/[أإآ]/gu, 'ا')
+    .replace(/ة/gu, 'ه')
+    .trim()
+}
+
+function netContributionImpact(item = {}) {
+  return Math.abs(Number(item.dinar || 0)) + Math.abs(Number(item.usd || 0))
+}
+
+export function filterNetContributions(contributions = [], query = '') {
+  const normalizedQuery = normalizedNetSearchText(query)
+  return (Array.isArray(contributions) ? contributions : [])
+    .filter((item) => {
+      if (!normalizedQuery) return true
+      const account = item?.account || {}
+      return normalizedNetSearchText([
+        account.ownerName,
+        account.subAccountName,
+        account.name,
+        account.valueKind,
+        account.currencyKind,
+        NET_SEARCH_LABELS[account.valueKind],
+        NET_SEARCH_LABELS[account.currencyKind],
+      ].filter(Boolean).join(' ')).includes(normalizedQuery)
+    })
+    .sort((left, right) => {
+      const impactDifference = netContributionImpact(right) - netContributionImpact(left)
+      if (impactDifference !== 0) return impactDifference
+      const leftName = `${left?.account?.ownerName || ''} ${left?.account?.subAccountName || ''}`.trim()
+      const rightName = `${right?.account?.ownerName || ''} ${right?.account?.subAccountName || ''}`.trim()
+      return leftName.localeCompare(rightName, 'ar', { numeric: true, sensitivity: 'base' })
+    })
+}
+
+export function buildNetPosition(rows = [], excludedAccountIds = []) {
+  const excluded = excludedAccountIds instanceof Set
+    ? excludedAccountIds
+    : new Set(Array.isArray(excludedAccountIds) ? excludedAccountIds : [])
   const contributions = rows
     .filter((row) => isAccountIncludedInNet(row?.account))
+    .filter((row) => !excluded.has(row.account.id))
     .map((row) => ({
       accountId: row.account.id,
       account: row.account,

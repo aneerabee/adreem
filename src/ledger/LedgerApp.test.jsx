@@ -52,6 +52,7 @@ import {
   saveFailureMessage,
   signedMoney,
   storageTextForStatus,
+  TEMPORARY_NET_RESET_MS,
 } from './LedgerApp.jsx'
 import { setActiveUiLanguage, stripUiDataProtection } from './uiTranslation.js'
 
@@ -142,6 +143,37 @@ describe('LedgerApp net position controls', () => {
     expect(markup).toContain('11,250 د.ل')
     expect(markup).toContain('كاش عندي')
     expect(markup).toContain('سعيد')
+  })
+
+  it('shows temporary multi-account exclusions without hiding the excluded account from the picker', () => {
+    const contributions = [
+      { accountId: 'cash', account: { id: 'cash', ownerName: 'أنا', subAccountName: 'كاش عندي', valueKind: VALUE_KINDS.CASH }, dinar: 12_000, usd: 0 },
+      { accountId: 'friend', account: { id: 'friend', ownerName: 'سعيد', subAccountName: 'كاش بيننا', valueKind: VALUE_KINDS.RECEIVABLE }, dinar: -1_500, usd: 100 },
+      { accountId: 'bank', account: { id: 'bank', ownerName: 'مصرف الجمهورية', subAccountName: 'حساب رئيسي', valueKind: VALUE_KINDS.BANK }, dinar: 2_000, usd: 0 },
+    ]
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <NetPositionPanel
+        position={{ dinar: 12_000, usd: 0, accountCount: 1, contributions: [contributions[0]] }}
+        allContributions={contributions}
+        excludedAccountIds={['friend', 'bank']}
+        query="سعيد"
+        rate=""
+        targetCurrency={CURRENCIES.DINAR}
+        onRateChange={() => {}}
+        onTargetCurrencyChange={() => {}}
+        onQueryChange={() => {}}
+        onToggleAccount={() => {}}
+        onResetExclusions={() => {}}
+        onClose={() => {}}
+      />,
+    ))
+
+    expect(markup).toContain('مستبعد 2')
+    expect(markup).toContain('سعيد')
+    expect(markup).toContain('مستبعد مؤقتًا')
+    expect(markup).toContain('aria-pressed="true"')
+    expect(markup).not.toContain('مصرف الجمهورية')
+    expect(TEMPORARY_NET_RESET_MS).toBe(5 * 60 * 1000)
   })
 })
 
