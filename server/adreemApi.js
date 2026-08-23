@@ -13,11 +13,11 @@ import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src
 import { deleteUnusedAccountFromLedgerState } from '../src/ledger/accountEditing.js'
 import { isSupportedUiLanguage, normalizeUiLanguage } from '../src/ledger/uiLanguage.js'
 import {
-  createTelegramUserAccess,
+  createUserAccess,
   defaultRegistryPath,
   registrySessionTokenMap,
-  validateTelegramLedgerAssignments,
-} from './telegram/userRegistry.js'
+  validateUserLedgerAssignments,
+} from './auth/userRegistry.js'
 import { createAdreemV3ApiHandler } from './adreemV3Api.js'
 import { supabaseAuthEnabled } from './ledger/supabaseAuth.js'
 
@@ -358,10 +358,10 @@ async function uploadAttachment(env, { ledgerId, fileName, mimeType, base64 }) {
 
 export function createAdreemApiHandler(env = process.env) {
   if (supabaseAuthEnabled(env)) return createAdreemV3ApiHandler(env)
-  const userAccess = createTelegramUserAccess(env)
-  const ledgerMapProblem = validateTelegramLedgerAssignments(userAccess)
+  const userAccess = createUserAccess(env)
+  const ledgerMapProblem = validateUserLedgerAssignments(userAccess)
   if (ledgerMapProblem) {
-    throw new Error(`Invalid Telegram ledger assignments: ${ledgerMapProblem}`)
+    throw new Error(`Invalid user ledger assignments: ${ledgerMapProblem}`)
   }
   const repositories = new Map()
   const allowedOrigin = env.ADREEM_WEB_ALLOWED_ORIGIN || '*'
@@ -396,7 +396,6 @@ export function createAdreemApiHandler(env = process.env) {
     return {
       userId: safeUser.userId || '',
       email: safeUser.email || '',
-      telegramUserId: safeUser.telegramUserId || '',
       ledgerId: safeUser.ledgerId || '',
       source: safeUser.source || 'registry',
       displayName: safeUser.displayName || safeUser.firstName || safeUser.username || '',
@@ -544,7 +543,6 @@ export function createAdreemApiHandler(env = process.env) {
             userId: body.userId,
             email: body.email,
             password: body.password,
-            telegramUserId: body.telegramUserId,
             ledgerId: body.ledgerId,
             displayName: body.displayName,
             language: body.language,
@@ -555,7 +553,7 @@ export function createAdreemApiHandler(env = process.env) {
           })
           if (!result.ok) {
             audit(env, { action: 'admin.user.create.failed', ownerUserId: ownerUser.userId, error: result.error, targetUserId: body.userId || body.ledgerId || '' })
-            const status = result.error === 'ledger-used' || result.error === 'telegram-used' || result.error === 'email-used' ? 409 : 400
+            const status = result.error === 'ledger-used' || result.error === 'email-used' ? 409 : 400
             return sendJson(res, status, { error: result.error, existingUserId: result.existingUserId || '' }, allowedOrigin)
           }
           audit(env, { action: 'admin.user.created', ownerUserId: ownerUser.userId, targetUserId: result.entry.userId, ledgerId: result.entry.ledgerId })
@@ -569,7 +567,6 @@ export function createAdreemApiHandler(env = process.env) {
           const result = userAccess.updateUser(targetUserId, {
             email: body.email,
             password: body.password,
-            telegramUserId: body.telegramUserId,
             ledgerId: body.ledgerId,
             displayName: body.displayName,
             language: body.language,
@@ -578,7 +575,7 @@ export function createAdreemApiHandler(env = process.env) {
           if (!result.ok) {
             audit(env, { action: 'admin.user.update.failed', ownerUserId: ownerUser.userId, targetUserId, error: result.error })
             const status = result.error === 'not-found' ? 404
-              : result.error === 'ledger-used' || result.error === 'telegram-used' || result.error === 'email-used' || result.error === 'ledger-change-requires-migration' || result.error === 'owner-identity-required' ? 409
+              : result.error === 'ledger-used' || result.error === 'email-used' || result.error === 'ledger-change-requires-migration' || result.error === 'owner-identity-required' ? 409
                 : 400
             return sendJson(res, status, { error: result.error, existingUserId: result.existingUserId || '' }, allowedOrigin)
           }

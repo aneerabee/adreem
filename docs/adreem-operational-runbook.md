@@ -6,8 +6,7 @@
 
 - الويب وواجهة API للنسخة الثالثة خلف أصل HTTPS واحد.
 - API خاص يحفظ ويقرأ من Supabase عبر service role فقط.
-- Telegram Bot يعمل كخدمة systemd مستقلة.
-- لا توجد مفاتيح Supabase أو Telegram داخل بناء الويب أو Git.
+- لا توجد مفاتيح Supabase داخل بناء الويب أو Git.
 - رموز دخول Supabase تبقى داخل ملفات ارتباط `Secure` و`HttpOnly` ولا تصل إلى JavaScript.
 
 ## المتغيرات
@@ -35,20 +34,7 @@ supabase db push --linked
 supabase migration list --linked
 ```
 
-لا تفتح النسخة الثالثة قبل أن تعرض القائمة البعيدة الترحيلات التالية كمطبّقة بالترتيب نفسه:
-
-```text
-20260820213621_lock_down_adreem_ml_state.sql
-20260820213622_create_private_adreem_attachments_bucket.sql
-20260820213624_enforce_ml_state_timestamps.sql
-20260820213626_create_adreem_v3_schema.sql
-20260820213628_create_adreem_v3_ledger_functions.sql
-20260820213629_add_adreem_bot_state_claim_cas.sql
-20260820213631_add_adreem_bot_effect_cas.sql
-20260820213833_remove_empty_legacy_state_from_v3.sql
-```
-
-الترحيل الأخير يحذف جداول التوافق القديمة من المشروع المستقل فقط بعد إثبات أنها فارغة، ويرفض التنفيذ إذا وجد أي صف.
+لا تفتح النسخة الثالثة قبل أن تعرض القائمة البعيدة سجل `supabase/migrations/` كاملًا بالترتيب نفسه. ترحيلات التنظيف لا تحذف جداول التوافق القديمة إلا بعد إثبات أنها فارغة، وتزيل التكاملات المتوقفة دون المساس بالحسابات أو الحركات.
 
 لا تشغّل ملفات الترحيل منفردة خارج سجل Supabase، ولا تستخدم `supabase/schema.sql` لتجهيز النسخة الثالثة. بعد تطبيقها نفّذ ترحيل البيانات وفق `docs/adreem-v3-migration.md` وافحص النتيجة قبل التحويل.
 
@@ -90,7 +76,6 @@ ADREEM_API_PUBLIC_ORIGIN=https://adreem.example.com
 SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=server-only-service-role-key
-ADREEM_TELEGRAM_DURABLE_STATE=true
 # اختياري، الافتراضي 30 يومًا
 ADREEM_AUTH_REFRESH_MAX_AGE_SECONDS=2592000
 ```
@@ -161,7 +146,7 @@ ADREEM_RUNTIME_TEST_PASSWORD=owner-password
 - اضبط `ADREEM_BACKUP_DIR` لتفعيل snapshots تلقائية قبل/بعد حفظ الدفتر.
 - عند فقدان كلمة مرور مستخدم، أنشئ له كلمة مرور جديدة من صفحة الإدارة بنفس كود الدفتر.
 
-قاعدة العزل: كل مستخدم يحصل على `ledgerId` خاص ويدخل بالإيميل وكلمة المرور. لا تعطي مستخدمين مختلفين نفس `ledgerId`. إدارة المستخدمين تتم من صفحة إدارة ADREEM، وليس من أوامر التلقرام.
+قاعدة العزل: كل مستخدم يحصل على `ledgerId` خاص ويدخل بالإيميل وكلمة المرور. لا تعطي مستخدمين مختلفين نفس `ledgerId`. إدارة المستخدمين تتم من صفحة إدارة ADREEM فقط.
 
 ## إضافة مستخدم من صفحة الإدارة
 
@@ -169,8 +154,7 @@ ADREEM_RUNTIME_TEST_PASSWORD=owner-password
 
 ```text
 ADREEM_OWNER_EMAILS=owner@example.com
-ADREEM_TELEGRAM_ADMIN_IDS=YOUR_TELEGRAM_ID
-ADREEM_TELEGRAM_USERS_FILE=/home/argaz/apps/adreem/adreem-telegram-users.json
+ADREEM_USERS_FILE=/home/argaz/apps/adreem/adreem-users.json
 ```
 
 رابط الإدارة:
@@ -187,29 +171,17 @@ https://adreem.example.com/?admin=users
 - اكتب إيميل المستخدم.
 - اكتب كلمة مرور 8 أحرف على الأقل.
 - اكتب كود دفتر إنجليزي واضح مثل `main-ledger` أو `business-book`.
-- ضع رقم تيليغرام اختياريًا فقط إذا كان هذا المستخدم سيستعمل البوت.
 - بعد الإنشاء يدخل المستخدم من رابط الأصل الموحد، مثل `https://adreem.example.com/`.
 
-أي مستخدم غير مضاف لا يستطيع الدخول للدفتر، لكنه يرى رقم تيليغرام الخاص به فقط حتى يرسله لك. لا تفعّل وضع "الجميع مسموح" للدفتر المالي؛ هذا يكسر العزل.
-
-الأوامر المتبقية من داخل البوت:
-
-```text
-/myid
-/users
-```
-
-البوت لا ينشئ مستخدمين. عند إضافة مستخدم من صفحة الإدارة تُحفظ كلمة المرور كـ hash فقط داخل `ADREEM_TELEGRAM_USERS_FILE`، والـ API يقرأ هذا الملف عند كل طلب، لذلك لا تحتاج لإعادة تشغيل API بعد إضافة مستخدم جديد.
+أي مستخدم غير مضاف لا يستطيع الدخول للدفتر. عند إضافة مستخدم من صفحة الإدارة تُحفظ كلمة المرور كبصمة مشتقة فقط داخل `ADREEM_USERS_FILE` في الوضع القديم، ويقرأها API عند كل طلب، لذلك لا تحتاج لإعادة تشغيل API بعد إضافة مستخدم جديد.
 
 ## systemd
 
-اترك `TELEGRAM_SKIP_OLD_UPDATES=false` في التشغيل الحقيقي. تفعيله يحذف الرسائل التي وصلت أثناء توقف البوت عند أول تشغيل، ويُستخدم فقط عند إنشاء بوت جديد بلا بيانات تشغيلية.
-
 ### توافق Node
 
-- النسخة الثالثة من API والبوت تعمل على Node `22.23.2` المثبت في `/home/argaz/.local/node-v22.23.2/bin/node`.
-- وحدتا systemd تستدعيان هذا المسار نفسه مباشرة؛ حدّث الوحدتين والدليل معًا عند ترقية Node.
-- `pnpm` غير مطلوب وقت تشغيل الخدمتين. نفّذ البناء والاختبارات محليًا أو في التكامل المستمر، ولا تفترض أن الخادم مناسب للبناء.
+- النسخة الثالثة من API تعمل على Node `22.23.2` المثبت في `/home/argaz/.local/node-v22.23.2/bin/node`.
+- وحدة systemd تستدعي هذا المسار مباشرة؛ حدّث الوحدة والدليل معًا عند ترقية Node.
+- `pnpm` غير مطلوب وقت تشغيل الخدمة. نفّذ البناء والاختبارات محليًا أو في التكامل المستمر، ولا تفترض أن الخادم مناسب للبناء.
 
 قبل أي تحديث تشغيلي، افحص النسخ دون تغيير الخدمة:
 
@@ -225,20 +197,17 @@ systemctl --version
 /home/argaz/apps/adreem
 /home/argaz/logs/adreem-api.log
 /home/argaz/logs/adreem-api-error.log
-/home/argaz/logs/adreem-bot.log
-/home/argaz/logs/adreem-bot-error.log
 ```
 
 انسخ ملفات الخدمة:
 
 ```bash
 cp deploy/systemd/adreem-api.service ~/.config/systemd/user/adreem-api.service
-cp deploy/systemd/adreem-bot.service ~/.config/systemd/user/adreem-bot.service
 systemctl --user daemon-reload
-systemctl --user enable --now adreem-api.service adreem-bot.service
+systemctl --user enable --now adreem-api.service
 ```
 
-الوحدتان تمنعان اكتساب صلاحيات جديدة ومساحات الأسماء غير اللازمة، وتبقيان الشبكة والكتابة داخل مجلد المستخدم متاحتين. تم اختبار القيود فعليًا بوحدة مستخدم مؤقتة على الخادم الحالي. لا تضف قيود إسقاط صلاحيات النواة مثل `PrivateDevices=true` إلى وحدات المستخدم الحالية؛ مدير الخدمات يفشل معها برمز `218/CAPABILITIES`. أعد تقييمها فقط عند الانتقال إلى وحدات نظام.
+الوحدة تمنع اكتساب صلاحيات جديدة ومساحات الأسماء غير اللازمة، وتبقي الشبكة والكتابة داخل مجلد المستخدم متاحتين. تم اختبار القيود فعليًا بوحدة مستخدم مؤقتة على الخادم الحالي. لا تضف قيود إسقاط صلاحيات النواة مثل `PrivateDevices=true` إلى وحدات المستخدم الحالية؛ مدير الخدمات يفشل معها برمز `218/CAPABILITIES`. أعد تقييمها فقط عند الانتقال إلى وحدات نظام.
 
 لا تضف `ProtectHome=true` لأن ملفات المستخدمين والنسخ الاحتياطية وسجل التدقيق محفوظة تحت `/home/argaz`، ولا تضف `MemoryDenyWriteExecute=true` لأنه غير مناسب لمحرك Node.
 
@@ -246,13 +215,12 @@ systemctl --user enable --now adreem-api.service adreem-bot.service
 
 ```bash
 systemd-analyze verify deploy/systemd/adreem-api.service
-systemd-analyze verify deploy/systemd/adreem-bot.service
-systemd-analyze security --user adreem-api.service adreem-bot.service
+systemd-analyze security --user adreem-api.service
 ```
 
 ## تدوير السجلات
 
-ملف `deploy/logrotate/adreem` يحتفظ بـ14 دورة لسجلات الخدمتين و30 دورة لسجل التدقيق، مع ضغط وصلاحية `0600`. سجلات الخدمتين تستخدم النسخ ثم التفريغ لأن systemd يبقي الملفات مفتوحة؛ سجل التدقيق لا يستخدم ذلك لأن التطبيق يفتح الملف عند كل كتابة.
+ملف `deploy/logrotate/adreem` يحتفظ بـ14 دورة لسجل خدمة API و30 دورة لسجل التدقيق، مع ضغط وصلاحية `0600`. سجل الخدمة يستخدم النسخ ثم التفريغ لأن systemd يبقي الملف مفتوحًا؛ سجل التدقيق لا يستخدم ذلك لأن التطبيق يفتح الملف عند كل كتابة.
 
 ثبّت الإعداد كمسؤول نظام ثم افحصه دون إجبار التدوير:
 
@@ -261,7 +229,7 @@ sudo install -o root -g root -m 0644 deploy/logrotate/adreem /etc/logrotate.d/ad
 sudo logrotate --debug /etc/logrotate.d/adreem
 ```
 
-لا يحتاج تدوير السجلات إلى إعادة تشغيل API أو البوت.
+لا يحتاج تدوير السجلات إلى إعادة تشغيل API.
 
 ## فحص التشغيل
 
@@ -269,7 +237,6 @@ sudo logrotate --debug /etc/logrotate.d/adreem
 
 ```bash
 systemctl --user status adreem-api.service --no-pager
-systemctl --user status adreem-bot.service --no-pager
 ```
 
 شغّل `pnpm verify:runtime` للوضع القديم فقط إلى أن يصبح الفاحص قادرًا على حفظ ملفات الارتباط. في النسخة الثالثة نفّذ فحص دخول حقيقي من رابط الإنتاج، ثم تأكد من نجاح تحميل الدفتر وتجديد الصفحة والخروج، ومن غياب الرموز عن تخزين المتصفح.

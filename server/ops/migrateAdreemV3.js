@@ -89,20 +89,6 @@ with target_tables(table_name) as (
   from pg_proc as procedure
   join pg_namespace as namespace on namespace.oid = procedure.pronamespace
   where namespace.nspname = 'public' and procedure.proname = 'adreem_delete_unused_account'
-), bot_cas_function_names(function_name) as (
-  values
-    ('adreem_bot_state_claim'),
-    ('adreem_bot_state_renew_claim'),
-    ('adreem_bot_state_complete_claim'),
-    ('adreem_bot_state_release_claim'),
-    ('adreem_bot_state_claim_effect'),
-    ('adreem_bot_state_complete_effect')
-), bot_cas_functions as (
-  select expected.function_name, procedure.oid, procedure.proacl, procedure.proowner, procedure.prosecdef
-  from bot_cas_function_names as expected
-  left join pg_proc as procedure
-    on procedure.proname = expected.function_name
-   and procedure.pronamespace = 'public'::regnamespace
 )
 select json_build_object(
   'tables', coalesce((
@@ -151,7 +137,7 @@ select json_build_object(
         filter (where has_column_privilege(checked_role.role_name, 'public.adreem_profiles', column_name, 'UPDATE')), '{}')
     ) order by checked_role.role_name)
     from checked_roles as checked_role
-    cross join unnest(array['display_name', 'email', 'id', 'is_active', 'is_system_owner', 'language', 'telegram_user_id']) as column_name
+    cross join unnest(array['display_name', 'email', 'id', 'is_active', 'is_system_owner', 'language']) as column_name
     group by checked_role.role_name
   ), '[]'::json),
   'applyFunction', (
@@ -181,21 +167,6 @@ select json_build_object(
       )
     )
     from delete_account_function as delete_proc
-  ),
-  'botCasFunctions', (
-    select json_agg(json_build_object(
-      'name', function_row.function_name,
-      'exists', function_row.oid is not null,
-      'securityDefiner', coalesce(function_row.prosecdef, false),
-      'anonExecute', case when function_row.oid is null then false else has_function_privilege('anon', function_row.oid, 'EXECUTE') end,
-      'authenticatedExecute', case when function_row.oid is null then false else has_function_privilege('authenticated', function_row.oid, 'EXECUTE') end,
-      'serviceRoleExecute', case when function_row.oid is null then false else has_function_privilege('service_role', function_row.oid, 'EXECUTE') end,
-      'publicExecute', case when function_row.oid is null then false else exists (
-        select 1 from aclexplode(coalesce(function_row.proacl, acldefault('f', function_row.proowner))) as acl
-        where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
-      ) end
-    ) order by function_row.function_name)
-    from bot_cas_functions as function_row
   )
 );
 commit;
@@ -355,27 +326,6 @@ export function verifyTargetSecurityManifest(manifest) {
     !deleteAccountFunction.authenticatedExecute || !deleteAccountFunction.serviceRoleExecute
   ) errors.push('invalid adreem_delete_unused_account security or grants')
 
-  const expectedBotCasFunctions = [
-    'adreem_bot_state_claim',
-    'adreem_bot_state_complete_claim',
-    'adreem_bot_state_claim_effect',
-    'adreem_bot_state_complete_effect',
-    'adreem_bot_state_release_claim',
-    'adreem_bot_state_renew_claim',
-  ]
-  const botCasFunctions = new Map((manifest?.botCasFunctions || []).map((entry) => [entry.name, entry]))
-  for (const functionName of expectedBotCasFunctions) {
-    const actual = botCasFunctions.get(functionName)
-    if (
-      !actual?.exists ||
-      !actual.securityDefiner ||
-      actual.anonExecute ||
-      actual.authenticatedExecute ||
-      !actual.serviceRoleExecute ||
-      actual.publicExecute
-    ) errors.push(`invalid or missing ${functionName} security or grants`)
-  }
-
   if (errors.length) throw new Error(`Target ADREEM v3 security preflight failed: ${errors[0]}`)
   return true
 }
@@ -430,7 +380,6 @@ export function normalizeMigrationUsers(users) {
       legacyRowId,
       ledgerId,
       displayName: String(user.displayName || '').trim(),
-      telegramUserId: String(user.telegramUserId || '').replace(/\D/g, ''),
       password: String(user.password || ''),
       isOwner: Boolean(user.isOwner),
       language: user.language === 'en' ? 'en' : 'ar',
@@ -445,7 +394,6 @@ export function normalizeMigrationUsers(users) {
     ['email', normalized.map((user) => user.email)],
     ['legacy row', normalized.map((user) => user.legacyRowId)],
     ['ledger id', normalized.map((user) => user.ledgerId)],
-    ['Telegram id', normalized.map((user) => user.telegramUserId).filter(Boolean)],
   ]) {
     if (new Set(values).size !== values.length) throw new Error(`Duplicate migration ${field}.`)
   }
@@ -468,11 +416,6 @@ export async function verifyTargetV3Schema(target) {
     const { error } = await target.from(table).select(columns, { count: 'exact', head: true })
     if (error) throw new Error(`Target ADREEM v3 schema marker is missing or unreadable at ${table}: ${error.message}`)
   }
-  const { error } = await target.rpc('adreem_bot_state_get', {
-    p_bot_key: '__adreem_v3_migration_read_only_probe__',
-    p_state_key: '__schema_marker__',
-  })
-  if (error) throw new Error(`Target ADREEM v3 function marker is missing or unreadable: ${error.message}`)
 }
 
 function sourceFreezeError(config, detail) {
@@ -519,7 +462,6 @@ export function migrationIdentityFingerprint(config) {
     legacyRowId: config.legacyRowId,
     ledgerId: config.ledgerId,
     displayName: config.displayName,
-    telegramUserId: config.telegramUserId,
     isOwner: config.isOwner,
     language: config.language,
     expectedSourceAppId: config.expectedSourceAppId,
@@ -565,7 +507,6 @@ function expectedAuthMetadata(config) {
       adreem_member: true,
       adreem_disabled: false,
       adreem_legacy_ledger_id: config.ledgerId,
-      adreem_telegram_user_id: config.telegramUserId,
       adreem_system_owner: config.isOwner,
     },
   }
@@ -618,7 +559,7 @@ async function targetLedger(target, ownerId) {
 
 async function targetProfileByEmail(target, email) {
   const { data, error } = await target.from('adreem_profiles')
-    .select('id, email, display_name, telegram_user_id, language, is_system_owner, is_active')
+    .select('id, email, display_name, language, is_system_owner, is_active')
     .eq('email', email).maybeSingle()
   if (error) throw error
   return data || null
@@ -653,10 +594,8 @@ function assertTargetIdentity(config, authUser, profile, ledger, options = {}) {
     [authUser.app_metadata?.adreem_legacy_ledger_id, metadata.appMetadata.adreem_legacy_ledger_id],
     [authUser.app_metadata?.adreem_member, metadata.appMetadata.adreem_member],
     [authUser.app_metadata?.adreem_disabled, metadata.appMetadata.adreem_disabled],
-    [authUser.app_metadata?.adreem_telegram_user_id, metadata.appMetadata.adreem_telegram_user_id],
     [authUser.app_metadata?.adreem_system_owner, metadata.appMetadata.adreem_system_owner],
     [profile.display_name, config.displayName],
-    [profile.telegram_user_id, config.telegramUserId],
     [profile.language, config.language],
     [profile.is_system_owner, config.isOwner],
   ]

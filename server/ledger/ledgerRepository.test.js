@@ -14,10 +14,8 @@ import {
   hasPersistedLedgerRow,
   ledgerVersionMatches,
   nextLedgerVersionTimestamp,
-  parseTelegramLedgerMap,
   prepareLedgerStateForSave,
   resolveLedgerConfig,
-  resolveTelegramLedgerId,
   selectLedgerRowsForLoad,
   validatePersistedLedgerPayload,
   writeLedgerBackup,
@@ -87,15 +85,6 @@ describe('ledger repository state preparation', () => {
     expect(config.rowId).toBe('adreem:adreem:main')
     expect(config.readableRowIds).toEqual(['adreem:adreem:main', 'default'])
     expect(config.legacyRowId).toBe('default')
-  })
-
-  it('maps telegram users to separate ledger ids when configured', () => {
-    const map = parseTelegramLedgerMap('278516861=main,555:saeed-book')
-
-    expect(map.get('278516861')).toBe('main')
-    expect(map.get('555')).toBe('saeed-book')
-    expect(resolveTelegramLedgerId(555, { ADREEM_TELEGRAM_LEDGER_IDS: '555=saeed-book' })).toBe('saeed-book')
-    expect(resolveTelegramLedgerId(999, { ADREEM_LEDGER_ID: 'fallback-book' })).toBe('fallback-book')
   })
 
   it('requires a service role key for all server repositories', () => {

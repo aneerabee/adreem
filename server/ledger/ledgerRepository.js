@@ -19,7 +19,7 @@ import { validateLedgerStateTransition } from './stateValidation.js'
 
 const MAX_SAVE_ATTEMPTS = 4
 const DEFAULT_BACKUP_LIMIT = 60
-const DEFAULT_REGISTRY_FILE = './adreem-telegram-users.json'
+const DEFAULT_REGISTRY_FILE = './adreem-users.json'
 const REQUIRED_PERSISTED_LISTS = ['accounts', 'movements']
 const OPTIONAL_PERSISTED_RECORD_LISTS = ['dimensions', 'attachments', 'recurringRules', 'reconciliations', 'auditEvents']
 const OPTIONAL_PERSISTED_LISTS = [...OPTIONAL_PERSISTED_RECORD_LISTS, 'ignoredExternalAccounts']
@@ -219,25 +219,6 @@ export function resolveLedgerConfig(env = process.env, options = {}) {
   }
 }
 
-export function parseTelegramLedgerMap(value = '') {
-  return String(value || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .reduce((map, item) => {
-      const [userId, ledgerId] = item.split(/[=:]/).map((part) => part?.trim())
-      if (userId && ledgerId) map.set(userId, createLedgerIdentity({ ledgerId }).ledgerId)
-      return map
-    }, new Map())
-}
-
-export function resolveTelegramLedgerId(userId, env = process.env) {
-  const explicitMap = parseTelegramLedgerMap(env.ADREEM_TELEGRAM_LEDGER_IDS)
-  return explicitMap.get(String(userId)) || createLedgerIdentity({
-    ledgerId: env.ADREEM_LEDGER_ID || env.VITE_ADREEM_LEDGER_ID,
-  }).ledgerId
-}
-
 async function loadLedgerState(client, ledgerConfig) {
   const fallback = createEmptyAdreemState(undefined, ledgerConfig.identity)
   const { data, error } = await client
@@ -305,7 +286,7 @@ export function prepareLedgerStateForSave(resultState, currentState, savedAt = n
 function ledgerBackupDirectory(env = process.env) {
   if (env.ADREEM_BACKUP_DIR) return env.ADREEM_BACKUP_DIR
   if (env.ADREEM_LEDGER_BACKUP_DIR) return env.ADREEM_LEDGER_BACKUP_DIR
-  const registryPath = env.ADREEM_TELEGRAM_USERS_FILE || env.ADREEM_TELEGRAM_REGISTRY_PATH || DEFAULT_REGISTRY_FILE
+  const registryPath = env.ADREEM_USERS_FILE || DEFAULT_REGISTRY_FILE
   return join(dirname(registryPath), 'ledger-backups')
 }
 

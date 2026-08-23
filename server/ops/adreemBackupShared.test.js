@@ -66,28 +66,9 @@ describe('ADREEM backup safety primitives', () => {
   })
 
   it('requires the exact critical SECURITY DEFINER privilege policy', () => {
-    const botCasFunctions = [
-      'public.adreem_bot_state_claim',
-      'public.adreem_bot_state_claim_effect',
-      'public.adreem_bot_state_complete_claim',
-      'public.adreem_bot_state_complete_effect',
-      'public.adreem_bot_state_fail_claim',
-      'public.adreem_bot_state_release_claim',
-      'public.adreem_bot_state_renew_claim',
-    ]
     expect(ADREEM_CRITICAL_FUNCTION_PRIVILEGES_SQL).toContain("acl.privilege_type = 'EXECUTE'")
     expect(validateCriticalFunctionPrivileges(ADREEM_CRITICAL_FUNCTION_PRIVILEGES))
       .toEqual(ADREEM_CRITICAL_FUNCTION_PRIVILEGES)
-    expect(ADREEM_CRITICAL_FUNCTION_PRIVILEGES.filter((entry) => botCasFunctions.includes(entry.function)))
-      .toEqual(botCasFunctions.map((functionName) => ({
-        function: functionName,
-        executeGrantedTo: ['service_role'],
-      })))
-    for (const functionName of botCasFunctions) {
-      expect(() => validateCriticalFunctionPrivileges(
-        ADREEM_CRITICAL_FUNCTION_PRIVILEGES.filter((entry) => entry.function !== functionName),
-      )).toThrowError(expect.objectContaining({ code: 'INVALID_CRITICAL_FUNCTION_PRIVILEGES' }))
-    }
     expect(ADREEM_CRITICAL_FUNCTION_PRIVILEGES).toContainEqual({
       function: 'public.adreem_delete_unused_account',
       executeGrantedTo: ['authenticated', 'service_role'],

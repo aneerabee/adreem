@@ -595,8 +595,6 @@ const ENGLISH_TEXT = Object.freeze({
   'رصيد': 'Balance',
   'رصيد مصرفي بيني وبين شخص أو جهة.': 'A bank balance between me and a person or business.',
   'رقم إيصال أو وصف': 'Receipt number or description',
-  'رقم تيليغرام مستخدم بالفعل.': 'This Telegram number is already used.',
-  'رقم تيليغرام غير صحيح.': 'The Telegram ID is not valid.',
   'سبب التصنيف أو أي توضيح': 'Category reason or note',
   'سبب الحركة أو التصحيح': 'Entry or adjustment reason',
   'سحابة متوقفة': 'Cloud offline',
@@ -942,7 +940,6 @@ const ENGLISH_TEXT = Object.freeze({
   'اختر نوع المصروف أو اضغط بدون تصنيف.': 'Choose an expense type or No category.',
   'اختر هل هذه الحركة شهرية.': 'Choose whether this entry repeats monthly.',
   'اختياري، ويسهّل معرفة أين صُرفت الفلوس.': 'Optional. It helps show where money was spent.',
-  'إخفاء حساب مراجعة صفر من البوت': 'Hide a zero-balance review account from the bot',
   'اربط مشروعًا': 'Link a project',
   'أسماء': 'Names',
   'اشتريت دولار': 'Bought US dollars',
@@ -953,13 +950,10 @@ const ENGLISH_TEXT = Object.freeze({
   'أضف ملاحظة': 'Add note',
   'إغلاق': 'Close',
   'اكتب الرقم فقط.': 'Enter numbers only.',
-  'التلقرام لا ينشئ مستخدمين حتى لا تتكرر مسارات الصلاحيات.': 'Telegram does not create users, so access stays in one clear place.',
   'الحركات الشهرية': 'Monthly entries',
   'آخر حركات اليوم': 'Latest entries today',
   'الحركة لم تعد قابلة للإصلاح من هنا.': 'This entry can no longer be fixed here.',
   'الحركة لم تعد في المراجعة.': 'This entry is no longer in Review.',
-  'إلغاء حركة ناقصة من البوت': 'Cancel an incomplete entry from the bot',
-  'إلغاء من سجل Telegram': 'Cancel from Telegram history',
   'القسم': 'Section',
   'بحث عن حساب': 'Search for an account',
   'حجم المرفق أكبر من 10 ميغابايت.': 'The attachment is larger than 10 MB.',
@@ -1093,7 +1087,6 @@ const ENGLISH_TEXT = Object.freeze({
   'سيُحفظ الحساب كالتالي': 'The account will be saved as',
   'حفظ الحساب': 'Save account',
   'اختر للمتابعة': 'Choose to continue',
-  'تيليغرام': 'Telegram',
   'تحديث الجلسة': 'Refresh session',
   'ادخل بحساب المالك': 'Sign in as owner',
   'إدارة المستخدمين تعمل من جلسة حسابك العادي فقط. لا يوجد توكن إدارة يدوي.': 'User management uses your normal owner session. There is no manual admin token.',
@@ -1102,7 +1095,6 @@ const ENGLISH_TEXT = Object.freeze({
   'هذا الحساب لا يملك صلاحية إدارة المستخدمين، أو أن الجلسة انتهت.': 'This account cannot manage users, or the session has expired.',
   'إعادة الفحص': 'Check again',
   'كود الدفتر': 'Ledger code',
-  'رقم تيليغرام (اختياري)': 'Telegram ID (optional)',
   'إلغاء التعديل': 'Cancel editing',
   'تحديث': 'Refresh',
   'لا يوجد مستخدمون بعد.': 'No users yet.',
@@ -1408,35 +1400,4 @@ export function rememberUiLanguage(value) {
     }
   }
   return language
-}
-
-export function localizeTelegramPayload(payload, language) {
-  if (!payload || typeof payload !== 'object') return payload
-  const isEnglish = normalizeUiLanguage(language) === UI_LANGUAGES.ENGLISH
-  const localizeValue = (value) => typeof value === 'string'
-    ? stripUiDataProtection(isEnglish ? translateUiText(value, language) : value)
-    : value
-  const replyMarkup = payload.reply_markup && typeof payload.reply_markup === 'object'
-    ? {
-        ...payload.reply_markup,
-        inline_keyboard: Array.isArray(payload.reply_markup.inline_keyboard)
-          ? payload.reply_markup.inline_keyboard.map((row) => row.map((button) => ({
-              ...button,
-              text: localizeValue(button.text),
-            })))
-          : payload.reply_markup.inline_keyboard,
-      }
-    : payload.reply_markup
-  const localized = {
-    ...payload,
-    text: localizeValue(payload.text),
-    caption: localizeValue(payload.caption),
-    reply_markup: replyMarkup,
-  }
-  if (isEnglish) return localized
-  const keyboardUnchanged = replyMarkup === payload.reply_markup ||
-    localized.reply_markup?.inline_keyboard?.every((row, rowIndex) => row.every((button, buttonIndex) =>
-      button.text === payload.reply_markup?.inline_keyboard?.[rowIndex]?.[buttonIndex]?.text))
-  const unchanged = localized.text === payload.text && localized.caption === payload.caption && keyboardUnchanged
-  return unchanged ? payload : localized
 }

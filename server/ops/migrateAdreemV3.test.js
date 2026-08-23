@@ -94,22 +94,6 @@ function securityManifest() {
       serviceRoleExecute: true,
       publicExecute: false,
     },
-    botCasFunctions: [
-      'adreem_bot_state_claim',
-      'adreem_bot_state_claim_effect',
-      'adreem_bot_state_complete_claim',
-      'adreem_bot_state_complete_effect',
-      'adreem_bot_state_release_claim',
-      'adreem_bot_state_renew_claim',
-    ].map((name) => ({
-      name,
-      exists: true,
-      securityDefiner: true,
-      anonExecute: false,
-      authenticatedExecute: false,
-      serviceRoleExecute: true,
-      publicExecute: false,
-    })),
   }
 }
 
@@ -202,7 +186,6 @@ function createTargetFake(options = {}) {
     id: OWNER_ID,
     email: 'owner@example.com',
     display_name: '',
-    telegram_user_id: null,
     language: 'ar',
     is_system_owner: true,
     is_active: true,
@@ -223,7 +206,6 @@ function createTargetFake(options = {}) {
     }
     if (changes.app_metadata) {
       user.app_metadata = { ...(user.app_metadata || {}), ...changes.app_metadata }
-      profile.telegram_user_id = user.app_metadata.adreem_telegram_user_id || null
       profile.is_system_owner = Boolean(user.app_metadata.adreem_system_owner)
       ledger.legacy_ledger_id = user.app_metadata.adreem_legacy_ledger_id
     }
@@ -282,7 +264,6 @@ function createTargetFake(options = {}) {
             id: OWNER_ID,
             email: changes.email,
             display_name: '',
-            telegram_user_id: null,
             language: 'ar',
             is_system_owner: false,
             is_active: true,
@@ -296,10 +277,6 @@ function createTargetFake(options = {}) {
     },
     from: query,
     async rpc(name, arguments_) {
-      if (name === 'adreem_bot_state_get') {
-        schemaReads.push('rpc:adreem_bot_state_get')
-        return options.schemaRpcError ? { data: null, error: { message: options.schemaRpcError } } : { data: null, error: null }
-      }
       rpcCalls += 1
       events.push(`apply:${Object.keys(arguments_.p_delta)[0]}`)
       if (failRpcAt === rpcCalls) return { data: null, error: { message: 'simulated interruption' } }
@@ -322,7 +299,7 @@ function createTargetFake(options = {}) {
     authMetadata: () => structuredClone(user?.app_metadata || {}),
     setRevision(value) { revision = value; if (ledger) ledger.revision = value },
     allowRpcCompletion() { failRpcAt = null },
-    driftMetadata() { user.app_metadata.adreem_telegram_user_id = 'different'; profile.telegram_user_id = 'different' },
+    driftMetadata() { user.user_metadata.display_name = 'different'; profile.display_name = 'different' },
   }
 }
 
@@ -334,7 +311,6 @@ async function privateMigrationEnv(directory, overrides = {}) {
     legacyRowId: 'legacy-a',
     ledgerId: 'main',
     displayName: 'Owner',
-    telegramUserId: '278516861',
     password: 'temporary-password',
     isOwner: true,
     language: 'ar',
@@ -440,14 +416,14 @@ describe('ADREEM v3 migration safety', () => {
 
   it('fingerprints every mapped identity and permission field deterministically', () => {
     const [config] = normalizeMigrationUsers([{
-      email: 'owner@example.com', legacyRowId: 'legacy-a', ledgerId: 'main', displayName: 'Owner', telegramUserId: '123',
+      email: 'owner@example.com', legacyRowId: 'legacy-a', ledgerId: 'main', displayName: 'Owner',
       isOwner: true, language: 'ar', expectedSourceAppId: 'adreem', expectedSourceTenantId: 'adreem',
       expectedSourceLedgerId: 'main', expectedSourceUpdatedAt: SOURCE_UPDATED_AT,
     }])
     const base = migrationIdentityFingerprint(config)
     for (const [field, value] of [
       ['email', 'other@example.com'], ['legacyRowId', 'other'], ['ledgerId', 'other'], ['displayName', 'Other'],
-      ['telegramUserId', '456'], ['isOwner', false], ['language', 'en'], ['expectedSourceTenantId', 'other'],
+      ['isOwner', false], ['language', 'en'], ['expectedSourceTenantId', 'other'],
     ]) expect(migrationIdentityFingerprint({ ...config, [field]: value })).not.toBe(base)
     const legacy = { updatedAt: SOURCE_UPDATED_AT, sourceRevision: null, state: { movements: [], nested: { b: 2, a: 1 } } }
     expect(migrationSourceFingerprint(config, legacy)).toBe(migrationSourceFingerprint(config, {
@@ -473,9 +449,6 @@ describe('ADREEM v3 migration safety', () => {
     const weakDeleteGrant = securityManifest()
     weakDeleteGrant.deleteAccountFunction.anonExecute = true
     expect(() => verifyTargetSecurityManifest(weakDeleteGrant)).toThrow('delete_unused_account security or grants')
-    const missingBotCas = securityManifest()
-    missingBotCas.botCasFunctions = missingBotCas.botCasFunctions.filter(({ name }) => name !== 'adreem_bot_state_complete_claim')
-    expect(() => verifyTargetSecurityManifest(missingBotCas)).toThrow('invalid or missing adreem_bot_state_complete_claim')
   })
 
   it('makes resume explicit and validates project and database identities before clients', async () => {
@@ -538,7 +511,7 @@ describe('ADREEM v3 migration safety', () => {
 
     await expect(runMigration(env, ['--dry-run'], migrationDependencies(sourceFake, targetFake, sourceState)))
       .resolves.toMatchObject({ mode: 'dry-run', targetSchemaVerified: true, targetSecurityVerified: true })
-    expect(targetFake.schemaReads).toEqual(expect.arrayContaining([...SECURITY_TABLES, 'rpc:adreem_bot_state_get']))
+    expect(targetFake.schemaReads).toEqual(expect.arrayContaining(SECURITY_TABLES))
     expect(targetFake.mutations).toEqual([])
     expect(targetFake.rpcCalls()).toBe(0)
   })

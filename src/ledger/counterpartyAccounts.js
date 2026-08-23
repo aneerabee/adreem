@@ -22,8 +22,6 @@ export function buildCounterpartyAccountBundle(draft = {}, metadata = {}) {
     counterpartyId,
     source: metadata.source || account.source,
     idempotencyKey: metadata.idempotencyKey || undefined,
-    telegramUserId: metadata.telegramUserId,
-    telegramChatId: metadata.telegramChatId,
   }))
 }
 

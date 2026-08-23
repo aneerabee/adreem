@@ -4,6 +4,7 @@ import { createLedgerIdentity } from '../../src/ledger/ledgerState.js'
 const USER_PAGE_SIZE = 1_000
 const LONG_BAN_DURATION = '876000h'
 const ADREEM_MEMBER_METADATA_KEY = 'adreem_member'
+const OBSOLETE_BOT_METADATA_KEY = 'adreem_telegram_user_id'
 
 export function supabaseAuthEnabled(env = process.env) {
   return String(env.ADREEM_AUTH_MODE || '').trim().toLowerCase() === 'supabase'
@@ -35,13 +36,10 @@ function requireAdreemMember(user) {
   throw authError({ status: 403 }, 'This authentication user is not an ADREEM member.')
 }
 
-function telegramUserIdValue(value) {
-  const text = String(value || '').trim()
-  if (!text) return null
-  if (!/^\d{1,19}$/.test(text) || BigInt(text) > 9_223_372_036_854_775_807n) {
-    throw authError({ status: 400, code: 'invalid-telegram-user-id' }, 'Telegram user ID is invalid.')
-  }
-  return text
+function withoutObsoleteBotMetadata(metadata = {}) {
+  return Object.fromEntries(
+    Object.entries(metadata).filter(([key]) => key !== OBSOLETE_BOT_METADATA_KEY),
+  )
 }
 
 function attachRotatedSession(error, session) {
@@ -77,7 +75,6 @@ function publicUser(profile = {}, ledger = {}, authUser = {}) {
   return {
     userId: profile.id || authUser.id || '',
     email: profile.email || authUser.email || '',
-    telegramUserId: profile.telegram_user_id ? String(profile.telegram_user_id) : '',
     ledgerId: ledger.legacy_ledger_id || ledger.id || '',
     relationalLedgerId: ledger.id || '',
     displayName: profile.display_name || authUser.user_metadata?.display_name || '',
@@ -99,7 +96,7 @@ export function createSupabaseAuthService(env = process.env, options = {}) {
   async function profileAndLedger(client, userId) {
     const { data: profile, error: profileError } = await client
       .from('adreem_profiles')
-      .select('id, email, display_name, telegram_user_id, language, is_system_owner, is_active')
+      .select('id, email, display_name, language, is_system_owner, is_active')
       .eq('id', userId)
       .maybeSingle()
     if (profileError) throw authError(profileError, 'Failed to load the user profile.')
@@ -185,7 +182,7 @@ export function createSupabaseAuthService(env = process.env, options = {}) {
   async function listUsers() {
     const { data: profileRows, error: profilesError } = await admin
       .from('adreem_profiles')
-      .select('id, email, display_name, telegram_user_id, language, is_system_owner, is_active')
+      .select('id, email, display_name, language, is_system_owner, is_active')
       .order('created_at', { ascending: true })
     if (profilesError) throw authError(profilesError, 'Failed to list ADREEM profiles.')
     const { data: ledgerRows, error: ledgersError } = await admin
@@ -206,13 +203,12 @@ export function createSupabaseAuthService(env = process.env, options = {}) {
       .map((profile) => publicUser(profile, ledgerByOwner.get(profile.id), authById.get(profile.id)))
   }
 
-  async function createUser({ email, password, displayName = '', telegramUserId = '', ledgerId, language = 'ar', active = false }) {
+  async function createUser({ email, password, displayName = '', ledgerId, language = 'ar', active = false }) {
     if (typeof active !== 'boolean') throw authError({ status: 400 }, 'Active must be a boolean.')
     const normalizedLedgerId = createLedgerIdentity({ ledgerId }).ledgerId
     const normalizedEmail = String(email || '').trim().toLowerCase()
     const normalizedDisplayName = String(displayName || '').trim()
     const normalizedLanguage = language === 'en' ? 'en' : 'ar'
-    const normalizedTelegramUserId = telegramUserIdValue(telegramUserId)
     const { data, error } = await admin.auth.admin.createUser({
       email: normalizedEmail,
       password,
@@ -223,7 +219,6 @@ export function createSupabaseAuthService(env = process.env, options = {}) {
         [ADREEM_MEMBER_METADATA_KEY]: true,
         adreem_disabled: true,
         adreem_legacy_ledger_id: normalizedLedgerId,
-        adreem_telegram_user_id: normalizedTelegramUserId || '',
         adreem_system_owner: false,
       },
     })
@@ -246,19 +241,16 @@ export function createSupabaseAuthService(env = process.env, options = {}) {
       userId,
       email: updates.email === undefined ? currentProfile.email : String(updates.email || '').trim().toLowerCase(),
       displayName: updates.displayName === undefined ? currentProfile.display_name : String(updates.displayName || '').trim(),
-      telegramUserId: updates.telegramUserId === undefined ? currentProfile.telegram_user_id : telegramUserIdValue(updates.telegramUserId),
       language: updates.language === undefined ? currentProfile.language : updates.language === 'en' ? 'en' : 'ar',
     }
+    const existingAppMetadata = withoutObsoleteBotMetadata(existing.app_metadata)
     const attributes = {
       user_metadata: {
         ...(existing.user_metadata || {}),
         display_name: nextProfile.displayName,
         language: nextProfile.language,
       },
-      app_metadata: {
-        ...(existing.app_metadata || {}),
-        adreem_telegram_user_id: nextProfile.telegramUserId ? String(nextProfile.telegramUserId) : '',
-      },
+      app_metadata: existingAppMetadata,
       ...(updates.email ? { email: nextProfile.email, email_confirm: true } : {}),
       ...(updates.password ? { password: updates.password } : {}),
     }

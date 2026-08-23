@@ -40,7 +40,6 @@ function createFixture(overrides = {}) {
       id,
       email: authUser.email,
       display_name: user.profileDisplayName ?? user.displayName ?? '',
-      telegram_user_id: user.telegramUserId ?? null,
       language: user.profileLanguage || user.language || 'ar',
       is_system_owner: Boolean(user.isOwner),
       is_active: user.active !== false,
@@ -62,7 +61,6 @@ function createFixture(overrides = {}) {
     id: 'user-a',
     email: 'owner@example.com',
     displayName: 'ربيع',
-    telegramUserId: '278516861',
     ledgerId: 'main-ledger',
     relationalLedgerId: 'ledger-a',
     isOwner: overrides.primaryIsOwner,
@@ -183,7 +181,6 @@ function createFixture(overrides = {}) {
     profile.email = user.email
     profile.display_name = user.user_metadata?.display_name || ''
     profile.language = user.user_metadata?.language === 'en' ? 'en' : 'ar'
-    profile.telegram_user_id = user.app_metadata?.adreem_telegram_user_id || null
   }
 
   const adminAuth = {
@@ -210,7 +207,6 @@ function createFixture(overrides = {}) {
           id,
           email: user.email,
           display_name: user.user_metadata.display_name || '',
-          telegram_user_id: user.app_metadata.adreem_telegram_user_id || null,
           language: user.user_metadata.language || 'ar',
           is_system_owner: Boolean(user.app_metadata.adreem_system_owner),
           is_active: false,
@@ -293,7 +289,6 @@ describe('Supabase Auth sessions', () => {
       publicUser: {
         userId: 'user-a',
         email: 'owner@example.com',
-        telegramUserId: '278516861',
         ledgerId: 'main-ledger',
         relationalLedgerId: 'ledger-a',
         displayName: 'ربيع',
@@ -506,7 +501,6 @@ describe('Supabase Auth user administration', () => {
       email: '  NEW@Example.COM ',
       password: 'strong-password',
       displayName: 'أحمد',
-      telegramUserId: 12345,
       ledgerId: '  Customer Main  ',
       language: 'en',
     })
@@ -521,14 +515,12 @@ describe('Supabase Auth user administration', () => {
         adreem_member: true,
         adreem_disabled: true,
         adreem_legacy_ledger_id: 'customer-main',
-        adreem_telegram_user_id: '12345',
         adreem_system_owner: false,
       },
     })
     expect(result).toMatchObject({
       email: 'new@example.com',
       displayName: 'أحمد',
-      telegramUserId: '12345',
       ledgerId: 'customer-main',
       relationalLedgerId: 'ledger-created-1',
       language: 'en',
@@ -615,7 +607,6 @@ describe('Supabase Auth user administration', () => {
       email: '  UPDATED@Example.COM ',
       password: 'new-password',
       displayName: 'ربيع الجديد',
-      telegramUserId: 9988,
       language: 'en',
     })
 
@@ -632,13 +623,11 @@ describe('Supabase Auth user administration', () => {
         adreem_member: true,
         marker: 'user-a-marker',
         plan: 'pro',
-        adreem_telegram_user_id: '9988',
       },
     })
     expect(result).toMatchObject({
       email: 'updated@example.com',
       displayName: 'ربيع الجديد',
-      telegramUserId: '9988',
       language: 'en',
       ledgerId: 'main-ledger',
     })
@@ -651,7 +640,7 @@ describe('Supabase Auth user administration', () => {
 
     expect(spies.updateUserById).toHaveBeenCalledWith('user-a', {
       user_metadata: { display_name: 'اسم فقط', language: 'ar' },
-      app_metadata: { adreem_member: true, marker: 'user-a-marker', adreem_telegram_user_id: '278516861' },
+      app_metadata: { adreem_member: true, marker: 'user-a-marker' },
     })
   })
 
@@ -661,31 +650,21 @@ describe('Supabase Auth user administration', () => {
     await expect(fixture.service.updateUser('user-a', {
       email: 'new@example.com',
       displayName: 'اسم جديد',
-      telegramUserId: '9988',
       language: 'en',
     })).rejects.toMatchObject({ code: 'auth_update_failed', status: 503 })
 
     expect(fixture.profiles.get('user-a')).toMatchObject({
       email: 'owner@example.com',
       display_name: 'ربيع',
-      telegram_user_id: '278516861',
       language: 'ar',
     })
   })
 
-  it('rejects changing a ledger identity or an invalid Telegram ID before mutation', async () => {
+  it('rejects changing a ledger identity before mutation', async () => {
     const fixture = createFixture()
 
     await expect(fixture.service.updateUser('user-a', { ledgerId: 'another-ledger' }))
       .rejects.toMatchObject({ code: 'ledger-change-requires-migration', status: 409 })
-    await expect(fixture.service.createUser({
-      email: 'bad-telegram@example.com',
-      password: 'strong-password',
-      displayName: 'Bad ID',
-      ledgerId: 'bad-telegram',
-      telegramUserId: '12x',
-    })).rejects.toMatchObject({ code: 'invalid-telegram-user-id', status: 400 })
-
     expect(fixture.spies.updateUserById).not.toHaveBeenCalled()
     expect(fixture.spies.createUser).not.toHaveBeenCalled()
   })

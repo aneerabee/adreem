@@ -15,7 +15,7 @@ import {
 } from './adreemApi.js'
 import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './ledger/attachmentValidation.js'
 import { ConcurrentLedgerUpdateError } from './ledger/ledgerRepository.js'
-import { createPasswordHash } from './telegram/userRegistry.js'
+import { createPasswordHash } from './auth/userRegistry.js'
 
 let tempDir = null
 
@@ -71,7 +71,6 @@ function registryPasswordUser({
   email,
   password,
   ledgerId,
-  telegramUserId = '',
   language = 'ar',
 }) {
   return {
@@ -80,7 +79,6 @@ function registryPasswordUser({
     email,
     passwordHash: createPasswordHash(password),
     ledgerId,
-    telegramUserId,
     language,
   }
 }
@@ -182,7 +180,7 @@ describe('ADREEM web API auth helpers', () => {
 
   it('marks authenticated responses as private and non-cacheable', async () => {
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: tempRegistry([
+      ADREEM_USERS_FILE: tempRegistry([
         registryPasswordUser({
           userId: 'main',
           displayName: 'Main',
@@ -244,7 +242,7 @@ describe('ADREEM web API auth helpers', () => {
 
   it('revokes the current cloud session on logout', async () => {
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: tempRegistry([
+      ADREEM_USERS_FILE: tempRegistry([
         registryPasswordUser({
           userId: 'main',
           displayName: 'Main',
@@ -372,7 +370,7 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       ADREEM_OWNER_USER_IDS: 'rabee',
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
@@ -410,14 +408,13 @@ describe('ADREEM web API auth helpers', () => {
 
   it('routes registry sessions without requiring an API restart', async () => {
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: tempRegistry([
+      ADREEM_USERS_FILE: tempRegistry([
         registryPasswordUser({
           userId: 'saeed-book',
           displayName: 'Saeed',
           email: 'saeed@example.com',
           password: 'saeed-pass-123',
           ledgerId: 'saeed-book',
-          telegramUserId: '555',
         }),
       ]),
       SUPABASE_URL: 'https://example.supabase.co',
@@ -456,7 +453,7 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -550,7 +547,7 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -611,7 +608,7 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -650,7 +647,7 @@ describe('ADREEM web API auth helpers', () => {
     const auditFile = join(tempDir, 'audit.jsonl')
     const api = createAdreemApiHandler({
       ADREEM_AUDIT_LOG_FILE: auditFile,
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -724,7 +721,7 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -759,7 +756,7 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -829,7 +826,7 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -860,100 +857,6 @@ describe('ADREEM web API auth helpers', () => {
     expect(response.statusCode).toBe(401)
   })
 
-  it('fails during API creation when the registry conflicts with the configured Telegram ledger map', () => {
-    const file = tempRegistry([
-      {
-        userId: 'registry-100',
-        telegramUserId: '100',
-        ledgerId: 'registry-ledger',
-      },
-    ])
-
-    expect(() => createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
-      ADREEM_TELEGRAM_LEDGER_IDS: '100=config-ledger',
-      SUPABASE_URL: 'https://example.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
-    })).toThrow('Invalid Telegram ledger assignments')
-  })
-
-  it('returns 409 when creating a user with a Telegram id configured for another ledger', async () => {
-    const file = tempRegistry([
-      registryPasswordUser({
-        userId: 'owner-main',
-        displayName: 'Owner',
-        email: 'owner@example.com',
-        password: 'owner-pass-123',
-        ledgerId: 'owner-main',
-      }),
-    ])
-    const api = createAdreemApiHandler({
-      ADREEM_OWNER_EMAILS: 'owner@example.com',
-      ADREEM_TELEGRAM_USERS_FILE: file,
-      ADREEM_TELEGRAM_LEDGER_IDS: '100=config-ledger',
-      SUPABASE_URL: 'https://example.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
-    })
-    const ownerToken = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
-    const request = createJsonRequest({
-      userId: 'registry-100',
-      telegramUserId: '100',
-      ledgerId: 'registry-ledger',
-    }, {
-      method: 'POST',
-      url: '/api/admin/users',
-      token: ownerToken,
-    })
-    const response = createMockResponse()
-
-    const promise = api(request, response)
-    request.emitBody()
-    await promise
-
-    expect(response.statusCode).toBe(409)
-    expect(JSON.parse(response.body)).toMatchObject({ error: 'telegram-used', existingUserId: '100' })
-  })
-
-  it('returns 409 when updating a user to a Telegram id configured for another ledger', async () => {
-    const file = tempRegistry([
-      registryPasswordUser({
-        userId: 'owner-main',
-        displayName: 'Owner',
-        email: 'owner@example.com',
-        password: 'owner-pass-123',
-        ledgerId: 'owner-main',
-      }),
-      registryPasswordUser({
-        userId: 'registry-user',
-        displayName: 'Registry user',
-        email: 'registry@example.com',
-        password: 'registry-pass-123',
-        ledgerId: 'registry-ledger',
-      }),
-    ])
-    const api = createAdreemApiHandler({
-      ADREEM_OWNER_EMAILS: 'owner@example.com',
-      ADREEM_TELEGRAM_USERS_FILE: file,
-      ADREEM_TELEGRAM_LEDGER_IDS: '100=config-ledger',
-      SUPABASE_URL: 'https://example.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
-    })
-    const ownerToken = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
-    const request = createJsonRequest({ telegramUserId: '100' }, {
-      method: 'PATCH',
-      url: '/api/admin/users/registry-user',
-      token: ownerToken,
-    })
-    const response = createMockResponse()
-
-    const promise = api(request, response)
-    request.emitBody()
-    await promise
-
-    expect(response.statusCode).toBe(409)
-    expect(JSON.parse(response.body)).toMatchObject({ error: 'telegram-used', existingUserId: '100' })
-  })
-
   it('allows the configured owner session to manage users without an admin token', async () => {
     const file = tempRegistry([
       registryPasswordUser({
@@ -966,7 +869,7 @@ describe('ADREEM web API auth helpers', () => {
     ])
     const api = createAdreemApiHandler({
       ADREEM_OWNER_EMAILS: 'owner@example.com',
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -1014,7 +917,7 @@ describe('ADREEM web API auth helpers', () => {
     ])
     const api = createAdreemApiHandler({
       ADREEM_OWNER_EMAILS: 'owner@example.com',
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -1054,7 +957,7 @@ describe('ADREEM web API auth helpers', () => {
     ])
     const api = createAdreemApiHandler({
       ADREEM_OWNER_EMAILS: 'owner@example.com',
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -1088,7 +991,7 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -1155,7 +1058,7 @@ describe('ADREEM web API auth helpers', () => {
     ])
     const api = createAdreemApiHandler({
       ADREEM_OWNER_EMAILS: 'owner@example.com',
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -1166,7 +1069,6 @@ describe('ADREEM web API auth helpers', () => {
       email: 'saeed-new@example.com',
       password: 'new-pass-123',
       ledgerId: 'saeed-book',
-      telegramUserId: '555',
     }, {
       method: 'PATCH',
       url: '/api/admin/users/saeed-book',
@@ -1182,7 +1084,6 @@ describe('ADREEM web API auth helpers', () => {
       userId: 'saeed-book',
       displayName: 'سعيد الجديد',
       email: 'saeed-new@example.com',
-      telegramUserId: '555',
     })
     const oldLoginRequest = createJsonRequest({ email: 'saeed@example.com', password: 'old-pass-123' }, {
       method: 'POST',
@@ -1236,7 +1137,7 @@ describe('ADREEM web API auth helpers', () => {
     ])
     const api = createAdreemApiHandler({
       ADREEM_OWNER_EMAILS: 'owner@example.com',
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -1247,7 +1148,6 @@ describe('ADREEM web API auth helpers', () => {
       email: 'saeed@example.com',
       password: 'strong-pass-123',
       ledgerId: 'saeed-book',
-      telegramUserId: '555',
     }, {
       method: 'POST',
       url: '/api/admin/users',
@@ -1264,7 +1164,6 @@ describe('ADREEM web API auth helpers', () => {
       userId: 'saeed-book',
       email: 'saeed@example.com',
       ledgerId: 'saeed-book',
-      telegramUserId: '555',
       displayName: 'سعيد',
       hasPassword: true,
     })
@@ -1337,7 +1236,7 @@ describe('ADREEM web API auth helpers', () => {
       }),
     ])
     const api = createAdreemApiHandler({
-      ADREEM_TELEGRAM_USERS_FILE: file,
+      ADREEM_USERS_FILE: file,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })

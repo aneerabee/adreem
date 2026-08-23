@@ -314,7 +314,7 @@ describe('relational ledger repository', () => {
     }))
   })
 
-  it('keeps Telegram attachments inside the owner and ledger path', async () => {
+  it('keeps uploaded attachments inside the owner and ledger path', async () => {
     const client = clientFixture()
     const repository = createRelationalLedgerRepository(client, {
       env: { ADREEM_ATTACHMENTS_BUCKET: 'private-ledger-files' },

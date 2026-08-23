@@ -3,14 +3,13 @@ import { describe, expect, it } from 'vitest'
 
 const schemaSql = readFileSync(new URL('../../supabase/migrations/20260820213626_create_adreem_v3_schema.sql', import.meta.url), 'utf8')
 const ledgerSql = readFileSync(new URL('../../supabase/migrations/20260820213628_create_adreem_v3_ledger_functions.sql', import.meta.url), 'utf8')
-const botCasSql = readFileSync(new URL('../../supabase/migrations/20260820213629_add_adreem_bot_state_claim_cas.sql', import.meta.url), 'utf8')
-const botEffectCasSql = readFileSync(new URL('../../supabase/migrations/20260820213631_add_adreem_bot_effect_cas.sql', import.meta.url), 'utf8')
 const legacyCleanupSql = readFileSync(new URL('../../supabase/migrations/20260820213833_remove_empty_legacy_state_from_v3.sql', import.meta.url), 'utf8')
 const summaryScopeSql = readFileSync(new URL('../../supabase/migrations/20260822090000_add_summary_scope_and_record_only.sql', import.meta.url), 'utf8')
 const accountDeletionSql = readFileSync(new URL('../../supabase/migrations/20260822170000_add_unused_account_deletion.sql', import.meta.url), 'utf8')
 const movementInvariantSql = readFileSync(new URL('../../supabase/migrations/20260822193000_harden_movement_invariants.sql', import.meta.url), 'utf8')
 const movementIdentitySql = readFileSync(new URL('../../supabase/migrations/20260822232245_lock_movement_type_and_currency.sql', import.meta.url), 'utf8')
 const tryCurrencySql = readFileSync(new URL('../../supabase/migrations/20260823160000_add_try_currency.sql', import.meta.url), 'utf8')
+const botRemovalSql = readFileSync(new URL('../../supabase/migrations/20260823190000_remove_telegram_bot.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -64,28 +63,14 @@ describe('ADREEM v3 database migration invariants', () => {
     expect(ledgerSql).not.toContain('row_number() over')
   })
 
-  it('fences Telegram claims with service-only atomic functions', () => {
-    for (const functionName of [
-      'adreem_bot_state_claim',
-      'adreem_bot_state_renew_claim',
-      'adreem_bot_state_complete_claim',
-      'adreem_bot_state_release_claim',
-    ]) {
-      expect(botCasSql).toContain(`function public.${functionName}`)
-      expect(botCasSql).toContain(`grant execute on function public.${functionName}`)
-    }
-    expect(botCasSql).toContain("state.payload #>> '{value,claimId}' = p_claim_token")
-    expect(botCasSql).toContain('to service_role;')
-    for (const functionName of [
-      'adreem_bot_state_claim',
-      'adreem_bot_state_fail_claim',
-      'adreem_bot_state_claim_effect',
-      'adreem_bot_state_complete_effect',
-    ]) {
-      expect(botEffectCasSql).toContain(`function public.${functionName}`)
-      expect(botEffectCasSql).toContain(`grant execute on function public.${functionName}`)
-    }
-    expect(botEffectCasSql).toContain('to service_role;')
+  it('removes the retired bot state without touching ledger records', () => {
+    expect(botRemovalSql).toContain('create or replace function adreem_private.handle_new_auth_user()')
+    expect(botRemovalSql).not.toContain("new.raw_app_meta_data ->> 'adreem_telegram_user_id'")
+    expect(botRemovalSql).toContain("raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) - 'adreem_telegram_user_id'")
+    expect(botRemovalSql.match(/drop function if exists public\.adreem_bot_state_/g)).toHaveLength(13)
+    expect(botRemovalSql).toContain('drop table if exists adreem_private.adreem_bot_state')
+    expect(botRemovalSql).toContain('alter table public.adreem_profiles drop column if exists telegram_user_id')
+    expect(botRemovalSql).not.toMatch(/delete from public\.adreem_(accounts|movements|movement_entries)/)
   })
 
   it('removes the legacy blob tables only from an empty v3 target', () => {

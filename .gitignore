@@ -21,7 +21,7 @@ dist-ssr
 /adreem-audit.jsonl*
 /ledger-backups/
 /backups/
-/adreem-telegram-users.json
+/adreem-users.json
 /adreem-migration-users*.json
 /adreem-migration-checkpoint*.json
 /adreem-backup-private/

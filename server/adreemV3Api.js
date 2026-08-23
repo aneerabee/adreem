@@ -37,10 +37,8 @@ function adminUserApiError(error) {
   const rawMessage = String(error?.message || '').toLowerCase()
   let code = ''
   if (rawCode === 'ledger-change-requires-migration') code = rawCode
-  else if (rawCode === 'invalid-telegram-user-id') code = rawCode
   else if (rawCode.includes('weak_password') || (rawMessage.includes('password') && rawMessage.includes('weak'))) code = 'weak-password'
   else if (rawCode.includes('invalid_email') || rawMessage.includes('invalid email')) code = 'invalid-email'
-  else if (rawMessage.includes('adreem_profiles_telegram_user_id_key')) code = 'telegram-used'
   else if (rawMessage.includes('adreem_ledgers_legacy_ledger_id_key')) code = 'ledger-used'
   else if (
     rawCode.includes('email_exists') ||
@@ -49,7 +47,7 @@ function adminUserApiError(error) {
     rawMessage.includes('adreem_profiles_email_key')
   ) code = 'email-used'
   if (!code) return error
-  const status = ['email-used', 'ledger-used', 'telegram-used', 'ledger-change-requires-migration'].includes(code) ? 409 : 400
+  const status = ['email-used', 'ledger-used', 'ledger-change-requires-migration'].includes(code) ? 409 : 400
   const mapped = new V3ApiError('لم يتم حفظ المستخدم. راجع البيانات.', status)
   mapped.code = code
   return mapped

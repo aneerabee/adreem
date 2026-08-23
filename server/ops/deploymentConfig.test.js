@@ -29,10 +29,11 @@ describe('ADREEM deployment configuration', () => {
     expect(gitignore).toContain('/adreem-audit.jsonl*')
     expect(gitignore).toContain('/ledger-backups/')
     expect(gitignore).toContain('/backups/')
-    expect(gitignore).toContain('/adreem-telegram-users.json')
+    expect(gitignore).toContain('/adreem-users.json')
   })
 
-  it.each(['adreem-api.service', 'adreem-bot.service'])('hardens %s without blocking Node executable memory', (service) => {
+  it('hardens adreem-api.service without blocking Node executable memory', () => {
+    const service = 'adreem-api.service'
     const unit = readRepositoryFile(`deploy/systemd/${service}`)
 
     hardeningDirectives.forEach((directive) => expect(unit).toContain(directive))

@@ -6,7 +6,6 @@ const required = [
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
   'ADREEM_WEB_ALLOWED_ORIGIN',
-  'TELEGRAM_BOT_TOKEN',
 ]
 
 export function runtimeCredentialStatus(env = process.env) {

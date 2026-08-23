@@ -5,7 +5,6 @@ const requiredEnv = {
   SUPABASE_URL: 'https://example.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'service-key',
   ADREEM_WEB_ALLOWED_ORIGIN: 'https://example.com',
-  TELEGRAM_BOT_TOKEN: 'bot-token',
 }
 
 describe('ADREEM runtime verification credentials', () => {

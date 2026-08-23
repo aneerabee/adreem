@@ -39,12 +39,10 @@ function adminErrorMessage(error, fallback) {
   const code = error?.data?.code || ''
   if (code === 'email-used') return 'هذا الإيميل مستخدم بالفعل.'
   if (code === 'ledger-used') return 'كود الدفتر مستخدم بالفعل.'
-  if (code === 'telegram-used') return 'رقم تيليغرام مستخدم بالفعل.'
   if (code === 'owner-protected') return 'لا يمكن حذف المالك.'
   if (code === 'not-found') return 'المستخدم غير موجود أو تم حذفه.'
   if (code === 'weak-password') return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.'
   if (code === 'invalid-email') return 'الإيميل غير صحيح.'
-  if (code === 'invalid-telegram-user-id') return 'رقم تيليغرام غير صحيح.'
   if (code === 'invalid-user-or-ledger') return 'كود الدفتر أو بيانات المستخدم غير صحيحة.'
   if (code === 'ledger-change-requires-migration') return 'لا يمكن تغيير كود الدفتر من التعديل العادي حتى لا تنفصل البيانات.'
   return fallback
@@ -71,7 +69,7 @@ function UserRow({ user, owner, onEdit, onRemove }) {
       </div>
       <div>
         <b>{isOwner ? 'مالك' : user.source === 'env' ? 'ثابت' : 'مستقل'}</b>
-        {user.telegramUserId ? <span>تيليغرام {user.telegramUserId}</span> : <span>{user.hasPassword ? 'دخول ويب' : 'بدون دخول'}</span>}
+        <span>{user.hasPassword ? 'دخول ويب' : 'بدون دخول'}</span>
       </div>
       {user.source === 'registry' || user.source === 'supabase-auth' ? (
         <div className="adreem-admin-user-actions">
@@ -101,7 +99,6 @@ export default function AdminUsersPage() {
     email: '',
     password: '',
     ledgerId: '',
-    telegramUserId: '',
   })
 
   const editingUser = users.find((user) => user.userId === editingUserId) || null
@@ -177,11 +174,10 @@ export default function AdminUsersPage() {
           email: draft.email.trim(),
           password: draft.password,
           ledgerId,
-          telegramUserId: draft.telegramUserId.trim(),
           active: true,
         },
       })
-      setDraft({ displayName: '', email: '', password: '', ledgerId: '', telegramUserId: '' })
+      setDraft({ displayName: '', email: '', password: '', ledgerId: '' })
       await loadUsers(token)
       setMessage('تم إنشاء المستخدم. يمكنه الدخول الآن بالإيميل وكلمة المرور.')
     } catch (error) {
@@ -196,14 +192,13 @@ export default function AdminUsersPage() {
       email: user.email || '',
       password: '',
       ledgerId: user.ledgerId || '',
-      telegramUserId: user.telegramUserId || '',
     })
     setMessage('اكتب التعديل ثم احفظ. كلمة المرور لا تتغير إلا إذا كتبت كلمة جديدة.')
   }
 
   function resetUserForm() {
     setEditingUserId('')
-    setDraft({ displayName: '', email: '', password: '', ledgerId: '', telegramUserId: '' })
+    setDraft({ displayName: '', email: '', password: '', ledgerId: '' })
   }
 
   async function updateUser(event) {
@@ -228,7 +223,6 @@ export default function AdminUsersPage() {
           email: draft.email.trim(),
           password: draft.password,
           ledgerId,
-          telegramUserId: draft.telegramUserId.trim(),
         },
       })
       resetUserForm()
@@ -342,16 +336,6 @@ export default function AdminUsersPage() {
                   dir="ltr"
                 />
               </label>
-              <label>
-                <span>رقم تيليغرام (اختياري)</span>
-                <input
-                  value={draft.telegramUserId}
-                  onChange={(event) => setDraft((current) => ({ ...current, telegramUserId: event.target.value.replace(/\D/g, '') }))}
-                  placeholder="للبوت فقط"
-                  inputMode="numeric"
-                  dir="ltr"
-                />
-              </label>
               <button type="submit">{editingUser ? 'حفظ التعديل' : 'إنشاء مستخدم'}</button>
               {editingUser ? <button type="button" onClick={resetUserForm}>إلغاء التعديل</button> : null}
             </form>
@@ -364,7 +348,7 @@ export default function AdminUsersPage() {
               <div className="adreem-admin-users">
                 {users.length ? users.map((user) => (
                   <UserRow
-                    key={`${user.source}-${user.userId || user.telegramUserId || user.ledgerId}`}
+                    key={`${user.source}-${user.userId || user.ledgerId}`}
                     user={user}
                     owner={owner}
                     onEdit={editUser}

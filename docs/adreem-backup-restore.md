@@ -111,7 +111,7 @@ The drill authenticates the version 2 manifest, verifies the encrypted file hash
 
 Version 1 archives omitted database privileges and are intentionally rejected by the current restore command. Create a fresh version 2 backup before relying on the drill.
 
-The returned restore result names the guarded target bucket and reports the uploaded object count and upload modes. Point a temporary ADREEM deployment at that restored database and bucket for the independent application-level drill. Do not repoint production until all database, privilege, attachment, login, web, and Telegram checks pass.
+The returned restore result names the guarded target bucket and reports the uploaded object count and upload modes. Point a temporary ADREEM deployment at that restored database and bucket for the independent application-level drill. Do not repoint production until all database, privilege, attachment, login, and web checks pass.
 
 ## Failure rules
 

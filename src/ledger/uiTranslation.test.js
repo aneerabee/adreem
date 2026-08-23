@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
-import { localizeTelegramPayload, preserveUiData, setActiveUiLanguage, stripUiDataProtection, translateUiText } from './uiTranslation.js'
+import { preserveUiData, setActiveUiLanguage, stripUiDataProtection, translateUiText } from './uiTranslation.js'
 
 const ARABIC_TEXT = /[\u0600-\u06ff]/u
 const UI_SOURCE_FILES = [
@@ -46,7 +46,7 @@ describe('ADREEM UI translation', () => {
     expect(translateUiText('3 أرصدة سابقة')).toBe('3 previous balances')
   })
 
-  it('translates formatted Telegram text without changing its markup', () => {
+  it('translates formatted text without changing its markup', () => {
     expect(translateUiText('<b>ADREEM · مراجعة</b>\n<blockquote>لا شيء معلق.</blockquote>', 'en'))
       .toBe('<b>ADREEM · Review</b>\n<blockquote>Nothing is pending.</blockquote>')
   })
@@ -84,38 +84,6 @@ describe('ADREEM UI translation', () => {
       .toBe('Choose whether the Cheque dinars balance is owed to you or owed by you.')
     expect(translateUiText('لا يمكن حذف حساب من مسار الحفظ العادي. أخفِه أو استخدم مسار التصفير المحمي.', 'en'))
       .toBe('An account cannot be deleted through normal saving. Hide it or use the protected reset flow.')
-  })
-
-  it('keeps callback data unchanged while translating button labels', () => {
-    const payload = localizeTelegramPayload({
-      text: 'اختر الحساب',
-      reply_markup: {
-        inline_keyboard: [[{ text: '↩️ رجوع', callback_data: 'mv:back:123' }]],
-      },
-    }, 'en')
-
-    expect(payload.text).toBe('Choose account')
-    expect(payload.reply_markup.inline_keyboard[0][0]).toEqual({
-      text: '↩️ Back',
-      callback_data: 'mv:back:123',
-    })
-  })
-
-  it('removes data-protection markers from Arabic and English Telegram payloads', () => {
-    const protectedName = preserveUiData('دخل')
-    const payload = {
-      text: `الحساب: ${protectedName}`,
-      reply_markup: { inline_keyboard: [[{ text: protectedName, callback_data: 'account:income' }]] },
-    }
-
-    expect(localizeTelegramPayload(payload, 'ar')).toEqual({
-      text: 'الحساب: دخل',
-      reply_markup: { inline_keyboard: [[{ text: 'دخل', callback_data: 'account:income' }]] },
-    })
-    expect(localizeTelegramPayload(payload, 'en')).toEqual({
-      text: 'Account: دخل',
-      reply_markup: { inline_keyboard: [[{ text: 'دخل', callback_data: 'account:income' }]] },
-    })
   })
 
   it.each([

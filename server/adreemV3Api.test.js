@@ -786,13 +786,13 @@ describe('ADREEM v3 API', () => {
     const { authService, context, handler } = fixture()
     context.isOwner = true
     authService.createUser.mockRejectedValueOnce(Object.assign(
-      new Error('duplicate key violates adreem_profiles_telegram_user_id_key: private detail'),
+      new Error('duplicate key violates adreem_profiles_email_key: private detail'),
       { code: '23505', status: 409 },
     ))
     const req = request({
       method: 'POST',
       url: '/api/admin/users',
-      body: { email: 'new@example.com', password: 'strong-password', displayName: 'New', ledgerId: 'new-ledger', telegramUserId: '123' },
+      body: { email: 'new@example.com', password: 'strong-password', displayName: 'New', ledgerId: 'new-ledger' },
     })
     const res = response()
 
@@ -804,7 +804,7 @@ describe('ADREEM v3 API', () => {
     expect(res.statusCode).toBe(409)
     expect(JSON.parse(res.body)).toEqual({
       error: 'لم يتم حفظ المستخدم. راجع البيانات.',
-      code: 'telegram-used',
+      code: 'email-used',
     })
     expect(res.body).not.toContain('private detail')
   })
