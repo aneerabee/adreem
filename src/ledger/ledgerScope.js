@@ -132,25 +132,35 @@ export function buildNetPosition(rows = [], excludedAccountIds = []) {
 
 export function convertNetPosition(position = {}, requestedRate, targetCurrency = 'LYD', requestedTryRate = 0) {
   const currency = ['USD', 'TRY'].includes(targetCurrency) ? targetCurrency : 'LYD'
-  const rate = Number(requestedRate)
-  const tryRate = Number(requestedTryRate)
+  const lydPerUsd = Number(requestedRate)
+  const tryPerUsd = Number(requestedTryRate)
   const dinar = Number(position.dinar || 0)
   const usd = Number(position.usd || 0)
   const tryAmount = Number(position.try || 0)
   if (![dinar, usd, tryAmount].every(Number.isSafeInteger)) {
     return { ok: false, error: 'نتيجة الصافي أكبر من الحد المسموح.' }
   }
-  const needsUsdRate = usd !== 0 || currency === 'USD'
-  const needsTryRate = tryAmount !== 0 || currency === 'TRY'
-  if ((needsUsdRate && (!Number.isFinite(rate) || rate <= 0)) || (needsTryRate && (!Number.isFinite(tryRate) || tryRate <= 0))) {
-    return { ok: false, error: needsUsdRate && needsTryRate ? 'أدخل سعري USD وTRY.' : needsTryRate ? 'أدخل سعر TRY.' : 'أدخل سعر USD.' }
+  const needsLydRate = currency === 'LYD' ? usd !== 0 || tryAmount !== 0 : dinar !== 0
+  const needsTryRate = currency === 'TRY' ? dinar !== 0 || usd !== 0 : tryAmount !== 0
+  const missingLydRate = needsLydRate && (!Number.isFinite(lydPerUsd) || lydPerUsd <= 0)
+  const missingTryRate = needsTryRate && (!Number.isFinite(tryPerUsd) || tryPerUsd <= 0)
+  if (missingLydRate || missingTryRate) {
+    return {
+      ok: false,
+      error: missingLydRate && missingTryRate
+        ? 'أدخل سعري LYD وTRY مقابل USD.'
+        : missingTryRate ? 'أدخل سعر TRY مقابل USD.' : 'أدخل سعر LYD مقابل USD.',
+    }
   }
-  const lydTotal = dinar + (usd * rate) + (tryAmount * tryRate)
+  const dinarAsUsd = dinar === 0 ? 0 : dinar / lydPerUsd
+  const usdAsLyd = usd === 0 ? 0 : usd * lydPerUsd
+  const usdAsTry = usd === 0 ? 0 : usd * tryPerUsd
+  const tryAsUsd = tryAmount === 0 ? 0 : tryAmount / tryPerUsd
   const rawAmount = currency === 'USD'
-    ? Math.round(usd + ((dinar + (tryAmount * tryRate)) / rate))
+    ? Math.round(usd + dinarAsUsd + tryAsUsd)
     : currency === 'TRY'
-      ? Math.round(tryAmount + ((dinar + (usd * rate)) / tryRate))
-      : Math.round(lydTotal)
+      ? Math.round(tryAmount + usdAsTry + (dinarAsUsd * tryPerUsd))
+      : Math.round(dinar + usdAsLyd + (tryAsUsd * lydPerUsd))
   if (!Number.isSafeInteger(rawAmount)) {
     return { ok: false, error: 'نتيجة الصافي أكبر من الحد المسموح.' }
   }
@@ -159,7 +169,7 @@ export function convertNetPosition(position = {}, requestedRate, targetCurrency 
     ok: true,
     currency,
     amount,
-    rate,
-    ...(needsTryRate ? { tryRate } : {}),
+    rate: Number.isFinite(lydPerUsd) && lydPerUsd > 0 ? lydPerUsd : 0,
+    ...(needsTryRate ? { tryRate: tryPerUsd } : {}),
   }
 }

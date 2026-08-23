@@ -586,7 +586,9 @@
 .adreem-net-calc > * { min-width: 0; }
 .adreem-net-calc .ml3-number-compact,
 .adreem-net-calc .ml3-number-compact input { width: 100%; max-width: 100%; min-width: 0; }
-.adreem-net-calc .ml3-number-compact input { height: 48px; min-height: 48px; border-color: #d8d1e4; background: white; }
+.adreem-net-calc .ml3-number-compact { position: relative; display: block; }
+.adreem-net-calc .ml3-number-compact > span { position: absolute; z-index: 1; inset-block-start: 5px; inset-inline-start: 8px; direction: ltr; color: var(--finance-muted); font-size: 0.52rem; font-weight: 800; unicode-bidi: isolate; pointer-events: none; }
+.adreem-net-calc .ml3-number-compact input { height: 48px; min-height: 48px; padding-block: 17px 4px; border-color: #d8d1e4; background: white; }
 .adreem-net-target { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border: 1px solid #d8d1e4; border-radius: 7px; background: #ebe7f1; }
 .adreem-net-target button { min-height: 42px; border: 0; border-radius: 5px; background: transparent; color: #685b82; font-size: 0.62rem; font-weight: 800; }
 .adreem-net-target button.is-active { background: white; color: #493d61; box-shadow: 0 2px 7px rgba(50, 39, 67, 0.11); }

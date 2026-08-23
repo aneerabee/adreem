@@ -164,20 +164,36 @@ describe('ADREEM account summary scope', () => {
     expect(filterNetContributions(contributions, 'دينار').map((item) => item.accountId)).toEqual(['bank', 'zero'])
   })
 
-  it('converts the net in both directions only with a valid positive rate', () => {
+  it('converts every net currency through rates quoted against USD', () => {
     const position = { dinar: 10_500, usd: 100 }
 
     expect(convertNetPosition(position, 7.5, 'LYD')).toEqual({ ok: true, currency: 'LYD', amount: 11_250, rate: 7.5 })
     expect(convertNetPosition(position, 7.5, 'USD')).toEqual({ ok: true, currency: 'USD', amount: 1_500, rate: 7.5 })
     expect(convertNetPosition(position, 0, 'LYD')).toMatchObject({ ok: false })
     expect(convertNetPosition(position, Number.NaN, 'USD')).toMatchObject({ ok: false })
-    expect(convertNetPosition({ dinar: 1_000, usd: 0, try: 100 }, 0, 'TRY', 10)).toEqual({
+    expect(convertNetPosition({ dinar: 7_250, usd: 0, try: 0 }, 7.25, 'TRY', 46)).toEqual({
       ok: true,
       currency: 'TRY',
-      amount: 200,
-      rate: 0,
-      tryRate: 10,
+      amount: 46_000,
+      rate: 7.25,
+      tryRate: 46,
     })
+    const mixedPosition = { dinar: 700, usd: 100, try: 460 }
+    expect(convertNetPosition(mixedPosition, 7, 'LYD', 46)).toEqual({ ok: true, currency: 'LYD', amount: 1_470, rate: 7, tryRate: 46 })
+    expect(convertNetPosition(mixedPosition, 7, 'USD', 46)).toEqual({ ok: true, currency: 'USD', amount: 210, rate: 7, tryRate: 46 })
+    expect(convertNetPosition(mixedPosition, 7, 'TRY', 46)).toEqual({ ok: true, currency: 'TRY', amount: 9_660, rate: 7, tryRate: 46 })
+    const opposingPosition = { dinar: 700, usd: -100, try: 460 }
+    expect(convertNetPosition(opposingPosition, 7, 'LYD', 46)).toEqual({ ok: true, currency: 'LYD', amount: 70, rate: 7, tryRate: 46 })
+    expect(convertNetPosition(opposingPosition, 7, 'USD', 46)).toEqual({ ok: true, currency: 'USD', amount: 10, rate: 7, tryRate: 46 })
+    expect(convertNetPosition(opposingPosition, 7, 'TRY', 46)).toEqual({ ok: true, currency: 'TRY', amount: 460, rate: 7, tryRate: 46 })
+    expect(convertNetPosition({ dinar: 700, usd: 0, try: 0 }, 0, 'LYD', 0)).toEqual({ ok: true, currency: 'LYD', amount: 700, rate: 0 })
+    expect(convertNetPosition({ dinar: 0, usd: 100, try: 0 }, 0, 'USD', 0)).toEqual({ ok: true, currency: 'USD', amount: 100, rate: 0 })
+    expect(convertNetPosition({ dinar: 0, usd: 0, try: 460 }, 0, 'TRY', 0)).toEqual({ ok: true, currency: 'TRY', amount: 460, rate: 0 })
+    expect(convertNetPosition({ dinar: 0, usd: 100, try: 0 }, 0, 'TRY', 46)).toEqual({ ok: true, currency: 'TRY', amount: 4_600, rate: 0, tryRate: 46 })
+    expect(convertNetPosition({ dinar: 0, usd: 0, try: 460 }, 0, 'USD', 46)).toEqual({ ok: true, currency: 'USD', amount: 10, rate: 0, tryRate: 46 })
+    expect(convertNetPosition({ dinar: 700, usd: 0, try: 0 }, 0, 'TRY', 46)).toEqual({ ok: false, error: 'أدخل سعر LYD مقابل USD.' })
+    expect(convertNetPosition({ dinar: 700, usd: 0, try: 0 }, 7, 'TRY', 0)).toEqual({ ok: false, error: 'أدخل سعر TRY مقابل USD.' })
+    expect(convertNetPosition({ dinar: 0, usd: 0, try: 460 }, 0, 'LYD', 0)).toEqual({ ok: false, error: 'أدخل سعري LYD وTRY مقابل USD.' })
     expect(convertNetPosition({ dinar: Number.MAX_SAFE_INTEGER + 1, usd: 0 }, 7.5, 'USD')).toMatchObject({ ok: false })
     expect(convertNetPosition({ dinar: 0, usd: Number.MAX_SAFE_INTEGER }, 2, 'LYD')).toEqual({
       ok: false,

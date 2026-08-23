@@ -1248,8 +1248,8 @@ export function NetPositionPanel({
         <span><small>TRY</small><strong>{money(position.try, CURRENCIES.TRY)}</strong></span>
       </div>
       <div className="adreem-net-calc">
-        <NumericEntry compact hideLabel label="سعر USD" value={rate} onChange={onRateChange} placeholder="سعر USD" allowDecimal />
-        <NumericEntry compact hideLabel label="سعر TRY" value={tryRate} onChange={onTryRateChange} placeholder="سعر TRY" allowDecimal />
+        <NumericEntry compact label="1 USD = ? LYD" value={rate} onChange={onRateChange} placeholder="0" allowDecimal />
+        <NumericEntry compact label="1 USD = ? TRY" value={tryRate} onChange={onTryRateChange} placeholder="0" allowDecimal />
         <div className="adreem-net-target" aria-label="عملة الصافي">
           {CURRENCY_OPTIONS.map((option) => <button type="button" key={option.value} className={targetCurrency === option.value ? 'is-active' : ''} onClick={() => onTargetCurrencyChange(option.value)}>{option.label}</button>)}
         </div>
