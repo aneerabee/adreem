@@ -55,6 +55,7 @@ const COUNTERPARTY_BALANCE_FILTERS = Object.freeze([
   { key: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, label: 'شيك', icon: Landmark },
   { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, label: 'دولار', icon: CircleDollarSign },
 ])
+const EXPENSE_CATEGORY_TONES = Object.freeze(['coral', 'blue', 'green', 'amber', 'plum', 'teal'])
 const BALANCE_FOCUS_LABELS = Object.freeze({
   cash: 'الكاش',
   bank: 'المصرف',
@@ -1453,6 +1454,64 @@ function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfi
   )
 }
 
+export function expenseCategoryTone(value = '') {
+  const normalized = normalizeAccountSearchText(value) || 'uncategorized'
+  let hash = 0
+  for (const character of normalized) hash = ((hash * 31) + character.codePointAt(0)) >>> 0
+  return EXPENSE_CATEGORY_TONES[hash % EXPENSE_CATEGORY_TONES.length]
+}
+
+export function prepareExpenseCategoryAccount(name, existingAccounts = []) {
+  const account = createAccount({
+    ownerName: String(name || '').trim(),
+    subAccountName: 'مصروف',
+    type: ACCOUNT_TYPES.EXPENSE,
+    valueKind: VALUE_KINDS.EXPENSE,
+    currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+  })
+  const validation = validateAccount(account, existingAccounts)
+  const normalizedName = normalizeAccountSearchText(account.ownerName)
+  const hasDuplicateCategory = normalizedName && existingAccounts.some((existingAccount) => (
+    existingAccount?.status !== ACCOUNT_STATUSES.INACTIVE &&
+    existingAccount?.valueKind === VALUE_KINDS.EXPENSE &&
+    normalizeAccountSearchText(existingAccount.ownerName) === normalizedName
+  ))
+  if (!hasDuplicateCategory) return { account, validation }
+  return {
+    account,
+    validation: {
+      ok: false,
+      errors: [
+        ...validation.errors.filter((error) => error.field !== 'subAccountName'),
+        { field: 'ownerName', message: 'يوجد تصنيف مصروف بنفس الاسم.' },
+      ],
+    },
+  }
+}
+
+export function ExpenseCategoryPicker({ value = '', categories = [], onChange, onCreate, compact = false }) {
+  return (
+    <div className={`adreem-expense-category-field ${compact ? 'is-compact' : ''}`}>
+      <div className="adreem-expense-category-head">
+        <span>نوع المصروف</span>
+        {onCreate ? <button type="button" onClick={onCreate}><Plus aria-hidden="true" size={14} /> جديد</button> : null}
+      </div>
+      <div className="adreem-expense-category-chips" role="radiogroup" aria-label="نوع المصروف">
+        <button type="button" className="is-none" aria-pressed={!value} onClick={() => onChange?.('')}>بدون تصنيف</button>
+        {categories.map((category) => {
+          const tone = expenseCategoryTone(category.ownerName)
+          return (
+            <button type="button" key={category.id} className={`adreem-category-tone-${tone}`} aria-pressed={value === category.id} onClick={() => onChange?.(category.id)}>
+              <i aria-hidden="true" />
+              <span>{protectedAccountPrimaryName(category)}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function buildExpenseBalanceRows(accounts = [], reports = []) {
   const categoryAccounts = new Map(
     accounts
@@ -1504,11 +1563,12 @@ export function ExpenseReportList({ rows = [], onOpen }) {
       {rows.length === 0 ? <p className="ml3-empty">لا توجد مصروفات.</p> : null}
       <AnimatePresence initial={false}>
         {rows.map((row) => {
+          const categoryTone = expenseCategoryTone(row.name)
           const content = (
             <>
               <i className="ml3-account-row-icon"><ReceiptText aria-hidden="true" size={16} /></i>
               <span className="ml3-account-copy">
-                <strong>{row.categoryId ? preserveUiData(row.name) : 'بدون تصنيف'}</strong>
+                <strong className={`adreem-expense-category-tag ${row.categoryId ? `adreem-category-tone-${categoryTone}` : 'is-none'}`}><i aria-hidden="true" />{row.categoryId ? preserveUiData(row.name) : 'بدون تصنيف'}</strong>
                 <small className="ml3-account-context">{row.count ? `${formatCount(row.count)} حركة` : 'لا حركات'}</small>
               </span>
             </>
@@ -2191,6 +2251,40 @@ function useLedgerDialogFocus(panelRef, initialFocusRef, onClose, disabled = fal
   }, [initialFocusRef, panelRef])
 }
 
+export function ExpenseCategoryDialog({ name = '', error = '', isSaving = false, onNameChange, onClose, onSave }) {
+  const panelRef = useRef(null)
+  const inputRef = useRef(null)
+  useLedgerDialogFocus(panelRef, inputRef, onClose, isSaving)
+  const normalizedName = String(name || '').trim()
+  const tone = expenseCategoryTone(normalizedName)
+  return (
+    <Motion.div className="adreem-movement-dialog-layer" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
+      <Motion.form ref={panelRef} className="adreem-expense-category-dialog" role="dialog" aria-modal="true" aria-labelledby="adreem-expense-category-title" tabIndex={-1} onSubmit={onSave} initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }} transition={UI_MOTION_TRANSITION}>
+        <header>
+          <i><ReceiptText aria-hidden="true" size={19} /></i>
+          <h2 id="adreem-expense-category-title">تصنيف مصروف جديد</h2>
+          <button type="button" aria-label="إغلاق" title="إغلاق" onClick={onClose} disabled={isSaving}><X aria-hidden="true" size={17} /></button>
+        </header>
+        <div className="adreem-expense-category-dialog-body">
+          <label>
+            <span>اسم التصنيف</span>
+            <input ref={inputRef} value={name} maxLength={80} onChange={(event) => onNameChange?.(event.target.value)} placeholder="مثال: وقود أو إيجار" autoComplete="off" />
+          </label>
+          <div className={`adreem-expense-category-preview adreem-category-tone-${tone}`} aria-live="polite">
+            <small>التاق</small>
+            <strong><i aria-hidden="true" />{normalizedName ? preserveUiData(normalizedName) : 'اسم التصنيف'}</strong>
+          </div>
+          {error ? <p role="alert">{error}</p> : null}
+        </div>
+        <footer>
+          <button type="button" onClick={onClose} disabled={isSaving}>رجوع</button>
+          <button type="submit" className="is-save" disabled={isSaving || !normalizedName}><Check aria-hidden="true" size={16} /> {isSaving ? 'جاري الحفظ' : 'حفظ التصنيف'}</button>
+        </footer>
+      </Motion.form>
+    </Motion.div>
+  )
+}
+
 export function MovementActionDialog({ action, accountById, isSaving = false, onClose, onConfirm }) {
   const panelRef = useRef(null)
   const closeButtonRef = useRef(null)
@@ -2302,13 +2396,7 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
                 </label>
               ) : null}
               {draft.type === MOVEMENT_TYPES.EXPENSE || draft.type === MOVEMENT_TYPES.TRUCK_EXPENSE ? (
-                <label>
-                  <span>نوع المصروف</span>
-                  <select value={draft.expenseCategoryId} onChange={(event) => onDraftChange('expenseCategoryId', event.target.value)}>
-                    <option value="">بدون تصنيف</option>
-                    {expenseCategories.map((category) => <option key={category.id} value={category.id}>{protectedAccountPrimaryName(category)}</option>)}
-                  </select>
-                </label>
+                <ExpenseCategoryPicker compact value={draft.expenseCategoryId} categories={expenseCategories} onChange={(categoryId) => onDraftChange('expenseCategoryId', categoryId)} />
               ) : null}
             </div>
             <div className="adreem-movement-edit-hint"><CircleAlert aria-hidden="true" size={16} /><span>لا تتغير الأرصدة أثناء الكتابة. سترى الأثر قبل الحفظ.</span></div>
@@ -3059,6 +3147,8 @@ export default function LedgerApp() {
   const [historyPage, setHistoryPage] = useState(null)
   const [reviewPage, setReviewPage] = useState(null)
   const [serverReports, setServerReports] = useState(null)
+  const [expenseCategoryCreator, setExpenseCategoryCreator] = useState(null)
+  const [isSavingExpenseCategory, setIsSavingExpenseCategory] = useState(false)
   const [isLoadingOlderMovements, setIsLoadingOlderMovements] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [isLoadingReview, setIsLoadingReview] = useState(false)
@@ -3092,6 +3182,7 @@ export default function LedgerApp() {
   const movementSaveLockRef = useRef(false)
   const accountAttachmentLockRef = useRef(false)
   const accountCreationLockRef = useRef('')
+  const expenseCategoryCreationLockRef = useRef('')
   const reconciliationLockRef = useRef('')
   const separateRecordSaveLockRef = useRef(false)
   const activeEntryModeRef = useRef(activeEntryMode)
@@ -4275,6 +4366,52 @@ export default function LedgerApp() {
     setAccountQuery('')
     setFocusedCounterpartyId('')
     scrollToBalancesWorkspace()
+  }
+
+  function openExpenseCategoryCreator(context = 'balances') {
+    setExpenseCategoryCreator({ context, name: '', error: '' })
+  }
+
+  function closeExpenseCategoryCreator() {
+    if (isSavingExpenseCategory) return
+    setExpenseCategoryCreator(null)
+  }
+
+  function updateExpenseCategoryName(name) {
+    setExpenseCategoryCreator((current) => current ? { ...current, name, error: '' } : current)
+  }
+
+  function saveExpenseCategory(event) {
+    event.preventDefault()
+    const name = String(expenseCategoryCreator?.name || '').trim()
+    if (!name) {
+      setExpenseCategoryCreator((current) => current ? { ...current, error: 'اكتب اسم التصنيف.' } : current)
+      return
+    }
+    const submissionKey = JSON.stringify(['expense-category', name])
+    if (!claimSubmission(expenseCategoryCreationLockRef, submissionKey)) return
+    const { account, validation } = prepareExpenseCategoryAccount(name, accounts)
+    if (!validation.ok) {
+      releaseSubmission(expenseCategoryCreationLockRef, submissionKey)
+      setExpenseCategoryCreator((current) => current ? { ...current, error: validation.errors.map((error) => error.message).join(' ') } : current)
+      return
+    }
+
+    setIsSavingExpenseCategory(true)
+    setAccounts((current) => [...current, account])
+    setLedgerExtras((current) => ({
+      ...current,
+      auditEvents: [
+        ...(current.auditEvents || []),
+        createAuditEvent('expense_category.created', { accountId: account.id }),
+      ],
+    }))
+    if (expenseCategoryCreator?.context === 'movement') {
+      setMovementDraft((current) => ({ ...current, expenseCategoryId: account.id }))
+    }
+    setExpenseCategoryCreator(null)
+    setIsSavingExpenseCategory(false)
+    setFeedback('تم إنشاء تصنيف المصروف.')
   }
 
   function editMovementStep(step) {
@@ -5492,7 +5629,13 @@ export default function LedgerApp() {
                 ) : activeGroup.key === 'money' ? (
                   <AccountList title="فلوسي" rows={rows} onOpen={setSelectedAccountId} embedded tone="money" compactValues hideHeader />
                 ) : activeGroup.key === 'expenses' ? (
-                  <ExpenseReportList rows={rows} onOpen={setSelectedAccountId} />
+                  <>
+                    <div className="adreem-expense-toolbar">
+                      <span><ReceiptText aria-hidden="true" size={15} /> التصنيفات</span>
+                      <button type="button" onClick={() => openExpenseCategoryCreator('balances')}><Plus aria-hidden="true" size={14} /> تصنيف جديد</button>
+                    </div>
+                    <ExpenseReportList rows={rows} onOpen={setSelectedAccountId} />
+                  </>
                 ) : (
                   <AccountList title={activeGroup.title} rows={rows} onOpen={setSelectedAccountId} embedded tone={activeGroup.key} compactValues hideHeader />
                 )}
@@ -6002,17 +6145,7 @@ export default function LedgerApp() {
                         </label>
                       ) : null}
                       {movementDraft.type === MOVEMENT_TYPES.EXPENSE || movementDraft.type === MOVEMENT_TYPES.TRUCK_EXPENSE ? (
-                        <label>
-                          نوع المصروف
-                          <select value={movementDraft.expenseCategoryId} onChange={(event) => updateMovementDraft('expenseCategoryId', event.target.value)}>
-                            <option value="">بدون تصنيف</option>
-                            {activeExpenseCategories.map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {protectedAccountPrimaryName(category)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <ExpenseCategoryPicker value={movementDraft.expenseCategoryId} categories={activeExpenseCategories} onChange={(categoryId) => updateMovementDraft('expenseCategoryId', categoryId)} onCreate={() => openExpenseCategoryCreator('movement')} />
                       ) : null}
                       <label>
                         مرفق
@@ -6380,6 +6513,16 @@ export default function LedgerApp() {
       </section>
       <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} isDeletingAccount={isDeletingAccount} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onDeleteAccount={deleteAccountPermanently} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
       <AnimatePresence>
+        {expenseCategoryCreator ? (
+          <ExpenseCategoryDialog
+            name={expenseCategoryCreator.name}
+            error={expenseCategoryCreator.error}
+            isSaving={isSavingExpenseCategory}
+            onNameChange={updateExpenseCategoryName}
+            onClose={closeExpenseCategoryCreator}
+            onSave={saveExpenseCategory}
+          />
+        ) : null}
         {movementEditDialogOpen ? (
           <MovementEditDialog
             movement={editingMovement}

@@ -19,6 +19,8 @@ import {
   ReviewAccountCard,
   CounterpartyCard,
   CounterpartyList,
+  ExpenseCategoryDialog,
+  ExpenseCategoryPicker,
   ExpenseReportList,
   accountBalanceChip,
   accountProfileMovements,
@@ -39,6 +41,7 @@ import {
   filterCounterpartyGroupsByQuery,
   filterMoneyBalanceRows,
   formatMoneyNumber,
+  expenseCategoryTone,
   compareBalanceBuckets,
   counterpartyMagnitudeForFilter,
   unifiedCounterpartyGroups,
@@ -58,6 +61,7 @@ import {
   parseMoneyAmount,
   parseWholeAmount,
   pendingUploadedOrphanPaths,
+  prepareExpenseCategoryAccount,
   prepareAccountClassificationUpdate,
   releaseSubmission,
   saveFailureMessage,
@@ -547,6 +551,50 @@ describe('LedgerApp expense balances', () => {
     expect(markup).toContain('3 حركة')
     expect(markup).toContain('1,200 د.ل')
     expect(markup).toContain('35 $')
+  })
+
+  it('creates a real expense category and rejects a duplicate name', () => {
+    const prepared = prepareExpenseCategoryAccount('وقود', [])
+
+    expect(prepared.validation.ok).toBe(true)
+    expect(prepared.account).toMatchObject({
+      ownerName: 'وقود',
+      subAccountName: 'مصروف',
+      type: ACCOUNT_TYPES.EXPENSE,
+      valueKind: VALUE_KINDS.EXPENSE,
+      openingDinar: 0,
+      openingUsd: 0,
+    })
+    expect(prepareExpenseCategoryAccount('وقود', [prepared.account]).validation.ok).toBe(false)
+    expect(prepareExpenseCategoryAccount('  وقود  ', [{
+      id: 'legacy-fuel',
+      ownerName: 'وقود',
+      subAccountName: 'رئيسي',
+      type: ACCOUNT_TYPES.EXPENSE,
+      valueKind: VALUE_KINDS.EXPENSE,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    }]).validation).toMatchObject({
+      ok: false,
+      errors: [{ field: 'ownerName', message: 'يوجد تصنيف مصروف بنفس الاسم.' }],
+    })
+  })
+
+  it('renders stable colored category tags with a clear create action', () => {
+    const tone = expenseCategoryTone('وقود')
+    const pickerMarkup = stripUiDataProtection(renderToStaticMarkup(
+      <ExpenseCategoryPicker value="fuel" categories={[expenseAccount]} onChange={() => {}} onCreate={() => {}} />,
+    ))
+    const dialogMarkup = stripUiDataProtection(renderToStaticMarkup(
+      <ExpenseCategoryDialog name="وقود" onNameChange={() => {}} onClose={() => {}} onSave={() => {}} />,
+    ))
+
+    expect(['coral', 'blue', 'green', 'amber', 'plum', 'teal']).toContain(tone)
+    expect(expenseCategoryTone('وقود')).toBe(tone)
+    expect(pickerMarkup).toContain(`adreem-category-tone-${tone}`)
+    expect(pickerMarkup).toContain('aria-pressed="true"')
+    expect(pickerMarkup).toContain('جديد')
+    expect(dialogMarkup).toContain('تصنيف مصروف جديد')
+    expect(dialogMarkup).toContain('حفظ التصنيف')
   })
 })
 

@@ -742,6 +742,85 @@
 .ml3-balances-surface .ml3-account-values strong.is-negative { color: var(--finance-debt-dark); }
 .ml3-balances-surface .ml3-account-values.is-expense strong { color: var(--finance-coral); }
 .adreem-expense-report-list .ml3-account-row:not(.is-zero) { --row-tone: var(--finance-coral); --row-soft: var(--finance-coral-soft); }
+.adreem-category-tone-coral { --category-tone: #d85845; --category-soft: #fff0ed; --category-ink: #9f3325; }
+.adreem-category-tone-blue { --category-tone: #3678c8; --category-soft: #edf5ff; --category-ink: #235b9f; }
+.adreem-category-tone-green { --category-tone: #218461; --category-soft: #eaf8f2; --category-ink: #176448; }
+.adreem-category-tone-amber { --category-tone: #b6781e; --category-soft: #fff7df; --category-ink: #80520f; }
+.adreem-category-tone-plum { --category-tone: #7b5aa6; --category-soft: #f5effc; --category-ink: #5b3d82; }
+.adreem-category-tone-teal { --category-tone: #12807b; --category-soft: #e9f8f7; --category-ink: #0b5f5b; }
+.adreem-expense-category-tag {
+  max-width: 100%;
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--category-soft, var(--finance-surface));
+  color: var(--category-ink, var(--finance-muted)) !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adreem-expense-category-tag > i,
+.adreem-expense-category-preview strong > i,
+.adreem-expense-category-chips button:not(.is-none) > i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--category-tone); }
+.adreem-expense-toolbar {
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in srgb, var(--finance-coral) 18%, var(--finance-line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--finance-coral-soft) 46%, var(--finance-paper));
+}
+.adreem-expense-toolbar > span { display: inline-flex; align-items: center; gap: 6px; color: var(--finance-coral-dark); font-size: 0.68rem; font-weight: 820; }
+.adreem-expense-toolbar > button,
+.adreem-expense-category-head > button {
+  min-height: 29px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--finance-coral) 28%, var(--finance-line));
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: var(--finance-paper);
+  color: var(--finance-coral-dark);
+  font-size: 0.65rem;
+  font-weight: 820;
+}
+.adreem-expense-toolbar > button:hover,
+.adreem-expense-category-head > button:hover { border-color: var(--finance-coral); background: var(--finance-coral-soft); }
+.adreem-expense-category-field { min-width: 0; grid-column: 1 / -1; display: grid; gap: 5px; }
+.adreem-expense-category-head { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 7px; }
+.adreem-expense-category-head > span { color: var(--finance-muted); font-size: 0.65rem; font-weight: 780; }
+.adreem-expense-category-chips { min-width: 0; display: flex; flex-wrap: wrap; gap: 5px; }
+.adreem-expense-category-chips button {
+  min-width: 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--category-tone) 22%, var(--finance-line));
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--category-soft);
+  color: var(--category-ink);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adreem-expense-category-chips button.is-none { --category-tone: var(--finance-neutral); --category-soft: var(--finance-neutral-soft); --category-ink: var(--finance-neutral-dark); }
+.adreem-expense-category-chips button[aria-pressed="true"] { border-color: var(--category-tone); background: var(--category-tone); color: white; box-shadow: 0 5px 13px color-mix(in srgb, var(--category-tone) 20%, transparent); }
+.adreem-expense-category-chips button[aria-pressed="true"] > i { background: white; }
+.adreem-expense-category-field.is-compact { padding: 7px; border: 1px solid var(--finance-line); border-radius: 7px; background: var(--finance-surface); }
 .ml3-balances-surface .ml3-empty { min-height: 92px; display: grid; place-items: center; color: var(--finance-muted); }
 
 .adreem-people-controls {
@@ -1562,6 +1641,40 @@
 
 .adreem-movement-action-dialog { width: min(520px, 100%); }
 
+.adreem-expense-category-dialog {
+  width: min(430px, 100%);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--finance-coral) 24%, var(--finance-line));
+  border-radius: 10px;
+  background: var(--finance-paper);
+  color: var(--finance-ink);
+  box-shadow: 0 26px 70px rgba(18, 31, 28, 0.24);
+}
+.adreem-expense-category-dialog > header {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--finance-line);
+  background: color-mix(in srgb, var(--finance-coral-soft) 54%, var(--finance-paper));
+}
+.adreem-expense-category-dialog > header > i { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; background: var(--finance-coral-soft); color: var(--finance-coral-dark); }
+.adreem-expense-category-dialog > header h2 { min-width: 0; overflow: hidden; margin: 0; font-size: 0.94rem; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-expense-category-dialog > header > button { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 1px solid var(--finance-line); border-radius: 7px; background: var(--finance-paper); color: var(--finance-muted); }
+.adreem-expense-category-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 9px; padding: 12px; }
+.adreem-expense-category-dialog-body > label { min-width: 0; display: grid; gap: 5px; color: var(--finance-muted); font-size: 0.64rem; font-weight: 780; }
+.adreem-expense-category-dialog-body input { width: 100%; min-width: 0; min-height: 40px; font-size: 1rem; }
+.adreem-expense-category-preview { min-width: 115px; display: grid; gap: 4px; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--category-tone) 22%, var(--finance-line)); border-radius: 7px; background: var(--category-soft); }
+.adreem-expense-category-preview small { color: var(--category-ink); font-size: 0.55rem; font-weight: 760; }
+.adreem-expense-category-preview strong { max-width: 150px; display: inline-flex; align-items: center; gap: 5px; overflow: hidden; color: var(--category-ink); font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-expense-category-dialog-body > p { grid-column: 1 / -1; margin: 0; padding: 6px 8px; border-radius: 6px; background: var(--finance-debt-soft); color: var(--finance-debt-dark); font-size: 0.64rem; font-weight: 760; }
+.adreem-expense-category-dialog > footer { display: flex; justify-content: flex-end; gap: 7px; padding: 9px 11px; border-top: 1px solid var(--finance-line); background: var(--finance-surface); }
+.adreem-expense-category-dialog > footer button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 12px; border: 1px solid var(--finance-line); border-radius: 7px; background: var(--finance-paper); color: var(--finance-ink); font-size: 0.7rem; font-weight: 820; }
+.adreem-expense-category-dialog > footer .is-save { border-color: var(--finance-coral); background: var(--finance-coral); color: white; }
+.adreem-expense-category-dialog > footer button:disabled { opacity: 0.45; }
+
 .adreem-movement-action-dialog > header,
 .adreem-movement-edit-dialog > header {
   position: sticky;
@@ -1743,6 +1856,10 @@
   .adreem-movement-dialog-layer { place-items: end center; padding: 0; }
   .adreem-movement-action-dialog,
   .adreem-movement-edit-dialog { width: 100%; max-height: calc(100dvh - max(8px, env(safe-area-inset-top))); border-width: 1px 0 0; border-radius: 12px 12px 0 0; scrollbar-gutter: auto; }
+  .adreem-expense-category-dialog { width: 100%; border-width: 1px 0 0; border-radius: 12px 12px 0 0; }
+  .adreem-expense-category-dialog-body { grid-template-columns: minmax(0, 1fr) auto; padding: 9px; }
+  .adreem-expense-category-dialog > footer { padding: 8px 9px max(8px, env(safe-area-inset-bottom)); }
+  .adreem-expense-category-dialog > footer button { flex: 1; min-width: 0; }
   .adreem-movement-action-dialog > header,
   .adreem-movement-edit-dialog > header { min-height: 56px; padding: 8px 10px; }
   .adreem-movement-edit-locks { padding: 8px 9px 0; }
