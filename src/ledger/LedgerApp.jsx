@@ -111,9 +111,9 @@ const ACCOUNT_WIZARD_STEPS = {
 }
 
 const sectionTitles = {
-  entry: 'عملية جديدة',
+  entry: 'إضافة',
   accounts: 'الأرصدة',
-  history: 'الحركات',
+  history: 'السجل',
   review: 'المراجعة',
 }
 const sectionOrder = Object.keys(sectionTitles)
@@ -1461,6 +1461,12 @@ export function expenseCategoryTone(value = '') {
   return EXPENSE_CATEGORY_TONES[hash % EXPENSE_CATEGORY_TONES.length]
 }
 
+function movementNoteAddsContext(movement, expenseCategory) {
+  if (!movement.note) return false
+  if (!expenseCategory) return true
+  return normalizeAccountSearchText(movement.note) !== normalizeAccountSearchText(accountPrimaryName(expenseCategory))
+}
+
 export function prepareExpenseCategoryAccount(name, existingAccounts = []) {
   const account = createAccount({
     ownerName: String(name || '').trim(),
@@ -2096,6 +2102,7 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
   })
   const dimension = dimensions.find((item) => item.id === movement.dimensionId)
   const expenseCategory = accountById.get(movement.expenseCategoryId)
+  const showNote = movementNoteAddsContext(movement, expenseCategory)
 
   return (
     <article className={`ml3-today-row ml3-today-row--${movementTone(movement.type)} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
@@ -2122,9 +2129,13 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
           })}
         </div>
       ) : null}
-      {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
+      {showNote ? <small>{preserveUiData(movement.note)}</small> : null}
       {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
-      {expenseCategory ? <small>نوع المصروف: {protectedAccountPrimaryName(expenseCategory)}</small> : null}
+      {expenseCategory ? (
+        <span className={`adreem-expense-category-tag adreem-category-tone-${expenseCategoryTone(expenseCategory.ownerName)}`} aria-label={`نوع المصروف: ${protectedAccountPrimaryName(expenseCategory)}`}>
+          <i aria-hidden="true" />{protectedAccountPrimaryName(expenseCategory)}
+        </span>
+      ) : null}
       {movementAttachments.length ? (
         <div className="ml3-attachment-list">
           {movementAttachments.map((item) => (
@@ -2158,6 +2169,7 @@ export function HistoryMovementRow({ movement, accountById, attachments = [], di
   })
   const dimension = dimensions.find((item) => item.id === movement.dimensionId)
   const expenseCategory = accountById.get(movement.expenseCategoryId)
+  const showNote = movementNoteAddsContext(movement, expenseCategory)
 
   return (
     <article className={`ml3-history-row ml3-history-row--${movementTone(movement.type)} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
@@ -2184,11 +2196,15 @@ export function HistoryMovementRow({ movement, accountById, attachments = [], di
           </span>
         ) : null}
       </div>
-      {movement.note || dimension || expenseCategory || reviewErrors.length ? (
+      {showNote || dimension || expenseCategory || reviewErrors.length ? (
         <div className="ml3-history-details">
-          {movement.note ? <p className="ml3-history-note"><span aria-hidden="true">●</span>{preserveUiData(movement.note)}</p> : null}
+          {showNote ? <p className="ml3-history-note"><span aria-hidden="true">●</span>{preserveUiData(movement.note)}</p> : null}
           {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
-          {expenseCategory ? <small>نوع المصروف: {protectedAccountPrimaryName(expenseCategory)}</small> : null}
+          {expenseCategory ? (
+            <span className={`adreem-expense-category-tag adreem-category-tone-${expenseCategoryTone(expenseCategory.ownerName)}`} aria-label={`نوع المصروف: ${protectedAccountPrimaryName(expenseCategory)}`}>
+              <i aria-hidden="true" />{protectedAccountPrimaryName(expenseCategory)}
+            </span>
+          ) : null}
           {reviewErrors.map((error) => <small className="is-error" key={`${movement.id}-${error.field}`}>{error.message}</small>)}
         </div>
       ) : null}
@@ -2265,15 +2281,16 @@ export function ExpenseCategoryDialog({ name = '', error = '', isSaving = false,
           <h2 id="adreem-expense-category-title">تصنيف مصروف جديد</h2>
           <button type="button" aria-label="إغلاق" title="إغلاق" onClick={onClose} disabled={isSaving}><X aria-hidden="true" size={17} /></button>
         </header>
-        <div className="adreem-expense-category-dialog-body">
+        <div className={`adreem-expense-category-dialog-body ${normalizedName ? 'is-previewing' : ''}`}>
           <label>
             <span>اسم التصنيف</span>
             <input ref={inputRef} value={name} maxLength={80} onChange={(event) => onNameChange?.(event.target.value)} placeholder="مثال: وقود أو إيجار" autoComplete="off" />
           </label>
-          <div className={`adreem-expense-category-preview adreem-category-tone-${tone}`} aria-live="polite">
-            <small>التاق</small>
-            <strong><i aria-hidden="true" />{normalizedName ? preserveUiData(normalizedName) : 'اسم التصنيف'}</strong>
-          </div>
+          {normalizedName ? (
+            <div className={`adreem-expense-category-preview adreem-category-tone-${tone}`} aria-label="معاينة التصنيف" aria-live="polite">
+              <strong><i aria-hidden="true" />{preserveUiData(normalizedName)}</strong>
+            </div>
+          ) : null}
           {error ? <p role="alert">{error}</p> : null}
         </div>
         <footer>
@@ -2303,7 +2320,7 @@ export function MovementActionDialog({ action, accountById, isSaving = false, on
         <header>
           <i>{isRestore ? <RotateCcw aria-hidden="true" size={20} /> : <Trash2 aria-hidden="true" size={20} />}</i>
           <div>
-            <span>{isRestore ? 'استعادة النسخة السابقة' : 'خطوة تأكيد'}</span>
+            {isRestore ? <span>استعادة النسخة السابقة</span> : null}
             <h2 id="adreem-movement-action-title">{isRestore ? 'التراجع عن التعديل؟' : 'تأكيد إلغاء الحركة'}</h2>
           </div>
           <button ref={closeButtonRef} type="button" aria-label="إغلاق" title="إغلاق" onClick={onClose} disabled={isSaving}><X aria-hidden="true" size={18} /></button>
@@ -2360,7 +2377,6 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
         </header>
 
         <div className="adreem-movement-edit-locks" aria-label="بيانات ثابتة">
-          <span><small>الحركة</small><strong>{movementLabels[movement.type] || movement.type}</strong></span>
           <span><small>العملة</small><strong>{movement.currency === CURRENCIES.USD ? 'دولار' : 'دينار'}</strong></span>
           <span><small>وقت التسجيل</small><strong>{movementDateTime(movement.createdAt || movement.updatedAt)}</strong></span>
         </div>
@@ -2399,7 +2415,7 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
                 <ExpenseCategoryPicker compact value={draft.expenseCategoryId} categories={expenseCategories} onChange={(categoryId) => onDraftChange('expenseCategoryId', categoryId)} />
               ) : null}
             </div>
-            <div className="adreem-movement-edit-hint"><CircleAlert aria-hidden="true" size={16} /><span>لا تتغير الأرصدة أثناء الكتابة. سترى الأثر قبل الحفظ.</span></div>
+            <div className="adreem-movement-edit-hint"><CircleAlert aria-hidden="true" size={16} /><span>الأثر يظهر قبل الحفظ.</span></div>
           </div>
         ) : (
           <div className="adreem-movement-edit-review">
@@ -3436,7 +3452,6 @@ export default function LedgerApp() {
   }, [balancesByKind.review, reviewMovements, unresolvedExternalAccounts])
   const activeReviewItem = reviewItems.find((item) => item.key === activeReviewKey) || reviewItems[0] || null
   const reviewMovementTotal = ledgerStorageMode === 'relational' ? activeReviewPage?.total ?? reviewMovements.length : reviewMovements.length
-  const reviewItemTotal = (balancesByKind.review || []).length + unresolvedExternalAccounts.length + reviewMovementTotal
   const postedUserMovements = movements
     .filter(isMainLedgerMovement)
     .slice()
@@ -5560,18 +5575,18 @@ export default function LedgerApp() {
           <div className="ml3-balance-pane">
             <AnimatePresence mode="wait" initial={false}>
               <Motion.div key={activeGroup.key} className="adreem-balance-pane-motion" {...BALANCE_PANE_MOTION}>
-                <div className={`ml3-balance-pane-head ${activeGroup.key === 'separate' ? 'is-separate' : ''}`}>
-                  <div className="ml3-balance-pane-title">
-                    <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
-                    <h2>{balancePaneTitle}</h2>
-                    <span>{formatCount(activeGroupCount)}</span>
+                {activeGroup.key !== 'separate' || activeBalanceFocus ? (
+                  <div className={`ml3-balance-pane-head ${activeBalanceFocus ? '' : 'is-search-only'}`}>
                     {activeBalanceFocus ? (
-                      <button type="button" className="adreem-balance-focus-reset" aria-label="عرض الكل" title="عرض الكل" onClick={() => selectAccountGroup(activeGroup.key)}>
-                        <X aria-hidden="true" size={14} />
-                      </button>
+                      <div className="ml3-balance-pane-title">
+                        <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
+                        <h2>{balancePaneTitle}</h2>
+                        <span>{formatCount(activeGroupCount)}</span>
+                        <button type="button" className="adreem-balance-focus-reset" aria-label="عرض الكل" title="عرض الكل" onClick={() => selectAccountGroup(activeGroup.key)}>
+                          <X aria-hidden="true" size={14} />
+                        </button>
+                      </div>
                     ) : null}
-                  </div>
-                  {activeGroup.key !== 'separate' ? (
                     <label className="ml3-account-toolbar">
                       <Search aria-hidden="true" size={15} />
                       <input
@@ -5584,8 +5599,8 @@ export default function LedgerApp() {
                         placeholder="ابحث عن حساب"
                       />
                     </label>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
 
                 {activeGroup.key === 'separate' ? (
                   <SeparateLedgerPanel
@@ -5631,8 +5646,7 @@ export default function LedgerApp() {
                 ) : activeGroup.key === 'expenses' ? (
                   <>
                     <div className="adreem-expense-toolbar">
-                      <span><ReceiptText aria-hidden="true" size={15} /> التصنيفات</span>
-                      <button type="button" onClick={() => openExpenseCategoryCreator('balances')}><Plus aria-hidden="true" size={14} /> تصنيف جديد</button>
+                      <button type="button" aria-label="إدارة تصنيفات المصروف" onClick={() => openExpenseCategoryCreator('balances')}><Plus aria-hidden="true" size={14} /> تصنيف جديد</button>
                     </div>
                     <ExpenseReportList rows={rows} onOpen={setSelectedAccountId} />
                   </>
@@ -5654,13 +5668,7 @@ export default function LedgerApp() {
     if (activeSection === 'accounts') return renderAccountsSection()
     if (activeSection === 'review') {
       return (
-        <section className="ml3-panel">
-          <div className="ml3-panel-head">
-            <div>
-              <h2>مراجعة</h2>
-            </div>
-            <span>{formatCount(reviewItemTotal)}</span>
-          </div>
+        <section className="ml3-panel" aria-label="المراجعة">
           {ledgerStorageMode !== 'relational' && movementPage.reviewTruncated ? <p className="ml3-empty">اعرض بقية الحركات الناقصة من السجل.</p> : null}
           <div className="ml3-review-workspace">
             <div className="ml3-review-queue" aria-label="قائمة المراجعة">
@@ -5697,13 +5705,7 @@ export default function LedgerApp() {
     }
     if (activeSection === 'history') {
       return (
-        <section className="ml3-panel">
-          <div className="ml3-panel-head">
-            <div>
-              <h2>السجل</h2>
-            </div>
-            <span>{formatCount(activeHistoryPage?.total ?? filteredHistoryMovements.length)}</span>
-          </div>
+        <section className="ml3-panel" aria-label="السجل">
           <details className="ml3-filter-disclosure">
             <summary>
               <span>
@@ -5951,12 +5953,12 @@ export default function LedgerApp() {
               <button id="adreem-entry-movement-tab" data-entry-mode="movement" type="button" role="tab" aria-selected={activeEntryMode === 'movement'} aria-controls="adreem-entry-movement-panel" tabIndex={activeEntryMode === 'movement' ? 0 : -1} className={activeEntryMode === 'movement' ? 'is-active' : ''} onClick={() => switchEntryMode('movement')}>
                 {activeEntryMode === 'movement' ? <Motion.i className="adreem-motion-selection" layoutId="adreem-entry-mode" transition={UI_MOTION_TRANSITION} /> : null}
                 <ArrowRightLeft aria-hidden="true" size={17} />
-                <span>حركة جديدة</span>
+                <span>حركة</span>
               </button>
               <button id="adreem-entry-account-tab" data-entry-mode="account" type="button" role="tab" aria-selected={activeEntryMode === 'account'} aria-controls="adreem-entry-account-panel" tabIndex={activeEntryMode === 'account' ? 0 : -1} className={activeEntryMode === 'account' ? 'is-active' : ''} onClick={() => switchEntryMode('account')}>
                 {activeEntryMode === 'account' ? <Motion.i className="adreem-motion-selection" layoutId="adreem-entry-mode" transition={UI_MOTION_TRANSITION} /> : null}
                 <WalletCards aria-hidden="true" size={17} />
-                <span>حساب جديد</span>
+                <span>حساب</span>
               </button>
             </div>
             {feedback || pendingUndo || editingMovementId ? (
@@ -5987,7 +5989,7 @@ export default function LedgerApp() {
                     <h2>{currentMovementStepCopy.title}</h2>
                     {currentMovementStepCopy.summary ? <p>{currentMovementStepCopy.summary}</p> : null}
                   </div>
-                  <b className={preview.validation.ok ? 'is-ready' : ''}>{preview.validation.ok ? 'جاهزة' : 'قيد الإدخال'}</b>
+                  {movementStep === MOVEMENT_ENTRY_STEPS.REVIEW ? <b className={preview.validation.ok ? 'is-ready' : ''}>{preview.validation.ok ? 'جاهزة' : 'ناقصة'}</b> : null}
                 </header>
                 <FlowProgress current={currentMovementStepIndex + 1} total={visibleMovementSteps.length} items={completedMovementReceipt} onEdit={editMovementStep} />
                 <Motion.div key={movementStep} className="adreem-flow-stage-motion" {...FLOW_STAGE_MOTION}>

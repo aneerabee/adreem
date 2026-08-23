@@ -393,6 +393,7 @@ describe('LedgerApp compact history rows', () => {
 
     expect(markup).toContain('role="alertdialog"')
     expect(markup).toContain('تأكيد إلغاء الحركة')
+    expect(markup).not.toContain('خطوة تأكيد')
     expect(markup).toContain('نعم، إلغاء الحركة')
     expect(markup).toContain('لن تُحذف من السجل')
     expect(markup).toContain('سعيد')
@@ -553,6 +554,49 @@ describe('LedgerApp expense balances', () => {
     expect(markup).toContain('35 $')
   })
 
+  it('shows the expense category once as a compact colored tag', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <HistoryMovementRow
+        accountById={new Map([['fuel', expenseAccount]])}
+        movement={{
+          id: 'expense-1',
+          type: MOVEMENT_TYPES.EXPENSE,
+          status: MOVEMENT_STATUSES.POSTED,
+          amount: 450,
+          currency: CURRENCIES.DINAR,
+          expenseCategoryId: 'fuel',
+          note: 'وقود',
+        }}
+      />,
+    ))
+
+    expect(markup).toContain('adreem-expense-category-tag')
+    expect(markup).toContain('aria-label="نوع المصروف: وقود"')
+    expect(markup).toContain('>وقود</span>')
+    expect(markup).not.toContain('>نوع المصروف:')
+    expect(markup).not.toContain('ml3-history-note')
+  })
+
+  it('keeps an expense note when it adds information beyond the category', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <HistoryMovementRow
+        accountById={new Map([['fuel', expenseAccount]])}
+        movement={{
+          id: 'expense-2',
+          type: MOVEMENT_TYPES.EXPENSE,
+          status: MOVEMENT_STATUSES.POSTED,
+          amount: 450,
+          currency: CURRENCIES.DINAR,
+          expenseCategoryId: 'fuel',
+          note: 'وقود الشاحنة',
+        }}
+      />,
+    ))
+
+    expect(markup).toContain('ml3-history-note')
+    expect(markup).toContain('وقود الشاحنة')
+  })
+
   it('creates a real expense category and rejects a duplicate name', () => {
     const prepared = prepareExpenseCategoryAccount('وقود', [])
 
@@ -587,6 +631,9 @@ describe('LedgerApp expense balances', () => {
     const dialogMarkup = stripUiDataProtection(renderToStaticMarkup(
       <ExpenseCategoryDialog name="وقود" onNameChange={() => {}} onClose={() => {}} onSave={() => {}} />,
     ))
+    const emptyDialogMarkup = stripUiDataProtection(renderToStaticMarkup(
+      <ExpenseCategoryDialog onNameChange={() => {}} onClose={() => {}} onSave={() => {}} />,
+    ))
 
     expect(['coral', 'blue', 'green', 'amber', 'plum', 'teal']).toContain(tone)
     expect(expenseCategoryTone('وقود')).toBe(tone)
@@ -595,6 +642,8 @@ describe('LedgerApp expense balances', () => {
     expect(pickerMarkup).toContain('جديد')
     expect(dialogMarkup).toContain('تصنيف مصروف جديد')
     expect(dialogMarkup).toContain('حفظ التصنيف')
+    expect(dialogMarkup).toContain('adreem-expense-category-preview')
+    expect(emptyDialogMarkup).not.toContain('adreem-expense-category-preview')
   })
 })
 

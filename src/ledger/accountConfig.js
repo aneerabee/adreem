@@ -61,7 +61,7 @@ export const accountPresets = [
   {
     key: 'own-cash',
     title: 'كاش عندي',
-    detail: 'خزنة أو مكان كاش',
+    detail: 'خزنة أو مكان',
     type: ACCOUNT_TYPES.CASH,
     valueKind: VALUE_KINDS.CASH,
     ownerName: 'أنا',
@@ -111,7 +111,7 @@ export const accountPresets = [
   {
     key: 'expense',
     title: 'نوع مصروف',
-    detail: 'مصروفات متشابهة',
+    detail: 'وقود أو إيجار أو شخصي',
     type: ACCOUNT_TYPES.EXPENSE,
     valueKind: VALUE_KINDS.EXPENSE,
     subAccountName: 'مصروف',
