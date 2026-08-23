@@ -19,7 +19,8 @@ const NET_SEARCH_LABELS = Object.freeze({
   [VALUE_KINDS.ASSET]: 'اصل ممتلكات',
   [ACCOUNT_CURRENCY_KINDS.DINAR]: 'دينار د ل',
   [ACCOUNT_CURRENCY_KINDS.USD]: 'دولار امريكي',
-  [ACCOUNT_CURRENCY_KINDS.MULTI]: 'دينار دولار متعدد',
+  [ACCOUNT_CURRENCY_KINDS.TRY]: 'ليرة تركية try tl',
+  [ACCOUNT_CURRENCY_KINDS.MULTI]: 'lyd usd try متعدد',
 })
 
 const MAX_SAFE_MONEY_BIGINT = BigInt(Number.MAX_SAFE_INTEGER)
@@ -63,7 +64,7 @@ function normalizedNetSearchText(value) {
 }
 
 function netContributionImpact(item = {}) {
-  return Math.abs(Number(item.dinar || 0)) + Math.abs(Number(item.usd || 0))
+  return Math.abs(Number(item.dinar || 0)) + Math.abs(Number(item.usd || 0)) + Math.abs(Number(item.try || 0))
 }
 
 function roundedNetAmount(value) {
@@ -117,33 +118,48 @@ export function buildNetPosition(rows = [], excludedAccountIds = []) {
       account: row.account,
       dinar: roundedNetAmount(row.dinar),
       usd: roundedNetAmount(row.usd),
+      try: roundedNetAmount(row.try),
     }))
-    .filter((item) => item.dinar !== 0 || item.usd !== 0)
+    .filter((item) => item.dinar !== 0 || item.usd !== 0 || item.try !== 0)
   return {
     dinar: exactNetTotal(contributions, 'dinar'),
     usd: exactNetTotal(contributions, 'usd'),
+    try: exactNetTotal(contributions, 'try'),
     accountCount: contributions.length,
     contributions,
   }
 }
 
-export function convertNetPosition(position = {}, requestedRate, targetCurrency = 'LYD') {
+export function convertNetPosition(position = {}, requestedRate, targetCurrency = 'LYD', requestedTryRate = 0) {
+  const currency = ['USD', 'TRY'].includes(targetCurrency) ? targetCurrency : 'LYD'
   const rate = Number(requestedRate)
-  if (!Number.isFinite(rate) || rate <= 0) {
-    return { ok: false, error: 'أدخل سعر صرف أكبر من صفر.' }
-  }
+  const tryRate = Number(requestedTryRate)
   const dinar = Number(position.dinar || 0)
   const usd = Number(position.usd || 0)
-  if (!Number.isSafeInteger(dinar) || !Number.isSafeInteger(usd)) {
+  const tryAmount = Number(position.try || 0)
+  if (![dinar, usd, tryAmount].every(Number.isSafeInteger)) {
     return { ok: false, error: 'نتيجة الصافي أكبر من الحد المسموح.' }
   }
-  const currency = targetCurrency === 'USD' ? 'USD' : 'LYD'
+  const needsUsdRate = usd !== 0 || currency === 'USD'
+  const needsTryRate = tryAmount !== 0 || currency === 'TRY'
+  if ((needsUsdRate && (!Number.isFinite(rate) || rate <= 0)) || (needsTryRate && (!Number.isFinite(tryRate) || tryRate <= 0))) {
+    return { ok: false, error: needsUsdRate && needsTryRate ? 'أدخل سعري USD وTRY.' : needsTryRate ? 'أدخل سعر TRY.' : 'أدخل سعر USD.' }
+  }
+  const lydTotal = dinar + (usd * rate) + (tryAmount * tryRate)
   const rawAmount = currency === 'USD'
-    ? Math.round(usd + (dinar / rate))
-    : Math.round(dinar + (usd * rate))
+    ? Math.round(usd + ((dinar + (tryAmount * tryRate)) / rate))
+    : currency === 'TRY'
+      ? Math.round(tryAmount + ((dinar + (usd * rate)) / tryRate))
+      : Math.round(lydTotal)
   if (!Number.isSafeInteger(rawAmount)) {
     return { ok: false, error: 'نتيجة الصافي أكبر من الحد المسموح.' }
   }
   const amount = rawAmount
-  return { ok: true, currency, amount, rate }
+  return {
+    ok: true,
+    currency,
+    amount,
+    rate,
+    ...(needsTryRate ? { tryRate } : {}),
+  }
 }

@@ -141,7 +141,7 @@ describe('server ledger state validation', () => {
     const allRemoved = validateLedgerStateTransition({ ...current, accounts: [] }, current)
 
     expect(oneRemoved.errors).toContainEqual(expect.objectContaining({ code: 'account-deletion-not-allowed', id: accounts[0].id }))
-    expect(allRemoved.errors.filter((error) => error.code === 'account-deletion-not-allowed')).toHaveLength(3)
+    expect(allRemoved.errors.filter((error) => error.code === 'account-deletion-not-allowed')).toHaveLength(4)
   })
 
   it('allows only the exact account ids authorized by the protected deletion path', () => {

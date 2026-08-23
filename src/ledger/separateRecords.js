@@ -85,9 +85,10 @@ export function separateRecordTotals(movements = []) {
   const totals = {
     [CURRENCIES.DINAR]: emptyCurrency(),
     [CURRENCIES.USD]: emptyCurrency(),
+    [CURRENCIES.TRY]: emptyCurrency(),
   }
   for (const movement of activeSeparateRecords(movements)) {
-    const currency = movement.currency === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+    const currency = Object.values(CURRENCIES).includes(movement.currency) ? movement.currency : CURRENCIES.DINAR
     const direction = normalizeSeparateRecordDirection(movement.recordDirection)
     const amount = Math.abs(Math.round(Number(movement.amount || 0)))
     if (direction === SEPARATE_RECORD_DIRECTIONS.RECEIVABLE) totals[currency].receivable += amount
@@ -109,7 +110,7 @@ export function separateRecordCancellationDraft(target = {}) {
   return {
     type: MOVEMENT_TYPES.RECORD_ONLY,
     amount: Math.max(1, Math.abs(Math.round(Number(target.amount || 0)))),
-    currency: target.currency === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR,
+    currency: Object.values(CURRENCIES).includes(target.currency) ? target.currency : CURRENCIES.DINAR,
     sourceAccountId: null,
     destinationAccountId: null,
     separateAccountId: String(target.separateAccountId || (target.id ? `separate-account-${target.id}` : '')).trim(),

@@ -48,7 +48,7 @@ describe('telegram account balance presentation', () => {
     expect(formatAccountBalance(receivable, bucket)).toBe('أقبض منه 12,500 د.ل')
     expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('👤 سعيد · أقبض منه 12,500 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('success')
-    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🟢 سعيد\nكاش · دينار')
+    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🟢 سعيد\nكاش · LYD')
   })
 
   it('marks money I should pay in red terms', () => {
@@ -57,7 +57,7 @@ describe('telegram account balance presentation', () => {
     expect(formatAccountBalance(receivable, bucket)).toBe('أدفع له 3,200 د.ل')
     expect(stripUiDataProtection(accountChoiceButtonText(receivable, bucket))).toBe('👤 سعيد · أدفع له 3,200 د.ل')
     expect(accountChoiceButtonStyle(receivable, bucket)).toBe('danger')
-    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🔴 سعيد\nكاش · دينار')
+    expect(stripUiDataProtection(accountBlockquote(receivable, bucket))).toContain('🔴 سعيد\nكاش · LYD')
   })
 
   it('uses the same visual direction for my own money accounts', () => {
@@ -105,8 +105,8 @@ describe('telegram account balance presentation', () => {
       ].join('\n'),
     }, 'en')
 
-    expect(localized.text).toContain('🟢 دخل\nCash · Dinar')
-    expect(localized.text).toContain('🟢 مالك\nCash · Dinar')
+    expect(localized.text).toContain('🟢 دخل\nCash · LYD')
+    expect(localized.text).toContain('🟢 مالك\nCash · LYD')
     expect(localized.text).not.toContain('🟢 Income')
   })
 
@@ -378,7 +378,7 @@ describe('telegram movement presentation', () => {
 
     expect(card).toContain('<blockquote>')
     expect(card).toContain('🔁 تحويل · 1,250 د.ل · مسودة')
-    expect(card).toContain('كاش عندي · كاش · دينار ← سعيد · كاش · دينار')
+    expect(card).toContain('كاش عندي · كاش · LYD ← سعيد · كاش · LYD')
     expect(card).toContain('ملاحظة: تجربة &lt;مهمة&gt;')
   })
 
@@ -486,11 +486,11 @@ describe('telegram movement presentation', () => {
     ))
 
     expect(text).toContain('<b>تأكيد الحركة</b>')
-    expect(text).toContain('🔴 من: كاش عندي · كاش · دينار')
+    expect(text).toContain('🔴 من: كاش عندي · كاش · LYD')
     expect(text).toContain('قبل: 2,000 د.ل')
     expect(text).toContain('التغيير: -500 د.ل')
     expect(text).toContain('بعد: 1,500 د.ل')
-    expect(text).toContain('🟢 إلى: سعيد · كاش · دينار')
+    expect(text).toContain('🟢 إلى: سعيد · كاش · LYD')
     expect(text).toContain('التغيير: +500 د.ل')
     expect(text).toContain('بعد: 600 د.ل')
   })

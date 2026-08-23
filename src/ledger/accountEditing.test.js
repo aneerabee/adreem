@@ -320,7 +320,7 @@ describe('account editing', () => {
     expect(usage).toMatchObject({ movement: true, locked: true })
   })
 
-  it('renames all three linked person balances atomically before their first movement', () => {
+  it('renames all four linked person balances atomically before their first movement', () => {
     const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
     const result = prepareAccountUpdate({
       accounts,
@@ -331,7 +331,7 @@ describe('account editing', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.accountIds).toHaveLength(3)
+    expect(result.accountIds).toHaveLength(4)
     expect(new Set(result.accounts.map((account) => account.ownerName))).toEqual(new Set(['شركة سعيد']))
   })
 

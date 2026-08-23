@@ -53,8 +53,18 @@ const COUNTERPARTY_BALANCE_FILTERS = Object.freeze([
   { key: 'payable', label: 'أدفع', icon: ArrowUpFromLine },
   { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, label: 'كاش', icon: Banknote },
   { key: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, label: 'شيك', icon: Landmark },
-  { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, label: 'دولار', icon: CircleDollarSign },
+  { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, label: 'USD', icon: CircleDollarSign },
+  { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, label: 'TRY', icon: CircleDollarSign },
 ])
+const CURRENCY_OPTIONS = Object.freeze([
+  { value: CURRENCIES.DINAR, label: 'LYD', field: 'dinar' },
+  { value: CURRENCIES.USD, label: 'USD', field: 'usd' },
+  { value: CURRENCIES.TRY, label: 'TRY', field: 'try' },
+])
+
+function currencyField(currency) {
+  return CURRENCY_OPTIONS.find((option) => option.value === currency)?.field || 'dinar'
+}
 const EXPENSE_CATEGORY_TONES = Object.freeze(['coral', 'blue', 'green', 'amber', 'plum', 'teal'])
 const BALANCE_FOCUS_LABELS = Object.freeze({
   cash: 'الكاش',
@@ -133,7 +143,7 @@ const movementOptionGroups = [
   },
   {
     key: 'exchange',
-    title: 'الدولار',
+    title: 'USD',
     hint: 'بيع أو شراء',
     types: [MOVEMENT_TYPES.USD_SALE, MOVEMENT_TYPES.USD_PURCHASE],
   },
@@ -167,7 +177,7 @@ function AccountChoiceIcon({ account, size = 16 }) {
   const kind = accountChoiceKind(account)
   if (kind === 'person-cash') return <Banknote {...props} />
   if (kind === 'person-bank') return <Landmark {...props} />
-  if (kind === 'person-usd') return <CircleDollarSign {...props} />
+  if (kind === 'person-usd' || kind === 'person-try') return <CircleDollarSign {...props} />
   if (kind === VALUE_KINDS.CASH) return <Banknote {...props} />
   if (kind === VALUE_KINDS.BANK) return <Landmark {...props} />
   if (kind === VALUE_KINDS.ASSET) return <Boxes {...props} />
@@ -322,19 +332,45 @@ export function balanceAmountIsWide(value) {
   return Math.max(
     formatMoneyNumber(value?.dinar).length,
     formatMoneyNumber(value?.usd).length,
+    formatMoneyNumber(value?.try).length,
   ) > 13
 }
 
 export function money(value, currency = CURRENCIES.DINAR) {
-  const unit = currency === CURRENCIES.USD ? '$' : 'د.ل'
-  return `${formatMoneyNumber(value, currency)} ${unit}`
+  return `${formatMoneyNumber(value, currency)} ${currency}`
 }
 
 export function signedMoney(value, currency = CURRENCIES.DINAR) {
   const number = Number(value || 0)
   const displayValue = Math.round(number)
   const prefix = displayValue > 0 ? '+' : displayValue < 0 ? '-' : ''
-  return `${prefix}${formatMoneyNumber(Math.abs(displayValue), currency)} ${currency === CURRENCIES.USD ? '$' : 'د.ل'}`
+  return `${prefix}${formatMoneyNumber(Math.abs(displayValue), currency)} ${currency}`
+}
+
+export function SearchField({ value = '', onChange, placeholder = 'بحث', ariaLabel = 'بحث', className = '' }) {
+  return (
+    <label className={`adreem-search-field ${className}`.trim()}>
+      <Search aria-hidden="true" size={16} />
+      <input
+        type="search"
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange?.(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || !value) return
+          event.preventDefault()
+          onChange?.('')
+        }}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      {value ? (
+        <button type="button" aria-label="مسح البحث" title="مسح" onClick={() => onChange?.('')}>
+          <X aria-hidden="true" size={14} />
+        </button>
+      ) : <span aria-hidden="true" />}
+    </label>
+  )
 }
 
 function formatInteger(value) {
@@ -680,7 +716,7 @@ function movementStepCopy(step, config = {}) {
 }
 
 function nonZero(bucket) {
-  return hasMoneyValue(bucket.dinar) || hasMoneyValue(bucket.usd)
+  return hasMoneyValue(bucket.dinar) || hasMoneyValue(bucket.usd) || hasMoneyValue(bucket.try)
 }
 
 function externalAccountKey(account = {}) {
@@ -723,8 +759,9 @@ export function previewMovementEdit(candidateMovement, originalMovement, account
         ...buildPostingEntries(replacement).filter((entry) => entry.accountId === accountId).map((entry) => entry.currency),
       ])
       return Array.from(currencies).flatMap((currency) => {
-        const before = currency === CURRENCIES.USD ? Number(beforeById.get(accountId)?.usd || 0) : Number(beforeById.get(accountId)?.dinar || 0)
-        const after = currency === CURRENCIES.USD ? Number(afterById.get(accountId)?.usd || 0) : Number(afterById.get(accountId)?.dinar || 0)
+        const field = currencyField(currency)
+        const before = Number(beforeById.get(accountId)?.[field] || 0)
+        const after = Number(afterById.get(accountId)?.[field] || 0)
         if (before === after) return []
         return [{ accountId, account, currency, before, delta: after - before, after }]
       })
@@ -737,7 +774,7 @@ export function accountReviewSelection(classificationValue, currencyKind = ACCOU
   return {
     type: classification.type,
     valueKind: classification.valueKind,
-    currencyKind: accountNeedsCurrency(classification) ? (currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? ACCOUNT_CURRENCY_KINDS.USD : ACCOUNT_CURRENCY_KINDS.DINAR) : ACCOUNT_CURRENCY_KINDS.DINAR,
+    currencyKind: accountNeedsCurrency(classification) && Object.values(ACCOUNT_CURRENCY_KINDS).includes(currencyKind) ? currencyKind : ACCOUNT_CURRENCY_KINDS.DINAR,
   }
 }
 
@@ -983,8 +1020,10 @@ function visualKind(account) {
   if (account.valueKind === VALUE_KINDS.BANK) return 'bank'
   if (account.valueKind === VALUE_KINDS.EXPENSE) return 'expense'
   if (account.valueKind === VALUE_KINDS.ASSET) return 'asset'
-  if (account.valueKind === VALUE_KINDS.RECEIVABLE && /مصرف|بنك|شيك|حساب/i.test(account.subAccountName || '')) return 'person-bank'
-  if (account.valueKind === VALUE_KINDS.RECEIVABLE && /دولار|usd/i.test(account.subAccountName || '')) return 'person-usd'
+  if (account.valueKind === VALUE_KINDS.RECEIVABLE) {
+    const choiceKind = accountChoiceKind(account)
+    if (['person-bank', 'person-usd', 'person-try'].includes(choiceKind)) return choiceKind
+  }
   return 'person'
 }
 
@@ -995,10 +1034,15 @@ function accountKindText(account) {
 export function accountBalanceChip(account, bucket, currency = '') {
   const dinar = Number(bucket?.dinar || 0)
   const usd = Number(bucket?.usd || 0)
+  const tryAmount = Number(bucket?.try || 0)
   if (currency === CURRENCIES.DINAR) return accountBalanceChipForCurrency(account, dinar, CURRENCIES.DINAR)
   if (currency === CURRENCIES.USD) return accountBalanceChipForCurrency(account, usd, CURRENCIES.USD)
+  if (currency === CURRENCIES.TRY) return accountBalanceChipForCurrency(account, tryAmount, CURRENCIES.TRY)
   const hasDinar = hasMoneyValue(dinar)
   const hasUsd = hasMoneyValue(usd)
+  const hasTry = hasMoneyValue(tryAmount)
+
+  if (!hasDinar && !hasUsd && hasTry) return accountBalanceChipForCurrency(account, tryAmount, CURRENCIES.TRY)
 
   if (!hasDinar && hasUsd) {
     return {
@@ -1049,8 +1093,8 @@ function accountBalanceChipForCurrency(account, amount, currency) {
 }
 
 export function compareBalanceBuckets(a, b) {
-  const aActive = Math.abs(a.dinar) > 0.000001 || Math.abs(a.usd) > 0.000001
-  const bActive = Math.abs(b.dinar) > 0.000001 || Math.abs(b.usd) > 0.000001
+  const aActive = Math.abs(a.dinar) > 0.000001 || Math.abs(a.usd) > 0.000001 || Math.abs(a.try) > 0.000001
+  const bActive = Math.abs(b.dinar) > 0.000001 || Math.abs(b.usd) > 0.000001 || Math.abs(b.try) > 0.000001
   const aPrimary = accountPrimaryBalance(a)
   const bPrimary = accountPrimaryBalance(b)
   return Number(bActive) - Number(aActive)
@@ -1061,18 +1105,23 @@ export function compareBalanceBuckets(a, b) {
 }
 
 function accountPrimaryBalance(bucket = {}) {
-  const dinar = Number(bucket.dinar || 0)
-  const usd = Number(bucket.usd || 0)
-  const prefersUsd = bucket.account?.currencyKind === ACCOUNT_CURRENCY_KINDS.USD
-  const preferred = prefersUsd
-    ? { amount: usd, currency: CURRENCIES.USD, secondaryAmount: dinar, secondaryCurrency: CURRENCIES.DINAR }
-    : { amount: dinar, currency: CURRENCIES.DINAR, secondaryAmount: usd, secondaryCurrency: CURRENCIES.USD }
-  if (hasMoneyValue(preferred.amount) || !hasMoneyValue(preferred.secondaryAmount)) return preferred
+  const balances = [
+    { amount: Number(bucket.dinar || 0), currency: CURRENCIES.DINAR },
+    { amount: Number(bucket.usd || 0), currency: CURRENCIES.USD },
+    { amount: Number(bucket.try || 0), currency: CURRENCIES.TRY },
+  ]
+  const preferredCurrency = bucket.account?.currencyKind
+  const ordered = preferredCurrency === ACCOUNT_CURRENCY_KINDS.MULTI
+    ? balances.slice().sort((left, right) => Math.abs(right.amount) - Math.abs(left.amount))
+    : balances.slice().sort((left, right) => Number(right.currency === preferredCurrency) - Number(left.currency === preferredCurrency))
+  const nonZero = ordered.filter((item) => hasMoneyValue(item.amount))
+  const primary = nonZero[0] || ordered[0]
+  const secondary = nonZero[1] || ordered.find((item) => item.currency !== primary.currency)
   return {
-    amount: preferred.secondaryAmount,
-    currency: preferred.secondaryCurrency,
-    secondaryAmount: preferred.amount,
-    secondaryCurrency: preferred.currency,
+    amount: primary.amount,
+    currency: primary.currency,
+    secondaryAmount: secondary?.amount || 0,
+    secondaryCurrency: secondary?.currency || CURRENCIES.USD,
   }
 }
 
@@ -1083,6 +1132,7 @@ export function buildPeopleAccountViews(rows = []) {
     ...bucket,
     dinar: direction > 0 ? Math.max(0, Number(bucket.dinar || 0)) : Math.min(0, Number(bucket.dinar || 0)),
     usd: direction > 0 ? Math.max(0, Number(bucket.usd || 0)) : Math.min(0, Number(bucket.usd || 0)),
+    try: direction > 0 ? Math.max(0, Number(bucket.try || 0)) : Math.min(0, Number(bucket.try || 0)),
   })
   const positive = withBalance.map((bucket) => signedView(bucket, 1)).filter(nonZero).sort(compareBalanceBuckets)
   const negative = withBalance.map((bucket) => signedView(bucket, -1)).filter(nonZero).sort(compareBalanceBuckets)
@@ -1099,37 +1149,46 @@ export function buildPeopleAccountViews(rows = []) {
 export function buildBalanceOverview(rows = []) {
   let cashDinar = 0
   let cashUsd = 0
+  let cashTry = 0
   let bankDinar = 0
   let bankUsd = 0
+  let bankTry = 0
   let receivableDinar = 0
   let receivableUsd = 0
+  let receivableTry = 0
   let payableDinar = 0
   let payableUsd = 0
+  let payableTry = 0
   for (const bucket of rows) {
     const kind = bucket.account?.valueKind
     const dinar = Number(bucket.dinar || 0)
     const usd = Number(bucket.usd || 0)
+    const tryAmount = Number(bucket.try || 0)
     if (kind === VALUE_KINDS.CASH) {
       cashDinar += dinar
       cashUsd += usd
+      cashTry += tryAmount
     }
     if (kind === VALUE_KINDS.BANK) {
       bankDinar += dinar
       bankUsd += usd
+      bankTry += tryAmount
     }
     if (kind === VALUE_KINDS.RECEIVABLE) {
       if (dinar > 0) receivableDinar += dinar
       if (dinar < 0) payableDinar += Math.abs(dinar)
       if (usd > 0) receivableUsd += usd
       if (usd < 0) payableUsd += Math.abs(usd)
+      if (tryAmount > 0) receivableTry += tryAmount
+      if (tryAmount < 0) payableTry += Math.abs(tryAmount)
     }
   }
   return {
-    cash: { dinar: cashDinar, usd: cashUsd },
-    bank: { dinar: bankDinar, usd: bankUsd },
-    money: { dinar: cashDinar + bankDinar, usd: cashUsd + bankUsd },
-    receivable: { dinar: receivableDinar, usd: receivableUsd },
-    payable: { dinar: payableDinar, usd: payableUsd },
+    cash: { dinar: cashDinar, usd: cashUsd, try: cashTry },
+    bank: { dinar: bankDinar, usd: bankUsd, try: bankTry },
+    money: { dinar: cashDinar + bankDinar, usd: cashUsd + bankUsd, try: cashTry + bankTry },
+    receivable: { dinar: receivableDinar, usd: receivableUsd, try: receivableTry },
+    payable: { dinar: payableDinar, usd: payableUsd, try: payableTry },
   }
 }
 
@@ -1137,8 +1196,9 @@ function BalanceAmountPair({ value }) {
   const wide = balanceAmountIsWide(value)
   return (
     <span className={`ml3-balance-pair${wide ? ' is-wide' : ''}`}>
-      <strong><b>{formatInteger(value.dinar)}</b><span>د.ل</span></strong>
-      <small><b>{formatInteger(value.usd)}</b><span>$</span></small>
+      <strong><b>{formatInteger(value.dinar)}</b><span>LYD</span></strong>
+      <small><b>{formatInteger(value.usd)}</b><span>USD</span></small>
+      {hasMoneyValue(value.try) ? <small><b>{formatInteger(value.try)}</b><span>TRY</span></small> : null}
     </span>
   )
 }
@@ -1156,15 +1216,17 @@ export function NetPositionPanel({
   excludedAccountIds = [],
   query = '',
   rate,
+  tryRate,
   targetCurrency,
   onRateChange,
+  onTryRateChange,
   onTargetCurrencyChange,
   onQueryChange = () => {},
   onToggleAccount = () => {},
   onResetExclusions = () => {},
   onClose,
 }) {
-  const conversion = convertNetPosition(position, rate, targetCurrency)
+  const conversion = convertNetPosition(position, rate, targetCurrency, tryRate)
   const excluded = new Set(excludedAccountIds)
   const excludedCount = allContributions.reduce((count, item) => count + (excluded.has(item.accountId) ? 1 : 0), 0)
   const visibleContributions = filterNetContributions(allContributions, query)
@@ -1175,14 +1237,15 @@ export function NetPositionPanel({
         <button type="button" aria-label="إغلاق الصافي" title="إغلاق" onClick={onClose}><X aria-hidden="true" size={16} /></button>
       </header>
       <div className="adreem-net-raw">
-        <span><small>دينار</small><strong>{money(position.dinar, CURRENCIES.DINAR)}</strong></span>
-        <span><small>دولار</small><strong>{money(position.usd, CURRENCIES.USD)}</strong></span>
+        <span><small>LYD</small><strong>{money(position.dinar, CURRENCIES.DINAR)}</strong></span>
+        <span><small>USD</small><strong>{money(position.usd, CURRENCIES.USD)}</strong></span>
+        <span><small>TRY</small><strong>{money(position.try, CURRENCIES.TRY)}</strong></span>
       </div>
       <div className="adreem-net-calc">
-        <NumericEntry compact hideLabel label="سعر الدولار" value={rate} onChange={onRateChange} placeholder="0" allowDecimal />
+        <NumericEntry compact hideLabel label="سعر USD" value={rate} onChange={onRateChange} placeholder="سعر USD" allowDecimal />
+        <NumericEntry compact hideLabel label="سعر TRY" value={tryRate} onChange={onTryRateChange} placeholder="سعر TRY" allowDecimal />
         <div className="adreem-net-target" aria-label="عملة الصافي">
-          <button type="button" className={targetCurrency === CURRENCIES.DINAR ? 'is-active' : ''} onClick={() => onTargetCurrencyChange(CURRENCIES.DINAR)}>دينار</button>
-          <button type="button" className={targetCurrency === CURRENCIES.USD ? 'is-active' : ''} onClick={() => onTargetCurrencyChange(CURRENCIES.USD)}>دولار</button>
+          {CURRENCY_OPTIONS.map((option) => <button type="button" key={option.value} className={targetCurrency === option.value ? 'is-active' : ''} onClick={() => onTargetCurrencyChange(option.value)}>{option.label}</button>)}
         </div>
         <output className={conversion.ok && conversion.amount < 0 ? 'is-negative' : ''}>
           <small>النتيجة</small>
@@ -1197,10 +1260,7 @@ export function NetPositionPanel({
         </summary>
         <div className="adreem-net-account-editor">
           <div className="adreem-net-account-tools">
-            <label>
-              <Search aria-hidden="true" size={15} />
-              <input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="ابحث عن حساب" />
-            </label>
+            <SearchField value={query} onChange={onQueryChange} placeholder="اسم الحساب" ariaLabel="بحث في حسابات الصافي" />
             {excludedCount ? (
               <button type="button" onClick={onResetExclusions}>
                 <RotateCcw aria-hidden="true" size={14} /> إرجاع الكل
@@ -1217,7 +1277,7 @@ export function NetPositionPanel({
                     <AccountChoiceIcon account={item.account} size={15} />
                     <span><strong>{protectedAccountPrimaryName(item.account)}</strong><small>{protectedAccountContext(item.account)}</small></span>
                   </span>
-                  <span className="adreem-net-account-values"><strong>{money(item.dinar, CURRENCIES.DINAR)}</strong><small>{money(item.usd, CURRENCIES.USD)}</small></span>
+                  <span className="adreem-net-account-values"><strong>{money(item.dinar, CURRENCIES.DINAR)}</strong><small>{money(item.usd, CURRENCIES.USD)}</small>{item.try ? <small>{money(item.try, CURRENCIES.TRY)}</small> : null}</span>
                 </button>
               )
             })}
@@ -1235,21 +1295,21 @@ function separateRecordDirectionLabel(direction) {
 
 export function SeparateLedgerPanel({ records, names, totals, query, draft, editorOpen, editingId, isSaving, hasMore, isLoadingMore, onQueryChange, onDraftChange, onOpenEditor, onCloseEditor, onSave, onEdit, onVoid, onLoadMore }) {
   const normalizedDraftName = normalizeSeparateRecordName(draft.relatedName).toLocaleLowerCase('ar')
+  const dinarTotals = totals[CURRENCIES.DINAR] || { receivable: 0, payable: 0 }
+  const usdTotals = totals[CURRENCIES.USD] || { receivable: 0, payable: 0 }
+  const tryTotals = totals[CURRENCIES.TRY] || { receivable: 0, payable: 0 }
   const suggestedNames = names
     .filter((name) => !normalizedDraftName || name.toLocaleLowerCase('ar').includes(normalizedDraftName))
     .slice(0, 6)
   return (
     <section className="adreem-separate-ledger">
       <div className="adreem-separate-summary" aria-label="ملخص السجل المنفصل">
-        <span className="is-positive"><ArrowDownToLine aria-hidden="true" size={16} /><small>لي</small><strong>{money(totals[CURRENCIES.DINAR].receivable)}</strong><b>{money(totals[CURRENCIES.USD].receivable, CURRENCIES.USD)}</b></span>
-        <span className="is-negative"><ArrowUpFromLine aria-hidden="true" size={16} /><small>عليّ</small><strong>{money(totals[CURRENCIES.DINAR].payable)}</strong><b>{money(totals[CURRENCIES.USD].payable, CURRENCIES.USD)}</b></span>
+        <span className="is-positive"><ArrowDownToLine aria-hidden="true" size={16} /><small>لي</small><strong>{money(dinarTotals.receivable)}</strong><b>{money(usdTotals.receivable, CURRENCIES.USD)}</b>{tryTotals.receivable ? <b>{money(tryTotals.receivable, CURRENCIES.TRY)}</b> : null}</span>
+        <span className="is-negative"><ArrowUpFromLine aria-hidden="true" size={16} /><small>عليّ</small><strong>{money(dinarTotals.payable)}</strong><b>{money(usdTotals.payable, CURRENCIES.USD)}</b>{tryTotals.payable ? <b>{money(tryTotals.payable, CURRENCIES.TRY)}</b> : null}</span>
       </div>
 
       <div className="adreem-separate-toolbar">
-        <label>
-          <Search aria-hidden="true" size={15} />
-          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="ابحث بالاسم أو الملاحظة" />
-        </label>
+        <SearchField value={query} onChange={onQueryChange} placeholder="اسم أو ملاحظة" ariaLabel="بحث في السجل المنفصل" />
         <button type="button" className="adreem-separate-add" onClick={editorOpen ? onCloseEditor : onOpenEditor}>
           {editorOpen ? <X aria-hidden="true" size={16} /> : <Plus aria-hidden="true" size={16} />}
           {editorOpen ? 'إغلاق' : 'حساب جديد'}
@@ -1285,8 +1345,7 @@ export function SeparateLedgerPanel({ records, names, totals, query, draft, edit
             <label className="adreem-separate-currency">
               <span>العملة</span>
               <select value={draft.currency} onChange={(event) => onDraftChange('currency', event.target.value)}>
-                <option value={CURRENCIES.DINAR}>دينار</option>
-                <option value={CURRENCIES.USD}>دولار</option>
+                {CURRENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
             <label className="adreem-separate-note">
@@ -1535,6 +1594,7 @@ export function buildExpenseBalanceRows(accounts = [], reports = []) {
       account,
       dinar: 0,
       usd: 0,
+      try: 0,
       count: 0,
     })
   }
@@ -1551,12 +1611,13 @@ export function buildExpenseBalanceRows(accounts = [], reports = []) {
       account: current?.account || account,
       dinar: Math.abs(Number(report?.dinar || 0)),
       usd: Math.abs(Number(report?.usd || 0)),
+      try: Math.abs(Number(report?.try || 0)),
       count: Math.max(0, Number(report?.count || 0)),
     })
   }
 
   return Array.from(rowsById.values()).sort((left, right) => (
-    (right.dinar + right.usd) - (left.dinar + left.usd)
+    (right.dinar + right.usd + right.try) - (left.dinar + left.usd + left.try)
     || right.count - left.count
     || left.name.localeCompare(right.name, 'ar')
     || left.id.localeCompare(right.id)
@@ -1589,7 +1650,8 @@ export function ExpenseReportList({ rows = [], onOpen }) {
               <div className="ml3-account-values is-expense">
                 {row.dinar ? <strong>{money(row.dinar, CURRENCIES.DINAR)}</strong> : null}
                 {row.usd ? <strong>{money(row.usd, CURRENCIES.USD)}</strong> : null}
-                {!row.dinar && !row.usd ? <span>صفر</span> : null}
+                {row.try ? <strong>{money(row.try, CURRENCIES.TRY)}</strong> : null}
+                {!row.dinar && !row.usd && !row.try ? <span>صفر</span> : null}
               </div>
             </Motion.article>
           )
@@ -1600,16 +1662,18 @@ export function ExpenseReportList({ rows = [], onOpen }) {
 }
 
 function counterpartyBucketAmount(bucket = {}) {
-  const currency = bucket.account?.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+  const currency = bucket.account?.currencyKind === ACCOUNT_CURRENCY_KINDS.USD
+    ? CURRENCIES.USD
+    : bucket.account?.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? CURRENCIES.TRY : CURRENCIES.DINAR
   return {
-    amount: currency === CURRENCIES.USD ? Number(bucket.usd || 0) : Number(bucket.dinar || 0),
+    amount: Number(bucket[currencyField(currency)] || 0),
     currency,
   }
 }
 
 function counterpartyHasDirection(group = {}, direction) {
   const value = group?.[direction] || {}
-  return Number(value.dinar || 0) > 0 || Number(value.usd || 0) > 0
+  return Number(value.dinar || 0) > 0 || Number(value.usd || 0) > 0 || Number(value.try || 0) > 0
 }
 
 export function filterCounterpartyGroups(groups = [], filterKey = 'all') {
@@ -1645,7 +1709,7 @@ export function filterMoneyBalanceRows(rows = [], focus = '') {
 
 export function counterpartyMagnitudeForFilter(group = {}, filterKey = 'all') {
   if (filterKey === 'receivable' || filterKey === 'payable') {
-    return Math.max(Number(group?.[filterKey]?.dinar || 0), Number(group?.[filterKey]?.usd || 0))
+    return Math.max(Number(group?.[filterKey]?.dinar || 0), Number(group?.[filterKey]?.usd || 0), Number(group?.[filterKey]?.try || 0))
   }
   if (filterKey && !['all', 'zero'].includes(filterKey)) {
     return Math.max(0, ...group.rows
@@ -1655,8 +1719,10 @@ export function counterpartyMagnitudeForFilter(group = {}, filterKey = 'all') {
   return Math.max(
     Number(group.receivable?.dinar || 0),
     Number(group.receivable?.usd || 0),
+    Number(group.receivable?.try || 0),
     Number(group.payable?.dinar || 0),
     Number(group.payable?.usd || 0),
+    Number(group.payable?.try || 0),
   )
 }
 
@@ -1684,8 +1750,8 @@ function CounterpartyChannel({ bucket }) {
 }
 
 export function CounterpartyCard({ group, isFocused = false, isDimmed = false, onFocus, onOpen }) {
-  const hasReceivable = group.receivable.dinar > 0 || group.receivable.usd > 0
-  const hasPayable = group.payable.dinar > 0 || group.payable.usd > 0
+  const hasReceivable = group.receivable.dinar > 0 || group.receivable.usd > 0 || group.receivable.try > 0
+  const hasPayable = group.payable.dinar > 0 || group.payable.usd > 0 || group.payable.try > 0
   const balanceStatus = hasReceivable && hasPayable ? 'أقبض وأدفع' : hasReceivable ? 'أقبض منه' : hasPayable ? 'أدفع له' : 'مسكر'
   const tone = hasReceivable && hasPayable ? 'mixed' : hasReceivable ? 'receivable' : hasPayable ? 'payable' : 'zero'
   const previewRows = group.rows.filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
@@ -1787,12 +1853,13 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
   const selectedBalance = selectedAccount ? accountBalanceChip(selectedAccount, balanceByAccountId.get(selectedAccount.id), balanceCurrency) : null
   const showChooser = !selectedAccount || isChanging
   const preferredIndexById = new Map(preferredAccountIds.map((accountId, index) => [accountId, index]))
-  const accountBucket = (account) => balanceByAccountId.get(account.id) || { dinar: 0, usd: 0 }
+  const accountBucket = (account) => balanceByAccountId.get(account.id) || { dinar: 0, usd: 0, try: 0 }
   const accountMagnitude = (account) => {
     const bucket = accountBucket(account)
     if (balanceCurrency === CURRENCIES.USD) return Math.abs(Number(bucket.usd || 0))
     if (balanceCurrency === CURRENCIES.DINAR) return Math.abs(Number(bucket.dinar || 0))
-    return Math.max(Math.abs(Number(bucket.dinar || 0)), Math.abs(Number(bucket.usd || 0)))
+    if (balanceCurrency === CURRENCIES.TRY) return Math.abs(Number(bucket.try || 0))
+    return Math.max(Math.abs(Number(bucket.dinar || 0)), Math.abs(Number(bucket.usd || 0)), Math.abs(Number(bucket.try || 0)))
   }
   const hasVisibleBalance = (account) => accountMagnitude(account) > 0
   const preferredAccounts = preferredAccountIds.map((accountId) => accounts.find((account) => account.id === accountId)).filter(Boolean)
@@ -1873,18 +1940,17 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
       </div>
       {showChooser ? (
         <>
-          <label className="ml3-search-box">
-            <span className="ml3-search-icon"><Search aria-hidden="true" size={17} /></span>
-            <input
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value)
-                setQuickFilter('')
-                setShowAllResults(false)
-              }}
-              placeholder="اكتب الاسم أو كاش أو مصرف"
-            />
-          </label>
+          <SearchField
+            className="ml3-search-box"
+            value={query}
+            onChange={(value) => {
+              setQuery(value)
+              setQuickFilter('')
+              setShowAllResults(false)
+            }}
+            placeholder="اسم الحساب"
+            ariaLabel="بحث عن حساب"
+          />
           <div className="ml3-picker-context" aria-label="أنواع الحسابات المتاحة">
             <span>{formatCount(resultAccounts.length)} حساب</span>
             <div>
@@ -2377,7 +2443,7 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
         </header>
 
         <div className="adreem-movement-edit-locks" aria-label="بيانات ثابتة">
-          <span><small>العملة</small><strong>{movement.currency === CURRENCIES.USD ? 'دولار' : 'دينار'}</strong></span>
+          <span><small>العملة</small><strong>{movement.currency || CURRENCIES.DINAR}</strong></span>
           <span><small>وقت التسجيل</small><strong>{movementDateTime(movement.createdAt || movement.updatedAt)}</strong></span>
         </div>
 
@@ -2472,6 +2538,135 @@ export function accountProfileMovements(movements = [], accountId = '') {
     .reverse()
 }
 
+export function accountStatementAccountIds(account = {}, accounts = []) {
+  if (!account?.id) return []
+  if (account.counterpartyId) {
+    return accounts.filter((item) => item.counterpartyId === account.counterpartyId).map((item) => item.id)
+  }
+  if (account.valueKind === VALUE_KINDS.RECEIVABLE) {
+    const ownerName = normalizeAccountSearchText(account.ownerName)
+    return accounts
+      .filter((item) => item.valueKind === VALUE_KINDS.RECEIVABLE && normalizeAccountSearchText(item.ownerName) === ownerName)
+      .map((item) => item.id)
+  }
+  return [account.id]
+}
+
+export function buildAccountStatement(movements = [], accountIds = [], selectedCurrencies = Object.values(CURRENCIES)) {
+  const ids = new Set(accountIds)
+  const currencies = new Set(selectedCurrencies)
+  const running = Object.fromEntries(Object.values(CURRENCIES).map((currency) => [currency, 0]))
+  const totals = Object.fromEntries(Object.values(CURRENCIES).map((currency) => [currency, { incoming: 0, outgoing: 0, balance: 0 }]))
+  const rows = []
+  const sorted = [...movements]
+    .filter((movement) => movement?.status === MOVEMENT_STATUSES.POSTED)
+    .sort((left, right) => Number(left.databaseSequence || 0) - Number(right.databaseSequence || 0)
+      || new Date(left.createdAt || left.updatedAt || 0).getTime() - new Date(right.createdAt || right.updatedAt || 0).getTime()
+      || String(left.id || '').localeCompare(String(right.id || '')))
+
+  for (const movement of sorted) {
+    const impacts = new Map()
+    for (const entry of buildPostingEntries(movement)) {
+      if (!ids.has(entry.accountId) || !currencies.has(entry.currency)) continue
+      impacts.set(entry.currency, Number(impacts.get(entry.currency) || 0) + Number(entry.delta || 0))
+    }
+    for (const [currency, delta] of impacts) {
+      if (!delta) continue
+      running[currency] += delta
+      if (delta > 0) totals[currency].incoming += delta
+      else totals[currency].outgoing += Math.abs(delta)
+      totals[currency].balance = running[currency]
+      rows.push({ movement, currency, delta, balance: running[currency] })
+    }
+  }
+  return { rows: rows.reverse(), totals }
+}
+
+function AccountStatement({ account, accounts, movements, isLoading = false, loadError = '', onClose }) {
+  const accountIds = accountStatementAccountIds(account, accounts)
+  const availableCurrencies = CURRENCY_OPTIONS.filter((option) => (
+    accounts.some((item) => accountIds.includes(item.id) && item.currencyKind === option.value)
+    || movements.some((movement) => buildPostingEntries(movement).some((entry) => accountIds.includes(entry.accountId) && entry.currency === option.value))
+  ))
+  const currencyOptions = availableCurrencies.length ? availableCurrencies : CURRENCY_OPTIONS
+  const [selectedCurrencies, setSelectedCurrencies] = useState(() => currencyOptions.map((option) => option.value))
+  const [visibleCount, setVisibleCount] = useState(100)
+  const statement = buildAccountStatement(movements, accountIds, selectedCurrencies)
+  const visibleRows = statement.rows.slice(0, visibleCount)
+  const accountMap = new Map(accounts.map((item) => [item.id, item]))
+
+  function toggleCurrency(currency) {
+    setVisibleCount(100)
+    setSelectedCurrencies((current) => current.includes(currency)
+      ? current.length === 1 ? current : current.filter((item) => item !== currency)
+      : [...current, currency])
+  }
+
+  function printStatement() {
+    setVisibleCount(statement.rows.length)
+    window.requestAnimationFrame(() => window.print())
+  }
+
+  return (
+    <Motion.section className="adreem-statement" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={UI_MOTION_TRANSITION} aria-label="كشف الحساب">
+      <header>
+        <div><small>كشف حساب</small><h3>{protectedAccountPrimaryName(account)}</h3></div>
+        <div>
+          <button type="button" onClick={printStatement}><ReceiptText aria-hidden="true" size={15} /> طباعة</button>
+          <button type="button" aria-label="إغلاق كشف الحساب" title="إغلاق" onClick={onClose}><X aria-hidden="true" size={16} /></button>
+        </div>
+      </header>
+      <div className="adreem-statement-currencies" aria-label="عملات كشف الحساب">
+        {currencyOptions.map((option) => (
+          <button type="button" key={option.value} className={selectedCurrencies.includes(option.value) ? 'is-active' : ''} aria-pressed={selectedCurrencies.includes(option.value)} onClick={() => toggleCurrency(option.value)}>
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <div className="adreem-statement-summary">
+        {currencyOptions.filter((option) => selectedCurrencies.includes(option.value)).map((option) => {
+          const total = statement.totals[option.value]
+          return (
+            <article key={option.value}>
+              <strong>{option.label}</strong>
+              <span className="is-positive">داخل {money(total.incoming, option.value)}</span>
+              <span className="is-negative">خارج {money(total.outgoing, option.value)}</span>
+              <b>{money(total.balance, option.value)}</b>
+            </article>
+          )
+        })}
+      </div>
+      {isLoading ? <p className="ml3-empty">جاري تجهيز الكشف الكامل...</p> : null}
+      {loadError ? <p className="adreem-statement-error">{loadError}</p> : null}
+      <div className="adreem-statement-list">
+        {visibleRows.map(({ movement, currency, delta, balance }) => {
+          const source = accountMap.get(movement.sourceAccountId)
+          const destination = accountMap.get(movement.destinationAccountId)
+          return (
+            <article key={`${movement.id}-${currency}`}>
+              <div>
+                <strong>{movementLabels[movement.type] || 'حركة'}</strong>
+                <span>{source ? protectedAccountPrimaryName(source) : 'خارجي'} ← {destination ? protectedAccountPrimaryName(destination) : 'خارجي'}</span>
+                {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
+              </div>
+              <div className={delta > 0 ? 'is-positive' : 'is-negative'}>
+                <strong>{signedMoney(delta, currency)}</strong>
+                <small>الرصيد {money(balance, currency)}</small>
+              </div>
+            </article>
+          )
+        })}
+        {!statement.rows.length && !isLoading ? <p className="ml3-empty">لا توجد حركات بهذه العملة.</p> : null}
+      </div>
+      {visibleCount < statement.rows.length ? (
+        <button type="button" className="adreem-statement-more" onClick={() => setVisibleCount((current) => current + 100)}>
+          حركات أقدم
+        </button>
+      ) : null}
+    </Motion.section>
+  )
+}
+
 function accountEditorDraft(account) {
   return {
     ...account,
@@ -2540,8 +2735,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
           العملة
           <select name={structureLocked ? undefined : 'currencyKind'} value={currencyFieldValue} disabled={structureLocked} onChange={(event) => setDraft((current) => ({ ...current, currencyKind: event.target.value }))}>
             {showLegacyMultiCurrency ? <option value="">اتركها فارغة بدون تغيير</option> : null}
-            <option value={ACCOUNT_CURRENCY_KINDS.DINAR}>دينار</option>
-            <option value={ACCOUNT_CURRENCY_KINDS.USD}>دولار</option>
+            {CURRENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </label>
       ) : null}
@@ -2549,8 +2743,12 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
   )
 }
 
-export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, isDeletingAccount = false, onClose, onEditMovement, onUpdateAccount, onDeleteAccount, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements }) {
+export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, isDeletingAccount = false, onClose, onEditMovement, onUpdateAccount, onDeleteAccount, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements, onLoadStatement }) {
   const [deleteConfirmationAccountId, setDeleteConfirmationAccountId] = useState('')
+  const [statementOpen, setStatementOpen] = useState(false)
+  const [statementMovements, setStatementMovements] = useState(null)
+  const [isLoadingStatement, setIsLoadingStatement] = useState(false)
+  const [statementError, setStatementError] = useState('')
   const profileAccountId = bucket?.account?.id || ''
   const panelRef = useRef(null)
   const closeButtonRef = useRef(null)
@@ -2601,7 +2799,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
 
   if (!bucket) return null
 
-  const { account, dinar, usd, postedCount } = bucket
+  const { account, dinar, usd, try: tryAmount, postedCount } = bucket
   const accountUsage = accountStructureUsage(account, { accounts, movements, reconciliations, recurringRules, dimensions })
   const structureLocked = accountUsage.locked
   const accountLocked = accountUsage.movement
@@ -2617,6 +2815,21 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
   const deletion = accountDeletionEligibility(account, { accounts, movements, attachments, reconciliations, recurringRules, dimensions })
   const deleteLabel = deletion.isCounterpartyBundle ? 'حذف الشخص وحساباته' : 'حذف الحساب'
   const isDeleteConfirmationOpen = deleteConfirmationAccountId === profileAccountId
+
+  async function openStatement() {
+    setStatementOpen(true)
+    if (!onLoadStatement || statementMovements) return
+    setIsLoadingStatement(true)
+    setStatementError('')
+    try {
+      const completeMovements = await onLoadStatement(accountStatementAccountIds(account, accounts))
+      setStatementMovements(Array.isArray(completeMovements) ? completeMovements : movements)
+    } catch {
+      setStatementError('تعذر تحميل الكشف كاملًا. أعد المحاولة.')
+    } finally {
+      setIsLoadingStatement(false)
+    }
+  }
 
   return (
     <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
@@ -2637,7 +2850,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
           <section className="ml3-profile-overview">
             <div className={`ml3-profile-balance ${profileBalanceTone}`}>
               <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong>
-              <span>{hasMoneyValue(primaryBalance.secondaryAmount) ? money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : primaryBalance.secondaryCurrency === CURRENCIES.USD ? 'لا يوجد دولار' : 'لا يوجد دينار'}</span>
+              <span>{hasMoneyValue(primaryBalance.secondaryAmount) ? money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : `0 ${primaryBalance.secondaryCurrency}`}</span>
             </div>
 
             <div className="ml3-profile-facts">
@@ -2656,9 +2869,24 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
             </div>
           </section>
 
+          <button type="button" className="adreem-statement-open" onClick={openStatement}>
+            <ReceiptText aria-hidden="true" size={17} /> كشف حساب
+          </button>
+
+          {statementOpen ? (
+            <AccountStatement
+              account={account}
+              accounts={accounts}
+              movements={statementMovements || movements}
+              isLoading={isLoadingStatement}
+              loadError={statementError}
+              onClose={() => setStatementOpen(false)}
+            />
+          ) : null}
+
           <section className="ml3-profile-tools">
             {canReconcileBalance ? (
-              <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd)}>
+              <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd, tryAmount)}>
                 <h3>مطابقة الرصيد</h3>
                 {lastReconciliation ? (
                   <p className="ml3-profile-note">
@@ -2667,12 +2895,16 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
                 ) : null}
                 <div className="ml3-profile-editor-grid">
                   <label>
-                    الرصيد الفعلي بالدينار
+                    الرصيد الفعلي · LYD
                     <input name="actualDinar" inputMode="numeric" defaultValue={formatInteger(dinar)} />
                   </label>
                   <label>
-                    الرصيد الفعلي بالدولار
+                    الرصيد الفعلي · USD
                     <input name="actualUsd" inputMode="numeric" defaultValue={formatMoneyNumber(usd)} />
+                  </label>
+                  <label>
+                    الرصيد الفعلي · TRY
+                    <input name="actualTry" inputMode="numeric" defaultValue={formatMoneyNumber(tryAmount)} />
                   </label>
                   <label>
                     ملاحظة
@@ -2960,8 +3192,7 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
           <label>
             العملة
             <select value={reviewDraft.currency} onChange={(event) => updateReviewDraft('currency', event.target.value)}>
-              <option value={CURRENCIES.DINAR}>دينار</option>
-              <option value={CURRENCIES.USD}>دولار</option>
+              {CURRENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
         )}
@@ -3051,7 +3282,12 @@ function OperationsPanel({ reports, expenseReports, dueRules, recurringRules, at
             </small>
             {item.incomeUsd || item.expenseUsd ? (
               <small>
-                دولار: دخل {money(item.incomeUsd, CURRENCIES.USD)} · مصروف {money(item.expenseUsd, CURRENCIES.USD)}
+                USD: دخل {money(item.incomeUsd, CURRENCIES.USD)} · مصروف {money(item.expenseUsd, CURRENCIES.USD)}
+              </small>
+            ) : null}
+            {item.incomeTry || item.expenseTry ? (
+              <small>
+                TRY: دخل {money(item.incomeTry, CURRENCIES.TRY)} · مصروف {money(item.expenseTry, CURRENCIES.TRY)}
               </small>
             ) : null}
           </div>
@@ -3068,6 +3304,7 @@ function OperationsPanel({ reports, expenseReports, dueRules, recurringRules, at
             <span>{preserveUiData(item.name)}</span>
             <b>{money(item.dinar)}</b>
             {item.usd ? <small>{money(item.usd, CURRENCIES.USD)}</small> : null}
+            {item.try ? <small>{money(item.try, CURRENCIES.TRY)}</small> : null}
           </div>
         ))}
       </article>
@@ -3188,6 +3425,7 @@ export default function LedgerApp() {
   const [netAccountQuery, setNetAccountQuery] = useState('')
   const [netRate, setNetRate] = useState('')
   const [netTargetCurrency, setNetTargetCurrency] = useState(CURRENCIES.DINAR)
+  const [netTryRate, setNetTryRate] = useState('')
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
   const [activeAccountDetail, setActiveAccountDetail] = useState('')
@@ -3295,8 +3533,12 @@ export default function LedgerApp() {
   const accountNeedsOpeningBalance = accountSupportsOpeningBalance(accountDraft)
   const accountNeedsPresetChoice = selectedAccountPresetGroup.keys.length > 1
   const accountOpening = accountOpeningAmounts(accountDraft)
-  const accountOpeningCurrency = accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? CURRENCIES.USD : CURRENCIES.DINAR
-  const accountOpeningValue = accountOpeningCurrency === CURRENCIES.USD ? accountOpening.openingUsd : accountOpening.openingDinar
+  const accountOpeningCurrency = accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD
+    ? CURRENCIES.USD
+    : accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? CURRENCIES.TRY : CURRENCIES.DINAR
+  const accountOpeningValue = accountOpeningCurrency === CURRENCIES.USD
+    ? accountOpening.openingUsd
+    : accountOpeningCurrency === CURRENCIES.TRY ? accountOpening.openingTry : accountOpening.openingDinar
   const accountOpeningDirectionReady = (accountIsCounterpartyBundle ? counterpartyOpeningDraftErrors(accountDraft) : accountOpeningDraftErrors(accountDraft)).length === 0
   const counterpartyOpeningCount = accountIsCounterpartyBundle
     ? counterpartyAccountChannels.filter((channel) => counterpartyOpeningFor(accountDraft, channel.key).amount > 0).length
@@ -3346,7 +3588,7 @@ export default function LedgerApp() {
           {
             key: ACCOUNT_WIZARD_STEPS.CURRENCY,
             title: 'العملة',
-            summary: accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'دولار' : 'دينار',
+            summary: accountDraft.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR,
           },
         ]
       : []),
@@ -4086,6 +4328,32 @@ export default function LedgerApp() {
     }
   }
 
+  async function loadCompleteAccountStatement(accountIds = []) {
+    if (ledgerStorageMode !== 'relational') return movements
+    const byId = new Map(movements.map((movement) => [movement.id, movement]))
+    for (const accountId of Array.from(new Set(accountIds.filter(Boolean)))) {
+      let before = null
+      const seenCursors = new Set()
+      for (let pageIndex = 0; pageIndex < 1000; pageIndex += 1) {
+        const result = await loadAdreemMovementPage({
+          accountId,
+          before,
+          limit: 250,
+          includeOpening: true,
+          requestKey: `statement:${accountId}`,
+        })
+        if (result.stale) throw new Error('stale-statement')
+        for (const movement of result.movements || []) byId.set(movement.id, movement)
+        if (!result.page?.hasMore || !result.page?.nextCursor) break
+        if (seenCursors.has(result.page.nextCursor)) throw new Error('repeated-statement-cursor')
+        seenCursors.add(result.page.nextCursor)
+        before = result.page.nextCursor
+        if (pageIndex === 999) throw new Error('statement-page-limit')
+      }
+    }
+    return Array.from(byId.values())
+  }
+
   useEffect(() => {
     function warnBeforeClose(event) {
       if (!saveCoordinatorRef.current?.hasPending() && !pendingUploadedAttachmentPathsRef.current.size) return
@@ -4520,7 +4788,7 @@ export default function LedgerApp() {
       relatedName: movement.relatedName || '',
       recordDirection: normalizeSeparateRecordDirection(movement.recordDirection),
       amount: String(Math.abs(Number(movement.amount || 0)) || ''),
-      currency: movement.currency === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR,
+      currency: Object.values(CURRENCIES).includes(movement.currency) ? movement.currency : CURRENCIES.DINAR,
       note: movement.note || '',
     })
     setIsSeparateEditorOpen(true)
@@ -4545,7 +4813,7 @@ export default function LedgerApp() {
       const movement = postMovement({
         type: MOVEMENT_TYPES.RECORD_ONLY,
         amount,
-        currency: separateDraft.currency === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.DINAR,
+        currency: Object.values(CURRENCIES).includes(separateDraft.currency) ? separateDraft.currency : CURRENCIES.DINAR,
         sourceAccountId: null,
         destinationAccountId: null,
         separateAccountId: originalMovement?.separateAccountId || `separate-account-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -5023,24 +5291,27 @@ export default function LedgerApp() {
     setFeedback('تم تعديل الحساب.')
   }
 
-  function reconcileAccount(event, accountId, currentDinar, currentUsd) {
+  function reconcileAccount(event, accountId, currentDinar, currentUsd, currentTry) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     const actualDinar = parseWholeAmount(formData.get('actualDinar'))
     const actualUsd = parseMoneyAmount(formData.get('actualUsd'), CURRENCIES.USD)
+    const actualTry = parseMoneyAmount(formData.get('actualTry'), CURRENCIES.TRY)
     const note = String(formData.get('note') || '').trim()
     if (!note) {
       setFeedback('المطابقة تحتاج ملاحظة واضحة.')
       return
     }
-    const submissionKey = JSON.stringify([accountId, currentDinar, currentUsd, actualDinar, actualUsd, note])
+    const submissionKey = JSON.stringify([accountId, currentDinar, currentUsd, currentTry, actualDinar, actualUsd, actualTry, note])
     if (!claimSubmission(reconciliationLockRef, submissionKey)) return
     const record = createReconciliation({
       accountId,
       actualDinar,
       actualUsd,
+      actualTry,
       expectedDinar: currentDinar,
       expectedUsd: currentUsd,
+      expectedTry: currentTry,
       note,
     })
     const nextMovements = []
@@ -5508,7 +5779,7 @@ export default function LedgerApp() {
     const activeGroupCount = activeGroup.key === 'separate' ? allSeparateRecords.length : visibleRows.length
     return (
       <section className={`ml3-panel ml3-balances-surface ml3-balances-surface--${activeGroup.key}`}>
-        <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة بالدينار والدولار">
+        <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة حسب العملة">
           <Motion.button type="button" className={`is-cash${balanceAmountIsWide(balanceOverview.cash) ? ' has-wide-balance' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} aria-pressed={activeBalanceFocus === 'cash'} onClick={() => openBalanceFocus('cash')}>
             <i><Banknote aria-hidden="true" size={18} /></i>
             <span><b>الكاش</b><BalanceAmountPair value={balanceOverview.cash} /></span>
@@ -5543,8 +5814,10 @@ export default function LedgerApp() {
               excludedAccountIds={netExcludedAccountIds}
               query={netAccountQuery}
               rate={netRate}
+              tryRate={netTryRate}
               targetCurrency={netTargetCurrency}
               onRateChange={setNetRate}
+              onTryRateChange={setNetTryRate}
               onTargetCurrencyChange={setNetTargetCurrency}
               onQueryChange={setNetAccountQuery}
               onToggleAccount={toggleTemporaryNetAccount}
@@ -5587,18 +5860,16 @@ export default function LedgerApp() {
                         </button>
                       </div>
                     ) : null}
-                    <label className="ml3-account-toolbar">
-                      <Search aria-hidden="true" size={15} />
-                      <input
-                        aria-label="بحث في الأرصدة"
-                        value={accountQuery}
-                        onChange={(event) => {
-                          setAccountQuery(event.target.value)
-                          setFocusedCounterpartyId('')
-                        }}
-                        placeholder="ابحث عن حساب"
-                      />
-                    </label>
+                    <SearchField
+                      className="ml3-account-toolbar"
+                      value={accountQuery}
+                      onChange={(value) => {
+                        setAccountQuery(value)
+                        setFocusedCounterpartyId('')
+                      }}
+                      placeholder="اسم الحساب"
+                      ariaLabel="بحث في الأرصدة"
+                    />
                   </div>
                 ) : null}
 
@@ -5714,7 +5985,7 @@ export default function LedgerApp() {
               {historyQuery || historyType || historyStatus || historyAccountId || historyDimensionId || historyExpenseCategoryId ? <b>مفعلة</b> : null}
             </summary>
             <div className="ml3-history-filters" aria-label="فلترة الحركات">
-              <input aria-label="بحث في السجل" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="اسم أو ملاحظة" />
+              <SearchField value={historyQuery} onChange={setHistoryQuery} placeholder="اسم أو ملاحظة" ariaLabel="بحث في السجل" />
               <select aria-label="نوع الحركة" value={historyType} onChange={(event) => setHistoryType(event.target.value)}>
                 <option value="">كل الأنواع</option>
                 {movementTypeOptions.map((option) => (
@@ -5873,7 +6144,7 @@ export default function LedgerApp() {
           key: 'currency',
           step: MOVEMENT_ENTRY_STEPS.CURRENCY,
           label: 'العملة',
-          value: movementDraft.currency === CURRENCIES.USD ? 'دولار' : 'دينار',
+          value: movementDraft.currency || CURRENCIES.DINAR,
         },
     movementConfig.needsRate
       ? {
@@ -6064,8 +6335,7 @@ export default function LedgerApp() {
                     ) : (
                       <label aria-label="العملة">
                         <select value={movementDraft.currency} onChange={(event) => updateMovementDraft('currency', event.target.value)}>
-                          <option value={CURRENCIES.DINAR}>دينار</option>
-                          <option value={CURRENCIES.USD}>دولار</option>
+                          {CURRENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </select>
                       </label>
                     )}
@@ -6340,7 +6610,7 @@ export default function LedgerApp() {
                           goToAccountWizardStep(accountNeedsOpeningBalance ? ACCOUNT_WIZARD_STEPS.OPENING : ACCOUNT_WIZARD_STEPS.SAVE)
                         }}
                       >
-                        <strong>دينار</strong>
+                        <strong>LYD</strong>
                       </button>
                       <button
                         type="button"
@@ -6353,7 +6623,17 @@ export default function LedgerApp() {
                           goToAccountWizardStep(accountNeedsOpeningBalance ? ACCOUNT_WIZARD_STEPS.OPENING : ACCOUNT_WIZARD_STEPS.SAVE)
                         }}
                       >
-                        <strong>دولار</strong>
+                        <strong>USD</strong>
+                      </button>
+                      <button
+                        type="button"
+                        className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? 'is-active' : ''}
+                        onClick={() => {
+                          setAccountDraft((current) => ({ ...current, currencyKind: ACCOUNT_CURRENCY_KINDS.TRY }))
+                          goToAccountWizardStep(accountNeedsOpeningBalance ? ACCOUNT_WIZARD_STEPS.OPENING : ACCOUNT_WIZARD_STEPS.SAVE)
+                        }}
+                      >
+                        <strong>TRY</strong>
                       </button>
                     </div>
                   ) : null}
@@ -6368,7 +6648,7 @@ export default function LedgerApp() {
                               <section className={`adreem-counterparty-opening adreem-counterparty-opening--${channel.key}`} key={channel.key}>
                                 <header>
                                   <strong>{channel.label}</strong>
-                                  <small>{channel.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? '$' : 'د.ل'}</small>
+                                  <small>{channel.currencyKind}</small>
                                 </header>
                                 <NumericEntry
                                   compact
@@ -6463,7 +6743,7 @@ export default function LedgerApp() {
                         <div className="adreem-counterparty-summary">
                           {counterpartyAccountChannels.map((channel) => {
                             const opening = counterpartyOpeningFor(accountDraft, channel.key)
-                            const currency = channel.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? CURRENCIES.USD : CURRENCIES.DINAR
+                            const currency = channel.currencyKind
                             const direction = opening.direction === ACCOUNT_OPENING_DIRECTIONS.I_OWE ? 'عليّ له' : 'لي عنده'
                             return (
                               <span key={channel.key}>
@@ -6513,7 +6793,7 @@ export default function LedgerApp() {
           </section>
         ) : null}
       </section>
-      <AccountProfile bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} isDeletingAccount={isDeletingAccount} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onDeleteAccount={deleteAccountPermanently} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} />
+      <AccountProfile key={selectedAccountId} bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} isDeletingAccount={isDeletingAccount} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onDeleteAccount={deleteAccountPermanently} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} onLoadStatement={loadCompleteAccountStatement} />
       <AnimatePresence>
         {expenseCategoryCreator ? (
           <ExpenseCategoryDialog

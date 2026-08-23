@@ -10,6 +10,7 @@ const summaryScopeSql = readFileSync(new URL('../../supabase/migrations/20260822
 const accountDeletionSql = readFileSync(new URL('../../supabase/migrations/20260822170000_add_unused_account_deletion.sql', import.meta.url), 'utf8')
 const movementInvariantSql = readFileSync(new URL('../../supabase/migrations/20260822193000_harden_movement_invariants.sql', import.meta.url), 'utf8')
 const movementIdentitySql = readFileSync(new URL('../../supabase/migrations/20260822232245_lock_movement_type_and_currency.sql', import.meta.url), 'utf8')
+const tryCurrencySql = readFileSync(new URL('../../supabase/migrations/20260823160000_add_try_currency.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -166,5 +167,25 @@ describe('ADREEM v3 database migration invariants', () => {
     expect(movementIdentitySql).toContain('ADREEM_MOVEMENT_CURRENCY_IMMUTABLE')
     expect(movementIdentitySql).toContain('before update on public.adreem_movements')
     expect(movementIdentitySql).toContain('revoke all on function adreem_private.protect_movement_identity()')
+  })
+
+  it('posts TRY through balances, openings, reports, and protected account lifecycles', () => {
+    expect(tryCurrencySql).toContain('balance_try numeric(15, 0) not null default 0')
+    expect(tryCurrencySql).toContain("currency_kind in ('LYD', 'USD', 'TRY', 'multi')")
+    expect(tryCurrencySql).toContain("currency in ('LYD', 'USD', 'TRY')")
+    expect(tryCurrencySql).toContain('adreem_accounts_nonnegative_try_check')
+    expect(tryCurrencySql.match(/ADREEM_EXCHANGE_RESULT_TOO_SMALL/g)).toHaveLength(2)
+    expect(tryCurrencySql).toContain("when 'transfer', 'cash_deposit', 'cash_withdrawal' then")
+    expect(tryCurrencySql).toContain('create trigger adreem_sync_try_entry_balance')
+    expect(tryCurrencySql).toContain('after insert or delete on public.adreem_movement_entries')
+    expect(tryCurrencySql).toContain('create trigger adreem_sync_try_entry_balance_update')
+    expect(tryCurrencySql).toContain('referencing old table as old_try_entries new table as new_try_entries')
+    expect(tryCurrencySql).toContain('for each statement execute function adreem_private.sync_try_entry_balance_update()')
+    expect(tryCurrencySql).toContain("foreach v_currency in array array['LYD', 'USD', 'TRY']")
+    expect(tryCurrencySql).toContain("movement.record_id = concat('opening-', new.record_id, '-', v_suffix)")
+    expect(tryCurrencySql).toContain("'incomeTry'")
+    expect(tryCurrencySql).toContain("'expenseTry'")
+    expect(tryCurrencySql).toContain("'netTry'")
+    expect(tryCurrencySql).toContain("'try', coalesce(sum(abs(movement.amount)) filter (where movement.currency = 'TRY'), 0)")
   })
 })

@@ -55,16 +55,16 @@ describe('account display wording', () => {
 
     expect(accountPrimaryName(person)).toBe('سعيد')
     expect(accountDetailDisplayName(person)).toBe('كاش')
-    expect(accountContextLabel(person)).toBe('كاش · دينار')
-    expect(accountDisplayName(person)).toBe('سعيد · كاش · دينار')
-    expect(accountDisplayName(cash)).toBe('خزنة البيت · كاش · دينار')
-    expect(accountDisplayName(bank)).toBe('الجمهورية · حساب مصرفي · دولار')
+    expect(accountContextLabel(person)).toBe('كاش · LYD')
+    expect(accountDisplayName(person)).toBe('سعيد · كاش · LYD')
+    expect(accountDisplayName(cash)).toBe('خزنة البيت · كاش · LYD')
+    expect(accountDisplayName(bank)).toBe('الجمهورية · حساب مصرفي · USD')
     expect(accountDisplayName(asset)).toBe('الشاحنة · أصل')
   })
 
   it('keeps legacy own-money accounts understandable without rewriting them', () => {
-    expect(accountDisplayName({ ownerName: 'أنا', subAccountName: 'كاش' })).toBe('كاش عندي · كاش · دينار')
-    expect(accountDisplayName({ ownerName: 'أنا', subAccountName: 'مصرف الجمهورية' })).toBe('مصرف الجمهورية · حساب مصرفي · دينار')
+    expect(accountDisplayName({ ownerName: 'أنا', subAccountName: 'كاش' })).toBe('كاش عندي · كاش · LYD')
+    expect(accountDisplayName({ ownerName: 'أنا', subAccountName: 'مصرف الجمهورية' })).toBe('مصرف الجمهورية · حساب مصرفي · LYD')
   })
 
   it('provides one compact chooser kind without repeating it in every label', () => {
@@ -100,8 +100,8 @@ describe('account display wording', () => {
       openingBalanceAmount: '800',
     }
 
-    expect(accountOpeningAmounts(person)).toEqual({ openingDinar: 0, openingUsd: -1_250 })
-    expect(accountOpeningAmounts(cash)).toEqual({ openingDinar: 800, openingUsd: 0 })
+    expect(accountOpeningAmounts(person)).toEqual({ openingDinar: 0, openingUsd: -1_250, openingTry: 0 })
+    expect(accountOpeningAmounts(cash)).toEqual({ openingDinar: 800, openingUsd: 0, openingTry: 0 })
   })
 
   it('offers opening balances only for real balance accounts', () => {

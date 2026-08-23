@@ -28,6 +28,7 @@ function clientFixture(rowOverrides = {}) {
       payload: { id: 'cash', ownerName: 'أنا', status: 'active' },
       balance_dinar: '1200',
       balance_usd: '50',
+      balance_try: '2750',
       posted_count: 3,
       structure_locked: true,
     }],
@@ -84,11 +85,11 @@ function queueAttachmentResults(client, resultPages = []) {
 describe('relational ledger repository', () => {
   it('normalizes database report numbers for the web and bot', () => {
     expect(normalizeRelationalReports({
-      dimensions: [{ movementCount: '2', income: '100', expense: '25', net: '75' }],
-      expenseCategories: [{ count: '3', dinar: '25', usd: '4' }],
+      dimensions: [{ movementCount: '2', income: '100', expense: '25', net: '75', incomeTry: '80', expenseTry: '30', netTry: '50' }],
+      expenseCategories: [{ count: '3', dinar: '25', usd: '4', try: '12' }],
     })).toEqual({
-      dimensions: [expect.objectContaining({ movementCount: 2, income: 100, expense: 25, net: 75 })],
-      expenseCategories: [expect.objectContaining({ count: 3, dinar: 25, usd: 4 })],
+      dimensions: [expect.objectContaining({ movementCount: 2, income: 100, expense: 25, net: 75, incomeTry: 80, expenseTry: 30, netTry: 50 })],
+      expenseCategories: [expect.objectContaining({ count: 3, dinar: 25, usd: 4, try: 12 })],
     })
   })
 
@@ -112,6 +113,7 @@ describe('relational ledger repository', () => {
       id: 'cash',
       balanceDinar: 1200,
       balanceUsd: 50,
+      balanceTry: 2750,
       postedCount: 3,
       structureLocked: true,
       balanceSource: 'database',

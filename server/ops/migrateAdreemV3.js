@@ -696,7 +696,7 @@ export async function loadTargetMigrationState(target, ledgerId) {
     recurringRules, reconciliations, auditEvents, ignoredExternalAccounts,
   ] = await Promise.all([
     target.from('adreem_ledgers').select('reset_at').eq('id', ledgerId).maybeSingle(),
-    targetRows(target, 'adreem_accounts', 'record_id, payload, balance_dinar, balance_usd, posted_count', ledgerId),
+    targetRows(target, 'adreem_accounts', 'record_id, payload, balance_dinar, balance_usd, balance_try, posted_count', ledgerId),
     targetRows(target, 'adreem_movements', 'record_id, payload, sequence', ledgerId),
     targetRows(target, 'adreem_movement_entries', 'movement_id, entry_index, account_id, currency, delta', ledgerId),
     targetRows(target, 'adreem_dimensions', 'record_id, payload', ledgerId),
@@ -712,6 +712,7 @@ export async function loadTargetMigrationState(target, ledgerId) {
     accounts: accounts.map((row) => payloadRecord(row, {
       balanceDinar: Number(row.balance_dinar || 0),
       balanceUsd: Number(row.balance_usd || 0),
+      balanceTry: Number(row.balance_try || 0),
       postedCount: Number(row.posted_count || 0),
       balanceSource: 'database',
     })),

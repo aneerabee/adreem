@@ -74,16 +74,19 @@ export function groupCounterpartyBalanceBuckets(rows = []) {
       id: key,
       ownerName: account.ownerName || '',
       rows: [],
-      receivable: { dinar: 0, usd: 0 },
-      payable: { dinar: 0, usd: 0 },
+      receivable: { dinar: 0, usd: 0, try: 0 },
+      payable: { dinar: 0, usd: 0, try: 0 },
     }
     const dinar = Number(bucket.dinar || 0)
     const usd = Number(bucket.usd || 0)
+    const tryAmount = Number(bucket.try || 0)
     current.rows.push(bucket)
     current.receivable.dinar += Math.max(0, dinar)
     current.receivable.usd += Math.max(0, usd)
+    current.receivable.try += Math.max(0, tryAmount)
     current.payable.dinar += Math.abs(Math.min(0, dinar))
     current.payable.usd += Math.abs(Math.min(0, usd))
+    current.payable.try += Math.abs(Math.min(0, tryAmount))
     groups.set(key, current)
   }
   return Array.from(groups.values()).map((group) => ({
@@ -96,14 +99,16 @@ function groupMagnitude(group = {}) {
   return Math.max(
     Number(group.receivable?.dinar || 0),
     Number(group.receivable?.usd || 0),
+    Number(group.receivable?.try || 0),
     Number(group.payable?.dinar || 0),
     Number(group.payable?.usd || 0),
+    Number(group.payable?.try || 0),
   )
 }
 
 function directionMagnitude(group = {}, direction) {
   const bucket = group?.[direction] || {}
-  return Math.max(Number(bucket.dinar || 0), Number(bucket.usd || 0))
+  return Math.max(Number(bucket.dinar || 0), Number(bucket.usd || 0), Number(bucket.try || 0))
 }
 
 function compareGroupsByMagnitude(left, right, direction = '') {
@@ -115,8 +120,8 @@ function compareGroupsByMagnitude(left, right, direction = '') {
 export function buildCounterpartyBalanceViews(rows = []) {
   const groups = groupCounterpartyBalanceBuckets(rows)
     .sort((left, right) => compareGroupsByMagnitude(left, right))
-  const hasReceivable = (group) => group.receivable.dinar > 0 || group.receivable.usd > 0
-  const hasPayable = (group) => group.payable.dinar > 0 || group.payable.usd > 0
+  const hasReceivable = (group) => group.receivable.dinar > 0 || group.receivable.usd > 0 || group.receivable.try > 0
+  const hasPayable = (group) => group.payable.dinar > 0 || group.payable.usd > 0 || group.payable.try > 0
   return {
     all: groups,
     withBalance: groups.filter((group) => hasReceivable(group) || hasPayable(group)),

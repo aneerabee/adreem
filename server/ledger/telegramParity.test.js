@@ -55,7 +55,7 @@ async function telegramMovementFor(draft, initialState = createFallbackLedgerSta
 }
 
 describe('telegram and web movement parity', () => {
-  it('creates the identical three-channel person bundle in web and Telegram', async () => {
+  it('creates the identical four-channel person bundle in web and Telegram', async () => {
     const draft = {
       ...emptyAccountDraft(),
       ownerName: 'شركة النور',
@@ -79,6 +79,7 @@ describe('telegram and web movement parity', () => {
       counterpartyKind: account.counterpartyKind,
       openingDinar: account.openingDinar,
       openingUsd: account.openingUsd,
+      openingTry: account.openingTry,
     })
 
     expect(telegram.accounts.map(comparableAccount)).toEqual(webAccounts.map(comparableAccount))
@@ -113,8 +114,8 @@ describe('telegram and web movement parity', () => {
     await appendTelegramAccount(secondLedger, secondDraft, { idempotencyKey: 'same-update-key' })
     expect(firstLedger.state.ledgerId).toBe('owner-a')
     expect(secondLedger.state.ledgerId).toBe('owner-b')
-    expect(firstLedger.state.accounts).toHaveLength(3)
-    expect(secondLedger.state.accounts).toHaveLength(3)
+    expect(firstLedger.state.accounts).toHaveLength(4)
+    expect(secondLedger.state.accounts).toHaveLength(4)
     expect(firstLedger.state.movements).toHaveLength(1)
     expect(secondLedger.state.movements).toHaveLength(1)
     expect(firstLedger.state.movements[0]).toMatchObject({ currency: CURRENCIES.DINAR, amount: 900 })

@@ -649,6 +649,56 @@ describe('adreem ledger core', () => {
     expect(movement.status).toBe(MOVEMENT_STATUSES.POSTED)
   })
 
+  it('posts TRY openings, transfers, and expenses without mixing another currency', () => {
+    const accounts = [
+      createAccount({
+        id: 'try-cash',
+        ownerName: 'أنا',
+        subAccountName: 'كاش TRY',
+        type: ACCOUNT_TYPES.CASH,
+        valueKind: VALUE_KINDS.CASH,
+        currencyKind: CURRENCIES.TRY,
+        openingTry: 1_000,
+      }),
+      createAccount({
+        id: 'try-person',
+        ownerName: 'سعيد',
+        subAccountName: 'كاش TRY',
+        type: ACCOUNT_TYPES.PERSON,
+        valueKind: VALUE_KINDS.RECEIVABLE,
+        currencyKind: CURRENCIES.TRY,
+      }),
+    ]
+    const openings = createOpeningMovements(accounts)
+    const transfer = postMovement({
+      type: MOVEMENT_TYPES.TRANSFER,
+      amount: 250,
+      currency: CURRENCIES.TRY,
+      sourceAccountId: 'try-cash',
+      destinationAccountId: 'try-person',
+    }, accounts, openings)
+    const expense = postMovement({
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 200,
+      currency: CURRENCIES.TRY,
+      sourceAccountId: 'try-cash',
+    }, accounts, [...openings, transfer])
+    const overspend = postMovement({
+      type: MOVEMENT_TYPES.EXPENSE,
+      amount: 551,
+      currency: CURRENCIES.TRY,
+      sourceAccountId: 'try-cash',
+    }, accounts, [...openings, transfer, expense])
+    const balances = summarizeBalances(accounts, [...openings, transfer, expense])
+
+    expect(openings).toEqual([expect.objectContaining({ currency: CURRENCIES.TRY, amount: 1_000 })])
+    expect(transfer.status).toBe(MOVEMENT_STATUSES.POSTED)
+    expect(expense.status).toBe(MOVEMENT_STATUSES.POSTED)
+    expect(overspend.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
+    expect(balances.find((bucket) => bucket.account.id === 'try-cash')).toMatchObject({ dinar: 0, usd: 0, try: 550 })
+    expect(balances.find((bucket) => bucket.account.id === 'try-person')).toMatchObject({ dinar: 0, usd: 0, try: 250 })
+  })
+
   it('keeps inactive accounts out of balances and posting endpoints', () => {
     const accounts = [
       createAccount({
@@ -873,9 +923,9 @@ describe('adreem ledger core', () => {
     )
 
     expect(usdSaleFromDinarBank.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
-    expect(usdSaleFromDinarBank.validation.errors.some((error) => error.message.includes('حساب دولار'))).toBe(true)
+    expect(usdSaleFromDinarBank.validation.errors.some((error) => error.message.includes('حساب USD'))).toBe(true)
     expect(usdPurchaseIntoDinarBank.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
-    expect(usdPurchaseIntoDinarBank.validation.errors.some((error) => error.message.includes('حساب دولار'))).toBe(true)
+    expect(usdPurchaseIntoDinarBank.validation.errors.some((error) => error.message.includes('حساب USD'))).toBe(true)
     expect(usdExpenseFromDinarBank.status).toBe(MOVEMENT_STATUSES.NEEDS_REVIEW)
     expect(usdExpenseFromDinarBank.validation.errors.some((error) => error.message.includes('عملة الحركة'))).toBe(true)
   })

@@ -100,8 +100,8 @@ describe('ADREEM relational migration projection', () => {
     const migration = createLedgerMigrationBatches(source, { batchSize: 3 })
 
     expect(validation.ok).toBe(true)
-    expect(validation.totals.get('cash')).toEqual({ dinar: 8_950, usd: 0, postedCount: 10 })
-    expect(validation.totals.get('usd')).toEqual({ dinar: 0, usd: 1_000, postedCount: 3 })
+    expect(validation.totals.get('cash')).toEqual({ dinar: 8_950, usd: 0, try: 0, postedCount: 10 })
+    expect(validation.totals.get('usd')).toEqual({ dinar: 0, usd: 1_000, try: 0, postedCount: 3 })
     expect(migration.batches[0]).toMatchObject({ collection: 'accounts' })
     expect(migration.batches.filter((batch) => batch.collection === 'movements')).toHaveLength(4)
     expect(migration.batches.every((batch) => Object.values(batch.delta)[0].length <= 3)).toBe(true)

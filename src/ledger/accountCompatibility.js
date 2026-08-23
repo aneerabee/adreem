@@ -2,6 +2,7 @@ import { VALUE_KINDS } from './accountCatalog.js'
 
 const DINAR = 'LYD'
 const USD = 'USD'
+const TRY = 'TRY'
 const MULTI = 'multi'
 
 export function canonicalAccountDetail(value = '') {
@@ -35,7 +36,7 @@ export function sameLogicalAccount(left, right) {
 
 export function transferAccountKind(account) {
   const text = `${account?.subAccountName || ''} ${account?.legacyName || ''}`.toLowerCase()
-  if (account?.valueKind === VALUE_KINDS.RECEIVABLE && (account?.counterpartyKind === 'cash-usd' || /دولار|usd|\$/.test(text))) return 'cash'
+  if (account?.valueKind === VALUE_KINDS.RECEIVABLE && (['cash-usd', 'cash-try'].includes(account?.counterpartyKind) || /usd|try|\$|₺|ليره|ليرة/.test(text))) return 'cash'
   if (account?.valueKind === VALUE_KINDS.CASH || /كاش|نقد|cash/.test(text)) return 'cash'
   if (account?.valueKind === VALUE_KINDS.BANK || /مصرف|مصرفي|شيك|حساب|الجمهورية|الوحدة|تركيا|bank/.test(text)) return 'bank'
   return account?.valueKind || 'account'
@@ -43,20 +44,21 @@ export function transferAccountKind(account) {
 
 export function accountCurrencyKind(account, bucket = null) {
   if (!account) return ''
-  if (account.currencyKind === USD || account.currencyKind === DINAR || account.currencyKind === MULTI) return account.currencyKind
+  if (account.currencyKind === USD || account.currencyKind === TRY || account.currencyKind === DINAR || account.currencyKind === MULTI) return account.currencyKind
   const text = `${account?.ownerName || ''} ${account?.subAccountName || ''} ${account?.legacyName || ''}`.toLowerCase()
   const hasDinar = Math.abs(Number(bucket?.dinar || account.openingDinar || 0)) > 0.000001
   const hasUsd = Math.abs(Number(bucket?.usd || account.openingUsd || 0)) > 0.000001
-  if (hasUsd && hasDinar) return MULTI
+  const hasTry = Math.abs(Number(bucket?.try || account.openingTry || 0)) > 0.000001
+  if ([hasDinar, hasUsd, hasTry].filter(Boolean).length > 1) return MULTI
+  if (hasTry || /ليره|ليرة|try|tl|₺/.test(text)) return TRY
   if (hasUsd || /دولار|usd|\$/.test(text)) return USD
   return DINAR
 }
 
 export function accountCurrencyLabel(account, bucket = null) {
   const kind = accountCurrencyKind(account, bucket)
-  if (kind === USD) return 'دولار'
-  if (kind === MULTI) return 'دينار + دولار'
-  return 'دينار'
+  if (kind === MULTI) return 'LYD + USD + TRY'
+  return kind || DINAR
 }
 
 export function accountSupportsTransferCurrency(account, currency = '', bucket = null) {

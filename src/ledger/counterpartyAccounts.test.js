@@ -17,15 +17,16 @@ function personDraft(overrides = {}) {
 }
 
 describe('counterparty account bundles', () => {
-  it('creates cash dinar, cheque dinar, and dollar accounts as one linked bundle', () => {
+  it('creates the four supported person balance channels as one linked bundle', () => {
     const accounts = buildCounterpartyAccountBundle(personDraft())
 
-    expect(accounts).toHaveLength(3)
+    expect(accounts).toHaveLength(4)
     expect(new Set(accounts.map((account) => account.counterpartyId)).size).toBe(1)
     expect(accounts.map((account) => [account.counterpartyKind, account.subAccountName, account.currencyKind])).toEqual([
       [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 'كاش بيننا', CURRENCIES.DINAR],
       [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 'شيك بيننا', CURRENCIES.DINAR],
       [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 'دولار بيننا', CURRENCIES.USD],
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, 'TRY بيننا', CURRENCIES.TRY],
     ])
   })
 
@@ -35,6 +36,7 @@ describe('counterparty account bundles', () => {
         [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR]: { amount: '1,200', direction: ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME },
         [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR]: { amount: '450', direction: ACCOUNT_OPENING_DIRECTIONS.I_OWE },
         [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD]: { amount: '80', direction: ACCOUNT_OPENING_DIRECTIONS.OWED_TO_ME },
+        [COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY]: { amount: '200', direction: ACCOUNT_OPENING_DIRECTIONS.I_OWE },
       },
     })
     const accounts = buildCounterpartyAccountBundle(draft)
@@ -42,10 +44,11 @@ describe('counterparty account bundles', () => {
     const balances = summarizeBalances(accounts, opening.movements)
 
     expect(opening.validation.ok).toBe(true)
-    expect(balances.map((bucket) => [bucket.account.counterpartyKind, bucket.dinar, bucket.usd])).toEqual([
-      [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 1200, 0],
-      [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -450, 0],
-      [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, 80],
+    expect(balances.map((bucket) => [bucket.account.counterpartyKind, bucket.dinar, bucket.usd, bucket.try])).toEqual([
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 1200, 0, 0],
+      [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -450, 0, 0],
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, 80, 0],
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, 0, 0, -200],
     ])
   })
 
@@ -70,7 +73,7 @@ describe('counterparty account bundles', () => {
     const result = validateCounterpartyAccountBundle(draft, existing)
 
     expect(result.validation.ok).toBe(false)
-    expect(result.validation.errors.filter((error) => error.field === 'subAccountName')).toHaveLength(3)
+    expect(result.validation.errors.filter((error) => error.field === 'subAccountName')).toHaveLength(4)
   })
 
   it('groups mixed directions under one person while exposing receivable and payable views', () => {
@@ -79,14 +82,15 @@ describe('counterparty account bundles', () => {
       { account: accounts[0], dinar: 1200, usd: 0 },
       { account: accounts[1], dinar: -450, usd: 0 },
       { account: accounts[2], dinar: 0, usd: 80 },
+      { account: accounts[3], dinar: 0, usd: 0, try: -200 },
     ]
     const views = buildCounterpartyBalanceViews(rows)
 
     expect(views.all).toHaveLength(1)
     expect(views.receivable).toHaveLength(1)
     expect(views.payable).toHaveLength(1)
-    expect(views.all[0].receivable).toEqual({ dinar: 1200, usd: 80 })
-    expect(views.all[0].payable).toEqual({ dinar: 450, usd: 0 })
+    expect(views.all[0].receivable).toEqual({ dinar: 1200, usd: 80, try: 0 })
+    expect(views.all[0].payable).toEqual({ dinar: 450, usd: 0, try: 200 })
   })
 
   it('sorts each direction by its own largest value instead of the opposite balance', () => {

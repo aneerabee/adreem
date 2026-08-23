@@ -28,7 +28,17 @@ const INACTIVE_STATUS = 'inactive'
 const RECORD_STATUSES = new Set([ACTIVE_STATUS, INACTIVE_STATUS])
 const VOID_WINDOW_MS = 24 * 60 * 60 * 1000
 const RAW_BALANCE_EPSILON = 1e-9
-const RECONCILIATION_VALUE_FIELDS = ['actualDinar', 'actualUsd', 'expectedDinar', 'expectedUsd', 'diffDinar', 'diffUsd']
+const RECONCILIATION_VALUE_FIELDS = [
+  'actualDinar',
+  'actualUsd',
+  'actualTry',
+  'expectedDinar',
+  'expectedUsd',
+  'expectedTry',
+  'diffDinar',
+  'diffUsd',
+  'diffTry',
+]
 const RECONCILABLE_VALUE_KINDS = new Set([
   VALUE_KINDS.CASH,
   VALUE_KINDS.BANK,
@@ -114,7 +124,8 @@ function changedAccountClassification(account, previousById) {
 }
 
 function validateCounterpartyGroups(accounts = [], errors = []) {
-  const expectedKinds = new Set(counterpartyAccountChannels.map((channel) => channel.key))
+  const allowedKinds = new Set(counterpartyAccountChannels.map((channel) => channel.key))
+  const requiredKinds = new Set(counterpartyAccountChannels.slice(0, 3).map((channel) => channel.key))
   const groups = new Map()
   for (const account of accounts) {
     const counterpartyId = cleanId(account?.counterpartyId)
@@ -124,13 +135,16 @@ function validateCounterpartyGroups(accounts = [], errors = []) {
   for (const [counterpartyId, group] of groups) {
     const ownerNames = new Set(group.map((account) => String(account.ownerName || '').trim()))
     const kinds = new Set(group.map((account) => account.counterpartyKind))
-    if (group.length !== expectedKinds.size || kinds.size !== expectedKinds.size || Array.from(expectedKinds).some((kind) => !kinds.has(kind))) {
+    const hasDuplicateKinds = group.length !== kinds.size
+    const hasUnknownKind = Array.from(kinds).some((kind) => !allowedKinds.has(kind))
+    const missesRequiredKind = Array.from(requiredKinds).some((kind) => !kinds.has(kind))
+    if (hasDuplicateKinds || hasUnknownKind || missesRequiredKind) {
       errors.push({
         code: 'invalid-counterparty-bundle',
         recordType: 'accounts',
         id: counterpartyId,
         field: 'counterpartyKind',
-        message: 'حسابات الشخص المرتبطة يجب أن تبقى دينار كاش ودينار شيك ودولار معًا.',
+        message: 'حسابات الشخص المرتبطة غير مكتملة أو مكررة.',
       })
     }
     if (ownerNames.size !== 1) {
@@ -139,7 +153,7 @@ function validateCounterpartyGroups(accounts = [], errors = []) {
         recordType: 'accounts',
         id: counterpartyId,
         field: 'ownerName',
-        message: 'اسم الشخص يجب أن يكون موحدًا في حساباته الثلاثة.',
+        message: 'اسم الشخص يجب أن يكون موحدًا في حساباته المرتبطة.',
       })
     }
   }
@@ -258,9 +272,10 @@ function rawBalancesByAccount(movements) {
     for (const entry of rawPostingEntries(movement)) {
       const accountId = cleanId(entry.accountId)
       if (!accountId) continue
-      const balance = balances.get(accountId) || { dinar: 0, usd: 0 }
+      const balance = balances.get(accountId) || { dinar: 0, usd: 0, try: 0 }
       if (entry.currency === CURRENCIES.DINAR) balance.dinar += entry.delta
       if (entry.currency === CURRENCIES.USD) balance.usd += entry.delta
+      if (entry.currency === CURRENCIES.TRY) balance.try += entry.delta
       balances.set(accountId, balance)
     }
   }
@@ -333,6 +348,14 @@ function validateReconciliationRecord(reconciliation, accountById, errors) {
     roundMoney(reconciliation.actualUsd - reconciliation.expectedUsd) !== reconciliation.diffUsd
   ) {
     pushError(errors, 'reconciliation-difference-mismatch', 'reconciliations', reconciliation, 'diffUsd', 'فرق الدولار في المطابقة لا يطابق الفعلي والمتوقع.')
+  }
+  if (
+    Number.isFinite(reconciliation?.actualTry) &&
+    Number.isFinite(reconciliation?.expectedTry) &&
+    Number.isFinite(reconciliation?.diffTry) &&
+    roundMoney(reconciliation.actualTry - reconciliation.expectedTry) !== reconciliation.diffTry
+  ) {
+    pushError(errors, 'reconciliation-difference-mismatch', 'reconciliations', reconciliation, 'diffTry', 'فرق TRY في المطابقة لا يطابق الفعلي والمتوقع.')
   }
   if (reconciliation?.currency && !Object.values(CURRENCIES).includes(reconciliation.currency)) {
     pushError(errors, 'invalid-reconciliation', 'reconciliations', reconciliation, 'currency', 'عملة المطابقة غير صالحة.')
@@ -441,7 +464,9 @@ function validateMovementReferences(movement, dimensionMaps, reconciliationById,
         ? reconciliation.diffUsd
         : movement.currency === CURRENCIES.DINAR
           ? reconciliation.diffDinar
-          : null
+          : movement.currency === CURRENCIES.TRY
+            ? reconciliation.diffTry
+            : null
       if (!Number.isFinite(expectedDifference) || movement.amount !== expectedDifference) {
         pushError(errors, 'movement-reconciliation-amount-mismatch', 'movements', movement, 'amount', 'قيمة حركة المطابقة لا تطابق فرق المطابقة.')
       }
@@ -541,7 +566,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
     if (!changedRecord(account, previousAccounts)) continue
     const previousAccount = previousAccounts.get(cleanId(account.id))
     if (previousAccount) {
-      for (const field of ['openingDinar', 'openingUsd']) {
+      for (const field of ['openingDinar', 'openingUsd', 'openingTry']) {
         if (Number(account?.[field] || 0) === Number(previousAccount?.[field] || 0)) continue
         errors.push({
           code: 'account-opening-immutable',
@@ -575,6 +600,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
       for (const [field, currency, suffix] of [
         ['openingDinar', CURRENCIES.DINAR, 'dinar'],
         ['openingUsd', CURRENCIES.USD, 'usd'],
+        ['openingTry', CURRENCIES.TRY, 'try'],
       ]) {
         const amount = Number(account?.[field] || 0)
         if (!amount) continue
@@ -610,8 +636,8 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
     if (!previousMovement && movement?.type === MOVEMENT_TYPES.OPENING_BALANCE) {
       const destinationAccountId = cleanId(movement.destinationAccountId)
       const destinationAccount = accountById.get(destinationAccountId)
-      const suffix = movement.currency === CURRENCIES.USD ? 'usd' : 'dinar'
-      const openingField = movement.currency === CURRENCIES.USD ? 'openingUsd' : 'openingDinar'
+      const suffix = movement.currency === CURRENCIES.USD ? 'usd' : movement.currency === CURRENCIES.TRY ? 'try' : 'dinar'
+      const openingField = movement.currency === CURRENCIES.USD ? 'openingUsd' : movement.currency === CURRENCIES.TRY ? 'openingTry' : 'openingDinar'
       if (previousAccounts.has(destinationAccountId)) {
         errors.push({
           code: 'opening-account-not-new',
@@ -748,7 +774,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   const balances = summarizeBalances(accounts, movements)
   for (const bucket of balances) {
     if (!OWN_VALUE_KINDS.has(bucket.account?.valueKind)) continue
-    for (const [currency, value] of [[CURRENCIES.DINAR, bucket.dinar], [CURRENCIES.USD, bucket.usd]]) {
+    for (const [currency, value] of [[CURRENCIES.DINAR, bucket.dinar], [CURRENCIES.USD, bucket.usd], [CURRENCIES.TRY, bucket.try]]) {
       if (Number(value || 0) >= 0) continue
       errors.push({
         code: 'negative-own-balance',
@@ -768,8 +794,9 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
     if (accountById.get(bucket.account.id)?.status !== ACCOUNT_STATUSES.INACTIVE) continue
     const rawBalance = rawBalances.get(cleanId(bucket.account.id))
     const carriesRawValue = Math.abs(Number(rawBalance?.dinar || 0)) > RAW_BALANCE_EPSILON ||
-      Math.abs(Number(rawBalance?.usd || 0)) > RAW_BALANCE_EPSILON
-    if (Number(bucket.dinar || 0) === 0 && Number(bucket.usd || 0) === 0 && !carriesRawValue) continue
+      Math.abs(Number(rawBalance?.usd || 0)) > RAW_BALANCE_EPSILON ||
+      Math.abs(Number(rawBalance?.try || 0)) > RAW_BALANCE_EPSILON
+    if (Number(bucket.dinar || 0) === 0 && Number(bucket.usd || 0) === 0 && Number(bucket.try || 0) === 0 && !carriesRawValue) continue
     errors.push({
       code: 'inactive-account-has-balance',
       id: bucket.account.id,

@@ -75,15 +75,16 @@ describe('telegram account flow', () => {
 
     await handleAccountText({ ...ctx, isCallback: false, messageId: 56 }, 'شركة النور')
     expect(ctx.sessions.get(ctx.chatId, ctx.userId).step).toBe('opening')
-    expect(ctx.telegram.calls.at(-1).payload.text).toContain('رصيد دينار كاش')
-    for (let index = 0; index < 3; index += 1) await handleAccountCallback(ctx, 'acct:num:done')
+    expect(ctx.telegram.calls.at(-1).payload.text).toContain('LYD')
+    for (let index = 0; index < 4; index += 1) await handleAccountCallback(ctx, 'acct:num:done')
     await handleAccountCallback(ctx, 'acct:confirm')
 
-    expect(ctx.repository.state.accounts).toHaveLength(3)
+    expect(ctx.repository.state.accounts).toHaveLength(4)
     expect(ctx.repository.state.accounts.map((account) => [account.ownerName, account.subAccountName, account.currencyKind])).toEqual([
       ['شركة النور', 'كاش بيننا', ACCOUNT_CURRENCY_KINDS.DINAR],
       ['شركة النور', 'شيك بيننا', ACCOUNT_CURRENCY_KINDS.DINAR],
       ['شركة النور', 'دولار بيننا', ACCOUNT_CURRENCY_KINDS.USD],
+      ['شركة النور', 'TRY بيننا', ACCOUNT_CURRENCY_KINDS.TRY],
     ])
     expect(new Set(ctx.repository.state.accounts.map((account) => account.counterpartyId)).size).toBe(1)
     expect(ctx.sessions.get(ctx.chatId, ctx.userId)).toBe(null)
@@ -171,9 +172,10 @@ describe('telegram account flow', () => {
 
     await handleAccountCallback(ctx, 'acct:opening-direction:i_owe')
     expect(ctx.telegram.calls.at(-1).payload.text).toContain('عليّ له')
+    await handleAccountCallback(ctx, 'acct:num:done')
     await handleAccountCallback(ctx, 'acct:confirm')
 
-    expect(ctx.repository.state.accounts).toHaveLength(3)
+    expect(ctx.repository.state.accounts).toHaveLength(4)
     expect(ctx.repository.state.accounts[2]).toMatchObject({ openingDinar: 0, openingUsd: -1_250 })
     expect(ctx.repository.state.movements).toHaveLength(1)
     expect(ctx.repository.state.movements[0]).toMatchObject({

@@ -1084,7 +1084,8 @@
 }
 .ml3-account-row--person .ml3-account-row-icon,
 .ml3-account-row--person-bank .ml3-account-row-icon,
-.ml3-account-row--person-usd .ml3-account-row-icon { background: var(--entry-soft); color: var(--entry); }
+.ml3-account-row--person-usd .ml3-account-row-icon,
+.ml3-account-row--person-try .ml3-account-row-icon { background: var(--entry-soft); color: var(--entry); }
 .ml3-account-row--asset .ml3-account-row-icon { background: #f0ecf8; color: #6d55a3; }
 .ml3-account-row--expense .ml3-account-row-icon { background: var(--history-soft); color: var(--history); }
 .ml3-account-row--review .ml3-account-row-icon { background: var(--review-soft); color: var(--review); }
@@ -2000,7 +2001,8 @@ html.adreem-overlay-open .adreem-app .adreem-view {
 .ml3-picker-type-icon { color: var(--section-accent); }
 .ml3-picker-kind--person-cash svg { color: var(--entry); }
 .ml3-picker-kind--person-bank svg { color: var(--accounts); }
-.ml3-picker-kind--person-usd svg { color: var(--history); }
+.ml3-picker-kind--person-usd svg,
+.ml3-picker-kind--person-try svg { color: var(--history); }
 .ml3-picker-type-icon--person-cash {
   color: var(--entry);
   background: var(--entry-soft);
@@ -2009,7 +2011,8 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   color: var(--accounts);
   background: var(--accounts-soft);
 }
-.ml3-picker-type-icon--person-usd {
+.ml3-picker-type-icon--person-usd,
+.ml3-picker-type-icon--person-try {
   color: var(--history);
   background: var(--history-soft);
 }
@@ -2110,7 +2113,8 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   color: #204f89;
   background: var(--accounts-soft);
 }
-.ml3-picker-channel-tag.is-person-usd {
+.ml3-picker-channel-tag.is-person-usd,
+.ml3-picker-channel-tag.is-person-try {
   color: #825108;
   background: var(--history-soft);
 }

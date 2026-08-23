@@ -10,6 +10,7 @@ import {
   preventImplicitNumericSubmit,
   NetPositionPanel,
   SeparateLedgerPanel,
+  SearchField,
   AccountRow,
   AccountSearchSelect,
   AccountClassificationEditorFields,
@@ -30,6 +31,7 @@ import {
   accountReviewSelection,
   activeRecurringRuleForMovement,
   buildBalanceOverview,
+  buildAccountStatement,
   balanceAmountIsWide,
   buildExpenseBalanceRows,
   buildPeopleAccountViews,
@@ -68,6 +70,7 @@ import {
   signedMoney,
   storageTextForStatus,
   TEMPORARY_NET_RESET_MS,
+  accountStatementAccountIds,
 } from './LedgerApp.jsx'
 import { setActiveUiLanguage, stripUiDataProtection } from './uiTranslation.js'
 
@@ -105,14 +108,77 @@ describe('LedgerApp numeric entry', () => {
   })
 })
 
+describe('LedgerApp search fields', () => {
+  it('uses one consistent searchable control with a direct clear action', () => {
+    const onChange = vi.fn()
+    const element = SearchField({ value: 'سعيد', onChange, placeholder: 'اسم الحساب', ariaLabel: 'بحث في الحسابات' })
+    const input = element.props.children[1]
+    const clearButton = element.props.children[2]
+    const markup = renderToStaticMarkup(element)
+
+    expect(markup).toContain('class="adreem-search-field"')
+    expect(markup).toContain('type="search"')
+    expect(markup).toContain('aria-label="بحث في الحسابات"')
+    expect(markup).toContain('aria-label="مسح البحث"')
+
+    input.props.onKeyDown({ key: 'Escape', preventDefault: vi.fn() })
+    clearButton.props.onClick()
+    expect(onChange).toHaveBeenNthCalledWith(1, '')
+    expect(onChange).toHaveBeenNthCalledWith(2, '')
+  })
+})
+
 describe('LedgerApp movement account balances', () => {
   it('shows only the currency used by the current movement side', () => {
     const account = { valueKind: VALUE_KINDS.CASH }
     const bucket = { dinar: 50_000, usd: 500 }
 
-    expect(accountBalanceChip(account, bucket, CURRENCIES.USD)).toEqual({ tone: 'positive', text: '500 $' })
-    expect(accountBalanceChip(account, bucket, CURRENCIES.DINAR)).toEqual({ tone: 'positive', text: '50,000 د.ل' })
-    expect(accountBalanceChip(account, { dinar: 50_000, usd: 0 }, CURRENCIES.USD)).toEqual({ tone: 'zero', text: '0 $' })
+    expect(accountBalanceChip(account, bucket, CURRENCIES.USD)).toEqual({ tone: 'positive', text: '500 USD' })
+    expect(accountBalanceChip(account, bucket, CURRENCIES.DINAR)).toEqual({ tone: 'positive', text: '50,000 LYD' })
+    expect(accountBalanceChip(account, { dinar: 50_000, usd: 0 }, CURRENCIES.USD)).toEqual({ tone: 'zero', text: '0 USD' })
+  })
+})
+
+describe('LedgerApp account statements', () => {
+  const linkedAccounts = [
+    { id: 'person-cash', ownerName: 'سعيد', counterpartyId: 'person:saeed', currencyKind: CURRENCIES.DINAR, valueKind: VALUE_KINDS.RECEIVABLE },
+    { id: 'person-cheque', ownerName: 'سعيد', counterpartyId: 'person:saeed', currencyKind: CURRENCIES.DINAR, valueKind: VALUE_KINDS.RECEIVABLE },
+    { id: 'person-usd', ownerName: 'سعيد', counterpartyId: 'person:saeed', currencyKind: CURRENCIES.USD, valueKind: VALUE_KINDS.RECEIVABLE },
+    { id: 'person-try', ownerName: 'سعيد', counterpartyId: 'person:saeed', currencyKind: CURRENCIES.TRY, valueKind: VALUE_KINDS.RECEIVABLE },
+    { id: 'other', ownerName: 'إدريس', counterpartyId: 'person:idris', currencyKind: CURRENCIES.DINAR, valueKind: VALUE_KINDS.RECEIVABLE },
+  ]
+
+  it('collects every linked account for one person', () => {
+    expect(accountStatementAccountIds(linkedAccounts[0], linkedAccounts)).toEqual([
+      'person-cash',
+      'person-cheque',
+      'person-usd',
+      'person-try',
+    ])
+  })
+
+  it('builds a multi-currency statement and removes internal transfers from its totals', () => {
+    const movements = [
+      { id: 'lyd-in', databaseSequence: 1, type: MOVEMENT_TYPES.TRANSFER, status: MOVEMENT_STATUSES.POSTED, amount: 500, currency: CURRENCIES.DINAR, sourceAccountId: 'outside', destinationAccountId: 'person-cash' },
+      { id: 'internal', databaseSequence: 2, type: MOVEMENT_TYPES.TRANSFER, status: MOVEMENT_STATUSES.POSTED, amount: 200, currency: CURRENCIES.DINAR, sourceAccountId: 'person-cash', destinationAccountId: 'person-cheque' },
+      { id: 'try-out', databaseSequence: 3, type: MOVEMENT_TYPES.TRANSFER, status: MOVEMENT_STATUSES.POSTED, amount: 300, currency: CURRENCIES.TRY, sourceAccountId: 'person-try', destinationAccountId: 'outside' },
+      { id: 'ignored-usd', databaseSequence: 4, type: MOVEMENT_TYPES.TRANSFER, status: MOVEMENT_STATUSES.POSTED, amount: 40, currency: CURRENCIES.USD, sourceAccountId: 'outside', destinationAccountId: 'person-usd' },
+      { id: 'voided', databaseSequence: 5, type: MOVEMENT_TYPES.TRANSFER, status: MOVEMENT_STATUSES.VOIDED, amount: 900, currency: CURRENCIES.DINAR, sourceAccountId: 'outside', destinationAccountId: 'person-cash' },
+    ]
+
+    const statement = buildAccountStatement(
+      movements,
+      accountStatementAccountIds(linkedAccounts[0], linkedAccounts),
+      [CURRENCIES.DINAR, CURRENCIES.TRY],
+    )
+
+    expect(statement.rows.map(({ movement, currency, delta, balance }) => [movement.id, currency, delta, balance])).toEqual([
+      ['try-out', CURRENCIES.TRY, -300, -300],
+      ['lyd-in', CURRENCIES.DINAR, 500, 500],
+    ])
+    expect(statement.totals[CURRENCIES.DINAR]).toEqual({ incoming: 500, outgoing: 0, balance: 500 })
+    expect(statement.totals[CURRENCIES.USD]).toEqual({ incoming: 0, outgoing: 0, balance: 0 })
+    expect(statement.totals[CURRENCIES.TRY]).toEqual({ incoming: 0, outgoing: 300, balance: -300 })
   })
 })
 
@@ -158,9 +224,9 @@ describe('LedgerApp net position controls', () => {
     ))
 
     expect(markup).toContain('الصافي')
-    expect(markup).toContain('10,500 د.ل')
-    expect(markup).toContain('100 $')
-    expect(markup).toContain('11,250 د.ل')
+    expect(markup).toContain('10,500 LYD')
+    expect(markup).toContain('100 USD')
+    expect(markup).toContain('11,250 LYD')
     expect(markup).toContain('كاش عندي')
     expect(markup).toContain('سعيد')
   })
@@ -213,8 +279,8 @@ describe('LedgerApp net position controls', () => {
       />,
     ))
 
-    expect(markup).toContain('9,999,999,999,999,990 د.ل')
-    expect(markup).toContain('-9,999,999,999,999,990 $')
+    expect(markup).toContain('9,999,999,999,999,990 LYD')
+    expect(markup).toContain('-9,999,999,999,999,990 USD')
     expect(markup).toContain('نتيجة الصافي أكبر من الحد المسموح.')
   })
 })
@@ -255,7 +321,7 @@ describe('LedgerApp separate accounts', () => {
 })
 
 describe('LedgerApp movement account picker', () => {
-  it('distinguishes the same counterparty cash, cheque, and dollar accounts in quick and search results', () => {
+  it('distinguishes the same counterparty cash, cheque, USD, and TRY accounts in quick and search results', () => {
     const sharedAccount = {
       ownerName: 'سعيد',
       type: ACCOUNT_TYPES.PERSON,
@@ -266,6 +332,7 @@ describe('LedgerApp movement account picker', () => {
       { ...sharedAccount, id: 'saeed-cash', subAccountName: 'كاش بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR, counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR },
       { ...sharedAccount, id: 'saeed-cheque', subAccountName: 'شيك بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR, counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR },
       { ...sharedAccount, id: 'saeed-usd', subAccountName: 'دولار بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.USD, counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD },
+      { ...sharedAccount, id: 'saeed-try', subAccountName: 'TRY بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.TRY, counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY },
     ]
     const markup = stripUiDataProtection(renderToStaticMarkup(
       <AccountSearchSelect
@@ -279,6 +346,7 @@ describe('LedgerApp movement account picker', () => {
           ['saeed-cash', { dinar: 12_000, usd: 0 }],
           ['saeed-cheque', { dinar: -4_500, usd: 0 }],
           ['saeed-usd', { dinar: 0, usd: 700 }],
+          ['saeed-try', { dinar: 0, usd: 0, try: 2_400 }],
         ])}
       />,
     ))
@@ -286,15 +354,17 @@ describe('LedgerApp movement account picker', () => {
     expect(markup).toContain('ml3-picker-channel-tag is-person-cash')
     expect(markup).toContain('ml3-picker-channel-tag is-person-bank')
     expect(markup).toContain('ml3-picker-channel-tag is-person-usd')
+    expect(markup).toContain('ml3-picker-channel-tag is-person-try')
     expect(markup).toContain('lucide-banknote')
     expect(markup).toContain('lucide-landmark')
     expect(markup).toContain('lucide-circle-dollar-sign')
     expect(markup).toContain('>كاش<')
     expect(markup).toContain('>شيك<')
-    expect(markup).toContain('دولار')
-    expect(markup).toContain('12,000 د.ل')
-    expect(markup).toContain('أدفع 4,500 د.ل')
-    expect(markup).toContain('700 $')
+    expect(markup).toContain('USD')
+    expect(markup).toContain('12,000 LYD')
+    expect(markup).toContain('أدفع 4,500 LYD')
+    expect(markup).toContain('700 USD')
+    expect(markup).toContain('2,400 TRY')
   })
 })
 
@@ -320,8 +390,8 @@ describe('LedgerApp compact history rows', () => {
       />,
     ))
 
-    expect(markup).toContain('100 $')
-    expect(markup).toContain('↔ 700 د.ل')
+    expect(markup).toContain('100 USD')
+    expect(markup).toContain('↔ 700 LYD')
     expect(markup).toContain('× 7')
   })
 
@@ -480,7 +550,7 @@ describe('LedgerApp movement editing', () => {
     }
 
     expect(movementEditChanges(original, candidate, labels)).toEqual([
-      { field: 'amount', label: 'المبلغ', before: '100 د.ل', after: '150 د.ل' },
+      { field: 'amount', label: 'المبلغ', before: '100 LYD', after: '150 LYD' },
       { field: 'destinationAccountId', label: 'إلى', before: 'المصرف', after: 'سعيد' },
       { field: 'note', label: 'الملاحظة', before: 'قديم', after: 'جديد' },
       { field: 'expenseCategoryId', label: 'نوع المصروف', before: 'بدون', after: 'وقود' },
@@ -508,6 +578,15 @@ describe('LedgerApp balance ordering', () => {
     ]
 
     expect(rows.sort(compareBalanceBuckets).map((row) => row.account.id)).toEqual(['large', 'small', 'zero'])
+  })
+
+  it('ranks a multi-currency account by its non-zero TRY balance', () => {
+    const rows = [
+      { account: { id: 'small', ownerName: 'أ', currencyKind: CURRENCIES.DINAR }, dinar: 100, usd: 0, try: 0 },
+      { account: { id: 'try-large', ownerName: 'ب', currencyKind: 'multi' }, dinar: 0, usd: 0, try: 9_000 },
+    ]
+
+    expect(rows.sort(compareBalanceBuckets).map((row) => row.account.id)).toEqual(['try-large', 'small'])
   })
 
   it('uses the selected people direction when ranking a filtered list', () => {
@@ -550,8 +629,8 @@ describe('LedgerApp expense balances', () => {
 
     expect(markup).toContain('وقود')
     expect(markup).toContain('3 حركة')
-    expect(markup).toContain('1,200 د.ل')
-    expect(markup).toContain('35 $')
+    expect(markup).toContain('1,200 LYD')
+    expect(markup).toContain('35 USD')
   })
 
   it('shows the expense category once as a compact colored tag', () => {
@@ -858,11 +937,11 @@ describe('LedgerApp people account views', () => {
       bucket('person-usd', VALUE_KINDS.RECEIVABLE, 0, -80),
       bucket('asset', VALUE_KINDS.ASSET, 9000, 0),
     ])).toEqual({
-      cash: { dinar: 1500, usd: 0 },
-      bank: { dinar: 0, usd: 300 },
-      money: { dinar: 1500, usd: 300 },
-      receivable: { dinar: 700, usd: 0 },
-      payable: { dinar: 0, usd: 80 },
+      cash: { dinar: 1500, usd: 0, try: 0 },
+      bank: { dinar: 0, usd: 300, try: 0 },
+      money: { dinar: 1500, usd: 300, try: 0 },
+      receivable: { dinar: 700, usd: 0, try: 0 },
+      payable: { dinar: 0, usd: 80, try: 0 },
     })
   })
 
@@ -948,10 +1027,10 @@ describe('LedgerApp people account views', () => {
     )
     const views = buildPeopleAccountViews([mixedBucket])
 
-    expect(markup).toContain('class="is-positive">لي 500 د.ل')
-    expect(markup).toContain('class="is-negative">عليّ 250 $')
-    expect(views.positive).toEqual([expect.objectContaining({ dinar: 500, usd: 0 })])
-    expect(views.negative).toEqual([expect.objectContaining({ dinar: 0, usd: -250 })])
+    expect(markup).toContain('class="is-positive">لي 500 LYD')
+    expect(markup).toContain('class="is-negative">عليّ 250 USD')
+    expect(views.positive).toEqual([expect.objectContaining({ dinar: 500, usd: 0, try: 0 })])
+    expect(views.negative).toEqual([expect.objectContaining({ dinar: 0, usd: -250, try: 0 })])
     expect(views.withBalance).toHaveLength(1)
     expect(views.all).toHaveLength(1)
   })
@@ -1062,9 +1141,9 @@ describe('LedgerApp people account views', () => {
     expect(markup).toContain('is-cash-dinar is-positive')
     expect(markup).toContain('is-cheque-dinar is-negative')
     expect(markup).toContain('is-cash-usd is-positive')
-    expect(markup.match(/أقبض 1,200 د\.ل/g)).toHaveLength(1)
-    expect(markup.match(/أدفع 450 د\.ل/g)).toHaveLength(1)
-    expect(markup.match(/أقبض 80 \$/g)).toHaveLength(1)
+    expect(markup.match(/أقبض 1,200 LYD/g)).toHaveLength(1)
+    expect(markup.match(/أدفع 450 LYD/g)).toHaveLength(1)
+    expect(markup.match(/أقبض 80 USD/g)).toHaveLength(1)
   })
 
   it('shows a settled search result in the same people card without empty balance rows', () => {
@@ -1137,10 +1216,10 @@ describe('LedgerApp people account views', () => {
     expect(markup.match(/adreem-counterparty-channels/g)).toHaveLength(1)
     expect(markup).toContain('>كاش<')
     expect(markup).toContain('>شيك<')
-    expect(markup).toContain('دولار')
-    expect(markup).toContain('أقبض 1,200 د.ل')
-    expect(markup).toContain('أدفع 450 د.ل')
-    expect(markup).toContain('أقبض 80 $')
+    expect(markup).toContain('USD')
+    expect(markup).toContain('أقبض 1,200 LYD')
+    expect(markup).toContain('أدفع 450 LYD')
+    expect(markup).toContain('أقبض 80 USD')
   })
 
   it('describes account edits using clear before and after values', () => {
@@ -1161,7 +1240,7 @@ describe('LedgerApp people account views', () => {
     expect(accountEditChanges(before, after)).toEqual([
       expect.objectContaining({ key: 'name', before: 'سعيد', after: 'شركة سعيد' }),
       expect.objectContaining({ key: 'type', before: 'شخص أو جهة · كاش', after: 'شخص أو جهة · شيك' }),
-      expect.objectContaining({ key: 'currency', before: 'دينار', after: 'دولار' }),
+      expect.objectContaining({ key: 'currency', before: 'LYD', after: 'USD' }),
     ])
   })
 })
@@ -1185,9 +1264,9 @@ describe('LedgerApp English user data protection', () => {
         <AccountRow bucket={{ account: { ...account, subAccountName: 'كاش بيننا' }, dinar: 0, usd: 0 }} />,
       ))
 
-      expect(custom).toContain('>دخل · Dinar<')
-      expect(custom).not.toContain('>Income · Dinar<')
-      expect(standard).toContain('>Cash · Dinar<')
+      expect(custom).toContain('>دخل · LYD<')
+      expect(custom).not.toContain('>Income · LYD<')
+      expect(standard).toContain('>Cash · LYD<')
     } finally {
       setActiveUiLanguage('ar')
     }
@@ -1284,8 +1363,8 @@ describe('LedgerApp localized money', () => {
   })
 
   it('keeps all money amounts whole while rates may remain decimal', () => {
-    expect(money(10.5, CURRENCIES.USD)).toBe('11 $')
-    expect(signedMoney(-1.6, CURRENCIES.USD)).toBe('-2 $')
+    expect(money(10.5, CURRENCIES.USD)).toBe('11 USD')
+    expect(signedMoney(-1.6, CURRENCIES.USD)).toBe('-2 USD')
   })
 })
 
@@ -1418,7 +1497,7 @@ describe('LedgerApp history filtering', () => {
     expect(markup).toContain('· ناقص')
     expect(markup).toContain('· ملغي')
     expect(markup).toContain('مطابقة الرصيد')
-    expect(markup).toContain('الرصيد الفعلي بالدينار')
+    expect(markup).toContain('الرصيد الفعلي · LYD')
     expect(markup).not.toContain('داخل الصافي')
     expect(markup).not.toContain('>حفظ التعديل</button>')
     expect(markup).not.toContain('حذف الحساب')

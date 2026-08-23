@@ -29,11 +29,13 @@ export const VALUE_KINDS = {
 export const ACCOUNT_CURRENCY_KINDS = {
   DINAR: 'LYD',
   USD: 'USD',
+  TRY: 'TRY',
   MULTI: 'multi',
 }
 
 export function normalizeAccountCurrencyKind(value, fallback = ACCOUNT_CURRENCY_KINDS.DINAR) {
   if (value === ACCOUNT_CURRENCY_KINDS.USD || value === 'usd' || value === '$') return ACCOUNT_CURRENCY_KINDS.USD
+  if (value === ACCOUNT_CURRENCY_KINDS.TRY || value === 'try' || value === 'tl' || value === '₺') return ACCOUNT_CURRENCY_KINDS.TRY
   if (value === ACCOUNT_CURRENCY_KINDS.MULTI || value === 'both') return ACCOUNT_CURRENCY_KINDS.MULTI
   if (value === ACCOUNT_CURRENCY_KINDS.DINAR || value === 'dinar' || value === 'lyd') return ACCOUNT_CURRENCY_KINDS.DINAR
   return fallback
@@ -42,8 +44,10 @@ export function normalizeAccountCurrencyKind(value, fallback = ACCOUNT_CURRENCY_
 export function inferAccountCurrencyKind(account = {}) {
   const openingDinar = Number(account.openingDinar || 0)
   const openingUsd = Number(account.openingUsd || 0)
+  const openingTry = Number(account.openingTry || 0)
   const text = `${account.ownerName || ''} ${account.subAccountName || ''} ${account.legacyName || ''}`.toLowerCase()
-  if (openingUsd && openingDinar) return ACCOUNT_CURRENCY_KINDS.MULTI
+  if ([openingDinar, openingUsd, openingTry].filter(Boolean).length > 1) return ACCOUNT_CURRENCY_KINDS.MULTI
+  if (openingTry || /ليره|ليرة|try|tl|₺/.test(text)) return ACCOUNT_CURRENCY_KINDS.TRY
   if (openingUsd || /دولار|usd|\$/.test(text)) return ACCOUNT_CURRENCY_KINDS.USD
   return ACCOUNT_CURRENCY_KINDS.DINAR
 }
@@ -56,6 +60,7 @@ function catalogAccount({
   valueKind,
   openingDinar = 0,
   openingUsd = 0,
+  openingTry = 0,
   currencyKind,
   status = ACCOUNT_STATUSES.ACTIVE,
 }) {
@@ -68,9 +73,10 @@ function catalogAccount({
     valueKind,
     openingDinar,
     openingUsd,
+    openingTry,
     currencyKind: normalizeAccountCurrencyKind(
       currencyKind,
-      inferAccountCurrencyKind({ ownerName, subAccountName, openingDinar, openingUsd }),
+      inferAccountCurrencyKind({ ownerName, subAccountName, openingDinar, openingUsd, openingTry }),
     ),
     status,
     notes: '',

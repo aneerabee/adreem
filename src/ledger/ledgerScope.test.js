@@ -125,8 +125,8 @@ describe('ADREEM account summary scope', () => {
   })
 
   it('fails closed when the balance-row collection is missing or malformed', () => {
-    expect(buildNetPosition(null)).toEqual({ dinar: 0, usd: 0, accountCount: 0, contributions: [] })
-    expect(buildNetPosition({ account: { id: 'not-a-list' } })).toEqual({ dinar: 0, usd: 0, accountCount: 0, contributions: [] })
+    expect(buildNetPosition(null)).toEqual({ dinar: 0, usd: 0, try: 0, accountCount: 0, contributions: [] })
+    expect(buildNetPosition({ account: { id: 'not-a-list' } })).toEqual({ dinar: 0, usd: 0, try: 0, accountCount: 0, contributions: [] })
   })
 
   it('handles sets, duplicate ids, unknown ids, and excluding every account', () => {
@@ -143,6 +143,7 @@ describe('ADREEM account summary scope', () => {
     expect(buildNetPosition(rows, ['cash', 'cash', 'bank', 'missing'])).toEqual({
       dinar: 0,
       usd: 0,
+      try: 0,
       accountCount: 0,
       contributions: [],
     })
@@ -170,6 +171,13 @@ describe('ADREEM account summary scope', () => {
     expect(convertNetPosition(position, 7.5, 'USD')).toEqual({ ok: true, currency: 'USD', amount: 1_500, rate: 7.5 })
     expect(convertNetPosition(position, 0, 'LYD')).toMatchObject({ ok: false })
     expect(convertNetPosition(position, Number.NaN, 'USD')).toMatchObject({ ok: false })
+    expect(convertNetPosition({ dinar: 1_000, usd: 0, try: 100 }, 0, 'TRY', 10)).toEqual({
+      ok: true,
+      currency: 'TRY',
+      amount: 200,
+      rate: 0,
+      tryRate: 10,
+    })
     expect(convertNetPosition({ dinar: Number.MAX_SAFE_INTEGER + 1, usd: 0 }, 7.5, 'USD')).toMatchObject({ ok: false })
     expect(convertNetPosition({ dinar: 0, usd: Number.MAX_SAFE_INTEGER }, 2, 'LYD')).toEqual({
       ok: false,

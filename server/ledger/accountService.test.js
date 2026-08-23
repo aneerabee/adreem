@@ -32,7 +32,7 @@ function memoryRepository(initialState = emptyState()) {
 }
 
 describe('telegram account service', () => {
-  it('creates the same three linked person balances used by the web', async () => {
+  it('creates the same four linked person balances used by the web', async () => {
     const repository = memoryRepository()
     const result = await appendTelegramAccount(repository, {
       ...emptyAccountDraft(),
@@ -46,12 +46,13 @@ describe('telegram account service', () => {
 
     expect(result.rejected).toBeFalsy()
     expect(result.bundle).toBe(true)
-    expect(repository.state.accounts).toHaveLength(3)
+    expect(repository.state.accounts).toHaveLength(4)
     expect(repository.state.movements).toHaveLength(2)
-    expect(repository.state.accounts.map((account) => [account.counterpartyKind, account.openingDinar, account.openingUsd])).toEqual([
-      [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 900, 0],
-      [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 0, 0],
-      [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, -40],
+    expect(repository.state.accounts.map((account) => [account.counterpartyKind, account.openingDinar, account.openingUsd, account.openingTry])).toEqual([
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 900, 0, 0],
+      [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 0, 0, 0],
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, -40, 0],
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, 0, 0, 0],
     ])
   })
 
@@ -297,7 +298,7 @@ describe('telegram account service', () => {
     }, { idempotencyKey: 'linked-person-rename' })
 
     expect(result.rejected).toBeFalsy()
-    expect(result.accountIds).toHaveLength(3)
+    expect(result.accountIds).toHaveLength(4)
     expect(new Set(repository.state.accounts.map((account) => account.ownerName))).toEqual(new Set(['شركة سعيد']))
     expect(repository.state.auditEvents.at(-1)).toMatchObject({
       action: 'account.updated',
