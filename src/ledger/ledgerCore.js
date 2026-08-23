@@ -1,4 +1,4 @@
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS, buildAccountMap, inferAccountCurrencyKind, normalizeAccountCurrencyKind } from './accountCatalog.js'
+import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS, buildAccountMap, inferAccountCurrencyKind, normalizeAccountCurrencyKind } from './accountCatalog.js'
 import { counterpartyAccountChannels } from './accountConfig.js'
 import {
   accountSupportsTransferCurrency,
@@ -597,6 +597,9 @@ export function validateAccount(account, existingAccounts = []) {
   }
   if (!Object.values(ACCOUNT_TYPES).includes(account?.type)) {
     errors.push({ field: 'type', message: 'نوع الحساب غير معروف.' })
+  }
+  if (!Object.values(ACCOUNT_CURRENCY_KINDS).includes(account?.currencyKind)) {
+    errors.push({ field: 'currencyKind', message: 'عملة الحساب غير معروفة.' })
   }
   const openingDinar = Number(account?.openingDinar || 0)
   const openingUsd = Number(account?.openingUsd || 0)

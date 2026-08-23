@@ -1005,6 +1005,32 @@ describe('LedgerApp people account views', () => {
     expect(markup).not.toContain('>صفر<')
   })
 
+  it('shows TRY for an own lira account without falling back to LYD', () => {
+    const markup = renderToStaticMarkup(
+      <AccountRow
+        compactValue
+        bucket={{
+          account: {
+            id: 'qnb-try',
+            ownerName: 'أنا',
+            subAccountName: 'QNB',
+            type: ACCOUNT_TYPES.BANK,
+            valueKind: VALUE_KINDS.BANK,
+            currencyKind: ACCOUNT_CURRENCY_KINDS.TRY,
+            status: ACCOUNT_STATUSES.ACTIVE,
+          },
+          dinar: 0,
+          usd: 0,
+          try: 2_400,
+        }}
+      />,
+    )
+
+    expect(markup).toContain('حساب مصرفي · TRY')
+    expect(markup).toContain('2,400 TRY')
+    expect(markup).not.toContain('LYD')
+  })
+
   it('keeps each currency direction visible in compact mixed-currency balances', () => {
     const mixedBucket = {
       account: {
@@ -1534,6 +1560,37 @@ describe('LedgerApp history filtering', () => {
 
     expect(markup).toContain('حذف الحساب')
     expect(markup).not.toContain('تأكيد الحذف')
+  })
+
+  it('keeps an empty TRY account profile in TRY without showing a false LYD balance', () => {
+    const account = {
+      id: 'qnb-try',
+      ownerName: 'أنا',
+      subAccountName: 'QNB',
+      type: ACCOUNT_TYPES.BANK,
+      valueKind: VALUE_KINDS.BANK,
+      currencyKind: CURRENCIES.TRY,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    }
+
+    const markup = renderToStaticMarkup(
+      <AccountProfile
+        bucket={{ account, dinar: 0, usd: 0, try: 0, postedCount: 0 }}
+        movements={[]}
+        accounts={[account]}
+        onClose={() => {}}
+        onEditMovement={() => {}}
+        onUpdateAccount={() => {}}
+        onReconcile={() => {}}
+        onAddAttachment={() => {}}
+        onDeleteAttachment={() => {}}
+        onLoadMoreMovements={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('حساب مصرفي · TRY')
+    expect(markup).toContain('0 TRY')
+    expect(markup).not.toContain('0 LYD')
   })
 })
 

@@ -2850,7 +2850,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
           <section className="ml3-profile-overview">
             <div className={`ml3-profile-balance ${profileBalanceTone}`}>
               <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong>
-              <span>{hasMoneyValue(primaryBalance.secondaryAmount) ? money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : `0 ${primaryBalance.secondaryCurrency}`}</span>
+              <span>{hasMoneyValue(primaryBalance.secondaryAmount) ? money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : money(0, primaryBalance.currency)}</span>
             </div>
 
             <div className="ml3-profile-facts">

@@ -1061,6 +1061,26 @@ describe('adreem ledger core', () => {
     expect(validateAccount(usdAccount, [dinarAccount]).ok).toBe(true)
   })
 
+  it('rejects an unsupported account currency instead of silently converting it to LYD', () => {
+    const account = {
+      ...createAccount({
+        ownerName: 'أنا',
+        subAccountName: 'حساب ليرة',
+        type: ACCOUNT_TYPES.BANK,
+        valueKind: VALUE_KINDS.BANK,
+        currencyKind: CURRENCIES.TRY,
+      }),
+      currencyKind: 'UNKNOWN',
+    }
+
+    expect(validateAccount(account, [])).toEqual(expect.objectContaining({
+      ok: false,
+      errors: expect.arrayContaining([
+        expect.objectContaining({ field: 'currencyKind', message: 'عملة الحساب غير معروفة.' }),
+      ]),
+    }))
+  })
+
   it('posts a record-only movement without changing any account balance', () => {
     const accounts = [createAccount({
       id: 'cash-record-only',
