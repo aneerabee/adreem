@@ -1541,7 +1541,6 @@ describe('LedgerApp history filtering', () => {
         onEditMovement={() => {}}
         onUpdateAccount={() => {}}
         onUpdateSummaryScope={() => {}}
-        onReconcile={() => {}}
         onAddAttachment={() => {}}
         onDeleteAttachment={() => {}}
         onLoadMoreMovements={() => {}}
@@ -1551,11 +1550,52 @@ describe('LedgerApp history filtering', () => {
     expect(markup).toContain('· تم')
     expect(markup).toContain('· ناقص')
     expect(markup).toContain('· ملغي')
-    expect(markup).toContain('مطابقة الرصيد')
-    expect(markup).toContain('الرصيد الفعلي · LYD')
+    expect(markup).not.toContain('مطابقة الرصيد')
+    expect(markup).not.toContain('الرصيد الفعلي')
+    expect(markup).not.toContain('إنشاء تصحيح')
     expect(markup).not.toContain('داخل الصافي')
     expect(markup).not.toContain('>حفظ التعديل</button>')
     expect(markup).not.toContain('حذف الحساب')
+  })
+
+  it.each([
+    ['cash', ACCOUNT_TYPES.CASH, VALUE_KINDS.CASH],
+    ['bank', ACCOUNT_TYPES.BANK, VALUE_KINDS.BANK],
+    ['person', ACCOUNT_TYPES.PERSON, VALUE_KINDS.RECEIVABLE],
+    ['asset', ACCOUNT_TYPES.ASSET, VALUE_KINDS.ASSET],
+    ['project', ACCOUNT_TYPES.PROJECT, VALUE_KINDS.PROJECT],
+    ['expense', ACCOUNT_TYPES.EXPENSE, VALUE_KINDS.EXPENSE],
+  ])('never exposes manual balance editing for %s accounts', (_, type, valueKind) => {
+    const account = {
+      id: `locked-${type}`,
+      ownerName: 'حساب تجريبي',
+      subAccountName: 'تفصيل',
+      type,
+      valueKind,
+      currencyKind: CURRENCIES.DINAR,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    }
+    const markup = renderToStaticMarkup(
+      <AccountProfile
+        bucket={{ account, dinar: 100, usd: 25, try: 50, postedCount: 1 }}
+        movements={[]}
+        accounts={[account]}
+        onClose={() => {}}
+        onEditMovement={() => {}}
+        onUpdateAccount={() => {}}
+        onDeleteAccount={() => {}}
+        onAddAttachment={() => {}}
+        onDeleteAttachment={() => {}}
+        onLoadMoreMovements={() => {}}
+      />,
+    )
+
+    expect(markup).not.toContain('مطابقة الرصيد')
+    expect(markup).not.toContain('الرصيد الفعلي')
+    expect(markup).not.toContain('name="actualDinar"')
+    expect(markup).not.toContain('name="actualUsd"')
+    expect(markup).not.toContain('name="actualTry"')
+    expect(markup).not.toContain('إنشاء تصحيح')
   })
 
   it('shows permanent deletion only for a completely unused account', () => {
@@ -1580,7 +1620,6 @@ describe('LedgerApp history filtering', () => {
         onEditMovement={() => {}}
         onUpdateAccount={() => {}}
         onDeleteAccount={() => {}}
-        onReconcile={() => {}}
         onAddAttachment={() => {}}
         onDeleteAttachment={() => {}}
         onLoadMoreMovements={() => {}}
@@ -1610,7 +1649,6 @@ describe('LedgerApp history filtering', () => {
         onClose={() => {}}
         onEditMovement={() => {}}
         onUpdateAccount={() => {}}
-        onReconcile={() => {}}
         onAddAttachment={() => {}}
         onDeleteAttachment={() => {}}
         onLoadMoreMovements={() => {}}

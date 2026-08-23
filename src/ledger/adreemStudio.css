@@ -1910,8 +1910,6 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   .ml3-profile-reconcile,
   .ml3-profile-editor,
   .ml3-profile-movements { padding: 7px; }
-  .ml3-profile-reconcile--balance .ml3-profile-editor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ml3-profile-reconcile--balance .ml3-profile-editor-grid label:last-child { grid-column: 1 / -1; }
   .ml3-profile label { font-size: 0.61rem; }
   .ml3-profile-activity .ml3-profile-movements {
     height: auto;

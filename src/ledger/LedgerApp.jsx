@@ -24,7 +24,7 @@ import { ledgerNavigationSearch, readLedgerNavigation } from './ledgerNavigation
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
 import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccountsForRole, sameLogicalAccount } from './movementAccounts'
 import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateRecords, isMainLedgerMovement, normalizeSeparateRecordDirection, normalizeSeparateRecordName, separateRecordCancellationDraft, separateRecordDirectionOptions, separateRecordNames, separateRecordTotals } from './separateRecords'
-import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, buildReconciliationCorrectionDrafts, createAttachment, createAuditEvent, createReconciliation, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, lastReconciliationForAccount, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
+import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
 
@@ -2752,7 +2752,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
       <input type="hidden" name="subAccountName" value={draft.subAccountName || ''} />
       {structureLocked ? <input type="hidden" name="classification" value={classification} /> : null}
       {structureLocked && accountNeedsCurrency(parsedClassification) ? <input type="hidden" name="currencyKind" value={currencyFieldValue} /> : null}
-      {accountLocked ? <p className="ml3-profile-lock-note">بيانات الحساب ثابتة بعد أول حركة. المطابقة عملية مستقلة ومسجلة.</p> : structureLocked ? <p className="ml3-profile-lock-note">النوع وطريقة التعامل والعملة ثابتة بعد استعمال الحساب. الاسم فقط قابل للتعديل.</p> : null}
+      {accountLocked ? <p className="ml3-profile-lock-note">بيانات الحساب ثابتة بعد أول حركة. الرصيد يتغير بالحركات فقط.</p> : structureLocked ? <p className="ml3-profile-lock-note">النوع وطريقة التعامل والعملة ثابتة بعد استعمال الحساب. الاسم فقط قابل للتعديل.</p> : null}
       <label>
         هذا الحساب هو
         <select
@@ -2798,7 +2798,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
   )
 }
 
-export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, isDeletingAccount = false, onClose, onEditMovement, onUpdateAccount, onDeleteAccount, onReconcile, onAddAttachment, onDeleteAttachment, onLoadMoreMovements, onLoadStatement }) {
+export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, isDeletingAccount = false, onClose, onEditMovement, onUpdateAccount, onDeleteAccount, onAddAttachment, onDeleteAttachment, onLoadMoreMovements, onLoadStatement }) {
   const [deleteConfirmationAccountId, setDeleteConfirmationAccountId] = useState('')
   const [statementOpen, setStatementOpen] = useState(false)
   const [statementMovements, setStatementMovements] = useState(null)
@@ -2854,17 +2854,15 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
 
   if (!bucket) return null
 
-  const { account, dinar, usd, try: tryAmount, postedCount } = bucket
+  const { account, postedCount } = bucket
   const accountUsage = accountStructureUsage(account, { accounts, movements, reconciliations, recurringRules, dimensions })
   const structureLocked = accountUsage.locked
   const accountLocked = accountUsage.movement
   const accountAttachments = attachmentsForRecord(attachments, {
     accountId: account.id,
   })
-  const lastReconciliation = lastReconciliationForAccount(reconciliations, account.id)
   const relatedMovements = accountProfileMovements(movements, account.id)
   const accountMap = new Map(accounts.map((item) => [item.id, item]))
-  const canReconcileBalance = account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK
   const primaryBalance = accountPrimaryBalance(bucket)
   const profileBalanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
   const deletion = accountDeletionEligibility(account, { accounts, movements, attachments, reconciliations, recurringRules, dimensions })
@@ -2941,36 +2939,6 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
           ) : null}
 
           <section className="ml3-profile-tools">
-            {canReconcileBalance ? (
-              <form className="ml3-profile-reconcile ml3-profile-reconcile--balance" onSubmit={(event) => onReconcile(event, account.id, dinar, usd, tryAmount)}>
-                <h3>مطابقة الرصيد</h3>
-                {lastReconciliation ? (
-                  <p className="ml3-profile-note">
-                    آخر مطابقة: {movementDateTime(lastReconciliation.createdAt)} · {preserveUiData(lastReconciliation.note)}
-                  </p>
-                ) : null}
-                <div className="ml3-profile-editor-grid">
-                  <label>
-                    الرصيد الفعلي · LYD
-                    <input name="actualDinar" inputMode="numeric" defaultValue={formatInteger(dinar)} />
-                  </label>
-                  <label>
-                    الرصيد الفعلي · USD
-                    <input name="actualUsd" inputMode="numeric" defaultValue={formatMoneyNumber(usd)} />
-                  </label>
-                  <label>
-                    الرصيد الفعلي · TRY
-                    <input name="actualTry" inputMode="numeric" defaultValue={formatMoneyNumber(tryAmount)} />
-                  </label>
-                  <label>
-                    ملاحظة
-                    <input name="note" placeholder="الملاحظة مطلوبة" />
-                  </label>
-                </div>
-                <button type="submit">إنشاء تصحيح</button>
-              </form>
-            ) : null}
-
             <details className="ml3-profile-disclosure">
               <summary>
                 <span><strong>مرفقات</strong><small>{formatCount(accountAttachments.length)}</small></span>
@@ -3494,7 +3462,6 @@ export default function LedgerApp() {
   const accountAttachmentLockRef = useRef(false)
   const accountCreationLockRef = useRef('')
   const expenseCategoryCreationLockRef = useRef('')
-  const reconciliationLockRef = useRef('')
   const separateRecordSaveLockRef = useRef(false)
   const activeEntryModeRef = useRef(activeEntryMode)
   const motionTimerRef = useRef(null)
@@ -5348,57 +5315,6 @@ export default function LedgerApp() {
     setFeedback('تم تعديل الحساب.')
   }
 
-  function reconcileAccount(event, accountId, currentDinar, currentUsd, currentTry) {
-    event.preventDefault()
-    const formData = new FormData(event.currentTarget)
-    const actualDinar = parseWholeAmount(formData.get('actualDinar'))
-    const actualUsd = parseMoneyAmount(formData.get('actualUsd'), CURRENCIES.USD)
-    const actualTry = parseMoneyAmount(formData.get('actualTry'), CURRENCIES.TRY)
-    const note = String(formData.get('note') || '').trim()
-    if (!note) {
-      setFeedback('المطابقة تحتاج ملاحظة واضحة.')
-      return
-    }
-    const submissionKey = JSON.stringify([accountId, currentDinar, currentUsd, currentTry, actualDinar, actualUsd, actualTry, note])
-    if (!claimSubmission(reconciliationLockRef, submissionKey)) return
-    const record = createReconciliation({
-      accountId,
-      actualDinar,
-      actualUsd,
-      actualTry,
-      expectedDinar: currentDinar,
-      expectedUsd: currentUsd,
-      expectedTry: currentTry,
-      note,
-    })
-    const nextMovements = []
-    let validationMovements = movements
-    for (const draft of buildReconciliationCorrectionDrafts(record)) {
-      const movement = postMovement(draft, accounts, validationMovements)
-      nextMovements.push(movement)
-      validationMovements = [...validationMovements, movement]
-    }
-    if (nextMovements.length) {
-      setMovements((current) => [...current, ...nextMovements])
-    }
-    setLedgerExtras((current) => ({
-      ...current,
-      reconciliations: [...(current.reconciliations || []), record],
-      auditEvents: [
-        ...(current.auditEvents || []),
-        createAuditEvent('account.reconciled', {
-          accountId,
-          reconciliationId: record.id,
-        }),
-      ],
-    }))
-    if (!nextMovements.length) {
-      setFeedback('تم حفظ المطابقة بدون تصحيح.')
-      return
-    }
-    setFeedback(nextMovements.every((movement) => movement.status === MOVEMENT_STATUSES.POSTED) ? 'تم إنشاء تصحيح الرصيد.' : 'تم حفظ التصحيح في المراجعة.')
-  }
-
   async function addAccountAttachment(event, accountId) {
     event.preventDefault()
     if (accountAttachmentLockRef.current) return
@@ -6850,7 +6766,7 @@ export default function LedgerApp() {
           </section>
         ) : null}
       </section>
-      <AccountProfile key={selectedAccountId} bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} isDeletingAccount={isDeletingAccount} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onDeleteAccount={deleteAccountPermanently} onReconcile={reconcileAccount} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} onLoadStatement={loadCompleteAccountStatement} />
+      <AccountProfile key={selectedAccountId} bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} isDeletingAccount={isDeletingAccount} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onDeleteAccount={deleteAccountPermanently} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} onLoadStatement={loadCompleteAccountStatement} />
       <AnimatePresence>
         {expenseCategoryCreator ? (
           <ExpenseCategoryDialog
