@@ -52,6 +52,9 @@ describe('ADREEM save shield', () => {
   })
 
   it('does not cover the ledger after cloud confirmation', () => {
-    expect(renderChrome('saved')).not.toContain('adreem-save-shield')
+    const html = renderChrome('saved')
+
+    expect(html).not.toContain('adreem-save-shield')
+    expect(html).toContain('id="adreem-overlay-root"')
   })
 })

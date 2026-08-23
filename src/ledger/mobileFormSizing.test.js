@@ -19,6 +19,12 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('contain: layout;')
   })
 
+  it('keeps the expense category dialog inside the visible mobile viewport', () => {
+    expect(financeStylesheet).toContain('max-height: calc(100dvh - max(8px, env(safe-area-inset-top)));')
+    expect(financeStylesheet).toContain('.adreem-expense-category-dialog-body { min-height: 0;')
+    expect(financeStylesheet).toContain('overscroll-behavior: contain;')
+  })
+
   it('keeps financial values and long profile labels visible on narrow screens', () => {
     expect(financeStylesheet).toContain('.ml3-number-input { font-size: 16px !important; }')
     expect(financeStylesheet).toContain('.ml3-balances-surface .ml3-account-values strong,')

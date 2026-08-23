@@ -2,7 +2,7 @@
 /** @jsxRuntime automatic */
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
@@ -99,6 +99,12 @@ function scrollToBalancesWorkspace() {
       })
     })
   })
+}
+
+function LedgerOverlayPortal({ children }) {
+  if (typeof document === 'undefined') return children
+  const overlayRoot = document.getElementById('adreem-overlay-root')
+  return overlayRoot ? createPortal(children, overlayRoot) : children
 }
 
 const accountGroupTabs = [
@@ -2340,8 +2346,9 @@ export function ExpenseCategoryDialog({ name = '', error = '', isSaving = false,
   const normalizedName = String(name || '').trim()
   const tone = expenseCategoryTone(normalizedName)
   return (
-    <Motion.div className="adreem-movement-dialog-layer" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
-      <Motion.form ref={panelRef} className="adreem-expense-category-dialog" role="dialog" aria-modal="true" aria-labelledby="adreem-expense-category-title" tabIndex={-1} onSubmit={onSave} initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }} transition={UI_MOTION_TRANSITION}>
+    <LedgerOverlayPortal>
+      <Motion.div className="adreem-movement-dialog-layer" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
+        <Motion.form ref={panelRef} className="adreem-expense-category-dialog" role="dialog" aria-modal="true" aria-labelledby="adreem-expense-category-title" tabIndex={-1} onSubmit={onSave} initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }} transition={UI_MOTION_TRANSITION}>
         <header>
           <i><ReceiptText aria-hidden="true" size={19} /></i>
           <h2 id="adreem-expense-category-title">تصنيف مصروف جديد</h2>
@@ -2363,8 +2370,9 @@ export function ExpenseCategoryDialog({ name = '', error = '', isSaving = false,
           <button type="button" onClick={onClose} disabled={isSaving}>رجوع</button>
           <button type="submit" className="is-save" disabled={isSaving || !normalizedName}><Check aria-hidden="true" size={16} /> {isSaving ? 'جاري الحفظ' : 'حفظ التصنيف'}</button>
         </footer>
-      </Motion.form>
-    </Motion.div>
+        </Motion.form>
+      </Motion.div>
+    </LedgerOverlayPortal>
   )
 }
 
@@ -2381,8 +2389,9 @@ export function MovementActionDialog({ action, accountById, isSaving = false, on
   const postingEntries = movement.status === MOVEMENT_STATUSES.POSTED ? buildPostingEntries(movement) : []
 
   return (
-    <Motion.div className="adreem-movement-dialog-layer" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
-      <Motion.section ref={panelRef} className={`adreem-movement-action-dialog ${isRestore ? 'is-restore' : 'is-void'}`} role="alertdialog" aria-modal="true" aria-labelledby="adreem-movement-action-title" tabIndex={-1} initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }} transition={UI_MOTION_TRANSITION}>
+    <LedgerOverlayPortal>
+      <Motion.div className="adreem-movement-dialog-layer" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
+        <Motion.section ref={panelRef} className={`adreem-movement-action-dialog ${isRestore ? 'is-restore' : 'is-void'}`} role="alertdialog" aria-modal="true" aria-labelledby="adreem-movement-action-title" tabIndex={-1} initial={{ opacity: 0, y: 12, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }} transition={UI_MOTION_TRANSITION}>
         <header>
           <i>{isRestore ? <RotateCcw aria-hidden="true" size={20} /> : <Trash2 aria-hidden="true" size={20} />}</i>
           <div>
@@ -2417,8 +2426,9 @@ export function MovementActionDialog({ action, accountById, isSaving = false, on
             {isSaving ? 'جاري الحفظ' : isRestore ? 'تأكيد التراجع' : 'نعم، إلغاء الحركة'}
           </button>
         </footer>
-      </Motion.section>
-    </Motion.div>
+        </Motion.section>
+      </Motion.div>
+    </LedgerOverlayPortal>
   )
 }
 
@@ -2431,8 +2441,9 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
   const sourceCurrency = movementAccountCurrencyForRole(draft.type, 'source', draft.currency)
   const destinationCurrency = movementAccountCurrencyForRole(draft.type, 'destination', draft.currency)
   return (
-    <Motion.div className="adreem-movement-dialog-layer" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
-      <Motion.form ref={panelRef} className={`adreem-movement-edit-dialog is-${stage}`} role="dialog" aria-modal="true" aria-labelledby="adreem-movement-edit-title" tabIndex={-1} onSubmit={(event) => stage === 'review' ? onSave(event) : (event.preventDefault(), onReview())} initial={{ opacity: 0, y: 14, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }} transition={UI_MOTION_TRANSITION}>
+    <LedgerOverlayPortal>
+      <Motion.div className="adreem-movement-dialog-layer" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
+        <Motion.form ref={panelRef} className={`adreem-movement-edit-dialog is-${stage}`} role="dialog" aria-modal="true" aria-labelledby="adreem-movement-edit-title" tabIndex={-1} onSubmit={(event) => stage === 'review' ? onSave(event) : (event.preventDefault(), onReview())} initial={{ opacity: 0, y: 14, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }} transition={UI_MOTION_TRANSITION}>
         <header>
           <i><Pencil aria-hidden="true" size={20} /></i>
           <div>
@@ -2517,8 +2528,9 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
             <button type="submit" className="is-save" disabled={isSaving || !canSave}><Check aria-hidden="true" size={16} /> {isSaving ? 'جاري الحفظ' : 'تأكيد وحفظ'}</button>
           )}
         </footer>
-      </Motion.form>
-    </Motion.div>
+        </Motion.form>
+      </Motion.div>
+    </LedgerOverlayPortal>
   )
 }
 
@@ -2832,8 +2844,9 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
   }
 
   return (
-    <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
-      <aside ref={panelRef} className="ml3-profile" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
+    <LedgerOverlayPortal>
+      <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
+        <aside ref={panelRef} className="ml3-profile" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
         <div className="ml3-profile-head">
           <div className="ml3-profile-identity">
             <i><AccountChoiceIcon account={account} size={18} /></i>
@@ -3039,8 +3052,9 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
             </div>
           </section>
         </div>
-      </aside>
-    </div>
+        </aside>
+      </div>
+    </LedgerOverlayPortal>
   )
 }
 
@@ -4398,7 +4412,7 @@ export default function LedgerApp() {
     if (typeof document === 'undefined') return undefined
     const previousOverflow = document.body.style.overflow
     const root = document.documentElement
-    if (selectedAccountId || movementEditDialogOpen || pendingMovementAction) {
+    if (selectedAccountId || expenseCategoryCreator || movementEditDialogOpen || pendingMovementAction) {
       document.body.style.overflow = 'hidden'
       root.classList.add('adreem-overlay-open')
     }
@@ -4406,7 +4420,7 @@ export default function LedgerApp() {
       document.body.style.overflow = previousOverflow
       root.classList.remove('adreem-overlay-open')
     }
-  }, [movementEditDialogOpen, pendingMovementAction, selectedAccountId])
+  }, [expenseCategoryCreator, movementEditDialogOpen, pendingMovementAction, selectedAccountId])
 
   useEffect(() => {
     if (activeSection !== 'review') return undefined

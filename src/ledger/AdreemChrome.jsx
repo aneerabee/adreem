@@ -241,6 +241,7 @@ export default function AdreemChrome({
           ) : null}
         </div>
       </section>
+      <div id="adreem-overlay-root" className="adreem-overlay-root" />
       {profileOpen ? (
         <div className="adreem-profile-layer" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) setProfileOpen(false)
