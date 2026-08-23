@@ -40,6 +40,16 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('overflow-wrap: anywhere;')
   })
 
+  it('keeps net results and opening balances inside narrow phone layouts', () => {
+    expect(financeStylesheet).toContain('.adreem-net-calc > * { min-width: 0; }')
+    expect(financeStylesheet).toContain('.adreem-net-calc { grid-template-columns: repeat(2, minmax(0, 1fr)); }')
+    expect(financeStylesheet).toContain('.adreem-net-target,')
+    expect(financeStylesheet).toContain('.adreem-net-calc output { width: 100%; grid-column: 1 / -1; }')
+    expect(financeStylesheet).not.toContain('.adreem-net-calc { grid-template-columns: minmax(80px, 0.8fr) minmax(92px, auto) minmax(105px, 1fr); }')
+    expect(financeStylesheet).toContain('grid-template-areas: "opening-label opening-value" "opening-direction opening-direction";')
+    expect(financeStylesheet).toContain('.adreem-counterparty-opening > header strong { overflow: visible;')
+  })
+
   it('uses a consistent control size scale on desktop and touch screens', () => {
     expect(financeStylesheet).toContain('--finance-control-compact: 32px;')
     expect(financeStylesheet).toContain('--finance-control: 40px;')
