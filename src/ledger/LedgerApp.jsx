@@ -1453,6 +1453,86 @@ function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfi
   )
 }
 
+export function buildExpenseBalanceRows(accounts = [], reports = []) {
+  const categoryAccounts = new Map(
+    accounts
+      .filter((account) => account?.valueKind === VALUE_KINDS.EXPENSE)
+      .map((account) => [account.id, account]),
+  )
+  const rowsById = new Map()
+
+  for (const account of categoryAccounts.values()) {
+    if (account.status === ACCOUNT_STATUSES.INACTIVE) continue
+    rowsById.set(account.id, {
+      id: account.id,
+      categoryId: account.id,
+      name: account.ownerName || 'مصروف',
+      account,
+      dinar: 0,
+      usd: 0,
+      count: 0,
+    })
+  }
+
+  for (const report of Array.isArray(reports) ? reports : []) {
+    const categoryId = String(report?.categoryId || '')
+    const account = categoryAccounts.get(categoryId) || null
+    const id = categoryId || 'uncategorized'
+    const current = rowsById.get(id)
+    rowsById.set(id, {
+      id,
+      categoryId,
+      name: report?.name || account?.ownerName || 'بدون تصنيف',
+      account: current?.account || account,
+      dinar: Math.abs(Number(report?.dinar || 0)),
+      usd: Math.abs(Number(report?.usd || 0)),
+      count: Math.max(0, Number(report?.count || 0)),
+    })
+  }
+
+  return Array.from(rowsById.values()).sort((left, right) => (
+    (right.dinar + right.usd) - (left.dinar + left.usd)
+    || right.count - left.count
+    || left.name.localeCompare(right.name, 'ar')
+    || left.id.localeCompare(right.id)
+  ))
+}
+
+export function ExpenseReportList({ rows = [], onOpen }) {
+  return (
+    <div className="ml3-list adreem-expense-report-list">
+      {rows.length === 0 ? <p className="ml3-empty">لا توجد مصروفات.</p> : null}
+      <AnimatePresence initial={false}>
+        {rows.map((row) => {
+          const content = (
+            <>
+              <i className="ml3-account-row-icon"><ReceiptText aria-hidden="true" size={16} /></i>
+              <span className="ml3-account-copy">
+                <strong>{row.categoryId ? preserveUiData(row.name) : 'بدون تصنيف'}</strong>
+                <small className="ml3-account-context">{row.count ? `${formatCount(row.count)} حركة` : 'لا حركات'}</small>
+              </span>
+            </>
+          )
+          return (
+            <Motion.article layout="position" key={row.id} initial={{ y: 4 }} animate={{ y: 0 }} exit={{ opacity: 0, y: -3 }} transition={UI_MOTION_TRANSITION} className={`ml3-account-row ml3-account-row--expense ${row.count ? 'is-positive' : 'is-zero'}`}>
+              {row.account ? (
+                <button type="button" className="ml3-account-main" onClick={() => onOpen?.(row.account.id)}>{content}</button>
+              ) : (
+                <div className="ml3-account-main">{content}</div>
+              )}
+              <div className="ml3-account-values is-expense">
+                {row.dinar ? <strong>{money(row.dinar, CURRENCIES.DINAR)}</strong> : null}
+                {row.usd ? <strong>{money(row.usd, CURRENCIES.USD)}</strong> : null}
+                {!row.dinar && !row.usd ? <span>صفر</span> : null}
+              </div>
+            </Motion.article>
+          )
+        })}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 function counterpartyBucketAmount(bucket = {}) {
   const currency = bucket.account?.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? CURRENCIES.USD : CURRENCIES.DINAR
   return {
@@ -3382,6 +3462,10 @@ export default function LedgerApp() {
   const localExpenseCategoryReports = useMemo(() => buildExpenseCategoryReports({ ...ledgerExtras, accounts, movements }), [accounts, movements, ledgerExtras])
   const dimensionReports = serverReports?.dimensions || localDimensionReports
   const expenseCategoryReports = serverReports?.expenseCategories || localExpenseCategoryReports
+  const expenseBalanceRows = useMemo(
+    () => buildExpenseBalanceRows(accounts, expenseCategoryReports),
+    [accounts, expenseCategoryReports],
+  )
   const dueRules = useMemo(() => dueRecurringRules(ledgerExtras.recurringRules), [ledgerExtras.recurringRules])
   const editingRecurringRule = useMemo(
     () => activeRecurringRuleForMovement(ledgerExtras.recurringRules, editingMovementId),
@@ -5242,6 +5326,11 @@ export default function LedgerApp() {
       return haystack.includes(normalizedAccountQuery)
     }
     const filterRows = (rows) => rows.filter(accountMatchesQuery)
+    const filteredExpenseRows = expenseBalanceRows.filter((row) => {
+      if (!normalizedAccountQuery) return true
+      const haystack = normalizeAccountSearchText(`${row.name} ${row.account?.subAccountName || ''} ${row.account?.legacyName || ''}`)
+      return haystack.includes(normalizedAccountQuery)
+    })
     const peopleViews = buildCounterpartyBalanceViews(peopleRows)
     const searchablePeople = filterCounterpartyGroupsByQuery(peopleViews.all, accountQuery)
     const peopleBalances = filterCounterpartyGroupsByQuery(peopleViews.withBalance, accountQuery)
@@ -5258,7 +5347,7 @@ export default function LedgerApp() {
       people: peopleBalances,
       money: filterRows(filterMoneyBalanceRows(moneyRows, activeBalanceFocus)),
       assets: filterRows(balancesByKind.assets || []),
-      expenses: filterRows(balancesByKind.expenses || []),
+      expenses: filteredExpenseRows,
       separate: [],
       review: filterRows(balancesByKind.review || []),
     }
@@ -5402,6 +5491,8 @@ export default function LedgerApp() {
                   </>
                 ) : activeGroup.key === 'money' ? (
                   <AccountList title="فلوسي" rows={rows} onOpen={setSelectedAccountId} embedded tone="money" compactValues hideHeader />
+                ) : activeGroup.key === 'expenses' ? (
+                  <ExpenseReportList rows={rows} onOpen={setSelectedAccountId} />
                 ) : (
                   <AccountList title={activeGroup.title} rows={rows} onOpen={setSelectedAccountId} embedded tone={activeGroup.key} compactValues hideHeader />
                 )}

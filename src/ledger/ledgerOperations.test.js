@@ -292,6 +292,22 @@ describe('adreem operational features', () => {
     ])
   })
 
+  it('counts only posted expenses and keeps dinars separate from dollars', () => {
+    const reports = buildExpenseCategoryReports({
+      accounts,
+      movements: [
+        { id: 'posted-dinar', type: MOVEMENT_TYPES.EXPENSE, status: MOVEMENT_STATUSES.POSTED, amount: 450, currency: CURRENCIES.DINAR, sourceAccountId: 'me-cash' },
+        { id: 'posted-usd', type: MOVEMENT_TYPES.EXPENSE, status: MOVEMENT_STATUSES.POSTED, amount: 25, currency: CURRENCIES.USD, sourceAccountId: 'me-cash' },
+        { id: 'voided', type: MOVEMENT_TYPES.EXPENSE, status: MOVEMENT_STATUSES.VOIDED, amount: 900, currency: CURRENCIES.DINAR, sourceAccountId: 'me-cash' },
+        { id: 'review', type: MOVEMENT_TYPES.EXPENSE, status: MOVEMENT_STATUSES.NEEDS_REVIEW, amount: 800, currency: CURRENCIES.DINAR, sourceAccountId: 'me-cash' },
+      ],
+    })
+
+    expect(reports).toEqual([
+      expect.objectContaining({ categoryId: '', name: 'بدون تصنيف', dinar: 450, usd: 25, count: 2 }),
+    ])
+  })
+
   it('runs monthly recurring rules once per month', () => {
     const movement = {
       id: 'rent-1',

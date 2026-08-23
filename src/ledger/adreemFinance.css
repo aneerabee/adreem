@@ -740,6 +740,8 @@
 .ml3-balances-surface .ml3-account-values > span { max-width: 100%; overflow: hidden; color: var(--row-tone); font-size: 0.78rem; font-weight: 820; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-balances-surface .ml3-account-values strong.is-positive { color: var(--finance-green-dark); }
 .ml3-balances-surface .ml3-account-values strong.is-negative { color: var(--finance-debt-dark); }
+.ml3-balances-surface .ml3-account-values.is-expense strong { color: var(--finance-coral); }
+.adreem-expense-report-list .ml3-account-row:not(.is-zero) { --row-tone: var(--finance-coral); --row-soft: var(--finance-coral-soft); }
 .ml3-balances-surface .ml3-empty { min-height: 92px; display: grid; place-items: center; color: var(--finance-muted); }
 
 .adreem-people-controls {

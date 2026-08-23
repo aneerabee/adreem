@@ -870,6 +870,8 @@ const ENGLISH_TEXT = Object.freeze({
   'لا توجد حركات اليوم.': 'No entries today.',
   'لا توجد حركة شهرية.': 'No monthly entries.',
   'لا توجد مصروفات مصنفة.': 'No categorized expenses.',
+  'لا توجد مصروفات.': 'No expenses.',
+  'لا حركات': 'No entries',
   'لا شيء معلق.': 'Nothing is pending.',
   'لا يوجد فرق. سيتم حفظ المطابقة بدون حركة تصحيح.': 'There is no difference. Reconciliation will be saved without an adjustment.',
   'إضافة · الأرصدة · السجل · المراجعة': 'Add · Balances · History · Review',

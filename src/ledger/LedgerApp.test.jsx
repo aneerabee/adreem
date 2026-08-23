@@ -19,6 +19,7 @@ import {
   ReviewAccountCard,
   CounterpartyCard,
   CounterpartyList,
+  ExpenseReportList,
   accountBalanceChip,
   accountProfileMovements,
   areMergeAccountsCompatible,
@@ -28,6 +29,7 @@ import {
   activeRecurringRuleForMovement,
   buildBalanceOverview,
   balanceAmountIsWide,
+  buildExpenseBalanceRows,
   buildPeopleAccountViews,
   canEditMovement,
   cancelMovementConfirmation,
@@ -511,6 +513,40 @@ describe('LedgerApp balance ordering', () => {
     }
     expect(counterpartyMagnitudeForFilter(group, 'receivable')).toBe(1_500)
     expect(counterpartyMagnitudeForFilter(group, 'payable')).toBe(300)
+  })
+})
+
+describe('LedgerApp expense balances', () => {
+  const expenseAccount = {
+    id: 'fuel',
+    ownerName: 'وقود',
+    subAccountName: 'مصروف',
+    type: ACCOUNT_TYPES.EXPENSE,
+    valueKind: VALUE_KINDS.EXPENSE,
+    status: ACCOUNT_STATUSES.ACTIVE,
+  }
+
+  it('keeps active categories and reveals posted expenses without a category', () => {
+    const rows = buildExpenseBalanceRows([expenseAccount], [
+      { categoryId: '', name: 'بدون تصنيف', dinar: 450, usd: 0, count: 1 },
+    ])
+
+    expect(rows).toEqual([
+      expect.objectContaining({ id: 'uncategorized', name: 'بدون تصنيف', dinar: 450, count: 1, account: null }),
+      expect.objectContaining({ id: 'fuel', name: 'وقود', dinar: 0, count: 0, account: expenseAccount }),
+    ])
+  })
+
+  it('shows dinar and dollar totals without merging the currencies', () => {
+    const rows = buildExpenseBalanceRows([expenseAccount], [
+      { categoryId: 'fuel', name: 'وقود', dinar: 1200, usd: 35, count: 3 },
+    ])
+    const markup = stripUiDataProtection(renderToStaticMarkup(<ExpenseReportList rows={rows} onOpen={() => {}} />))
+
+    expect(markup).toContain('وقود')
+    expect(markup).toContain('3 حركة')
+    expect(markup).toContain('1,200 د.ل')
+    expect(markup).toContain('35 $')
   })
 })
 
