@@ -3,8 +3,8 @@
   --ad-ink-soft: #355048;
   --ad-green: #08785f;
   --ad-green-soft: #e6f5ef;
-  --ad-blue: #2d66ad;
-  --ad-blue-soft: #eaf1fb;
+  --ad-charcoal: #4b5057;
+  --ad-charcoal-soft: #f0f1f2;
   --ad-red: #b8443d;
   --ad-red-soft: #fff0ee;
   --ad-amber: #9b650d;
@@ -217,7 +217,7 @@
   animation: adreem-shell-rise 200ms cubic-bezier(0.25, 1, 0.5, 1) both;
 }
 .adreem-admin-card:first-child { border-top: 4px solid var(--ad-green); }
-.adreem-admin-card:last-child { border-top: 4px solid var(--ad-blue); }
+.adreem-admin-card:last-child { border-top: 4px solid var(--ad-charcoal); }
 .adreem-admin-card-head {
   display: flex;
   align-items: center;
@@ -226,7 +226,7 @@
   margin-bottom: 11px;
 }
 .adreem-admin-card-head h2 { font-size: 1rem; }
-.adreem-admin-card-head span { direction: ltr; color: var(--ad-blue); font-size: 0.7rem; font-weight: 750; }
+.adreem-admin-card-head span { direction: ltr; color: var(--ad-charcoal); font-size: 0.7rem; font-weight: 750; }
 .adreem-admin-card label + label { margin-top: 8px; }
 .adreem-admin-card > button { width: 100%; margin-top: 10px; }
 .adreem-admin-users { display: grid; gap: 6px; }
@@ -242,7 +242,7 @@
   border-radius: 7px;
   background: #fff;
 }
-.adreem-admin-user:hover { border-color: #acc7e8; background: var(--ad-blue-soft); }
+.adreem-admin-user:hover { border-color: #c2c6ca; background: var(--ad-charcoal-soft); }
 .adreem-admin-user > div { min-width: 0; display: grid; gap: 2px; }
 .adreem-admin-user strong,
 .adreem-admin-user span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

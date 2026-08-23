@@ -1538,7 +1538,7 @@
 .adreem-app {
   --ink: #17332d;
   --green: #087f68;
-  --blue: #2f72b7;
+  --charcoal: #4b5057;
   --red: #dc2626;
   --amber: #d18a18;
   --canvas: #f3f7f5;
@@ -1553,9 +1553,9 @@
 }
 
 .adreem-app--accounts {
-  --section-accent: var(--blue);
-  --section-soft: #eaf2fb;
-  --section-line: #b8d1ec;
+  --section-accent: var(--charcoal);
+  --section-soft: #f0f1f2;
+  --section-line: #c4c8cd;
 }
 
 .adreem-app--history {
@@ -2375,7 +2375,7 @@
 }
 
 .adreem-nav button[data-section="entry"] { --tab-accent: var(--green); --tab-soft: #e7f6f1; }
-.adreem-nav button[data-section="accounts"] { --tab-accent: var(--blue); --tab-soft: #eaf2fb; }
+.adreem-nav button[data-section="accounts"] { --tab-accent: var(--charcoal); --tab-soft: #f0f1f2; }
 .adreem-nav button[data-section="history"] { --tab-accent: var(--amber); --tab-soft: #fff5df; }
 .adreem-nav button[data-section="review"] { --tab-accent: var(--red); --tab-soft: #fff0ee; }
 
@@ -2580,7 +2580,7 @@
   box-shadow: inset 0 0 0 1px var(--line), 0 5px 14px rgba(23, 51, 45, 0.045);
 }
 .ml3-balance-ledger button:hover { transform: translateY(-1px); }
-.ml3-balance-ledger .is-money { background: #edf3f8; border-inline-start-color: var(--blue); }
+.ml3-balance-ledger .is-money { background: #f2f3f4; border-inline-start-color: var(--charcoal); }
 .ml3-balance-ledger .is-positive { background: #eaf7f2; }
 .ml3-balance-ledger .is-negative { background: #fef2f2; }
 

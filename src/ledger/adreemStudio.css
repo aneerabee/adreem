@@ -10,8 +10,8 @@
   --line-strong: #bfcfc8;
   --entry: #08785f;
   --entry-soft: #e6f5ef;
-  --accounts: #2d66ad;
-  --accounts-soft: #eaf1fb;
+  --accounts: #4b5057;
+  --accounts-soft: #f0f1f2;
   --history: #9b650d;
   --history-soft: #fff4dd;
   --review: #b8443d;
@@ -35,8 +35,8 @@
 .adreem-app--accounts {
   --section-accent: var(--accounts);
   --section-soft: var(--accounts-soft);
-  --section-ink: #204f89;
-  --section-line: #acc7e8;
+  --section-ink: #30343a;
+  --section-line: #c6c9cd;
 }
 
 .adreem-app--history {
@@ -862,7 +862,7 @@
 }
 [dir='rtl'] .ml3-balance-ledger button::after { border-radius: 3px 0 0 3px; }
 .ml3-balance-ledger button.is-cash { --summary-tone: #187b58; --summary-soft: #e7f6ef; }
-.ml3-balance-ledger button.is-bank { --summary-tone: #2466a2; --summary-soft: #e8f1fa; }
+.ml3-balance-ledger button.is-bank { --summary-tone: #4b5057; --summary-soft: #f0f1f2; }
 .ml3-balance-ledger button.is-positive { --summary-tone: var(--positive); --summary-soft: var(--positive-soft); }
 .ml3-balance-ledger button.is-negative { --summary-tone: var(--negative); --summary-soft: var(--negative-soft); }
 .ml3-balance-ledger button i {
@@ -2108,7 +2108,7 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   background: var(--entry-soft);
 }
 .ml3-picker-channel-tag.is-person-bank {
-  color: #204f89;
+  color: #30343a;
   background: var(--accounts-soft);
 }
 .ml3-picker-channel-tag.is-person-usd,

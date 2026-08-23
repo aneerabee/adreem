@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 
 const stylesheet = readFileSync(new URL('./adreemStudio.css', import.meta.url), 'utf8')
 const financeStylesheet = readFileSync(new URL('./adreemFinance.css', import.meta.url), 'utf8')
+const deskStylesheet = readFileSync(new URL('./adreemDesk.css', import.meta.url), 'utf8')
+const appStylesheet = readFileSync(new URL('../appStudio.css', import.meta.url), 'utf8')
 
 describe('mobile form sizing', () => {
   it('keeps every editable field at the iPhone no-zoom font size', () => {
@@ -78,13 +80,25 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('.ml3-opening-direction button.is-negative.is-active { border-color: var(--finance-debt);')
   })
 
+  it('uses one dark charcoal neutral instead of the old blue accent', () => {
+    const completeStylesheet = [appStylesheet, deskStylesheet, stylesheet, financeStylesheet].join('\n')
+
+    expect(appStylesheet).toContain('--ad-charcoal: #4b5057;')
+    expect(deskStylesheet).toContain('--charcoal: #4b5057;')
+    expect(stylesheet).toContain('--accounts: #4b5057;')
+    expect(financeStylesheet).toContain('--finance-charcoal: #4b5057;')
+    expect(financeStylesheet).toContain('--finance-charcoal-dark: #2f3338;')
+    expect(financeStylesheet).toContain('--finance-charcoal-soft: #f0f1f2;')
+    expect(completeStylesheet).not.toMatch(/--(?:ad-)?blue|--finance-blue/u)
+  })
+
   it('colors balance containers by financial meaning instead of account type', () => {
-    expect(financeStylesheet).toContain('.ml3-balance-ledger button.is-cash { --summary-tone: var(--finance-blue);')
-    expect(financeStylesheet).toContain('.ml3-account-switcher--money { --group-tone: var(--finance-blue);')
+    expect(financeStylesheet).toContain('.ml3-balance-ledger button.is-cash { --summary-tone: var(--finance-charcoal);')
+    expect(financeStylesheet).toContain('.ml3-account-switcher--money { --group-tone: var(--finance-charcoal);')
     expect(financeStylesheet).toContain('.adreem-counterparty-card.is-mixed,')
     expect(financeStylesheet).toContain('.adreem-counterparty-channel.is-positive { --channel-tone: var(--finance-green);')
     expect(financeStylesheet).toContain('.adreem-counterparty-channel.is-negative { --channel-tone: var(--finance-debt);')
     expect(financeStylesheet).not.toContain('.adreem-counterparty-channel.is-cash-usd { --channel-tone: var(--finance-gold);')
-    expect(financeStylesheet).not.toContain('.adreem-counterparty-channel.is-cheque-dinar { --channel-tone: var(--finance-blue);')
+    expect(financeStylesheet).not.toContain('.adreem-counterparty-channel.is-cheque-dinar { --channel-tone: var(--finance-charcoal);')
   })
 })
