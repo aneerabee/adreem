@@ -25,6 +25,13 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('overscroll-behavior: contain;')
   })
 
+  it('prints account statements as an unclipped multi-page A4 document', () => {
+    expect(financeStylesheet).toContain('@page { size: A4 portrait; margin: 10mm; }')
+    expect(financeStylesheet).toContain('.ml3-profile-layer.has-statement')
+    expect(financeStylesheet).toContain('max-height: none !important;')
+    expect(financeStylesheet).toContain('break-inside: avoid;')
+  })
+
   it('keeps financial values and long profile labels visible on narrow screens', () => {
     expect(financeStylesheet).toContain('.ml3-number-input { font-size: 16px !important; }')
     expect(financeStylesheet).toContain('.ml3-balances-surface .ml3-account-values strong,')

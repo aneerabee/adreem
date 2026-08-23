@@ -2594,8 +2594,23 @@ export function buildAccountStatement(movements = [], accountIds = [], selectedC
   return { rows: rows.reverse(), totals }
 }
 
-function AccountStatement({ account, accounts, movements, isLoading = false, loadError = '', onClose }) {
+function statementPartyLabel(account, statementAccountIds) {
+  if (!account) return 'خارجي'
+  if (statementAccountIds.has(account.id)) return protectedAccountContext(account)
+  return protectedAccountPrimaryName(account)
+}
+
+function statementMovementDateParts(value) {
+  const locale = uiLanguageLocale(getActiveUiLanguage())
+  return {
+    date: formatZonedDate(value || Date.now(), locale, { year: 'numeric', month: '2-digit', day: '2-digit' }),
+    time: formatZonedTime(value || Date.now(), locale, { hour: '2-digit', minute: '2-digit' }),
+  }
+}
+
+export function AccountStatement({ account, accounts, movements, isLoading = false, loadError = '', onClose }) {
   const accountIds = accountStatementAccountIds(account, accounts)
+  const statementAccountIds = new Set(accountIds)
   const availableCurrencies = CURRENCY_OPTIONS.filter((option) => (
     accounts.some((item) => accountIds.includes(item.id) && item.currencyKind === option.value)
     || movements.some((movement) => buildPostingEntries(movement).some((entry) => accountIds.includes(entry.accountId) && entry.currency === option.value))
@@ -2606,6 +2621,12 @@ function AccountStatement({ account, accounts, movements, isLoading = false, loa
   const statement = buildAccountStatement(movements, accountIds, selectedCurrencies)
   const visibleRows = statement.rows.slice(0, visibleCount)
   const accountMap = new Map(accounts.map((item) => [item.id, item]))
+  const chronologicalRows = statement.rows.slice().reverse()
+  const firstMovementAt = chronologicalRows[0]?.movement?.createdAt || chronologicalRows[0]?.movement?.updatedAt
+  const lastMovementAt = statement.rows[0]?.movement?.createdAt || statement.rows[0]?.movement?.updatedAt
+  const statementRange = firstMovementAt && lastMovementAt
+    ? `${statementMovementDateParts(firstMovementAt).date} — ${statementMovementDateParts(lastMovementAt).date}`
+    : 'لا توجد حركات'
 
   function toggleCurrency(currency) {
     setVisibleCount(100)
@@ -2615,15 +2636,22 @@ function AccountStatement({ account, accounts, movements, isLoading = false, loa
   }
 
   function printStatement() {
-    setVisibleCount(statement.rows.length)
-    window.requestAnimationFrame(() => window.print())
+    flushSync(() => setVisibleCount(statement.rows.length))
+    window.print()
   }
 
   return (
     <Motion.section className="adreem-statement" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={UI_MOTION_TRANSITION} aria-label="كشف الحساب">
-      <header>
-        <div><small>كشف حساب</small><h3>{protectedAccountPrimaryName(account)}</h3></div>
-        <div>
+      <header className="adreem-statement-head">
+        <div className="adreem-statement-title">
+          <i><ReceiptText aria-hidden="true" size={18} /></i>
+          <div>
+            <small>ADREEM · كشف الحساب</small>
+            <h3>{protectedAccountPrimaryName(account)}</h3>
+            <p>{protectedAccountContext(account)} · {formatCount(statement.rows.length)} حركة · {statementRange}</p>
+          </div>
+        </div>
+        <div className="adreem-statement-actions">
           <button type="button" onClick={printStatement}><ReceiptText aria-hidden="true" size={15} /> طباعة</button>
           <button type="button" aria-label="إغلاق كشف الحساب" title="إغلاق" onClick={onClose}><X aria-hidden="true" size={16} /></button>
         </div>
@@ -2639,31 +2667,42 @@ function AccountStatement({ account, accounts, movements, isLoading = false, loa
         {currencyOptions.filter((option) => selectedCurrencies.includes(option.value)).map((option) => {
           const total = statement.totals[option.value]
           return (
-            <article key={option.value}>
+            <article className={total.balance > 0 ? 'is-positive' : total.balance < 0 ? 'is-negative' : 'is-zero'} key={option.value}>
               <strong>{option.label}</strong>
-              <span className="is-positive">داخل {money(total.incoming, option.value)}</span>
-              <span className="is-negative">خارج {money(total.outgoing, option.value)}</span>
-              <b>{money(total.balance, option.value)}</b>
+              <span className="is-in"><small>داخل</small><b>{money(total.incoming, option.value)}</b></span>
+              <span className="is-out"><small>خارج</small><b>{money(total.outgoing, option.value)}</b></span>
+              <span className="is-balance"><small>الرصيد</small><b>{money(total.balance, option.value)}</b></span>
             </article>
           )
         })}
       </div>
       {isLoading ? <p className="ml3-empty">جاري تجهيز الكشف الكامل...</p> : null}
       {loadError ? <p className="adreem-statement-error">{loadError}</p> : null}
+      <div className="adreem-statement-column-head" aria-hidden="true">
+        <span>التاريخ</span><span>التفاصيل</span><span>الحركة والرصيد</span>
+      </div>
       <div className="adreem-statement-list">
         {visibleRows.map(({ movement, currency, delta, balance }) => {
           const source = accountMap.get(movement.sourceAccountId)
           const destination = accountMap.get(movement.destinationAccountId)
+          const occurredAt = movement.createdAt || movement.updatedAt
+          const dateParts = statementMovementDateParts(occurredAt)
+          const sourceLabel = statementPartyLabel(source, statementAccountIds)
+          const destinationLabel = statementPartyLabel(destination, statementAccountIds)
           return (
-            <article key={`${movement.id}-${currency}`}>
-              <div>
-                <strong>{movementLabels[movement.type] || 'حركة'}</strong>
-                <span>{source ? protectedAccountPrimaryName(source) : 'خارجي'} ← {destination ? protectedAccountPrimaryName(destination) : 'خارجي'}</span>
+            <article className={delta > 0 ? 'is-positive' : 'is-negative'} key={`${movement.id}-${currency}`}>
+              <time dateTime={occurredAt || undefined}>
+                <strong>{dateParts.date}</strong>
+                <small>{dateParts.time}</small>
+              </time>
+              <div className="adreem-statement-row-copy">
+                <span className="adreem-statement-row-title"><strong>{movementLabels[movement.type] || 'حركة'}</strong><b>{currency}</b></span>
+                <span className="adreem-statement-route"><small>من</small> {sourceLabel}<i aria-hidden="true">←</i><small>إلى</small> {destinationLabel}</span>
                 {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
               </div>
-              <div className={delta > 0 ? 'is-positive' : 'is-negative'}>
+              <div className="adreem-statement-row-value">
                 <strong>{signedMoney(delta, currency)}</strong>
-                <small>الرصيد {money(balance, currency)}</small>
+                <small><span>الرصيد</span><b>{money(balance, currency)}</b></small>
               </div>
             </article>
           )
@@ -2675,6 +2714,10 @@ function AccountStatement({ account, accounts, movements, isLoading = false, loa
           حركات أقدم
         </button>
       ) : null}
+      <footer className="adreem-statement-print-foot">
+        <strong>ADREEM</strong>
+        <span>كشف حساب محفوظ من الدفتر</span>
+      </footer>
     </Motion.section>
   )
 }
@@ -2845,7 +2888,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
 
   return (
     <LedgerOverlayPortal>
-      <div className="ml3-profile-layer" role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
+      <div className={`ml3-profile-layer ${statementOpen ? 'has-statement' : ''}`} role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
         <aside ref={panelRef} className="ml3-profile" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
         <div className="ml3-profile-head">
           <div className="ml3-profile-identity">

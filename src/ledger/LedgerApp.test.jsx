@@ -6,6 +6,7 @@ import { COUNTERPARTY_ACCOUNT_KINDS } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement } from './ledgerCore.js'
 import {
   AccountProfile,
+  AccountStatement,
   NumericEntry,
   preventImplicitNumericSubmit,
   NetPositionPanel,
@@ -179,6 +180,34 @@ describe('LedgerApp account statements', () => {
     expect(statement.totals[CURRENCIES.DINAR]).toEqual({ incoming: 500, outgoing: 0, balance: 500 })
     expect(statement.totals[CURRENCIES.USD]).toEqual({ incoming: 0, outgoing: 0, balance: 0 })
     expect(statement.totals[CURRENCIES.TRY]).toEqual({ incoming: 0, outgoing: 300, balance: -300 })
+  })
+
+  it('renders a compact statement with dates, notes, running balances, and print controls', () => {
+    const movements = [
+      {
+        id: 'statement-row',
+        databaseSequence: 1,
+        type: MOVEMENT_TYPES.TRANSFER,
+        status: MOVEMENT_STATUSES.POSTED,
+        amount: 750,
+        currency: CURRENCIES.DINAR,
+        sourceAccountId: 'other',
+        destinationAccountId: 'person-cash',
+        note: 'دفعة تجريبية',
+        createdAt: '2026-08-23T10:15:00.000Z',
+      },
+    ]
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <AccountStatement account={linkedAccounts[0]} accounts={linkedAccounts} movements={movements} onClose={() => {}} />,
+    ))
+
+    expect(markup).toContain('adreem-statement-head')
+    expect(markup).toContain('adreem-statement-summary')
+    expect(markup).toContain('adreem-statement-column-head')
+    expect(markup).toContain('adreem-statement-row-value')
+    expect(markup).toContain('دفعة تجريبية')
+    expect(markup).toContain('750')
+    expect(markup).toContain('طباعة')
   })
 })
 
