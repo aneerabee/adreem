@@ -1770,7 +1770,7 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
       transition={UI_MOTION_TRANSITION}
-      className={['adreem-counterparty-card', `is-${tone}`, 'is-balances-view', isFocused && 'is-focused', isDimmed && 'is-dimmed'].filter(Boolean).join(' ')}
+      className={['adreem-counterparty-card', `is-${tone}`, 'is-balances-view', previewRows.length ? 'has-balances' : 'is-settled', isFocused && 'is-focused', isDimmed && 'is-dimmed'].filter(Boolean).join(' ')}
       data-counterparty-id={group.id}
     >
       <button type="button" className="adreem-counterparty-focus" aria-expanded={isFocused} onClick={() => onFocus?.(group.id)}>

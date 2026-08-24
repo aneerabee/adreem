@@ -91,6 +91,17 @@ describe('mobile form sizing', () => {
     expect(ledgerSource).toContain("aria-pressed={isPinned}")
   })
 
+  it('uses one full-width people row with clearer account values on every screen', () => {
+    expect(financeStylesheet).toContain('.adreem-counterparty-grid {')
+    expect(financeStylesheet).toContain('grid-template-columns: minmax(0, 1fr);')
+    expect(financeStylesheet).toContain('grid-template-columns: minmax(190px, 0.62fr) minmax(0, 1.38fr);')
+    expect(financeStylesheet).toContain('grid-template-areas: "icon label value";')
+    expect(financeStylesheet).toContain('.adreem-counterparty-channel > b { grid-area: value;')
+    expect(financeStylesheet).toContain('font-size: 0.86rem;')
+    expect(financeStylesheet).toContain('.adreem-counterparty-card { grid-template-columns: minmax(0, 1fr); }')
+    expect(financeStylesheet).toContain('.adreem-counterparty-channel-preview { grid-column: 1; grid-template-columns: minmax(0, 1fr);')
+  })
+
   it('uses a consistent control size scale on desktop and touch screens', () => {
     expect(financeStylesheet).toContain('--finance-control-compact: 32px;')
     expect(financeStylesheet).toContain('--finance-control: 40px;')

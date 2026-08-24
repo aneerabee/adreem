@@ -1259,6 +1259,7 @@ describe('LedgerApp people account views', () => {
     const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} />))
 
     expect(markup).toContain('is-balances-view')
+    expect(markup).toContain('has-balances')
     expect(markup).toContain('adreem-counterparty-channel-preview')
     expect(markup).toContain('is-cash-dinar is-positive')
     expect(markup).toContain('is-cheque-dinar is-negative')
@@ -1331,8 +1332,8 @@ describe('LedgerApp people account views', () => {
     ))
 
     expect(markup).toContain('adreem-counterparty-list has-focus')
-    expect(markup).toContain('is-mixed is-balances-view is-focused')
-    expect(markup).toContain('is-receivable is-balances-view is-dimmed')
+    expect(markup).toContain('is-mixed is-balances-view has-balances is-focused')
+    expect(markup).toContain('is-receivable is-balances-view has-balances is-dimmed')
     expect(markup).toContain('aria-expanded="true"')
     expect(markup.match(/adreem-counterparty-channel-preview/g)).toHaveLength(1)
     expect(markup.match(/adreem-counterparty-channels/g)).toHaveLength(1)
