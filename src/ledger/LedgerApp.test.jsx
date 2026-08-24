@@ -55,6 +55,7 @@ import {
   mergeMovementPageAttachments,
   mergeReviewMovementPage,
   money,
+  netContributionDisplayValues,
   movementStatusLabel,
   previewMovementEdit,
   movementChangedWhileOpen,
@@ -182,7 +183,7 @@ describe('LedgerApp account statements', () => {
     expect(statement.totals[CURRENCIES.TRY]).toEqual({ incoming: 0, outgoing: 300, balance: -300 })
   })
 
-  it('renders a compact statement with dates, notes, running balances, and print controls', () => {
+  it('renders a recipient-safe statement with only dates, notes, values, and print controls', () => {
     const movements = [
       {
         id: 'statement-row',
@@ -204,10 +205,18 @@ describe('LedgerApp account statements', () => {
     expect(markup).toContain('adreem-statement-head')
     expect(markup).toContain('adreem-statement-summary')
     expect(markup).toContain('adreem-statement-column-head')
+    expect(markup).toContain('التاريخ')
+    expect(markup).toContain('الملاحظة')
+    expect(markup).toContain('القيمة')
     expect(markup).toContain('adreem-statement-row-value')
+    expect(markup).toContain('adreem-statement-row-note')
     expect(markup).toContain('دفعة تجريبية')
     expect(markup).toContain('750')
     expect(markup).toContain('طباعة')
+    expect(markup).not.toContain('adreem-statement-route')
+    expect(markup).not.toContain('adreem-statement-row-title')
+    expect(markup).not.toContain('إدريس')
+    expect(markup).not.toContain('الحركة والرصيد')
   })
 })
 
@@ -232,6 +241,16 @@ describe('LedgerApp recurring movement binding', () => {
 })
 
 describe('LedgerApp net position controls', () => {
+  it('shows only currencies that actually contribute to each account', () => {
+    expect(netContributionDisplayValues({ dinar: 0, usd: -450, try: 0 })).toEqual([
+      { currency: CURRENCIES.USD, amount: -450 },
+    ])
+    expect(netContributionDisplayValues({ dinar: 1_200, usd: 80, try: 0 })).toEqual([
+      { currency: CURRENCIES.DINAR, amount: 1_200 },
+      { currency: CURRENCIES.USD, amount: 80 },
+    ])
+  })
+
   it('reveals raw currencies, the converted result, and every included account', () => {
     const markup = stripUiDataProtection(renderToStaticMarkup(
       <NetPositionPanel

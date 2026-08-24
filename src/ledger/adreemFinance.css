@@ -135,39 +135,28 @@
 .adreem-statement-currencies { display: flex; gap: 4px; }
 .adreem-statement-currencies button { min-width: 54px; min-height: 30px; padding: 4px 9px; border: 1px solid var(--statement-line); border-radius: 6px; background: var(--finance-surface); color: var(--finance-muted); font-size: .64rem; font-weight: 820; }
 .adreem-statement-currencies button.is-active { border-color: var(--finance-charcoal); background: var(--finance-charcoal); color: #fff; box-shadow: 0 3px 10px color-mix(in srgb, var(--finance-charcoal) 20%, transparent); }
-.adreem-statement-summary { display: grid; gap: 4px; }
-.adreem-statement-summary article { min-width: 0; display: grid; grid-template-columns: 48px repeat(3, minmax(0, 1fr)); align-items: stretch; overflow: hidden; border: 1px solid var(--statement-line); border-radius: 7px; background: var(--finance-paper); }
+.adreem-statement-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 4px; }
+.adreem-statement-summary article { min-width: 0; display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: stretch; overflow: hidden; border: 1px solid var(--statement-line); border-radius: 7px; background: var(--finance-paper); }
 .adreem-statement-summary article > strong { display: grid; place-items: center; padding: 6px; border-inline-end: 1px solid var(--statement-line); background: var(--finance-charcoal-soft); color: var(--finance-charcoal-dark); font-size: .68rem; }
 .adreem-statement-summary article > span { min-width: 0; display: grid; align-content: center; gap: 1px; padding: 5px 7px; border-inline-end: 1px solid var(--statement-line); }
 .adreem-statement-summary article > span:last-child { border-inline-end: 0; }
 .adreem-statement-summary article small { color: var(--finance-muted); font-size: .53rem; font-weight: 760; }
 .adreem-statement-summary article b { overflow: hidden; color: var(--finance-ink); font-size: .67rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-statement-summary .is-in b { color: var(--finance-green); }
-.adreem-statement-summary .is-out b { color: var(--finance-debt); }
 .adreem-statement-summary article.is-positive .is-balance b { color: var(--finance-green); }
 .adreem-statement-summary article.is-negative .is-balance b { color: var(--finance-debt); }
-.adreem-statement-column-head { display: grid; grid-template-columns: 78px minmax(0, 1fr) 126px; gap: 7px; padding: 0 8px; color: var(--finance-muted); font-size: .52rem; font-weight: 800; }
+.adreem-statement-column-head { display: grid; grid-template-columns: 82px minmax(0, 1fr) 118px; gap: 8px; padding: 0 9px; color: var(--finance-muted); font-size: .52rem; font-weight: 800; }
 .adreem-statement-column-head span:last-child { text-align: end; }
 .adreem-statement-list { display: grid; align-content: start; max-height: min(430px, 52vh); overflow-y: auto; border: 1px solid var(--statement-line); border-radius: 7px; background: var(--finance-paper); overscroll-behavior: contain; scrollbar-gutter: stable; }
-.adreem-statement-list > article { --statement-row-tone: var(--finance-charcoal); min-width: 0; display: grid; grid-template-columns: 78px minmax(0, 1fr) 126px; gap: 7px; align-items: center; padding: 6px 8px; border-inline-start: 3px solid var(--statement-row-tone); border-bottom: 1px solid var(--statement-line); background: var(--finance-paper); }
+.adreem-statement-list > article { --statement-row-tone: var(--finance-charcoal); min-width: 0; min-height: 42px; display: grid; grid-template-columns: 82px minmax(0, 1fr) 118px; gap: 8px; align-items: center; padding: 7px 9px; border-inline-start: 3px solid var(--statement-row-tone); border-bottom: 1px solid var(--statement-line); background: var(--finance-paper); }
 .adreem-statement-list > article:last-of-type { border-bottom: 0; }
 .adreem-statement-list > article.is-positive { --statement-row-tone: var(--finance-green); }
 .adreem-statement-list > article.is-negative { --statement-row-tone: var(--finance-debt); }
-.adreem-statement-list time { min-width: 0; display: grid; gap: 1px; color: var(--finance-muted); font-variant-numeric: tabular-nums; }
+.adreem-statement-list time { min-width: 0; display: block; color: var(--finance-muted); font-variant-numeric: tabular-nums; }
 .adreem-statement-list time strong { color: var(--finance-ink); font-size: .61rem; }
-.adreem-statement-list time small { font-size: .54rem; }
-.adreem-statement-row-copy { min-width: 0; display: grid; gap: 2px; }
-.adreem-statement-row-copy > small { overflow: hidden; color: var(--finance-muted); font-size: .58rem; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-statement-row-title { min-width: 0; display: flex; align-items: center; gap: 5px; }
-.adreem-statement-row-title strong { overflow: hidden; color: var(--finance-ink); font-size: .67rem; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-statement-row-title b { flex: 0 0 auto; padding: 1px 4px; border-radius: 4px; background: var(--finance-surface); color: var(--finance-muted); font-size: .49rem; }
-.adreem-statement-route { min-width: 0; display: flex; align-items: center; gap: 3px; overflow: hidden; color: var(--finance-muted); font-size: .56rem; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-statement-route small { color: var(--statement-row-tone); font-size: .5rem; font-weight: 820; }
-.adreem-statement-route i { color: var(--statement-row-tone); font-size: .57rem; font-style: normal; }
-.adreem-statement-row-value { min-width: 0; display: grid; justify-items: end; gap: 2px; text-align: end; }
+.adreem-statement-row-note { min-width: 0; margin: 0; overflow-wrap: anywhere; color: var(--finance-ink); font-size: .64rem; line-height: 1.35; }
+.adreem-statement-row-note.is-empty { color: var(--finance-muted); }
+.adreem-statement-row-value { min-width: 0; display: grid; justify-items: end; text-align: end; }
 .adreem-statement-row-value > strong { color: var(--statement-row-tone); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.adreem-statement-row-value > small { min-width: 0; display: flex; align-items: baseline; justify-content: flex-end; gap: 3px; color: var(--finance-muted); font-size: .51rem; white-space: nowrap; }
-.adreem-statement-row-value > small b { overflow: hidden; color: var(--finance-ink); font-size: .57rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; }
 .adreem-statement-error { margin: 0; padding: 7px 9px; border-inline-start: 3px solid var(--finance-debt); background: var(--finance-debt-soft); color: var(--finance-debt-dark); font-size: .63rem; font-weight: 760; }
 .adreem-statement-more { justify-self: center; min-height: 32px; padding: 5px 12px; border: 1px solid var(--statement-line); border-radius: 6px; background: var(--finance-paper); color: var(--finance-ink); font-size: .63rem; font-weight: 800; }
 .adreem-statement-print-foot { display: none; }
@@ -181,17 +170,16 @@
   .adreem-statement-title p { max-width: 215px; }
   .adreem-statement-actions button { width: 32px; min-height: 32px; padding: 0; font-size: 0; }
   .adreem-statement-currencies button { flex: 1; min-width: 0; }
-  .adreem-statement-summary article { grid-template-columns: 39px repeat(3, minmax(0, 1fr)); }
+  .adreem-statement-summary article { grid-template-columns: 39px minmax(0, 1fr); }
   .adreem-statement-summary article > strong { padding: 4px; font-size: .6rem; }
   .adreem-statement-summary article > span { padding: 4px 5px; }
   .adreem-statement-summary article b { font-size: .59rem; }
   .adreem-statement-column-head { display: none; }
   .adreem-statement-list { max-height: min(46vh, 380px); scrollbar-gutter: auto; }
-  .adreem-statement-list > article { grid-template-columns: 55px minmax(0, 1fr) 94px; gap: 5px; padding: 6px 5px; }
+  .adreem-statement-list > article { grid-template-columns: 64px minmax(0, 1fr) 90px; gap: 5px; padding: 7px 6px; }
   .adreem-statement-list time strong { font-size: .54rem; }
-  .adreem-statement-route { font-size: .52rem; }
+  .adreem-statement-row-note { font-size: .6rem; }
   .adreem-statement-row-value > strong { font-size: .64rem; }
-  .adreem-statement-row-value > small span { display: none; }
 }
 
 @media print {
@@ -220,22 +208,18 @@
   .adreem-statement-more,
   .adreem-statement > .ml3-empty { display: none !important; }
   .adreem-statement-summary { gap: 1.5mm; break-inside: avoid; }
-  .adreem-statement-summary article { grid-template-columns: 15mm repeat(3, minmax(0, 1fr)); border-color: #cfd2d6 !important; }
+  .adreem-statement-summary article { grid-template-columns: 15mm minmax(0, 1fr); border-color: #cfd2d6 !important; }
   .adreem-statement-summary article > strong { background: #eef0f2 !important; color: #2f3338 !important; }
   .adreem-statement-summary article > span { border-color: #cfd2d6 !important; }
   .adreem-statement-summary article small { font-size: 7pt; }
   .adreem-statement-summary article b { color: #20242a !important; font-size: 8pt; }
-  .adreem-statement-column-head { grid-template-columns: 25mm minmax(0, 1fr) 38mm; padding: 0 2mm; color: #555b62 !important; font-size: 7pt; }
+  .adreem-statement-column-head { grid-template-columns: 25mm minmax(0, 1fr) 34mm; padding: 0 2mm; color: #555b62 !important; font-size: 7pt; }
   .adreem-statement-list { max-height: none !important; overflow: visible !important; border-color: #cfd2d6 !important; border-radius: 0 !important; scrollbar-gutter: auto; }
-  .adreem-statement-list > article { grid-template-columns: 25mm minmax(0, 1fr) 38mm; gap: 2mm; padding: 2mm; border-color: #e3e5e8 !important; break-inside: avoid; }
-  .adreem-statement-list time strong,
-  .adreem-statement-row-title strong { color: #20242a !important; font-size: 8pt; }
-  .adreem-statement-list time small,
-  .adreem-statement-row-copy > small,
-  .adreem-statement-route { color: #555b62 !important; font-size: 7pt; }
+  .adreem-statement-list > article { grid-template-columns: 25mm minmax(0, 1fr) 34mm; gap: 2mm; padding: 2mm; border-color: #e3e5e8 !important; break-inside: avoid; }
+  .adreem-statement-list time strong { color: #20242a !important; font-size: 8pt; }
+  .adreem-statement-row-note { color: #20242a !important; font-size: 8pt; }
+  .adreem-statement-row-note.is-empty { color: #555b62 !important; }
   .adreem-statement-row-value > strong { color: var(--statement-row-tone) !important; font-size: 8.5pt; }
-  .adreem-statement-row-value > small { color: #555b62 !important; font-size: 7pt; }
-  .adreem-statement-row-value > small b { color: #20242a !important; font-size: 7pt; }
   .adreem-statement-print-foot { display: flex !important; justify-content: space-between; gap: 10mm; padding-top: 3mm; border-top: 1px solid #cfd2d6; color: #6c7177; font-size: 7pt; break-inside: avoid; }
   .adreem-statement-print-foot strong { color: #2f3338; }
 }
@@ -313,7 +297,7 @@
   text-align: start;
   box-shadow: var(--finance-shadow-small);
   animation: none;
-  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1), background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1), transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ml3-balance-ledger button.has-wide-balance { grid-column: span 2; }
@@ -336,15 +320,25 @@
 .ml3-balance-ledger button.is-positive { --summary-tone: var(--finance-green); --summary-ink: var(--finance-green-dark); --summary-soft: var(--finance-green-soft); }
 .ml3-balance-ledger button.is-negative { --summary-tone: var(--finance-debt); --summary-ink: var(--finance-debt-dark); --summary-soft: var(--finance-debt-soft); }
 
-.ml3-balance-ledger button:hover,
 .ml3-balance-ledger button[aria-pressed="true"] {
   border-color: color-mix(in srgb, var(--summary-tone) 52%, var(--finance-line));
   background: color-mix(in srgb, var(--summary-soft) 44%, white);
   box-shadow: 0 10px 24px color-mix(in srgb, var(--summary-tone) 12%, transparent);
-  transform: translateY(-1px);
+  transform: none;
 }
 
-.ml3-balance-ledger button:active { transform: translateY(0); }
+.ml3-balance-ledger button:active { transform: scale(0.995); }
+
+@media (hover: hover) {
+  .ml3-balance-ledger button:hover {
+    border-color: color-mix(in srgb, var(--summary-tone) 42%, var(--finance-line));
+    background: color-mix(in srgb, var(--summary-soft) 32%, white);
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--summary-tone) 10%, transparent);
+    transform: none;
+  }
+
+  .ml3-balance-ledger button:hover > i { transform: translateY(-1px); }
+}
 
 .ml3-balance-ledger button > i {
   width: 36px;
@@ -359,7 +353,6 @@
   transition: transform 180ms ease, background-color 180ms ease;
 }
 
-.ml3-balance-ledger button:hover > i { transform: translateY(-1px); }
 .ml3-balance-ledger button > span { min-width: 0; display: grid; gap: 5px; }
 .ml3-balance-ledger button > span > b {
   overflow: hidden;
@@ -609,7 +602,7 @@
 .adreem-net-account-tools label { min-width: 0; height: 36px; display: grid; grid-template-columns: 17px minmax(0, 1fr); align-items: center; gap: 5px; padding-inline: 8px; border: 1px solid #d8d1e4; border-radius: 6px; background: white; color: #766a89; }
 .adreem-net-account-tools input { min-width: 0; height: 32px; border: 0; outline: 0; background: transparent; color: var(--finance-ink); font: inherit; font-size: 1rem; }
 .adreem-net-account-tools > button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding-inline: 9px; border: 1px solid #efb6b6; border-radius: 6px; background: #fff7f7; color: #b42323; font-size: 0.61rem; font-weight: 820; }
-.adreem-net-account-list { min-width: 0; max-height: min(280px, 42vh); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 4px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.adreem-net-account-list { min-width: 0; max-height: min(280px, 42vh); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 4px; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 6px; scrollbar-gutter: stable; }
 .adreem-net-account-list > button { min-width: 0; min-height: 45px; display: grid; grid-template-columns: 19px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid #e1dce9; border-radius: 6px; background: white; color: var(--finance-ink); text-align: start; transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease; }
 .adreem-net-account-list > button:hover { border-color: #bdb3cc; box-shadow: 0 3px 10px rgba(50, 39, 67, 0.07); }
 .adreem-net-account-list > button.is-excluded { border-color: #e7a3a3; background: #fff4f4; box-shadow: inset 3px 0 0 #d32f2f; }
@@ -622,9 +615,12 @@
 .adreem-net-account-copy small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-net-account-copy strong { font-size: 0.64rem; }
 .adreem-net-account-copy small { color: var(--finance-muted); font-size: 0.53rem; }
-.adreem-net-account-values { min-width: 0; display: grid; justify-items: end; gap: 1px; font-variant-numeric: tabular-nums; }
-.adreem-net-account-values strong { color: var(--finance-ink); font-size: 0.62rem; white-space: nowrap; }
-.adreem-net-account-values small { color: var(--finance-muted); font-size: 0.54rem; white-space: nowrap; }
+.adreem-net-account-values { min-width: 0; display: grid; justify-items: end; gap: 2px; direction: ltr; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.adreem-net-account-values > span { min-width: 0; display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 3px; padding: 2px 5px; border-radius: 4px; background: var(--finance-neutral-soft); color: var(--finance-charcoal-dark); white-space: nowrap; }
+.adreem-net-account-values > span.is-positive { color: var(--finance-green-dark); }
+.adreem-net-account-values > span.is-negative { background: var(--finance-debt-soft); color: var(--finance-debt-dark); }
+.adreem-net-account-values b { overflow: hidden; font-size: 0.64rem; text-overflow: ellipsis; }
+.adreem-net-account-values small { color: currentColor; font-size: 0.49rem; font-weight: 780; opacity: 0.72; }
 .adreem-net-account-list > button.is-excluded .adreem-net-account-copy,
 .adreem-net-account-list > button.is-excluded .adreem-net-account-values { opacity: 0.7; }
 .adreem-net-account-list > .ml3-empty { grid-column: 1 / -1; margin: 0; padding: 10px; }
@@ -800,12 +796,13 @@
 .ml3-account-switcher button:hover { background: color-mix(in srgb, var(--group-soft) 55%, transparent); color: var(--group-tone); }
 
 .ml3-balance-pane {
+  position: relative;
   min-width: 0;
   overflow: hidden;
   background: var(--finance-paper);
 }
 
-.adreem-balance-pane-motion { min-width: 0; min-height: 100%; padding: 12px; }
+.adreem-balance-pane-motion { min-width: 0; min-height: 100%; padding: 12px; will-change: transform, opacity; }
 .ml3-balance-pane-head {
   min-width: 0;
   display: grid;
@@ -1564,13 +1561,23 @@
   .ml3-account-switcher button > svg { width: 16px; height: 16px; }
   .ml3-account-switcher button > strong { max-width: 100%; font-size: 0.59rem; }
   .ml3-account-switcher button > span { position: absolute; z-index: 2; inset-block-start: 3px; inset-inline-end: 4px; font-size: 0.53rem; }
-  .adreem-net-panel { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px; overflow: hidden; }
+  .adreem-net-panel { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px; overflow: visible; }
   .adreem-net-panel > header,
   .adreem-net-accounts { grid-column: 1; }
   .adreem-net-calc { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adreem-net-target,
   .adreem-net-calc output { width: 100%; grid-column: 1 / -1; }
   .adreem-net-panel > header > button { width: 38px; height: 38px; min-height: 38px; }
+  .adreem-net-account-editor { min-height: 0; }
+  .adreem-net-account-list {
+    max-height: min(360px, 46dvh);
+    padding-block-end: calc(68px + env(safe-area-inset-bottom));
+    scroll-padding-block-end: calc(68px + env(safe-area-inset-bottom));
+    scrollbar-gutter: auto;
+  }
+  .adreem-net-account-values { max-width: min(42vw, 138px); }
+  .adreem-net-account-values > span { max-width: 100%; }
+  .adreem-net-account-values b { max-width: 96px; }
   .adreem-balance-pane-motion { padding: 8px; }
   .ml3-balance-pane-head { grid-template-columns: minmax(0, 1fr) minmax(132px, 45%); gap: 6px; margin-bottom: 7px; padding-bottom: 7px; }
   .ml3-balance-pane-head.is-search-only { grid-template-columns: minmax(0, 1fr); }
@@ -1688,7 +1695,7 @@
   .ml3-balances-surface .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(88px, auto); }
   .ml3-number-entry { grid-template-columns: minmax(96px, 0.5fr) minmax(0, 1.5fr); }
   .ml3-number-display { min-height: 131px; }
-  .adreem-net-account-list { max-height: min(320px, 46dvh); grid-template-columns: 1fr; scrollbar-gutter: auto; }
+  .adreem-net-account-list { max-height: min(360px, 46dvh); grid-template-columns: 1fr; }
 }
 
 @media (max-width: 340px) {

@@ -50,6 +50,17 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).not.toContain('.adreem-net-calc { grid-template-columns: minmax(80px, 0.8fr) minmax(92px, auto) minmax(105px, 1fr); }')
     expect(financeStylesheet).toContain('grid-template-areas: "opening-label opening-value" "opening-direction opening-direction";')
     expect(financeStylesheet).toContain('.adreem-counterparty-opening > header strong { overflow: visible;')
+    expect(financeStylesheet).toContain('padding-block-end: calc(68px + env(safe-area-inset-bottom));')
+    expect(financeStylesheet).toContain('scroll-padding-block-end: calc(68px + env(safe-area-inset-bottom));')
+    expect(financeStylesheet).toContain('.adreem-net-account-values > span.is-negative { background: var(--finance-debt-soft);')
+    expect(financeStylesheet).toContain('.adreem-net-account-values > span.is-positive { color: var(--finance-green-dark);')
+  })
+
+  it('keeps balance cards stationary while their content changes smoothly', () => {
+    expect(financeStylesheet).toContain('.ml3-balance-ledger button[aria-pressed="true"] {')
+    expect(financeStylesheet).toContain('transform: none;')
+    expect(financeStylesheet).toContain('@media (hover: hover) {')
+    expect(financeStylesheet).toContain('.adreem-balance-pane-motion { min-width: 0; min-height: 100%; padding: 12px; will-change: transform, opacity; }')
   })
 
   it('uses a consistent control size scale on desktop and touch screens', () => {
