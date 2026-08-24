@@ -42,10 +42,9 @@ const FLOW_STAGE_MOTION = Object.freeze({
   transition: UI_MOTION_TRANSITION,
 })
 const BALANCE_PANE_MOTION = Object.freeze({
-  initial: { opacity: 0, scale: 0.997 },
-  animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 0.997 },
-  transition: { duration: 0.16, ease: [0.22, 1, 0.36, 1] },
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  transition: { duration: 0.12, ease: 'easeOut' },
 })
 const COUNTERPARTY_BALANCE_FILTERS = Object.freeze([
   { key: 'all', label: 'الكل', icon: SlidersHorizontal },
@@ -85,20 +84,6 @@ function scrollLedgerToTop(behavior = 'auto') {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
   document.querySelector('.adreem-view')?.scrollTo({ top: 0, left: 0, behavior })
   window.scrollTo({ top: 0, left: 0, behavior })
-}
-
-function scrollToBalancesWorkspace() {
-  if (typeof window === 'undefined' || typeof document === 'undefined') return
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-      document.querySelector('.ml3-balances-workspace')?.scrollIntoView({
-        block: 'nearest',
-        inline: 'nearest',
-        behavior: reducedMotion ? 'auto' : 'smooth',
-      })
-    })
-  })
 }
 
 function LedgerOverlayPortal({ children }) {
@@ -1257,7 +1242,7 @@ export function NetPositionPanel({
         <NumericEntry compact label="1 USD = ? LYD" value={rate} onChange={onRateChange} placeholder="0" allowDecimal />
         <NumericEntry compact label="1 USD = ? TRY" value={tryRate} onChange={onTryRateChange} placeholder="0" allowDecimal />
         <div className="adreem-net-target" aria-label="عملة الصافي">
-          {CURRENCY_OPTIONS.map((option) => <button type="button" key={option.value} className={targetCurrency === option.value ? 'is-active' : ''} onClick={() => onTargetCurrencyChange(option.value)}>{option.label}</button>)}
+          {CURRENCY_OPTIONS.map((option) => <button type="button" key={option.value} className={targetCurrency === option.value ? 'is-active' : ''} aria-pressed={targetCurrency === option.value} onClick={() => onTargetCurrencyChange(option.value)}>{option.label}</button>)}
         </div>
         <output className={conversion.ok && conversion.amount < 0 ? 'is-negative' : ''}>
           <small>النتيجة</small>
@@ -1312,7 +1297,7 @@ function separateRecordDirectionLabel(direction) {
   return separateRecordDirectionOptions.find((option) => option.value === normalizeSeparateRecordDirection(direction))?.label || 'معلومة'
 }
 
-export function SeparateLedgerPanel({ records, names, totals, query, draft, editorOpen, editingId, isSaving, hasMore, isLoadingMore, onQueryChange, onDraftChange, onOpenEditor, onCloseEditor, onSave, onEdit, onVoid, onLoadMore }) {
+export function SeparateLedgerPanel({ records, names, totals, query, draft, editorOpen, editingId, isSaving, hasMore, isLoadingMore, showSearch = true, onQueryChange, onDraftChange, onOpenEditor, onCloseEditor, onSave, onEdit, onVoid, onLoadMore }) {
   const normalizedDraftName = normalizeSeparateRecordName(draft.relatedName).toLocaleLowerCase('ar')
   const dinarTotals = totals[CURRENCIES.DINAR] || { receivable: 0, payable: 0 }
   const usdTotals = totals[CURRENCIES.USD] || { receivable: 0, payable: 0 }
@@ -1327,8 +1312,8 @@ export function SeparateLedgerPanel({ records, names, totals, query, draft, edit
         <span className="is-negative"><ArrowUpFromLine aria-hidden="true" size={16} /><small>عليّ</small><strong>{money(dinarTotals.payable)}</strong><b>{money(usdTotals.payable, CURRENCIES.USD)}</b>{tryTotals.payable ? <b>{money(tryTotals.payable, CURRENCIES.TRY)}</b> : null}</span>
       </div>
 
-      <div className="adreem-separate-toolbar">
-        <SearchField value={query} onChange={onQueryChange} placeholder="اسم أو ملاحظة" ariaLabel="بحث في السجل المنفصل" />
+      <div className={`adreem-separate-toolbar${showSearch ? '' : ' is-action-only'}`}>
+        {showSearch ? <SearchField value={query} onChange={onQueryChange} placeholder="اسم أو ملاحظة" ariaLabel="بحث في السجل المنفصل" /> : null}
         <button type="button" className="adreem-separate-add" onClick={editorOpen ? onCloseEditor : onOpenEditor}>
           {editorOpen ? <X aria-hidden="true" size={16} /> : <Plus aria-hidden="true" size={16} />}
           {editorOpen ? 'إغلاق' : 'حساب جديد'}
@@ -1851,7 +1836,6 @@ function CounterpartyFilters({ groups = [], options = COUNTERPARTY_BALANCE_FILTE
         const selected = value === option.key
         return (
           <button type="button" key={option.key} className={`is-${option.key}`} aria-pressed={selected} onClick={() => onChange?.(option.key)}>
-            {selected ? <Motion.i className="adreem-motion-selection" layoutId="adreem-counterparty-filter" transition={UI_MOTION_TRANSITION} /> : null}
             <Icon aria-hidden="true" size={14} />
             <span>{option.label}</span>
             <b>{formatCount(count)}</b>
@@ -2012,6 +1996,7 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
                     type="button"
                     key={filter.key || 'all'}
                     className={quickFilter === filter.key && !normalizedQuery ? 'is-active' : ''}
+                    aria-pressed={quickFilter === filter.key && !normalizedQuery}
                     onClick={() => {
                       setQuickFilter(filter.key)
                       setQuery('')
@@ -4465,7 +4450,7 @@ export default function LedgerApp() {
     root.classList.remove(...motionClasses)
     root.classList.add(directionClass)
 
-    if (scope === 'section' || typeof document.startViewTransition !== 'function') {
+    if (scope === 'section' || scope === 'mode' || typeof document.startViewTransition !== 'function') {
       root.classList.add('adreem-motion-fallback')
       flushSync(update)
       motionTimerRef.current = window.setTimeout(clearMotion, 240)
@@ -4600,13 +4585,13 @@ export default function LedgerApp() {
   }
 
   function resetTemporaryNet() {
-    setNetExcludedAccountIds([])
-    setNetAccountQuery('')
+    setNetExcludedAccountIds((current) => current.length ? [] : current)
+    setNetAccountQuery((current) => current ? '' : current)
   }
 
   function closeNetPanel() {
     resetTemporaryNet()
-    setIsNetOpen(false)
+    setIsNetOpen((current) => current ? false : current)
   }
 
   function toggleNetPanel() {
@@ -4627,11 +4612,7 @@ export default function LedgerApp() {
   }
 
   function switchSection(section) {
-    if (section === activeSection) {
-      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-      resetSectionScroll(reducedMotion ? 'auto' : 'smooth')
-      return
-    }
+    if (section === activeSection) return
     const currentIndex = sectionOrder.indexOf(activeSection)
     const targetIndex = sectionOrder.indexOf(section)
     commitFlowChange(
@@ -4652,16 +4633,49 @@ export default function LedgerApp() {
     setFocusedCounterpartyId('')
   }
 
+  function handleAccountGroupKeyDown(event) {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const currentIndex = Math.max(0, accountGroupTabs.findIndex((group) => group.key === activeAccountGroup))
+    const forwardKey = uiDirection === 'rtl' ? 'ArrowLeft' : 'ArrowRight'
+    const backwardKey = uiDirection === 'rtl' ? 'ArrowRight' : 'ArrowLeft'
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? accountGroupTabs.length - 1
+        : event.key === forwardKey || event.key === 'ArrowDown'
+          ? (currentIndex + 1) % accountGroupTabs.length
+          : event.key === backwardKey || event.key === 'ArrowUp'
+            ? (currentIndex - 1 + accountGroupTabs.length) % accountGroupTabs.length
+            : currentIndex
+    const nextGroup = accountGroupTabs[nextIndex]
+    selectAccountGroup(nextGroup.key)
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-account-group="${nextGroup.key}"]`)?.focus({ preventScroll: true })
+    })
+  }
+
   function openBalanceFocus(focus) {
     const accountGroup = ['cash', 'bank'].includes(focus) ? 'money' : 'people'
-    if (activeSection !== 'accounts') switchSection('accounts')
-    closeNetPanel()
-    setActiveAccountGroup(accountGroup)
-    setBalanceFocus(focus)
-    setCounterpartyBalanceFilter(['receivable', 'payable'].includes(focus) ? focus : 'all')
-    setAccountQuery('')
-    setFocusedCounterpartyId('')
-    scrollToBalancesWorkspace()
+    const applyFocus = () => {
+      if (isNetOpen || netExcludedAccountIds.length || netAccountQuery) closeNetPanel()
+      setActiveSection('accounts')
+      setActiveAccountGroup(accountGroup)
+      setBalanceFocus(focus)
+      setCounterpartyBalanceFilter(['receivable', 'payable'].includes(focus) ? focus : 'all')
+      setAccountQuery('')
+      setFocusedCounterpartyId('')
+    }
+    if (activeSection !== 'accounts') {
+      const currentIndex = sectionOrder.indexOf(activeSection)
+      const targetIndex = sectionOrder.indexOf('accounts')
+      commitFlowChange(() => {
+        applyFocus()
+        resetSectionScroll('auto')
+      }, targetIndex >= currentIndex ? 'forward' : 'back', 'section')
+      return
+    }
+    applyFocus()
   }
 
   function openExpenseCategoryCreator(context = 'balances') {
@@ -5742,22 +5756,22 @@ export default function LedgerApp() {
     return (
       <section className={`ml3-panel ml3-balances-surface ml3-balances-surface--${activeGroup.key}`}>
         <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة حسب العملة">
-          <Motion.button type="button" className={`is-cash${balanceAmountIsWide(balanceOverview.cash) ? ' has-wide-balance' : ''}`} aria-pressed={activeBalanceFocus === 'cash'} onClick={() => openBalanceFocus('cash')}>
+          <button type="button" className={`is-cash${balanceAmountIsWide(balanceOverview.cash) ? ' has-wide-balance' : ''}`} aria-pressed={activeBalanceFocus === 'cash'} onClick={() => openBalanceFocus('cash')}>
             <i><Banknote aria-hidden="true" size={18} /></i>
             <span><b>الكاش</b><BalanceAmountPair value={balanceOverview.cash} /></span>
-          </Motion.button>
-          <Motion.button type="button" className={`is-bank${balanceAmountIsWide(balanceOverview.bank) ? ' has-wide-balance' : ''}`} aria-pressed={activeBalanceFocus === 'bank'} onClick={() => openBalanceFocus('bank')}>
+          </button>
+          <button type="button" className={`is-bank${balanceAmountIsWide(balanceOverview.bank) ? ' has-wide-balance' : ''}`} aria-pressed={activeBalanceFocus === 'bank'} onClick={() => openBalanceFocus('bank')}>
             <i><Landmark aria-hidden="true" size={18} /></i>
             <span><b>المصرف</b><BalanceAmountPair value={balanceOverview.bank} /></span>
-          </Motion.button>
-          <Motion.button type="button" className={`is-positive${balanceAmountIsWide(balanceOverview.receivable) ? ' has-wide-balance' : ''}`} aria-pressed={activeBalanceFocus === 'receivable'} onClick={() => openBalanceFocus('receivable')}>
+          </button>
+          <button type="button" className={`is-positive${balanceAmountIsWide(balanceOverview.receivable) ? ' has-wide-balance' : ''}`} aria-pressed={activeBalanceFocus === 'receivable'} onClick={() => openBalanceFocus('receivable')}>
             <i><ArrowDownToLine aria-hidden="true" size={18} /></i>
             <span><b>أقبض من الناس</b><BalanceAmountPair value={balanceOverview.receivable} /></span>
-          </Motion.button>
-          <Motion.button type="button" className={`is-negative${balanceAmountIsWide(balanceOverview.payable) ? ' has-wide-balance' : ''}`} aria-pressed={activeBalanceFocus === 'payable'} onClick={() => openBalanceFocus('payable')}>
+          </button>
+          <button type="button" className={`is-negative${balanceAmountIsWide(balanceOverview.payable) ? ' has-wide-balance' : ''}`} aria-pressed={activeBalanceFocus === 'payable'} onClick={() => openBalanceFocus('payable')}>
             <i><ArrowUpFromLine aria-hidden="true" size={18} /></i>
             <span><b>أدفع للناس</b><BalanceAmountPair value={balanceOverview.payable} /></span>
-          </Motion.button>
+          </button>
         </div>
 
         <div className="adreem-net-bar">
@@ -5790,7 +5804,7 @@ export default function LedgerApp() {
         </AnimatePresence>
 
         <div className="ml3-balances-workspace">
-          <div className="ml3-account-switcher" aria-label="أنواع الأرصدة">
+          <div className="ml3-account-switcher" role="tablist" aria-label="أنواع الأرصدة" onKeyDown={handleAccountGroupKeyDown}>
             {accountGroupTabs.map((group) => {
               const groupCount = group.key === 'people'
                 ? visiblePeopleGroups.length
@@ -5798,8 +5812,7 @@ export default function LedgerApp() {
                   ? allSeparateRecords.length
                   : accountRowsByGroup[group.key]?.length || 0
               return (
-                <button type="button" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-current={activeAccountGroup === group.key ? 'true' : undefined} onClick={() => selectAccountGroup(group.key)}>
-                  {activeAccountGroup === group.key ? <Motion.i className="adreem-motion-selection" layoutId="adreem-balance-group" transition={UI_MOTION_TRANSITION} /> : null}
+                <button id={`adreem-balance-tab-${group.key}`} data-account-group={group.key} type="button" role="tab" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-selected={activeAccountGroup === group.key} aria-controls="adreem-balance-panel" tabIndex={activeAccountGroup === group.key ? 0 : -1} onClick={() => selectAccountGroup(group.key)}>
                   <AccountGroupIcon groupKey={group.key} />
                   <strong>{group.label}</strong>
                   <span>{formatCount(groupCount)}</span>
@@ -5807,87 +5820,88 @@ export default function LedgerApp() {
               )
             })}
           </div>
-          <div className="ml3-balance-pane">
-            <AnimatePresence mode="popLayout" initial={false}>
-              <Motion.div layout="position" key={activeGroup.key} className="adreem-balance-pane-motion" {...BALANCE_PANE_MOTION}>
-                {activeGroup.key !== 'separate' || activeBalanceFocus ? (
-                  <div className={`ml3-balance-pane-head ${activeBalanceFocus ? '' : 'is-search-only'}`}>
-                    {activeBalanceFocus ? (
-                      <div className="ml3-balance-pane-title">
-                        <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
-                        <h2>{balancePaneTitle}</h2>
-                        <span>{formatCount(activeGroupCount)}</span>
-                        <button type="button" className="adreem-balance-focus-reset" aria-label="عرض الكل" title="عرض الكل" onClick={() => selectAccountGroup(activeGroup.key)}>
-                          <X aria-hidden="true" size={14} />
-                        </button>
-                      </div>
-                    ) : null}
-                    <SearchField
-                      className="ml3-account-toolbar"
-                      value={accountQuery}
-                      onChange={(value) => {
-                        setAccountQuery(value)
-                        setFocusedCounterpartyId('')
-                      }}
-                      placeholder="اسم الحساب"
-                      ariaLabel="بحث في الأرصدة"
-                    />
-                  </div>
-                ) : null}
+          <div id="adreem-balance-panel" className="ml3-balance-pane" role="tabpanel" aria-labelledby={`adreem-balance-tab-${activeGroup.key}`}>
+            <Motion.div key={`${activeGroup.key}:${activeBalanceFocus || 'all'}`} className="adreem-balance-pane-motion" {...BALANCE_PANE_MOTION}>
+              <div className="ml3-balance-pane-head">
+                <div className="ml3-balance-pane-title">
+                  <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
+                  <h2>{balancePaneTitle}</h2>
+                  <span>{formatCount(activeGroupCount)}</span>
+                  {activeBalanceFocus ? (
+                    <button type="button" className="adreem-balance-focus-reset" aria-label="عرض الكل" title="عرض الكل" onClick={() => selectAccountGroup(activeGroup.key)}>
+                      <X aria-hidden="true" size={14} />
+                    </button>
+                  ) : null}
+                </div>
+                <SearchField
+                  className="ml3-account-toolbar"
+                  value={activeGroup.key === 'separate' ? separateQuery : accountQuery}
+                  onChange={(value) => {
+                    if (activeGroup.key === 'separate') {
+                      setSeparateQuery(value)
+                      return
+                    }
+                    setAccountQuery(value)
+                    setFocusedCounterpartyId('')
+                  }}
+                  placeholder={activeGroup.key === 'separate' ? 'اسم أو ملاحظة' : 'اسم الحساب'}
+                  ariaLabel={activeGroup.key === 'separate' ? 'بحث في السجل المنفصل' : 'بحث في الأرصدة'}
+                />
+              </div>
 
-                {activeGroup.key === 'separate' ? (
-                  <SeparateLedgerPanel
-                    records={separateRecords}
-                    names={separateNames}
-                    totals={separateTotals}
-                    query={separateQuery}
-                    draft={separateDraft}
-                    editorOpen={isSeparateEditorOpen}
-                    editingId={editingSeparateRecordId}
-                    isSaving={isSavingSeparateRecord}
-                    hasMore={Boolean(separatePage?.hasMore)}
-                    isLoadingMore={isLoadingSeparateRecords}
-                    onQueryChange={setSeparateQuery}
-                    onDraftChange={updateSeparateDraft}
-                    onOpenEditor={() => setIsSeparateEditorOpen(true)}
-                    onCloseEditor={closeSeparateEditor}
-                    onSave={saveSeparateRecord}
-                    onEdit={editSeparateRecord}
-                    onVoid={archiveSeparateRecord}
-                    onLoadMore={loadOlderSeparateRecords}
+              {activeGroup.key === 'separate' ? (
+                <SeparateLedgerPanel
+                  records={separateRecords}
+                  names={separateNames}
+                  totals={separateTotals}
+                  query={separateQuery}
+                  draft={separateDraft}
+                  editorOpen={isSeparateEditorOpen}
+                  editingId={editingSeparateRecordId}
+                  isSaving={isSavingSeparateRecord}
+                  showSearch={false}
+                  hasMore={Boolean(separatePage?.hasMore)}
+                  isLoadingMore={isLoadingSeparateRecords}
+                  onQueryChange={setSeparateQuery}
+                  onDraftChange={updateSeparateDraft}
+                  onOpenEditor={() => setIsSeparateEditorOpen(true)}
+                  onCloseEditor={closeSeparateEditor}
+                  onSave={saveSeparateRecord}
+                  onEdit={editSeparateRecord}
+                  onVoid={archiveSeparateRecord}
+                  onLoadMore={loadOlderSeparateRecords}
+                />
+              ) : activeGroup.key === 'people' ? (
+                <>
+                  <div className="adreem-people-controls">
+                    <CounterpartyFilters groups={peopleSource} value={counterpartyBalanceFilter} onChange={(nextFilter) => {
+                      setCounterpartyBalanceFilter(nextFilter)
+                      setBalanceFocus(['receivable', 'payable'].includes(nextFilter) ? nextFilter : '')
+                      setFocusedCounterpartyId('')
+                    }} />
+                  </div>
+                  <CounterpartyList
+                    title="الناس"
+                    groups={visiblePeopleGroups}
+                    focusedId={activeFocusedCounterpartyId}
+                    onFocus={(groupId) => setFocusedCounterpartyId((current) => current === groupId ? '' : groupId)}
+                    onOpen={setSelectedAccountId}
+                    hideHeader
                   />
-                ) : activeGroup.key === 'people' ? (
-                  <>
-                    <div className="adreem-people-controls">
-                      <CounterpartyFilters groups={peopleSource} value={counterpartyBalanceFilter} onChange={(nextFilter) => {
-                        setCounterpartyBalanceFilter(nextFilter)
-                        setBalanceFocus(['receivable', 'payable'].includes(nextFilter) ? nextFilter : '')
-                        setFocusedCounterpartyId('')
-                      }} />
-                    </div>
-                    <CounterpartyList
-                      title="الناس"
-                      groups={visiblePeopleGroups}
-                      focusedId={activeFocusedCounterpartyId}
-                      onFocus={(groupId) => setFocusedCounterpartyId((current) => current === groupId ? '' : groupId)}
-                      onOpen={setSelectedAccountId}
-                      hideHeader
-                    />
-                  </>
-                ) : activeGroup.key === 'money' ? (
-                  <AccountList title="فلوسي" rows={rows} onOpen={setSelectedAccountId} embedded tone="money" compactValues hideHeader />
-                ) : activeGroup.key === 'expenses' ? (
-                  <>
-                    <div className="adreem-expense-toolbar">
-                      <button type="button" aria-label="إدارة تصنيفات المصروف" onClick={() => openExpenseCategoryCreator('balances')}><Plus aria-hidden="true" size={14} /> تصنيف جديد</button>
-                    </div>
-                    <ExpenseReportList rows={rows} onOpen={setSelectedAccountId} />
-                  </>
-                ) : (
-                  <AccountList title={activeGroup.title} rows={rows} onOpen={setSelectedAccountId} embedded tone={activeGroup.key} compactValues hideHeader />
-                )}
-              </Motion.div>
-            </AnimatePresence>
+                </>
+              ) : activeGroup.key === 'money' ? (
+                <AccountList title="فلوسي" rows={rows} onOpen={setSelectedAccountId} embedded tone="money" compactValues hideHeader />
+              ) : activeGroup.key === 'expenses' ? (
+                <>
+                  <div className="adreem-expense-toolbar">
+                    <button type="button" aria-label="إدارة تصنيفات المصروف" onClick={() => openExpenseCategoryCreator('balances')}><Plus aria-hidden="true" size={14} /> تصنيف جديد</button>
+                  </div>
+                  <ExpenseReportList rows={rows} onOpen={setSelectedAccountId} />
+                </>
+              ) : (
+                <AccountList title={activeGroup.title} rows={rows} onOpen={setSelectedAccountId} embedded tone={activeGroup.key} compactValues hideHeader />
+              )}
+            </Motion.div>
           </div>
         </div>
       </section>
@@ -5907,7 +5921,7 @@ export default function LedgerApp() {
             <div className="ml3-review-queue" aria-label="قائمة المراجعة">
               {reviewItems.length === 0 && !isLoadingReview ? <p className="ml3-empty">لا شيء</p> : null}
               {reviewItems.map((item, index) => (
-                <button type="button" key={item.key} className={`ml3-review-ticket ml3-review-ticket--${item.tone} ${activeReviewItem?.key === item.key ? 'is-active' : ''}`} onClick={() => setActiveReviewKey(item.key)}>
+                <button type="button" key={item.key} className={`ml3-review-ticket ml3-review-ticket--${item.tone} ${activeReviewItem?.key === item.key ? 'is-active' : ''}`} aria-pressed={activeReviewItem?.key === item.key} onClick={() => setActiveReviewKey(item.key)}>
                   <span>{formatCount(index + 1)}</span>
                   <strong>{item.type === 'movement' ? item.label : preserveUiData(item.label)}</strong>
                   <b>{item.detail}</b>
@@ -6184,12 +6198,10 @@ export default function LedgerApp() {
           <aside className={`adreem-entry adreem-desk-entry adreem-entry--${activeEntryMode}`}>
             <div className={`ml3-entry-mode is-${activeEntryMode}`} role="tablist" aria-label="نوع الإضافة" onKeyDown={handleEntryModeKeyDown}>
               <button id="adreem-entry-movement-tab" data-entry-mode="movement" type="button" role="tab" aria-selected={activeEntryMode === 'movement'} aria-controls="adreem-entry-movement-panel" tabIndex={activeEntryMode === 'movement' ? 0 : -1} className={activeEntryMode === 'movement' ? 'is-active' : ''} onClick={() => switchEntryMode('movement')}>
-                {activeEntryMode === 'movement' ? <Motion.i className="adreem-motion-selection" layoutId="adreem-entry-mode" transition={UI_MOTION_TRANSITION} /> : null}
                 <ArrowRightLeft aria-hidden="true" size={17} />
                 <span>حركة</span>
               </button>
               <button id="adreem-entry-account-tab" data-entry-mode="account" type="button" role="tab" aria-selected={activeEntryMode === 'account'} aria-controls="adreem-entry-account-panel" tabIndex={activeEntryMode === 'account' ? 0 : -1} className={activeEntryMode === 'account' ? 'is-active' : ''} onClick={() => switchEntryMode('account')}>
-                {activeEntryMode === 'account' ? <Motion.i className="adreem-motion-selection" layoutId="adreem-entry-mode" transition={UI_MOTION_TRANSITION} /> : null}
                 <WalletCards aria-hidden="true" size={17} />
                 <span>حساب</span>
               </button>
@@ -6544,6 +6556,7 @@ export default function LedgerApp() {
                           type="button"
                           key={option}
                           className={activeAccountDetail === option ? 'is-active' : ''}
+                          aria-pressed={activeAccountDetail === option}
                           onClick={() => {
                             setAccountDraft((current) => ({
                               ...current,
@@ -6564,6 +6577,7 @@ export default function LedgerApp() {
                       <button
                         type="button"
                         className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.DINAR ? 'is-active' : ''}
+                        aria-pressed={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.DINAR}
                         onClick={() => {
                           setAccountDraft((current) => ({
                             ...current,
@@ -6577,6 +6591,7 @@ export default function LedgerApp() {
                       <button
                         type="button"
                         className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 'is-active' : ''}
+                        aria-pressed={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD}
                         onClick={() => {
                           setAccountDraft((current) => ({
                             ...current,
@@ -6590,6 +6605,7 @@ export default function LedgerApp() {
                       <button
                         type="button"
                         className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? 'is-active' : ''}
+                        aria-pressed={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY}
                         onClick={() => {
                           setAccountDraft((current) => ({ ...current, currencyKind: ACCOUNT_CURRENCY_KINDS.TRY }))
                           goToAccountWizardStep(accountNeedsOpeningBalance ? ACCOUNT_WIZARD_STEPS.OPENING : ACCOUNT_WIZARD_STEPS.SAVE)

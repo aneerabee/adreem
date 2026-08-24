@@ -149,19 +149,21 @@ describe('ADREEM account summary scope', () => {
     })
   })
 
-  it('orders non-zero accounts first and filters by account name or detail', () => {
+  it('groups net accounts by kind and name without using their amounts for order', () => {
     const contributions = [
       { accountId: 'zero', account: { id: 'zero', ownerName: 'صندوق', subAccountName: 'احتياطي', valueKind: VALUE_KINDS.CASH, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }, dinar: 0, usd: 0 },
       { accountId: 'nader', account: { id: 'nader', ownerName: 'NADER', subAccountName: 'كاش بيننا', valueKind: VALUE_KINDS.RECEIVABLE, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }, dinar: 450, usd: 0 },
       { accountId: 'bank', account: { id: 'bank', ownerName: 'مصرف الجمهورية', subAccountName: 'حساب رئيسي', valueKind: VALUE_KINDS.BANK, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }, dinar: 1_000, usd: 0 },
+      { accountId: 'cash-zulu', account: { id: 'cash-zulu', ownerName: 'Zulu', subAccountName: 'Cash', valueKind: VALUE_KINDS.CASH, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }, dinar: 999_999, usd: 0 },
+      { accountId: 'cash-alpha', account: { id: 'cash-alpha', ownerName: 'Alpha', subAccountName: 'Cash', valueKind: VALUE_KINDS.CASH, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }, dinar: 1, usd: 0 },
     ]
 
-    expect(filterNetContributions(contributions).map((item) => item.accountId)).toEqual(['bank', 'nader', 'zero'])
-    expect(filterNetContributions(contributions, 'كاش').map((item) => item.accountId)).toEqual(['nader', 'zero'])
+    expect(filterNetContributions(contributions).map((item) => item.accountId)).toEqual(['zero', 'cash-alpha', 'cash-zulu', 'bank', 'nader'])
+    expect(filterNetContributions(contributions, 'كاش').map((item) => item.accountId)).toEqual(['zero', 'cash-alpha', 'cash-zulu', 'nader'])
     expect(filterNetContributions(contributions, 'nader').map((item) => item.accountId)).toEqual(['nader'])
-    expect(filterNetContributions(contributions, 'دولار').map((item) => item.accountId)).toEqual(['nader'])
+    expect(filterNetContributions(contributions, 'دولار').map((item) => item.accountId)).toEqual(['cash-alpha', 'cash-zulu', 'nader'])
     expect(filterNetContributions(contributions, 'مصرف').map((item) => item.accountId)).toEqual(['bank'])
-    expect(filterNetContributions(contributions, 'دينار').map((item) => item.accountId)).toEqual(['bank', 'zero'])
+    expect(filterNetContributions(contributions, 'دينار').map((item) => item.accountId)).toEqual(['zero', 'bank'])
   })
 
   it('converts every net currency through rates quoted against USD', () => {

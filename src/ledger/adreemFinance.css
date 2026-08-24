@@ -224,12 +224,6 @@
   .adreem-statement-print-foot strong { color: #2f3338; }
 }
 
-.adreem-motion-selection {
-  position: absolute;
-  z-index: 0;
-  pointer-events: none;
-}
-
 /* Balance signal strip */
 .ml3-balances-surface {
   --balance-focus: var(--finance-charcoal);
@@ -283,7 +277,7 @@
   isolation: isolate;
   container: balance-summary / inline-size;
   min-width: 0;
-  min-height: var(--finance-summary);
+  height: var(--finance-summary);
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
@@ -297,7 +291,7 @@
   text-align: start;
   box-shadow: var(--finance-shadow-small);
   animation: none;
-  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1), background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1), transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
 }
 
 .ml3-balance-ledger button.has-wide-balance { grid-column: span 2; }
@@ -327,7 +321,11 @@
   transform: none;
 }
 
-.ml3-balance-ledger button:active { transform: scale(0.995); }
+.ml3-balance-ledger button:active {
+  border-color: color-mix(in srgb, var(--summary-tone) 60%, var(--finance-line));
+  background: color-mix(in srgb, var(--summary-soft) 52%, white);
+  transform: none;
+}
 
 @media (hover: hover) {
   .ml3-balance-ledger button:hover {
@@ -336,8 +334,6 @@
     box-shadow: 0 8px 20px color-mix(in srgb, var(--summary-tone) 10%, transparent);
     transform: none;
   }
-
-  .ml3-balance-ledger button:hover > i { transform: translateY(-1px); }
 }
 
 .ml3-balance-ledger button > i {
@@ -350,7 +346,7 @@
   background: var(--summary-soft);
   color: var(--summary-tone);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--summary-tone) 14%, transparent);
-  transition: transform 180ms ease, background-color 180ms ease;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 .ml3-balance-ledger button > span { min-width: 0; display: grid; gap: 5px; }
@@ -455,7 +451,7 @@
   position: relative;
   isolation: isolate;
   min-width: 0;
-  min-height: var(--finance-tab);
+  height: var(--finance-tab);
   display: grid;
   grid-template-columns: 25px minmax(0, 1fr) auto;
   align-items: center;
@@ -468,6 +464,7 @@
   color: var(--finance-muted);
   text-align: start;
   box-shadow: none;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 
 .ml3-account-switcher--money { --group-tone: var(--finance-charcoal); --group-soft: var(--finance-charcoal-soft); }
@@ -669,6 +666,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
 }
+.adreem-separate-toolbar.is-action-only { grid-template-columns: auto; justify-content: end; }
 .adreem-separate-toolbar > label {
   min-width: 0;
   height: 38px;
@@ -777,14 +775,6 @@
   .ml3-recurring-day { grid-template-columns: 1fr; }
 }
 
-.ml3-account-switcher button .adreem-motion-selection {
-  inset: 0;
-  border-radius: 7px;
-  background: var(--finance-paper);
-  box-shadow: inset 3px 0 0 var(--group-tone), 0 4px 12px color-mix(in srgb, var(--group-tone) 10%, transparent);
-}
-
-[dir="rtl"] .ml3-account-switcher button .adreem-motion-selection { box-shadow: inset -3px 0 0 var(--group-tone), 0 4px 12px color-mix(in srgb, var(--group-tone) 10%, transparent); }
 .ml3-account-switcher button::after { content: none; }
 .ml3-account-switcher button > svg,
 .ml3-account-switcher button > strong,
@@ -792,8 +782,15 @@
 .ml3-account-switcher button > svg { color: var(--group-tone); }
 .ml3-account-switcher button > strong { overflow: hidden; font-size: 0.7rem; font-weight: 790; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-account-switcher button > span { color: var(--group-tone); font-size: 0.62rem; font-weight: 820; }
-.ml3-account-switcher button.is-active { background: transparent; color: var(--group-tone); box-shadow: none; }
+.ml3-account-switcher button.is-active {
+  background: var(--finance-paper);
+  color: var(--group-tone);
+  box-shadow: inset 3px 0 0 var(--group-tone), 0 3px 10px color-mix(in srgb, var(--group-tone) 9%, transparent);
+}
+[dir="rtl"] .ml3-account-switcher button.is-active { box-shadow: inset -3px 0 0 var(--group-tone), 0 3px 10px color-mix(in srgb, var(--group-tone) 9%, transparent); }
 .ml3-account-switcher button:hover { background: color-mix(in srgb, var(--group-soft) 55%, transparent); color: var(--group-tone); }
+.ml3-account-switcher button.is-active:hover { background: var(--finance-paper); }
+.ml3-account-switcher button:focus-visible { outline: 2px solid var(--group-tone); outline-offset: -2px; }
 
 .ml3-balance-pane {
   position: relative;
@@ -802,7 +799,7 @@
   background: var(--finance-paper);
 }
 
-.adreem-balance-pane-motion { min-width: 0; min-height: 100%; padding: 12px; will-change: transform, opacity; }
+.adreem-balance-pane-motion { min-width: 0; min-height: 100%; padding: 12px; will-change: opacity; }
 .ml3-balance-pane-head {
   min-width: 0;
   display: grid;
@@ -813,11 +810,6 @@
   padding-bottom: 10px;
   border-bottom: 1px solid var(--finance-line);
 }
-.ml3-balance-pane-head.is-search-only {
-  grid-template-columns: minmax(180px, 320px);
-  justify-content: end;
-}
-
 .ml3-balance-pane-title { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .ml3-balance-pane-title > i {
   width: 31px;
@@ -1059,14 +1051,14 @@
   border-radius: 7px;
   background: var(--finance-surface);
 }
-.adreem-counterparty-filters { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.adreem-counterparty-filters { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .adreem-counterparty-filters button {
   --filter-tone: var(--finance-charcoal);
   --filter-soft: var(--finance-charcoal-soft);
   position: relative;
   isolation: isolate;
   min-width: 0;
-  min-height: var(--finance-control-compact);
+  height: var(--finance-control-compact);
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
@@ -1078,18 +1070,20 @@
   background: transparent;
   color: var(--finance-muted);
   font-size: 0.6rem;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 .adreem-counterparty-filters button.is-receivable { --filter-tone: var(--finance-green); --filter-soft: var(--finance-green-soft); }
 .adreem-counterparty-filters button.is-payable { --filter-tone: var(--finance-debt); --filter-soft: var(--finance-debt-soft); }
-.adreem-counterparty-filters button .adreem-motion-selection { inset: 0; border-radius: var(--finance-control-radius); background: var(--filter-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--filter-tone) 18%, transparent); }
 .adreem-counterparty-filters button > svg,
 .adreem-counterparty-filters button > span,
 .adreem-counterparty-filters button > b { position: relative; z-index: 1; min-width: 0; }
 .adreem-counterparty-filters button > svg { color: var(--filter-tone); }
 .adreem-counterparty-filters button > span { overflow: hidden; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-counterparty-filters button > b { color: var(--filter-tone); font-size: 0.55rem; font-variant-numeric: tabular-nums; }
-.adreem-counterparty-filters button[aria-pressed="true"] { color: var(--filter-tone); }
+.adreem-counterparty-filters button[aria-pressed="true"] { background: var(--filter-soft); color: var(--filter-tone); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--filter-tone) 18%, transparent); }
 .adreem-counterparty-filters button:hover { background: color-mix(in srgb, var(--filter-soft) 64%, transparent); color: var(--filter-tone); }
+.adreem-counterparty-filters button[aria-pressed="true"]:hover { background: var(--filter-soft); }
+.adreem-counterparty-filters button:focus-visible { outline: 2px solid var(--filter-tone); outline-offset: -2px; }
 
 .adreem-counterparty-list { min-width: 0; }
 .adreem-counterparty-list-head {
@@ -1249,7 +1243,7 @@
   position: relative;
   isolation: isolate;
   min-width: 0;
-  min-height: var(--finance-control);
+  height: var(--finance-control);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1262,11 +1256,12 @@
   font-size: 0.75rem;
   font-weight: 790;
   box-shadow: none;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
-.ml3-entry-mode button .adreem-motion-selection { inset: 0; border-radius: var(--finance-control-radius); background: var(--finance-paper); box-shadow: var(--finance-shadow-small); }
 .ml3-entry-mode button > svg,
 .ml3-entry-mode button > span { position: relative; z-index: 1; }
-.ml3-entry-mode button.is-active { background: transparent; color: var(--flow-ink); box-shadow: none; }
+.ml3-entry-mode button.is-active { background: var(--finance-paper); color: var(--flow-ink); box-shadow: var(--finance-shadow-small); }
+.ml3-entry-mode button:focus-visible { outline: 2px solid var(--flow-tone); outline-offset: -2px; }
 .ml3-entry-mode button:first-of-type.is-active > svg { color: var(--finance-green); }
 .ml3-entry-mode button:last-of-type.is-active > svg { color: var(--finance-charcoal); }
 
@@ -1538,7 +1533,7 @@
   .ml3-balance-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
   .ml3-balance-ledger button.has-wide-balance,
   .ml3-home-grid .ml3-home-card.has-wide-balance { grid-column: 1 / -1; }
-  .ml3-balance-ledger button { min-height: var(--finance-summary); grid-template-columns: 31px minmax(0, 1fr); gap: 6px; padding: 7px; box-shadow: 0 4px 12px color-mix(in srgb, var(--finance-ink) 5%, transparent); }
+  .ml3-balance-ledger button { height: var(--finance-summary); grid-template-columns: 31px minmax(0, 1fr); gap: 6px; padding: 7px; box-shadow: 0 4px 12px color-mix(in srgb, var(--finance-ink) 5%, transparent); }
   .ml3-balance-ledger button > i { width: 31px; height: 31px; }
   .ml3-balance-ledger button > span { gap: 3px; }
   .ml3-balance-ledger button > span > b { font-size: 0.65rem; }
@@ -1555,9 +1550,9 @@
     border-inline-end: 0;
     border-bottom: 1px solid var(--finance-line);
   }
-  .ml3-account-switcher button { min-height: var(--finance-tab); grid-template-columns: 1fr; grid-template-rows: 17px auto; justify-items: center; gap: 2px; padding: 4px 2px; text-align: center; }
-  .ml3-account-switcher button .adreem-motion-selection,
-  [dir="rtl"] .ml3-account-switcher button .adreem-motion-selection { box-shadow: inset 0 -3px 0 var(--group-tone), 0 3px 9px color-mix(in srgb, var(--group-tone) 8%, transparent); }
+  .ml3-account-switcher button { height: var(--finance-tab); grid-template-columns: 1fr; grid-template-rows: 17px auto; justify-items: center; gap: 2px; padding: 4px 2px; text-align: center; }
+  .ml3-account-switcher button.is-active,
+  [dir="rtl"] .ml3-account-switcher button.is-active { box-shadow: inset 0 -3px 0 var(--group-tone), 0 3px 9px color-mix(in srgb, var(--group-tone) 8%, transparent); }
   .ml3-account-switcher button > svg { width: 16px; height: 16px; }
   .ml3-account-switcher button > strong { max-width: 100%; font-size: 0.59rem; }
   .ml3-account-switcher button > span { position: absolute; z-index: 2; inset-block-start: 3px; inset-inline-end: 4px; font-size: 0.53rem; }
@@ -1580,7 +1575,6 @@
   .adreem-net-account-values b { max-width: 96px; }
   .adreem-balance-pane-motion { padding: 8px; }
   .ml3-balance-pane-head { grid-template-columns: minmax(0, 1fr) minmax(132px, 45%); gap: 6px; margin-bottom: 7px; padding-bottom: 7px; }
-  .ml3-balance-pane-head.is-search-only { grid-template-columns: minmax(0, 1fr); }
   .ml3-balance-pane-title { gap: 6px; }
   .ml3-balance-pane-title > i { width: 28px; height: 28px; flex-basis: 28px; }
   .ml3-balance-pane-title h2 { font-size: 0.82rem; }
@@ -1601,8 +1595,8 @@
   .ml3-account-sections { grid-template-columns: 1fr; gap: 7px; }
   .adreem-people-controls { grid-template-columns: 1fr; gap: 5px; margin-bottom: 7px; }
   .adreem-counterparty-filters { gap: 2px; padding: 2px; }
-  .adreem-counterparty-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .adreem-counterparty-filters button { min-height: var(--finance-control-compact); grid-template-columns: 1fr; justify-items: center; gap: 0; padding: 3px 2px; }
+  .adreem-counterparty-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .adreem-counterparty-filters button { height: var(--finance-control-compact); grid-template-columns: 1fr; justify-items: center; gap: 0; padding: 3px 2px; }
   .adreem-counterparty-filters button > svg { display: none; }
   .adreem-counterparty-filters button > b { position: absolute; inset-block-start: 1px; inset-inline-end: 3px; font-size: 0.48rem; }
   .adreem-counterparty-grid { grid-template-columns: 1fr; gap: 6px; }
@@ -2122,6 +2116,47 @@
   .adreem-movement-edit-dialog > footer { padding: 8px 9px max(8px, env(safe-area-inset-bottom)); }
   .adreem-movement-action-dialog > footer button,
   .adreem-movement-edit-dialog > footer button { flex: 1; min-width: 0; padding-inline: 8px; }
+}
+
+/* Stable navigation: selection changes color, never geometry or scroll position. */
+.adreem-view,
+.ml3-balances-workspace,
+.ml3-balance-pane { overflow-anchor: none; }
+
+.ml3-entry-mode::before { content: none !important; }
+
+.adreem-nav button,
+.ml3-entry-mode button,
+.ml3-account-switcher button,
+.adreem-counterparty-filters button,
+.ml3-picker-chips button,
+.adreem-net-target button,
+.adreem-statement-currencies button,
+.adreem-separate-direction button,
+.ml3-opening-direction button,
+.adreem-language-options button,
+.adreem-app [role="tab"],
+.adreem-app [role="radio"],
+.adreem-app button[aria-current],
+.adreem-app button[aria-pressed],
+.ml3-review-ticket { transform: none !important; }
+
+.adreem-nav button { transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+.adreem-nav-icon { transition: background-color 140ms ease, color 140ms ease; }
+.adreem-nav button.is-active .adreem-nav-icon { transform: none !important; }
+
+@keyframes adreem-tab-content-fade {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+
+.adreem-motion-fallback.adreem-section-forward .ml3-layout,
+.adreem-motion-fallback.adreem-section-back .ml3-layout,
+.adreem-motion-fallback.adreem-mode-forward .ml3-entry-card:not([hidden]),
+.adreem-motion-fallback.adreem-mode-forward .ml3-add-account:not([hidden]),
+.adreem-motion-fallback.adreem-mode-back .ml3-entry-card:not([hidden]),
+.adreem-motion-fallback.adreem-mode-back .ml3-add-account:not([hidden]) {
+  animation: adreem-tab-content-fade 140ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {

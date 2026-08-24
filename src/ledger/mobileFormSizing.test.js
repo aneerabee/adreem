@@ -5,6 +5,7 @@ const stylesheet = readFileSync(new URL('./adreemStudio.css', import.meta.url), 
 const financeStylesheet = readFileSync(new URL('./adreemFinance.css', import.meta.url), 'utf8')
 const deskStylesheet = readFileSync(new URL('./adreemDesk.css', import.meta.url), 'utf8')
 const appStylesheet = readFileSync(new URL('../appStudio.css', import.meta.url), 'utf8')
+const ledgerSource = readFileSync(new URL('./LedgerApp.jsx', import.meta.url), 'utf8')
 
 describe('mobile form sizing', () => {
   it('keeps every editable field at the iPhone no-zoom font size', () => {
@@ -58,9 +59,27 @@ describe('mobile form sizing', () => {
 
   it('keeps balance cards stationary while their content changes smoothly', () => {
     expect(financeStylesheet).toContain('.ml3-balance-ledger button[aria-pressed="true"] {')
+    expect(financeStylesheet).toContain('height: var(--finance-summary);')
+    expect(financeStylesheet).toContain('.ml3-balance-ledger button:active {')
     expect(financeStylesheet).toContain('transform: none;')
     expect(financeStylesheet).toContain('@media (hover: hover) {')
-    expect(financeStylesheet).toContain('.adreem-balance-pane-motion { min-width: 0; min-height: 100%; padding: 12px; will-change: transform, opacity; }')
+    expect(financeStylesheet).toContain('.adreem-balance-pane-motion { min-width: 0; min-height: 100%; padding: 12px; will-change: opacity; }')
+    expect(ledgerSource).not.toContain('scrollToBalancesWorkspace')
+    expect(ledgerSource).not.toContain('layoutId=')
+    expect(ledgerSource).not.toContain('mode="popLayout"')
+  })
+
+  it('keeps every navigation tab fixed and balances person filters evenly', () => {
+    expect(financeStylesheet).toContain('.adreem-counterparty-filters { grid-template-columns: repeat(7, minmax(0, 1fr)); }')
+    expect(financeStylesheet).toContain('.adreem-counterparty-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }')
+    expect(financeStylesheet).toContain('.ml3-entry-mode::before { content: none !important; }')
+    expect(financeStylesheet).toContain('.ml3-balance-pane { overflow-anchor: none; }')
+    expect(financeStylesheet).toContain('.adreem-nav button.is-active .adreem-nav-icon { transform: none !important; }')
+    expect(financeStylesheet).toContain('@keyframes adreem-tab-content-fade')
+    expect(financeStylesheet).toContain('animation: adreem-tab-content-fade 140ms ease-out both;')
+    expect(ledgerSource).toContain('<div className="ml3-account-switcher" role="tablist"')
+    expect(ledgerSource).toContain('role="tabpanel" aria-labelledby={`adreem-balance-tab-${activeGroup.key}`}')
+    expect(ledgerSource).toContain('showSearch={false}')
   })
 
   it('uses a consistent control size scale on desktop and touch screens', () => {

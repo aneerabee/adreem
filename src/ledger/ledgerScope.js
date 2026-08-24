@@ -23,6 +23,25 @@ const NET_SEARCH_LABELS = Object.freeze({
   [ACCOUNT_CURRENCY_KINDS.MULTI]: 'lyd usd try متعدد',
 })
 
+const NET_ACCOUNT_KIND_ORDER = Object.freeze({
+  [VALUE_KINDS.CASH]: 0,
+  [VALUE_KINDS.BANK]: 1,
+  [VALUE_KINDS.RECEIVABLE]: 2,
+  [VALUE_KINDS.ASSET]: 3,
+})
+
+const NET_CURRENCY_ORDER = Object.freeze({
+  [ACCOUNT_CURRENCY_KINDS.DINAR]: 0,
+  [ACCOUNT_CURRENCY_KINDS.USD]: 1,
+  [ACCOUNT_CURRENCY_KINDS.TRY]: 2,
+  [ACCOUNT_CURRENCY_KINDS.MULTI]: 3,
+})
+
+const NET_ACCOUNT_COLLATOR = new Intl.Collator(['ar', 'en'], {
+  numeric: true,
+  sensitivity: 'base',
+})
+
 const MAX_SAFE_MONEY_BIGINT = BigInt(Number.MAX_SAFE_INTEGER)
 const MIN_SAFE_MONEY_BIGINT = BigInt(Number.MIN_SAFE_INTEGER)
 
@@ -63,8 +82,24 @@ function normalizedNetSearchText(value) {
     .trim()
 }
 
-function netContributionImpact(item = {}) {
-  return Math.abs(Number(item.dinar || 0)) + Math.abs(Number(item.usd || 0)) + Math.abs(Number(item.try || 0))
+function compareNetContributions(left = {}, right = {}) {
+  const leftAccount = left.account || {}
+  const rightAccount = right.account || {}
+  const kindDifference = (NET_ACCOUNT_KIND_ORDER[leftAccount.valueKind] ?? 99) - (NET_ACCOUNT_KIND_ORDER[rightAccount.valueKind] ?? 99)
+  if (kindDifference !== 0) return kindDifference
+  const ownerDifference = NET_ACCOUNT_COLLATOR.compare(
+    leftAccount.ownerName || leftAccount.name || '',
+    rightAccount.ownerName || rightAccount.name || '',
+  )
+  if (ownerDifference !== 0) return ownerDifference
+  const detailDifference = NET_ACCOUNT_COLLATOR.compare(
+    leftAccount.subAccountName || leftAccount.legacyName || '',
+    rightAccount.subAccountName || rightAccount.legacyName || '',
+  )
+  if (detailDifference !== 0) return detailDifference
+  const currencyDifference = (NET_CURRENCY_ORDER[leftAccount.currencyKind] ?? 99) - (NET_CURRENCY_ORDER[rightAccount.currencyKind] ?? 99)
+  if (currencyDifference !== 0) return currencyDifference
+  return NET_ACCOUNT_COLLATOR.compare(left.accountId || '', right.accountId || '')
 }
 
 function roundedNetAmount(value) {
@@ -96,13 +131,7 @@ export function filterNetContributions(contributions = [], query = '') {
         NET_SEARCH_LABELS[account.currencyKind],
       ].filter(Boolean).join(' ')).includes(normalizedQuery)
     })
-    .sort((left, right) => {
-      const impactDifference = netContributionImpact(right) - netContributionImpact(left)
-      if (impactDifference !== 0) return impactDifference
-      const leftName = `${left?.account?.ownerName || ''} ${left?.account?.subAccountName || ''}`.trim()
-      const rightName = `${right?.account?.ownerName || ''} ${right?.account?.subAccountName || ''}`.trim()
-      return leftName.localeCompare(rightName, 'ar', { numeric: true, sensitivity: 'base' })
-    })
+    .sort(compareNetContributions)
 }
 
 export function buildNetPosition(rows = [], excludedAccountIds = []) {
