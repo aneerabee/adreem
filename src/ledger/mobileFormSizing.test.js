@@ -82,6 +82,15 @@ describe('mobile form sizing', () => {
     expect(ledgerSource).toContain('showSearch={false}')
   })
 
+  it('keeps highlighted separate accounts compact and touchable across phone and desktop', () => {
+    expect(financeStylesheet).toContain('.adreem-separate-list > article.is-featured {')
+    expect(financeStylesheet).toContain('border-inline-start-color: var(--finance-gold);')
+    expect(financeStylesheet).toContain('.adreem-separate-featured-tag {')
+    expect(financeStylesheet).toContain('.adreem-separate-record-actions .adreem-separate-pin.is-active {')
+    expect(financeStylesheet).toContain('.adreem-separate-record-actions button { width: 36px; height: 36px; }')
+    expect(ledgerSource).toContain("aria-pressed={isPinned}")
+  })
+
   it('uses a consistent control size scale on desktop and touch screens', () => {
     expect(financeStylesheet).toContain('--finance-control-compact: 32px;')
     expect(financeStylesheet).toContain('--finance-control: 40px;')

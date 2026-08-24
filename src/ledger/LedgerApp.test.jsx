@@ -356,6 +356,7 @@ describe('LedgerApp separate accounts', () => {
         onCloseEditor={() => {}}
         onSave={() => {}}
         onEdit={() => {}}
+        onTogglePinned={() => {}}
         onVoid={() => {}}
         onLoadMore={() => {}}
       />,
@@ -365,6 +366,53 @@ describe('LedgerApp separate accounts', () => {
     expect(markup).toContain('شخص أ')
     expect(markup).not.toContain('شركة جديدة')
     expect(markup).not.toContain('فصله عن الصافي')
+  })
+
+  it('shows highlighted separate accounts in a clear golden state with a reversible control', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <SeparateLedgerPanel
+        records={[{
+          id: 'separate-1',
+          type: MOVEMENT_TYPES.RECORD_ONLY,
+          status: MOVEMENT_STATUSES.POSTED,
+          amount: 450,
+          currency: CURRENCIES.DINAR,
+          relatedName: 'حساب مهم',
+          recordDirection: 'receivable',
+          note: 'متابعة',
+          separateRecordPinned: true,
+          createdAt: '2026-08-24T10:00:00.000Z',
+        }]}
+        names={[]}
+        totals={{
+          [CURRENCIES.DINAR]: { receivable: 450, payable: 0 },
+          [CURRENCIES.USD]: { receivable: 0, payable: 0 },
+          [CURRENCIES.TRY]: { receivable: 0, payable: 0 },
+        }}
+        query=""
+        draft={{ relatedName: '', recordDirection: 'receivable', amount: '', currency: CURRENCIES.DINAR, note: '' }}
+        editorOpen={false}
+        editingId=""
+        isSaving={false}
+        hasMore={false}
+        isLoadingMore={false}
+        onQueryChange={() => {}}
+        onDraftChange={() => {}}
+        onOpenEditor={() => {}}
+        onCloseEditor={() => {}}
+        onSave={() => {}}
+        onEdit={() => {}}
+        onTogglePinned={() => {}}
+        onVoid={() => {}}
+        onLoadMore={() => {}}
+      />,
+    ))
+
+    expect(markup).toContain('is-featured')
+    expect(markup).toContain('adreem-separate-featured-tag')
+    expect(markup).toContain('مميز')
+    expect(markup).toContain('aria-label="إزالة التمييز"')
+    expect(markup).toContain('aria-pressed="true"')
   })
 })
 

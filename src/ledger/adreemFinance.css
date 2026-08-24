@@ -745,24 +745,56 @@
   border-inline-start: 3px solid var(--record-tone);
   border-radius: 7px;
   background: white;
+  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
 }
 .adreem-separate-list > article.is-receivable { --record-tone: var(--finance-green); --record-soft: var(--finance-green-soft); }
 .adreem-separate-list > article.is-payable { --record-tone: var(--finance-debt); --record-soft: var(--finance-debt-soft); }
+.adreem-separate-list > article.is-featured {
+  border-color: color-mix(in srgb, var(--finance-gold) 48%, var(--finance-line));
+  border-inline-start-color: var(--finance-gold);
+  background: color-mix(in srgb, var(--finance-gold-soft) 78%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--finance-gold) 12%, transparent), 0 5px 14px color-mix(in srgb, var(--finance-gold) 10%, transparent);
+}
 .adreem-separate-list > article > i { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 7px; background: var(--record-soft); color: var(--record-tone); }
 .adreem-separate-record-copy,
 .adreem-separate-record-value { min-width: 0; display: grid; gap: 2px; }
-.adreem-separate-record-copy strong,
+.adreem-separate-record-heading { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.adreem-separate-record-heading strong,
 .adreem-separate-record-copy small,
 .adreem-separate-record-value b,
 .adreem-separate-record-value small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-separate-record-copy strong { color: var(--finance-ink); font-size: 0.73rem; }
+.adreem-separate-record-heading strong { color: var(--finance-ink); font-size: 0.73rem; }
+.adreem-separate-featured-tag {
+  flex: 0 0 auto;
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding-inline: 6px;
+  border: 1px solid color-mix(in srgb, var(--finance-gold) 34%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--finance-gold-soft) 62%, white);
+  color: var(--finance-gold);
+  font-size: 0.53rem;
+  font-weight: 850;
+  line-height: 1;
+}
 .adreem-separate-record-copy small,
 .adreem-separate-record-value small { color: var(--finance-muted); font-size: 0.57rem; }
 .adreem-separate-record-value { justify-items: end; }
 .adreem-separate-record-value b { color: var(--record-tone); font-size: 0.76rem; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .adreem-separate-record-actions { display: flex; gap: 3px; }
-.adreem-separate-record-actions button { width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid var(--finance-line); border-radius: 6px; background: var(--finance-surface); color: var(--finance-muted); }
+.adreem-separate-record-actions button { width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid var(--finance-line); border-radius: 6px; background: var(--finance-surface); color: var(--finance-muted); transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease; }
+.adreem-separate-record-actions button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.adreem-separate-record-actions button:disabled { cursor: wait; opacity: 0.5; }
+.adreem-separate-record-actions .adreem-separate-pin { color: var(--finance-gold); }
+.adreem-separate-record-actions .adreem-separate-pin.is-active { border-color: color-mix(in srgb, var(--finance-gold) 44%, transparent); background: var(--finance-gold-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--finance-gold) 10%, transparent); }
 .adreem-separate-record-actions button:last-child { color: var(--finance-debt); }
+
+@media (hover: hover) {
+  .adreem-separate-record-actions button:hover { border-color: color-mix(in srgb, currentColor 34%, var(--finance-line)); background: white; }
+  .adreem-separate-record-actions .adreem-separate-pin:hover { background: var(--finance-gold-soft); }
+}
 
 .ml3-effect--record-only { grid-template-columns: 20px minmax(0, 1fr) auto; color: #594b72; }
 .ml3-effect--record-only strong { color: #594b72; }

@@ -52,6 +52,11 @@ function compareSeparateRecordRecency(left, right) {
   return String(right?.id || '').localeCompare(String(left?.id || ''))
 }
 
+function compareSeparateRecordPriority(left, right) {
+  const pinnedComparison = Number(Boolean(right?.separateRecordPinned)) - Number(Boolean(left?.separateRecordPinned))
+  return pinnedComparison || compareSeparateRecordRecency(left, right)
+}
+
 export function activeSeparateRecords(movements = []) {
   const activeRecords = movements.filter(isActiveSeparateRecord)
   const supersededIds = new Set(
@@ -68,7 +73,23 @@ export function activeSeparateRecords(movements = []) {
     if (visibleAccountIds.has(accountId)) return false
     visibleAccountIds.add(accountId)
     return movement.separateRecordAction !== 'void'
-  })
+  }).sort(compareSeparateRecordPriority)
+}
+
+export function separateRecordPinRevisionDraft(target = {}, pinned = true) {
+  return {
+    type: MOVEMENT_TYPES.RECORD_ONLY,
+    amount: Math.max(1, Math.abs(Math.round(Number(target.amount || 0)))),
+    currency: Object.values(CURRENCIES).includes(target.currency) ? target.currency : CURRENCIES.DINAR,
+    sourceAccountId: null,
+    destinationAccountId: null,
+    separateAccountId: String(target.separateAccountId || (target.id ? `separate-account-${target.id}` : '')).trim(),
+    relatedName: normalizeSeparateRecordName(target.relatedName) || 'بدون اسم',
+    recordDirection: normalizeSeparateRecordDirection(target.recordDirection),
+    note: String(target.note || '').trim() || 'حساب منفصل',
+    separateRecordPinned: Boolean(pinned),
+    supersedesSeparateRecordId: String(target.id || '').trim(),
+  }
 }
 
 export function separateRecordNames(accounts = [], movements = []) {

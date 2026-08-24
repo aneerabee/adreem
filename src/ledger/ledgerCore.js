@@ -367,6 +367,9 @@ export function validateMovement(movement, accounts = [], movements = [], option
     if (movement?.recordDirection && !['receivable', 'payable', 'note'].includes(movement.recordDirection)) {
       errors.push({ field: 'recordDirection', message: 'اتجاه السجل المنفصل غير معروف.' })
     }
+    if (movement?.separateRecordPinned !== undefined && typeof movement.separateRecordPinned !== 'boolean') {
+      errors.push({ field: 'separateRecordPinned', message: 'حالة تمييز الحساب المنفصل غير صالحة.' })
+    }
   }
   if ((type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) && movement?.expenseCategoryId) {
     const category = accountMap.get(movement.expenseCategoryId)

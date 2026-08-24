@@ -3,7 +3,7 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Star, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
@@ -23,7 +23,7 @@ import { buildNetPosition, convertNetPosition, filterNetContributions, isAccount
 import { ledgerNavigationSearch, readLedgerNavigation } from './ledgerNavigation'
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
 import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccountsForRole, sameLogicalAccount } from './movementAccounts'
-import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateRecords, isMainLedgerMovement, normalizeSeparateRecordDirection, normalizeSeparateRecordName, separateRecordCancellationDraft, separateRecordDirectionOptions, separateRecordNames, separateRecordTotals } from './separateRecords'
+import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateRecords, isMainLedgerMovement, normalizeSeparateRecordDirection, normalizeSeparateRecordName, separateRecordCancellationDraft, separateRecordDirectionOptions, separateRecordNames, separateRecordPinRevisionDraft, separateRecordTotals } from './separateRecords'
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
@@ -1297,7 +1297,7 @@ function separateRecordDirectionLabel(direction) {
   return separateRecordDirectionOptions.find((option) => option.value === normalizeSeparateRecordDirection(direction))?.label || 'معلومة'
 }
 
-export function SeparateLedgerPanel({ records, names, totals, query, draft, editorOpen, editingId, isSaving, hasMore, isLoadingMore, showSearch = true, onQueryChange, onDraftChange, onOpenEditor, onCloseEditor, onSave, onEdit, onVoid, onLoadMore }) {
+export function SeparateLedgerPanel({ records, names, totals, query, draft, editorOpen, editingId, isSaving, hasMore, isLoadingMore, showSearch = true, onQueryChange, onDraftChange, onOpenEditor, onCloseEditor, onSave, onEdit, onTogglePinned, onVoid, onLoadMore }) {
   const normalizedDraftName = normalizeSeparateRecordName(draft.relatedName).toLocaleLowerCase('ar')
   const dinarTotals = totals[CURRENCIES.DINAR] || { receivable: 0, payable: 0 }
   const usdTotals = totals[CURRENCIES.USD] || { receivable: 0, payable: 0 }
@@ -1368,11 +1368,15 @@ export function SeparateLedgerPanel({ records, names, totals, query, draft, edit
         <AnimatePresence initial={false}>
           {records.map((movement) => {
             const direction = normalizeSeparateRecordDirection(movement.recordDirection)
+            const isPinned = Boolean(movement.separateRecordPinned)
             return (
-              <Motion.article layout="position" key={movement.id} className={`is-${direction}`} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={UI_MOTION_TRANSITION}>
+              <Motion.article layout="position" key={movement.id} className={`is-${direction}${isPinned ? ' is-featured' : ''}`} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={UI_MOTION_TRANSITION}>
                 <i>{direction === SEPARATE_RECORD_DIRECTIONS.RECEIVABLE ? <ArrowDownToLine aria-hidden="true" size={16} /> : direction === SEPARATE_RECORD_DIRECTIONS.PAYABLE ? <ArrowUpFromLine aria-hidden="true" size={16} /> : <NotebookPen aria-hidden="true" size={16} />}</i>
                 <span className="adreem-separate-record-copy">
-                  <strong>{preserveUiData(movement.relatedName || 'بدون اسم')}</strong>
+                  <span className="adreem-separate-record-heading">
+                    <strong>{preserveUiData(movement.relatedName || 'بدون اسم')}</strong>
+                    {isPinned ? <b className="adreem-separate-featured-tag"><Star aria-hidden="true" size={11} fill="currentColor" /> مميز</b> : null}
+                  </span>
                   <small>{preserveUiData(movement.note)}</small>
                 </span>
                 <span className="adreem-separate-record-value">
@@ -1380,6 +1384,7 @@ export function SeparateLedgerPanel({ records, names, totals, query, draft, edit
                   <small>{movementDateTime(movement.createdAt || movement.updatedAt)}</small>
                 </span>
                 <span className="adreem-separate-record-actions">
+                  <button type="button" className={`adreem-separate-pin${isPinned ? ' is-active' : ''}`} aria-label={isPinned ? 'إزالة التمييز' : 'تمييز وتثبيت بالأعلى'} aria-pressed={isPinned} title={isPinned ? 'إزالة التمييز' : 'تمييز وتثبيت بالأعلى'} disabled={isSaving} onClick={() => onTogglePinned(movement.id)}><Star aria-hidden="true" size={15} fill={isPinned ? 'currentColor' : 'none'} /></button>
                   <button type="button" aria-label="تعديل" title="تعديل" onClick={() => onEdit(movement)}><Pencil aria-hidden="true" size={15} /></button>
                   <button type="button" aria-label="إلغاء" title="إلغاء" onClick={() => onVoid(movement.id)}><Trash2 aria-hidden="true" size={15} /></button>
                 </span>
@@ -4847,6 +4852,7 @@ export default function LedgerApp() {
         relatedName,
         recordDirection: normalizeSeparateRecordDirection(separateDraft.recordDirection),
         note,
+        ...(originalMovement ? { separateRecordPinned: Boolean(originalMovement.separateRecordPinned) } : {}),
         ...(originalMovement ? { supersedesSeparateRecordId: originalMovement.id } : {}),
       }, accounts, movements)
       if (!movement.validation.ok) {
@@ -4869,6 +4875,41 @@ export default function LedgerApp() {
       setPendingUndo({ movementId: movement.id, label: `${relatedName} · ${money(amount, movement.currency)}` })
       setFeedback(originalMovement ? 'تم تعديل السجل المنفصل.' : 'تم حفظ السجل المنفصل.')
       closeSeparateEditor()
+    } finally {
+      separateRecordSaveLockRef.current = false
+      setIsSavingSeparateRecord(false)
+    }
+  }
+
+  function toggleSeparateRecordPinned(movementId) {
+    if (separateRecordSaveLockRef.current) return
+    const target = movements.find((movement) => movement.id === movementId && movement.type === MOVEMENT_TYPES.RECORD_ONLY)
+    if (!target) return
+    const nextPinned = target.separateRecordPinned !== true
+    separateRecordSaveLockRef.current = true
+    setIsSavingSeparateRecord(true)
+    try {
+      const movement = postMovement(separateRecordPinRevisionDraft(target, nextPinned), accounts, movements)
+      if (!movement.validation.ok) {
+        setFeedback(movement.validation.errors.map((error) => error.message).join(' ') || 'تعذر حفظ التمييز.')
+        return
+      }
+      setMovements((current) => [...current, movement])
+      setLedgerExtras((current) => ({
+        ...current,
+        auditEvents: [
+          ...(current.auditEvents || []),
+          createAuditEvent('movement.created', {
+            movementId: movement.id,
+            status: movement.status,
+            recordOnly: true,
+            supersedesMovementId: target.id,
+            separateRecordPinned: nextPinned,
+          }),
+        ],
+      }))
+      setPendingUndo({ movementId: movement.id, label: `${nextPinned ? 'تمييز' : 'إلغاء تمييز'} ${target.relatedName || 'حساب منفصل'}` })
+      setFeedback(nextPinned ? 'تم تثبيت الحساب المنفصل بالأعلى.' : 'تم إلغاء تثبيت الحساب المنفصل.')
     } finally {
       separateRecordSaveLockRef.current = false
       setIsSavingSeparateRecord(false)
@@ -5868,6 +5909,7 @@ export default function LedgerApp() {
                   onCloseEditor={closeSeparateEditor}
                   onSave={saveSeparateRecord}
                   onEdit={editSeparateRecord}
+                  onTogglePinned={toggleSeparateRecordPinned}
                   onVoid={archiveSeparateRecord}
                   onLoadMore={loadOlderSeparateRecords}
                 />

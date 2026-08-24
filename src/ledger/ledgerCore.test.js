@@ -1144,9 +1144,17 @@ describe('adreem ledger core', () => {
       relatedName: 'سعيد',
       recordDirection: 'unknown',
     }, [], [])
+    const invalidPin = validateMovement({
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
+      note: 'جديد',
+      separateRecordPinned: 'yes',
+    }, [], [])
 
     expect(legacy.ok).toBe(true)
     expect(invalid.errors).toContainEqual(expect.objectContaining({ field: 'recordDirection' }))
+    expect(invalidPin.errors).toContainEqual(expect.objectContaining({ field: 'separateRecordPinned' }))
   })
 
   it('does not allow a posted movement to change between financial and record-only modes', () => {

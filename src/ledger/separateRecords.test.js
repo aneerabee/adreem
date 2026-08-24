@@ -7,6 +7,7 @@ import {
   normalizeSeparateRecordDirection,
   separateRecordCancellationDraft,
   separateRecordNames,
+  separateRecordPinRevisionDraft,
   separateRecordTotals,
 } from './separateRecords.js'
 
@@ -93,6 +94,40 @@ describe('separate records', () => {
       separateRecordAction: 'void',
     })
     expect(filterSeparateRecords([original, firstEdit, latestEdit, latestCancellation])).toEqual([])
+  })
+
+  it('keeps highlighted accounts first without reviving an older highlighted revision', () => {
+    const regular = record('1', { separateAccountId: 'side-regular', databaseSequence: 4, relatedName: 'عادي' })
+    const highlighted = record('2', { separateAccountId: 'side-highlighted', databaseSequence: 2, relatedName: 'مميز', separateRecordPinned: true })
+    expect(filterSeparateRecords([regular, highlighted]).map((item) => item.id)).toEqual(['2', '1'])
+
+    const original = record('3', { separateAccountId: 'side-shared', databaseSequence: 1 })
+    const olderHighlightedEdit = record('4', { separateAccountId: 'side-shared', databaseSequence: 2, supersedesSeparateRecordId: '3', separateRecordPinned: true })
+    const latestRegularEdit = record('5', { separateAccountId: 'side-shared', databaseSequence: 3, supersedesSeparateRecordId: '3', separateRecordPinned: false })
+    expect(filterSeparateRecords([original, olderHighlightedEdit, latestRegularEdit]).map((item) => item.id)).toEqual(['5'])
+  })
+
+  it('builds an immutable pin revision without linking the main ledger', () => {
+    expect(separateRecordPinRevisionDraft(record('9', {
+      amount: 850,
+      currency: CURRENCIES.USD,
+      separateAccountId: 'side-9',
+      relatedName: ' حساب خاص ',
+      recordDirection: SEPARATE_RECORD_DIRECTIONS.PAYABLE,
+      note: 'مرجع',
+    }), true)).toEqual({
+      type: MOVEMENT_TYPES.RECORD_ONLY,
+      amount: 850,
+      currency: CURRENCIES.USD,
+      sourceAccountId: null,
+      destinationAccountId: null,
+      separateAccountId: 'side-9',
+      relatedName: 'حساب خاص',
+      recordDirection: SEPARATE_RECORD_DIRECTIONS.PAYABLE,
+      note: 'مرجع',
+      separateRecordPinned: true,
+      supersedesSeparateRecordId: '9',
+    })
   })
 
   it('keeps old records neutral and searches names or notes', () => {
