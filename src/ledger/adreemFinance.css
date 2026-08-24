@@ -30,6 +30,10 @@
   --finance-choice: 52px;
   --finance-tab: 44px;
   --finance-summary: 76px;
+  --finance-number-compact: 0.72rem;
+  --finance-number-value: 0.78rem;
+  --finance-number-summary: 0.84rem;
+  --finance-number-weight: 820;
   --finance-control-radius: 7px;
   --finance-shadow: 0 12px 34px color-mix(in srgb, var(--finance-ink) 8%, transparent);
   --finance-shadow-small: 0 5px 16px color-mix(in srgb, var(--finance-ink) 7%, transparent);
@@ -377,8 +381,8 @@
   gap: 3px;
   overflow: hidden;
   color: var(--finance-ink);
-  font-size: 0.78rem;
-  font-weight: 820;
+  font-size: var(--finance-number-summary);
+  font-weight: var(--finance-number-weight);
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -392,17 +396,14 @@
   text-overflow: ellipsis;
 }
 
-.ml3-balance-ledger button .ml3-balance-pair small {
-  color: var(--summary-ink);
-  font-size: 0.7rem;
-}
+.ml3-balance-ledger button .ml3-balance-pair small { color: var(--summary-ink); }
 
 .ml3-balance-pair strong > span,
 .ml3-balance-pair small > span { color: var(--finance-muted); font-size: 0.58rem; font-weight: 750; }
 
 @container balance-summary (min-width: 220px) {
-  .ml3-balance-ledger button .ml3-balance-pair strong { font-size: 0.96rem; }
-  .ml3-balance-ledger button .ml3-balance-pair small { font-size: 0.82rem; }
+  .ml3-balance-ledger button .ml3-balance-pair strong,
+  .ml3-balance-ledger button .ml3-balance-pair small { font-size: 0.92rem; }
   .ml3-balance-pair strong > span,
   .ml3-balance-pair small > span { font-size: 0.62rem; }
 }
@@ -453,7 +454,7 @@
   min-width: 0;
   height: var(--finance-tab);
   display: grid;
-  grid-template-columns: 25px minmax(0, 1fr) auto;
+  grid-template-columns: 25px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   overflow: hidden;
@@ -652,12 +653,12 @@
 .adreem-separate-summary svg { width: 24px; }
 .adreem-separate-summary small { font-size: 0.61rem; font-weight: 820; }
 .adreem-separate-summary strong,
-.adreem-separate-summary b { min-width: 0; overflow: hidden; font-size: 0.8rem; font-variant-numeric: tabular-nums; line-height: 1.15; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-separate-summary b { font-size: 0.7rem; opacity: 0.82; }
+.adreem-separate-summary b { min-width: 0; overflow: hidden; font-size: var(--finance-number-summary); font-variant-numeric: tabular-nums; font-weight: var(--finance-number-weight); line-height: 1.15; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-separate-summary b { opacity: 0.82; }
 
 @container separate-summary (min-width: 250px) {
-  .adreem-separate-summary strong { font-size: 0.92rem; }
-  .adreem-separate-summary b { font-size: 0.78rem; }
+  .adreem-separate-summary strong,
+  .adreem-separate-summary b { font-size: 0.9rem; }
 }
 
 .adreem-separate-toolbar {
@@ -782,7 +783,7 @@
 .adreem-separate-record-copy small,
 .adreem-separate-record-value small { color: var(--finance-muted); font-size: 0.57rem; }
 .adreem-separate-record-value { justify-items: end; }
-.adreem-separate-record-value b { color: var(--record-tone); font-size: 0.76rem; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.adreem-separate-record-value b { color: var(--record-tone); font-size: var(--finance-number-value); font-variant-numeric: tabular-nums; font-weight: var(--finance-number-weight); line-height: 1.15; }
 .adreem-separate-record-actions { display: flex; gap: 3px; }
 .adreem-separate-record-actions button { width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid var(--finance-line); border-radius: 6px; background: var(--finance-surface); color: var(--finance-muted); transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease; }
 .adreem-separate-record-actions button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
@@ -809,11 +810,9 @@
 
 .ml3-account-switcher button::after { content: none; }
 .ml3-account-switcher button > svg,
-.ml3-account-switcher button > strong,
-.ml3-account-switcher button > span { position: relative; z-index: 1; min-width: 0; }
+.ml3-account-switcher button > strong { position: relative; z-index: 1; min-width: 0; }
 .ml3-account-switcher button > svg { color: var(--group-tone); }
 .ml3-account-switcher button > strong { overflow: hidden; font-size: 0.7rem; font-weight: 790; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-account-switcher button > span { color: var(--group-tone); font-size: 0.62rem; font-weight: 820; }
 .ml3-account-switcher button.is-active {
   background: var(--finance-paper);
   color: var(--group-tone);
@@ -855,7 +854,6 @@
   color: var(--balance-focus);
 }
 .ml3-balance-pane-title h2 { min-width: 0; overflow: hidden; margin: 0; color: var(--finance-ink); font-size: 0.96rem; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-balance-pane-title > span { flex: 0 0 auto; color: var(--balance-focus); font-size: 0.66rem; font-weight: 820; }
 .adreem-balance-focus-reset {
   width: 27px;
   height: 27px;
@@ -974,7 +972,7 @@
 .ml3-balances-surface .ml3-account-context { min-width: 0; overflow: hidden; color: var(--finance-muted); font-size: 0.61rem; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-balances-surface .ml3-account-values { min-width: 0; display: grid; justify-items: end; gap: 2px; font-variant-numeric: tabular-nums; }
 .ml3-balances-surface .ml3-account-values strong,
-.ml3-balances-surface .ml3-account-values > span { max-width: 100%; overflow: hidden; color: var(--row-tone); font-size: 0.78rem; font-weight: 820; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-balances-surface .ml3-account-values > span { max-width: 100%; overflow: hidden; color: var(--row-tone); font-size: var(--finance-number-value); font-weight: var(--finance-number-weight); line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-balances-surface .ml3-account-values strong.is-positive { color: var(--finance-green-dark); }
 .ml3-balances-surface .ml3-account-values strong.is-negative { color: var(--finance-debt-dark); }
 .ml3-balances-surface .ml3-account-values.is-expense strong { color: var(--finance-coral); }
@@ -1092,7 +1090,7 @@
   min-width: 0;
   height: var(--finance-control-compact);
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto;
+  grid-template-columns: 14px minmax(0, 1fr);
   align-items: center;
   gap: 3px;
   overflow: hidden;
@@ -1107,11 +1105,9 @@
 .adreem-counterparty-filters button.is-receivable { --filter-tone: var(--finance-green); --filter-soft: var(--finance-green-soft); }
 .adreem-counterparty-filters button.is-payable { --filter-tone: var(--finance-debt); --filter-soft: var(--finance-debt-soft); }
 .adreem-counterparty-filters button > svg,
-.adreem-counterparty-filters button > span,
-.adreem-counterparty-filters button > b { position: relative; z-index: 1; min-width: 0; }
+.adreem-counterparty-filters button > span { position: relative; z-index: 1; min-width: 0; }
 .adreem-counterparty-filters button > svg { color: var(--filter-tone); }
 .adreem-counterparty-filters button > span { overflow: hidden; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-counterparty-filters button > b { color: var(--filter-tone); font-size: 0.55rem; font-variant-numeric: tabular-nums; }
 .adreem-counterparty-filters button[aria-pressed="true"] { background: var(--filter-soft); color: var(--filter-tone); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--filter-tone) 18%, transparent); }
 .adreem-counterparty-filters button:hover { background: color-mix(in srgb, var(--filter-soft) 64%, transparent); color: var(--filter-tone); }
 .adreem-counterparty-filters button[aria-pressed="true"]:hover { background: var(--filter-soft); }
@@ -1218,7 +1214,7 @@
 .adreem-counterparty-channel.is-zero { --channel-tone: var(--finance-neutral); --channel-soft: var(--finance-neutral-soft); }
 .adreem-counterparty-channel > i { grid-area: icon; width: 19px; height: 19px; display: grid; place-items: center; color: var(--channel-tone); }
 .adreem-counterparty-channel > small { grid-area: label; min-width: 0; overflow: hidden; color: var(--finance-muted); font-size: 0.59rem; font-weight: 780; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-counterparty-channel > b { grid-area: value; min-width: 0; overflow: hidden; color: var(--channel-tone); font-size: 0.86rem; font-variant-numeric: tabular-nums; line-height: 1.15; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-counterparty-channel > b { grid-area: value; min-width: 0; overflow: hidden; color: var(--channel-tone); font-size: var(--finance-number-summary); font-variant-numeric: tabular-nums; font-weight: var(--finance-number-weight); line-height: 1.15; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-counterparty-channel.is-negative > b { color: var(--finance-debt-dark); }
 .adreem-counterparty-channel.is-zero { opacity: 0.72; }
 .adreem-counterparty-channels { min-width: 0; display: grid; border-inline-start: 1px solid var(--finance-line); transform-origin: top center; }
@@ -1240,7 +1236,7 @@
 .adreem-counterparty-channels button:hover { background: color-mix(in srgb, var(--counterparty-soft) 44%, var(--finance-surface)); }
 .adreem-counterparty-channels button i { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 5px; background: var(--finance-surface); }
 .adreem-counterparty-channels button span { overflow: hidden; font-size: 0.65rem; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-counterparty-channels button b { overflow: hidden; font-size: 0.76rem; font-variant-numeric: tabular-nums; line-height: 1.15; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-counterparty-channels button b { overflow: hidden; font-size: var(--finance-number-summary); font-variant-numeric: tabular-nums; font-weight: var(--finance-number-weight); line-height: 1.15; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-counterparty-channels button.is-positive i,
 .adreem-counterparty-channels button.is-positive b { color: var(--finance-green-dark); }
 .adreem-counterparty-channels button.is-negative i,
@@ -1574,8 +1570,8 @@
   .ml3-balance-ledger button > span { gap: 3px; }
   .ml3-balance-ledger button > span > b { font-size: 0.65rem; }
   .ml3-balance-pair { grid-template-columns: minmax(0, 1fr); gap: 1px; }
-  .ml3-balance-ledger button .ml3-balance-pair strong { font-size: 0.84rem; }
-  .ml3-balance-ledger button .ml3-balance-pair small { font-size: 0.72rem; }
+  .ml3-balance-ledger button .ml3-balance-pair strong,
+  .ml3-balance-ledger button .ml3-balance-pair small { font-size: 0.82rem; }
   .ml3-balance-pair.is-wide { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 
   .ml3-balances-workspace { min-height: 0; grid-template-columns: 1fr; border-radius: 8px; }
@@ -1591,7 +1587,6 @@
   [dir="rtl"] .ml3-account-switcher button.is-active { box-shadow: inset 0 -3px 0 var(--group-tone), 0 3px 9px color-mix(in srgb, var(--group-tone) 8%, transparent); }
   .ml3-account-switcher button > svg { width: 16px; height: 16px; }
   .ml3-account-switcher button > strong { max-width: 100%; font-size: 0.59rem; }
-  .ml3-account-switcher button > span { position: absolute; z-index: 2; inset-block-start: 3px; inset-inline-end: 4px; font-size: 0.53rem; }
   .adreem-net-panel { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px; overflow: visible; }
   .adreem-net-panel > header,
   .adreem-net-accounts { grid-column: 1; }
@@ -1634,14 +1629,13 @@
   .adreem-counterparty-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .adreem-counterparty-filters button { height: var(--finance-control-compact); grid-template-columns: 1fr; justify-items: center; gap: 0; padding: 3px 2px; }
   .adreem-counterparty-filters button > svg { display: none; }
-  .adreem-counterparty-filters button > b { position: absolute; inset-block-start: 1px; inset-inline-end: 3px; font-size: 0.48rem; }
   .adreem-counterparty-grid { grid-template-columns: 1fr; gap: 6px; }
   .adreem-counterparty-card { grid-template-columns: minmax(0, 1fr); }
   .adreem-counterparty-focus { grid-column: 1; min-height: 49px; border-inline-end: 0; border-bottom: 1px solid var(--finance-line); }
   .adreem-counterparty-card.is-settled .adreem-counterparty-focus { border-bottom: 0; }
   .adreem-counterparty-channel-preview { grid-column: 1; grid-template-columns: minmax(0, 1fr); gap: 3px; padding: 5px 6px 6px; }
   .adreem-counterparty-channel { min-height: 38px; grid-template-columns: 19px minmax(58px, 0.62fr) minmax(0, 1.38fr); padding-inline: 7px; }
-  .adreem-counterparty-channel > b { font-size: 0.82rem; }
+  .adreem-counterparty-channel > b { font-size: var(--finance-number-summary); }
   .adreem-counterparty-channels { grid-column: 1; border-inline-start: 0; }
   .ml3-balances-surface .ml3-account-row { min-height: 49px; grid-template-columns: minmax(0, 1fr) minmax(96px, auto); gap: 5px; padding-inline: 7px; }
   .ml3-balances-surface .ml3-account-row-icon { width: 28px; height: 28px; }
@@ -1708,8 +1702,8 @@
 
 @media (max-width: 390px) {
   .ml3-balance-ledger button { min-height: var(--finance-summary); }
-  .ml3-balance-ledger button .ml3-balance-pair strong { font-size: 0.88rem; }
-  .ml3-balance-ledger button .ml3-balance-pair small { font-size: 0.76rem; }
+  .ml3-balance-ledger button .ml3-balance-pair strong,
+  .ml3-balance-ledger button .ml3-balance-pair small { font-size: 0.82rem; }
   .ml3-account-switcher button > strong { font-size: 0.57rem; }
   .ml3-balance-pane-head { grid-template-columns: 1fr; }
   .ml3-account-toolbar { width: 100%; }
@@ -1733,18 +1727,42 @@
 }
 
 @media (max-width: 340px) {
-  .ml3-balance-ledger button .ml3-balance-pair strong { font-size: 0.84rem; }
-  .ml3-balance-ledger button .ml3-balance-pair small { font-size: 0.72rem; }
+  .ml3-balance-ledger button .ml3-balance-pair strong,
+  .ml3-balance-ledger button .ml3-balance-pair small { font-size: var(--finance-number-value); }
 }
 
-.ml3-profile-balance strong {
-  font-size: 1rem;
+.ml3-profile-balance strong,
+.ml3-profile-balance span {
+  font-size: var(--finance-number-summary);
   font-variant-numeric: tabular-nums;
+  font-weight: var(--finance-number-weight);
   line-height: 1.15;
 }
 
 @media (max-width: 720px) {
-  .ml3-profile-balance strong { font-size: 0.88rem; }
+  .ml3-profile-balance strong,
+  .ml3-profile-balance span { font-size: 0.82rem; }
+}
+
+/* Financial values use one numeric scale inside each comparable view. */
+.ml3-history-side > strong,
+.ml3-history-conversion,
+.ml3-review-card-head > b,
+.ml3-review-usd,
+.ml3-profile-impact b {
+  font-size: var(--finance-number-value);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--finance-number-weight);
+}
+
+.ml3-effect b,
+.ml3-effect i,
+.ml3-effect strong,
+.adreem-statement-summary article b,
+.adreem-statement-row-value > strong {
+  font-size: var(--finance-number-compact);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--finance-number-weight);
 }
 
 @media (max-width: 390px) {

@@ -82,6 +82,16 @@ describe('mobile form sizing', () => {
     expect(ledgerSource).toContain('showSearch={false}')
   })
 
+  it('keeps balance tabs free from small item counters', () => {
+    expect(ledgerSource).not.toContain('const groupCount =')
+    expect(ledgerSource).not.toContain('formatCount(groupCount)')
+    expect(ledgerSource).not.toContain('<b>{formatCount(count)}</b>')
+    expect(ledgerSource).not.toContain('formatCount(activeGroupCount)')
+    expect(financeStylesheet).not.toContain('.ml3-account-switcher button > span')
+    expect(financeStylesheet).not.toContain('.adreem-counterparty-filters button > b')
+    expect(financeStylesheet).not.toContain('.ml3-balance-pane-title > span')
+  })
+
   it('keeps highlighted separate accounts compact and touchable across phone and desktop', () => {
     expect(financeStylesheet).toContain('.adreem-separate-list > article.is-featured {')
     expect(financeStylesheet).toContain('border-inline-start-color: var(--finance-gold);')
@@ -100,6 +110,16 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('font-size: 0.86rem;')
     expect(financeStylesheet).toContain('.adreem-counterparty-card { grid-template-columns: minmax(0, 1fr); }')
     expect(financeStylesheet).toContain('.adreem-counterparty-channel-preview { grid-column: 1; grid-template-columns: minmax(0, 1fr);')
+  })
+
+  it('keeps comparable financial values on one numeric scale across every balance view', () => {
+    expect(financeStylesheet).toContain('--finance-number-compact: 0.72rem;')
+    expect(financeStylesheet).toContain('--finance-number-value: 0.78rem;')
+    expect(financeStylesheet).toContain('--finance-number-summary: 0.84rem;')
+    expect(financeStylesheet).toContain('.adreem-separate-summary strong,\n.adreem-separate-summary b')
+    expect(financeStylesheet).not.toContain('.adreem-separate-summary b { font-size: 0.7rem;')
+    expect(financeStylesheet).toContain('.ml3-profile-balance strong,\n.ml3-profile-balance span')
+    expect(financeStylesheet).toContain('.ml3-history-side > strong,\n.ml3-history-conversion,')
   })
 
   it('uses a consistent control size scale on desktop and touch screens', () => {

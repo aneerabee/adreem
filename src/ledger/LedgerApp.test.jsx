@@ -67,6 +67,7 @@ import {
   pendingUploadedOrphanPaths,
   prepareExpenseCategoryAccount,
   prepareAccountClassificationUpdate,
+  projectCounterpartyGroupForFilter,
   releaseSubmission,
   saveFailureMessage,
   signedMoney,
@@ -1157,37 +1158,80 @@ describe('LedgerApp people account views', () => {
     expect(views.all).toHaveLength(1)
   })
 
-  it('filters whole people without hiding the rest of a matched person balances', () => {
+  it('shows only the selected balance channel without leaking the same person other balances', () => {
     const group = (id, rows, receivable, payable) => ({ id, ownerName: id, rows, receivable, payable })
     const row = (counterpartyKind, amount, currencyKind = ACCOUNT_CURRENCY_KINDS.DINAR) => ({
       account: { counterpartyKind, currencyKind },
-      dinar: currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? 0 : amount,
+      dinar: currencyKind === ACCOUNT_CURRENCY_KINDS.DINAR ? amount : 0,
       usd: currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? amount : 0,
+      try: currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? amount : 0,
     })
     const mixed = group('mixed', [
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 1_200),
       row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -450),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 80, ACCOUNT_CURRENCY_KINDS.USD),
-    ], { dinar: 1_200, usd: 80 }, { dinar: 450, usd: 0 })
+      row(COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, -900, ACCOUNT_CURRENCY_KINDS.TRY),
+    ], { dinar: 1_200, usd: 80, try: 0 }, { dinar: 450, usd: 0, try: 900 })
     const chequeOnly = group('cheque', [
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 0),
       row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -300),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, ACCOUNT_CURRENCY_KINDS.USD),
-    ], { dinar: 0, usd: 0 }, { dinar: 300, usd: 0 })
+      row(COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, 0, ACCOUNT_CURRENCY_KINDS.TRY),
+    ], { dinar: 0, usd: 0, try: 0 }, { dinar: 300, usd: 0, try: 0 })
     const zero = group('zero', [
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 0),
       row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 0),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, ACCOUNT_CURRENCY_KINDS.USD),
-    ], { dinar: 0, usd: 0 }, { dinar: 0, usd: 0 })
+      row(COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, 0, ACCOUNT_CURRENCY_KINDS.TRY),
+    ], { dinar: 0, usd: 0, try: 0 }, { dinar: 0, usd: 0, try: 0 })
     const groups = [mixed, chequeOnly, zero]
 
-    expect(filterCounterpartyGroups(groups, 'receivable').map((item) => item.id)).toEqual(['mixed'])
-    expect(filterCounterpartyGroups(groups, 'payable').map((item) => item.id)).toEqual(['mixed', 'cheque'])
-    expect(filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR).map((item) => item.id)).toEqual(['mixed'])
-    expect(filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR).map((item) => item.id)).toEqual(['mixed', 'cheque'])
-    expect(filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CASH_USD).map((item) => item.id)).toEqual(['mixed'])
+    const receivable = filterCounterpartyGroups(groups, 'receivable')
+    const payable = filterCounterpartyGroups(groups, 'payable')
+    const cash = filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR)
+    const cheque = filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR)
+    const usd = filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CASH_USD)
+    const tryGroups = filterCounterpartyGroups(groups, COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY)
+
+    expect(receivable.map((item) => item.id)).toEqual(['mixed'])
+    expect(receivable[0].rows).toHaveLength(2)
+    expect(receivable[0].payable).toEqual({ dinar: 0, usd: 0, try: 0 })
+    expect(payable.map((item) => item.id)).toEqual(['mixed', 'cheque'])
+    expect(payable[0].rows).toHaveLength(2)
+    expect(payable[0].receivable).toEqual({ dinar: 0, usd: 0, try: 0 })
+    expect(cash.map((item) => item.id)).toEqual(['mixed'])
+    expect(cash[0].rows.map((item) => item.account.counterpartyKind)).toEqual([COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR])
+    expect(cash[0].receivable).toEqual({ dinar: 1_200, usd: 0, try: 0 })
+    expect(cheque.map((item) => item.id)).toEqual(['mixed', 'cheque'])
+    expect(cheque.every((item) => item.rows.every((bucket) => bucket.account.counterpartyKind === COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR))).toBe(true)
+    expect(usd.map((item) => item.id)).toEqual(['mixed'])
+    expect(usd[0].rows.map((item) => item.account.counterpartyKind)).toEqual([COUNTERPARTY_ACCOUNT_KINDS.CASH_USD])
+    expect(tryGroups.map((item) => item.id)).toEqual(['mixed'])
+    expect(tryGroups[0].rows.map((item) => item.account.counterpartyKind)).toEqual([COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY])
     expect(filterCounterpartyGroups(groups, 'zero').map((item) => item.id)).toEqual(['zero'])
     expect(filterCounterpartyGroups(groups, 'all')).toBe(groups)
+    expect(projectCounterpartyGroupForFilter(mixed, 'unknown')).toBeNull()
+  })
+
+  it('renders only the selected channel after filtering a mixed person', () => {
+    const group = {
+      id: 'person:mixed',
+      ownerName: 'سعيد',
+      receivable: { dinar: 1_200, usd: 80, try: 0 },
+      payable: { dinar: 450, usd: 0, try: 0 },
+      rows: [
+        { account: { id: 'cash', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }, dinar: 1_200, usd: 0, try: 0 },
+        { account: { id: 'cheque', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }, dinar: -450, usd: 0, try: 0 },
+        { account: { id: 'usd', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }, dinar: 0, usd: 80, try: 0 },
+      ],
+    }
+    const filtered = filterCounterpartyGroups([group], COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR)
+    const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyList groups={filtered} hideHeader />))
+
+    expect(markup).toContain('أدفع 450 LYD')
+    expect(markup).not.toContain('أقبض 1,200 LYD')
+    expect(markup).not.toContain('أقبض 80 USD')
+    expect(markup).toContain('is-payable')
   })
 
   it('searches by one account while preserving every balance channel for the matched person', () => {

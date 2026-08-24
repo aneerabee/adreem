@@ -1685,18 +1685,50 @@ function counterpartyHasDirection(group = {}, direction) {
   return Number(value.dinar || 0) > 0 || Number(value.usd || 0) > 0 || Number(value.try || 0) > 0
 }
 
+function counterpartyGroupFromRows(group = {}, rows = []) {
+  const totals = rows.reduce((result, bucket) => {
+    for (const field of ['dinar', 'usd', 'try']) {
+      const amount = Number(bucket?.[field] || 0)
+      result.receivable[field] += Math.max(0, amount)
+      result.payable[field] += Math.abs(Math.min(0, amount))
+    }
+    return result
+  }, {
+    receivable: { dinar: 0, usd: 0, try: 0 },
+    payable: { dinar: 0, usd: 0, try: 0 },
+  })
+  return { ...group, rows, ...totals }
+}
+
+function counterpartyRowsForDirection(group = {}, direction) {
+  const keepPositive = direction === 'receivable'
+  return group.rows.map((bucket) => ({
+    ...bucket,
+    dinar: keepPositive ? Math.max(0, Number(bucket.dinar || 0)) : Math.min(0, Number(bucket.dinar || 0)),
+    usd: keepPositive ? Math.max(0, Number(bucket.usd || 0)) : Math.min(0, Number(bucket.usd || 0)),
+    try: keepPositive ? Math.max(0, Number(bucket.try || 0)) : Math.min(0, Number(bucket.try || 0)),
+  })).filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
+}
+
+export function projectCounterpartyGroupForFilter(group = {}, filterKey = 'all') {
+  if (filterKey === 'all' || filterKey === 'zero') return group
+  if (filterKey === 'receivable' || filterKey === 'payable') {
+    const rows = counterpartyRowsForDirection(group, filterKey)
+    return rows.length ? counterpartyGroupFromRows(group, rows) : null
+  }
+  const rows = group.rows.filter((bucket) => (
+    bucket.account?.counterpartyKind === filterKey
+    && hasMoneyValue(counterpartyBucketAmount(bucket).amount)
+  ))
+  return rows.length ? counterpartyGroupFromRows(group, rows) : null
+}
+
 export function filterCounterpartyGroups(groups = [], filterKey = 'all') {
   if (filterKey === 'all') return groups
   if (filterKey === 'zero') {
     return groups.filter((group) => !counterpartyHasDirection(group, 'receivable') && !counterpartyHasDirection(group, 'payable'))
   }
-  if (filterKey === 'receivable' || filterKey === 'payable') {
-    return groups.filter((group) => counterpartyHasDirection(group, filterKey))
-  }
-  return groups.filter((group) => group.rows.some((bucket) => {
-    if (bucket.account?.counterpartyKind !== filterKey) return false
-    return hasMoneyValue(counterpartyBucketAmount(bucket).amount)
-  }))
+  return groups.map((group) => projectCounterpartyGroupForFilter(group, filterKey)).filter(Boolean)
 }
 
 export function filterCounterpartyGroupsByQuery(groups = [], query = '') {
@@ -1738,7 +1770,7 @@ export function counterpartyMagnitudeForFilter(group = {}, filterKey = 'all') {
 export function unifiedCounterpartyGroups(views = {}, query = '', filterKey = 'all') {
   const directionalSource = filterKey === 'receivable' || filterKey === 'payable' ? views[filterKey] : null
   const source = directionalSource || (normalizeAccountSearchText(query) ? views.all || [] : views.withBalance || [])
-  return filterCounterpartyGroups(filterCounterpartyGroupsByQuery(source, query), filterKey)
+  return filterCounterpartyGroupsByQuery(filterCounterpartyGroups(source, filterKey), query)
     .slice()
     .sort((left, right) => counterpartyMagnitudeForFilter(right, filterKey) - counterpartyMagnitudeForFilter(left, filterKey)
       || left.ownerName.localeCompare(right.ownerName, 'ar')
@@ -1824,26 +1856,22 @@ export function CounterpartyList({ title, groups = [], focusedId = '', onFocus, 
       ) : null}
       {groups.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
       <div className="adreem-counterparty-grid">
-        <AnimatePresence initial={false}>
-          {groups.map((group) => <CounterpartyCard key={group.id} group={group} isFocused={group.id === focusedId} isDimmed={hasFocus && group.id !== focusedId} onFocus={onFocus} onOpen={onOpen} />)}
-        </AnimatePresence>
+        {groups.map((group) => <CounterpartyCard key={group.id} group={group} isFocused={group.id === focusedId} isDimmed={hasFocus && group.id !== focusedId} onFocus={onFocus} onOpen={onOpen} />)}
       </div>
     </section>
   )
 }
 
-function CounterpartyFilters({ groups = [], options = COUNTERPARTY_BALANCE_FILTERS, value = 'all', onChange }) {
+function CounterpartyFilters({ options = COUNTERPARTY_BALANCE_FILTERS, value = 'all', onChange }) {
   return (
     <div className="adreem-counterparty-filters" aria-label="فلترة الأشخاص">
       {options.map((option) => {
         const Icon = option.icon
-        const count = filterCounterpartyGroups(groups, option.key).length
         const selected = value === option.key
         return (
           <button type="button" key={option.key} className={`is-${option.key}`} aria-pressed={selected} onClick={() => onChange?.(option.key)}>
             <Icon aria-hidden="true" size={14} />
             <span>{option.label}</span>
-            <b>{formatCount(count)}</b>
           </button>
         )
       })}
@@ -3657,7 +3685,6 @@ export default function LedgerApp() {
     return groups
   }, [balances])
   const separateRecords = useMemo(() => filterSeparateRecords(movements, separateQuery), [movements, separateQuery])
-  const allSeparateRecords = useMemo(() => filterSeparateRecords(movements), [movements])
   const separateNames = useMemo(() => separateRecordNames(accounts, movements), [accounts, movements])
   const separateTotals = useMemo(() => separateRecordTotals(movements), [movements])
 
@@ -5772,9 +5799,7 @@ export default function LedgerApp() {
       return haystack.includes(normalizedAccountQuery)
     })
     const peopleViews = buildCounterpartyBalanceViews(peopleRows)
-    const searchablePeople = filterCounterpartyGroupsByQuery(peopleViews.all, accountQuery)
     const peopleBalances = filterCounterpartyGroupsByQuery(peopleViews.withBalance, accountQuery)
-    const peopleSource = normalizedAccountQuery ? searchablePeople : peopleBalances
     const visiblePeopleGroups = unifiedCounterpartyGroups(peopleViews, accountQuery, counterpartyBalanceFilter)
     const activeFocusedCounterpartyId = visiblePeopleGroups.some((group) => group.id === focusedCounterpartyId) ? focusedCounterpartyId : ''
     const activeBalanceFocus = (
@@ -5792,8 +5817,6 @@ export default function LedgerApp() {
       review: filterRows(balancesByKind.review || []),
     }
     const rows = accountRowsByGroup[activeGroup.key] || []
-    const visibleRows = activeGroup.key === 'people' ? visiblePeopleGroups : rows
-    const activeGroupCount = activeGroup.key === 'separate' ? allSeparateRecords.length : visibleRows.length
     return (
       <section className={`ml3-panel ml3-balances-surface ml3-balances-surface--${activeGroup.key}`}>
         <div className="ml3-balance-ledger" aria-label="ملخص الأرصدة حسب العملة">
@@ -5846,20 +5869,12 @@ export default function LedgerApp() {
 
         <div className="ml3-balances-workspace">
           <div className="ml3-account-switcher" role="tablist" aria-label="أنواع الأرصدة" onKeyDown={handleAccountGroupKeyDown}>
-            {accountGroupTabs.map((group) => {
-              const groupCount = group.key === 'people'
-                ? visiblePeopleGroups.length
-                : group.key === 'separate'
-                  ? allSeparateRecords.length
-                  : accountRowsByGroup[group.key]?.length || 0
-              return (
-                <button id={`adreem-balance-tab-${group.key}`} data-account-group={group.key} type="button" role="tab" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-selected={activeAccountGroup === group.key} aria-controls="adreem-balance-panel" tabIndex={activeAccountGroup === group.key ? 0 : -1} onClick={() => selectAccountGroup(group.key)}>
-                  <AccountGroupIcon groupKey={group.key} />
-                  <strong>{group.label}</strong>
-                  <span>{formatCount(groupCount)}</span>
-                </button>
-              )
-            })}
+            {accountGroupTabs.map((group) => (
+              <button id={`adreem-balance-tab-${group.key}`} data-account-group={group.key} type="button" role="tab" key={group.key} className={`ml3-account-switcher--${group.key} ${activeAccountGroup === group.key ? 'is-active' : ''}`} aria-selected={activeAccountGroup === group.key} aria-controls="adreem-balance-panel" tabIndex={activeAccountGroup === group.key ? 0 : -1} onClick={() => selectAccountGroup(group.key)}>
+                <AccountGroupIcon groupKey={group.key} />
+                <strong>{group.label}</strong>
+              </button>
+            ))}
           </div>
           <div id="adreem-balance-panel" className="ml3-balance-pane" role="tabpanel" aria-labelledby={`adreem-balance-tab-${activeGroup.key}`}>
             <Motion.div key={`${activeGroup.key}:${activeBalanceFocus || 'all'}`} className="adreem-balance-pane-motion" {...BALANCE_PANE_MOTION}>
@@ -5867,7 +5882,6 @@ export default function LedgerApp() {
                 <div className="ml3-balance-pane-title">
                   <i><AccountGroupIcon groupKey={activeGroup.key} /></i>
                   <h2>{balancePaneTitle}</h2>
-                  <span>{formatCount(activeGroupCount)}</span>
                   {activeBalanceFocus ? (
                     <button type="button" className="adreem-balance-focus-reset" aria-label="عرض الكل" title="عرض الكل" onClick={() => selectAccountGroup(activeGroup.key)}>
                       <X aria-hidden="true" size={14} />
@@ -5916,7 +5930,7 @@ export default function LedgerApp() {
               ) : activeGroup.key === 'people' ? (
                 <>
                   <div className="adreem-people-controls">
-                    <CounterpartyFilters groups={peopleSource} value={counterpartyBalanceFilter} onChange={(nextFilter) => {
+                    <CounterpartyFilters value={counterpartyBalanceFilter} onChange={(nextFilter) => {
                       setCounterpartyBalanceFilter(nextFilter)
                       setBalanceFocus(['receivable', 'payable'].includes(nextFilter) ? nextFilter : '')
                       setFocusedCounterpartyId('')
