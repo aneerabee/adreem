@@ -106,6 +106,26 @@ describe('adreem ledger state reset safety', () => {
     expect(sameSerializableContent(snapshot, changedBalance)).toBe(false)
     expect(sameSerializableContent(snapshot, [...snapshot, { id: 'bank-main' }])).toBe(false)
   })
+
+  it('preserves settlement pin metadata when normalizing a cloud account', () => {
+    const state = normalizeLedgerState({
+      accounts: [{
+        id: 'person-cash',
+        type: 'person',
+        valueKind: 'receivable',
+        ownerName: 'سعيد',
+        subAccountName: 'كاش بيننا',
+        settlementPinned: true,
+        settlementPinnedAt: '2026-08-25T08:00:00.000Z',
+      }],
+      movements: [],
+    })
+
+    expect(state.accounts[0]).toMatchObject({
+      settlementPinned: true,
+      settlementPinnedAt: '2026-08-25T08:00:00.000Z',
+    })
+  })
 })
 
 describe('adreem ledger state migration', () => {

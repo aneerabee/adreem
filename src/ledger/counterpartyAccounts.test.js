@@ -106,4 +106,22 @@ describe('counterparty account bundles', () => {
     expect(views.receivable.map((group) => group.ownerName)).toEqual(['الأول', 'الثاني'])
     expect(views.payable.map((group) => group.ownerName)).toEqual(['الثاني', 'الأول'])
   })
+
+  it('keeps people pinned for settlement above larger unpinned balances', () => {
+    const largeAccounts = buildCounterpartyAccountBundle(personDraft({ ownerName: 'رصيد كبير' }))
+    const pinnedAccounts = buildCounterpartyAccountBundle(personDraft({ ownerName: 'تسوية عاجلة' }))
+      .map((account) => ({
+        ...account,
+        settlementPinned: true,
+        settlementPinnedAt: '2026-08-25T08:00:00.000Z',
+      }))
+    const views = buildCounterpartyBalanceViews([
+      { account: largeAccounts[0], dinar: 50_000, usd: 0, try: 0 },
+      { account: pinnedAccounts[0], dinar: 100, usd: 0, try: 0 },
+    ])
+
+    expect(views.all.map((group) => group.ownerName)).toEqual(['تسوية عاجلة', 'رصيد كبير'])
+    expect(views.receivable.map((group) => group.ownerName)).toEqual(['تسوية عاجلة', 'رصيد كبير'])
+    expect(views.all[0]).toMatchObject({ settlementPinned: true, settlementPinnedAt: '2026-08-25T08:00:00.000Z' })
+  })
 })

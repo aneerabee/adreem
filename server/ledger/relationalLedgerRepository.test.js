@@ -25,7 +25,13 @@ function clientFixture(rowOverrides = {}) {
     adreem_ledgers: [ledger],
     adreem_accounts: [{
       record_id: 'cash',
-      payload: { id: 'cash', ownerName: 'أنا', status: 'active' },
+      payload: {
+        id: 'cash',
+        ownerName: 'أنا',
+        status: 'active',
+        settlementPinned: true,
+        settlementPinnedAt: '2026-08-25T08:00:00.000Z',
+      },
       balance_dinar: '1200',
       balance_usd: '50',
       balance_try: '2750',
@@ -117,6 +123,8 @@ describe('relational ledger repository', () => {
       postedCount: 3,
       structureLocked: true,
       balanceSource: 'database',
+      settlementPinned: true,
+      settlementPinnedAt: '2026-08-25T08:00:00.000Z',
     })
     expect(result.state.movements[0]).toMatchObject({ id: 'movement-1', databaseSequence: 1 })
     expect(result.movementPage).toEqual({

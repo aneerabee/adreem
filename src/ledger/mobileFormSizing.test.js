@@ -47,7 +47,6 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('.adreem-net-calc > * { min-width: 0; }')
     expect(financeStylesheet).toContain('.adreem-net-calc { grid-template-columns: repeat(2, minmax(0, 1fr)); }')
     expect(financeStylesheet).toContain('.adreem-net-target,')
-    expect(financeStylesheet).toContain('.adreem-net-calc output { width: 100%; grid-column: 1 / -1; }')
     expect(financeStylesheet).not.toContain('.adreem-net-calc { grid-template-columns: minmax(80px, 0.8fr) minmax(92px, auto) minmax(105px, 1fr); }')
     expect(financeStylesheet).toContain('grid-template-areas: "opening-label opening-value" "opening-direction opening-direction";')
     expect(financeStylesheet).toContain('.adreem-counterparty-opening > header strong { overflow: visible;')
@@ -55,6 +54,10 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('scroll-padding-block-end: calc(68px + env(safe-area-inset-bottom));')
     expect(financeStylesheet).toContain('.adreem-net-account-values > span.is-negative { background: var(--finance-debt-soft);')
     expect(financeStylesheet).toContain('.adreem-net-account-values > span.is-positive { color: var(--finance-green-dark);')
+    expect(ledgerSource).toContain('className="adreem-net-result"')
+    expect(financeStylesheet).toContain('.adreem-net-calc output .adreem-net-result { min-width: 0; max-width: 100%;')
+    expect(financeStylesheet).toContain('.adreem-net-result > span { flex: 0 0 auto;')
+    expect(financeStylesheet).toContain('.adreem-net-calc output { width: auto; max-width: 100%; grid-column: 1 / -1; }')
   })
 
   it('keeps balance cards stationary while their content changes smoothly', () => {
@@ -148,6 +151,10 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('.adreem-counterparty-channel.is-negative { --channel-tone: var(--finance-debt);')
     expect(financeStylesheet).toContain('.adreem-counterparty-channel.is-negative > b { color: var(--finance-debt-dark); }')
     expect(financeStylesheet).toContain('.ml3-opening-direction button.is-negative.is-active { border-color: var(--finance-debt);')
+    expect(financeStylesheet).toContain('.adreem-counterparty-main {')
+    expect(financeStylesheet).toContain('.adreem-counterparty-card.is-settlement-pinned {')
+    expect(financeStylesheet).toContain('.adreem-counterparty-settlement-toggle { width: 42px; min-width: 42px; min-height: 44px; }')
+    expect(ledgerSource).toContain("nextPinned ? 'counterparty.settlement_pinned' : 'counterparty.settlement_unpinned'")
   })
 
   it('uses one dark charcoal neutral instead of the old blue accent', () => {

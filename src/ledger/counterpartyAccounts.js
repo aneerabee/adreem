@@ -74,6 +74,8 @@ export function groupCounterpartyBalanceBuckets(rows = []) {
       rows: [],
       receivable: { dinar: 0, usd: 0, try: 0 },
       payable: { dinar: 0, usd: 0, try: 0 },
+      settlementPinned: false,
+      settlementPinnedAt: null,
     }
     const dinar = Number(bucket.dinar || 0)
     const usd = Number(bucket.usd || 0)
@@ -85,6 +87,11 @@ export function groupCounterpartyBalanceBuckets(rows = []) {
     current.payable.dinar += Math.abs(Math.min(0, dinar))
     current.payable.usd += Math.abs(Math.min(0, usd))
     current.payable.try += Math.abs(Math.min(0, tryAmount))
+    if (account.settlementPinned) {
+      const pinnedAt = String(account.settlementPinnedAt || account.updatedAt || account.createdAt || '')
+      current.settlementPinned = true
+      if (pinnedAt > String(current.settlementPinnedAt || '')) current.settlementPinnedAt = pinnedAt
+    }
     groups.set(key, current)
   }
   return Array.from(groups.values()).map((group) => ({
@@ -110,9 +117,14 @@ function directionMagnitude(group = {}, direction) {
 }
 
 function compareGroupsByMagnitude(left, right, direction = '') {
+  const pinnedComparison = Number(Boolean(right?.settlementPinned)) - Number(Boolean(left?.settlementPinned))
+  const pinnedAtComparison = String(right?.settlementPinnedAt || '').localeCompare(String(left?.settlementPinnedAt || ''))
   const leftMagnitude = direction ? directionMagnitude(left, direction) : groupMagnitude(left)
   const rightMagnitude = direction ? directionMagnitude(right, direction) : groupMagnitude(right)
-  return rightMagnitude - leftMagnitude || left.ownerName.localeCompare(right.ownerName, 'ar') || left.id.localeCompare(right.id)
+  return pinnedComparison || (left?.settlementPinned && right?.settlementPinned ? pinnedAtComparison : 0)
+    || rightMagnitude - leftMagnitude
+    || left.ownerName.localeCompare(right.ownerName, 'ar')
+    || left.id.localeCompare(right.id)
 }
 
 export function buildCounterpartyBalanceViews(rows = []) {

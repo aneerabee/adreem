@@ -70,6 +70,7 @@ import {
   projectCounterpartyGroupForFilter,
   releaseSubmission,
   saveFailureMessage,
+  setCounterpartySettlementPin,
   signedMoney,
   storageTextForStatus,
   TEMPORARY_NET_RESET_MS,
@@ -275,7 +276,9 @@ describe('LedgerApp net position controls', () => {
     expect(markup).toContain('الصافي')
     expect(markup).toContain('10,500 LYD')
     expect(markup).toContain('100 USD')
-    expect(markup).toContain('11,250 LYD')
+    expect(markup).toContain('adreem-net-result')
+    expect(markup).toContain('>11,250</b>')
+    expect(markup).toContain('>LYD</span>')
     expect(markup).toContain('كاش عندي')
     expect(markup).toContain('سعيد')
   })
@@ -1311,6 +1314,49 @@ describe('LedgerApp people account views', () => {
     expect(markup.match(/أقبض 1,200 LYD/g)).toHaveLength(1)
     expect(markup.match(/أدفع 450 LYD/g)).toHaveLength(1)
     expect(markup.match(/أقبض 80 USD/g)).toHaveLength(1)
+  })
+
+  it('persists a settlement pin across every account for the same person', () => {
+    const accounts = [
+      { id: 'cash', type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE, counterpartyId: 'person:saeed' },
+      { id: 'cheque', type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE, counterpartyId: 'person:saeed' },
+      { id: 'other', type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE, counterpartyId: 'person:other' },
+    ]
+    const pinnedAt = '2026-08-25T08:00:00.000Z'
+    const pinned = setCounterpartySettlementPin(accounts, 'person:saeed', true, pinnedAt)
+    const unpinned = setCounterpartySettlementPin(pinned, 'person:saeed', false, '2026-08-25T09:00:00.000Z')
+
+    expect(pinned.filter((account) => account.counterpartyId === 'person:saeed')).toEqual([
+      expect.objectContaining({ id: 'cash', settlementPinned: true, settlementPinnedAt: pinnedAt, updatedAt: pinnedAt }),
+      expect.objectContaining({ id: 'cheque', settlementPinned: true, settlementPinnedAt: pinnedAt, updatedAt: pinnedAt }),
+    ])
+    expect(pinned[2]).toBe(accounts[2])
+    expect(unpinned.filter((account) => account.counterpartyId === 'person:saeed').every((account) => account.settlementPinned === false && account.settlementPinnedAt === null)).toBe(true)
+    expect(setCounterpartySettlementPin(accounts, 'missing', true, pinnedAt)).toBe(accounts)
+  })
+
+  it('marks a person pinned for settlement with one clear accessible control', () => {
+    const group = {
+      id: 'person:saeed',
+      ownerName: 'سعيد',
+      settlementPinned: true,
+      settlementPinnedAt: '2026-08-25T08:00:00.000Z',
+      receivable: { dinar: 1_200, usd: 0, try: 0 },
+      payable: { dinar: 0, usd: 0, try: 0 },
+      rows: [{
+        account: { id: 'cash', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR },
+        dinar: 1_200,
+        usd: 0,
+        try: 0,
+      }],
+    }
+    const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} onToggleSettlement={() => {}} />))
+
+    expect(markup).toContain('is-settlement-pinned')
+    expect(markup).toContain('adreem-counterparty-settlement-tag')
+    expect(markup).toContain(' تسوية</b>')
+    expect(markup).toContain('aria-label="إلغاء تثبيت التسوية"')
+    expect(markup).toContain('aria-pressed="true"')
   })
 
   it('shows a settled search result in the same people card without empty balance rows', () => {

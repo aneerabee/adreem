@@ -3,14 +3,14 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Star, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Pin, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Star, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
 import './adreemFinance.css'
 import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
-import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailDisplayName, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
+import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailDisplayName, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyGroupKey, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
 import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
@@ -1246,7 +1246,12 @@ export function NetPositionPanel({
         </div>
         <output className={conversion.ok && conversion.amount < 0 ? 'is-negative' : ''}>
           <small>النتيجة</small>
-          <strong>{conversion.ok ? money(conversion.amount, conversion.currency) : conversion.error || 'أدخل السعر'}</strong>
+          {conversion.ok ? (
+            <strong className="adreem-net-result" title={money(conversion.amount, conversion.currency)}>
+              <b>{formatInteger(conversion.amount)}</b>
+              <span>{conversion.currency}</span>
+            </strong>
+          ) : <strong className="adreem-net-result-error">{conversion.error || 'أدخل السعر'}</strong>}
         </output>
       </div>
       <details className="adreem-net-accounts">
@@ -1685,6 +1690,24 @@ function counterpartyHasDirection(group = {}, direction) {
   return Number(value.dinar || 0) > 0 || Number(value.usd || 0) > 0 || Number(value.try || 0) > 0
 }
 
+export function setCounterpartySettlementPin(accounts = [], groupId = '', pinned = true, updatedAt = new Date().toISOString()) {
+  const targetId = String(groupId || '').trim()
+  if (!targetId) return accounts
+  const nextPinned = Boolean(pinned)
+  let changed = false
+  const nextAccounts = accounts.map((account) => {
+    if (counterpartyGroupKey(account) !== targetId) return account
+    changed = true
+    return {
+      ...account,
+      settlementPinned: nextPinned,
+      settlementPinnedAt: nextPinned ? updatedAt : null,
+      updatedAt,
+    }
+  })
+  return changed ? nextAccounts : accounts
+}
+
 function counterpartyGroupFromRows(group = {}, rows = []) {
   const totals = rows.reduce((result, bucket) => {
     for (const field of ['dinar', 'usd', 'try']) {
@@ -1772,7 +1795,11 @@ export function unifiedCounterpartyGroups(views = {}, query = '', filterKey = 'a
   const source = directionalSource || (normalizeAccountSearchText(query) ? views.all || [] : views.withBalance || [])
   return filterCounterpartyGroupsByQuery(filterCounterpartyGroups(source, filterKey), query)
     .slice()
-    .sort((left, right) => counterpartyMagnitudeForFilter(right, filterKey) - counterpartyMagnitudeForFilter(left, filterKey)
+    .sort((left, right) => Number(Boolean(right?.settlementPinned)) - Number(Boolean(left?.settlementPinned))
+      || (left?.settlementPinned && right?.settlementPinned
+        ? String(right?.settlementPinnedAt || '').localeCompare(String(left?.settlementPinnedAt || ''))
+        : 0)
+      || counterpartyMagnitudeForFilter(right, filterKey) - counterpartyMagnitudeForFilter(left, filterKey)
       || left.ownerName.localeCompare(right.ownerName, 'ar')
       || left.id.localeCompare(right.id))
 }
@@ -1790,9 +1817,10 @@ function CounterpartyChannel({ bucket }) {
   )
 }
 
-export function CounterpartyCard({ group, isFocused = false, isDimmed = false, onFocus, onOpen }) {
+export function CounterpartyCard({ group, isFocused = false, isDimmed = false, onFocus, onOpen, onToggleSettlement }) {
   const hasReceivable = group.receivable.dinar > 0 || group.receivable.usd > 0 || group.receivable.try > 0
   const hasPayable = group.payable.dinar > 0 || group.payable.usd > 0 || group.payable.try > 0
+  const settlementPinned = Boolean(group.settlementPinned)
   const balanceStatus = hasReceivable && hasPayable ? 'أقبض وأدفع' : hasReceivable ? 'أقبض منه' : hasPayable ? 'أدفع له' : 'مسكر'
   const tone = hasReceivable && hasPayable ? 'mixed' : hasReceivable ? 'receivable' : hasPayable ? 'payable' : 'zero'
   const previewRows = group.rows.filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
@@ -1802,17 +1830,30 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
       transition={UI_MOTION_TRANSITION}
-      className={['adreem-counterparty-card', `is-${tone}`, 'is-balances-view', previewRows.length ? 'has-balances' : 'is-settled', isFocused && 'is-focused', isDimmed && 'is-dimmed'].filter(Boolean).join(' ')}
+      className={['adreem-counterparty-card', `is-${tone}`, 'is-balances-view', previewRows.length ? 'has-balances' : 'is-settled', settlementPinned && 'is-settlement-pinned', isFocused && 'is-focused', isDimmed && 'is-dimmed'].filter(Boolean).join(' ')}
       data-counterparty-id={group.id}
     >
-      <button type="button" className="adreem-counterparty-focus" aria-expanded={isFocused} onClick={() => onFocus?.(group.id)}>
-        <span className="adreem-counterparty-avatar"><UserRound aria-hidden="true" size={16} /></span>
-        <span className="adreem-counterparty-identity">
-          <strong>{preserveUiData(group.ownerName)}</strong>
-          <small>{balanceStatus}</small>
-        </span>
-        <ChevronDown className="adreem-counterparty-chevron" aria-hidden="true" size={16} />
-      </button>
+      <div className="adreem-counterparty-main">
+        <button type="button" className="adreem-counterparty-focus" aria-expanded={isFocused} onClick={() => onFocus?.(group.id)}>
+          <span className="adreem-counterparty-avatar"><UserRound aria-hidden="true" size={16} /></span>
+          <span className="adreem-counterparty-identity">
+            <strong>{preserveUiData(group.ownerName)}</strong>
+            <small>{balanceStatus}</small>
+            {settlementPinned ? <b className="adreem-counterparty-settlement-tag"><Pin aria-hidden="true" size={10} fill="currentColor" /> تسوية</b> : null}
+          </span>
+          <ChevronDown className="adreem-counterparty-chevron" aria-hidden="true" size={16} />
+        </button>
+        <button
+          type="button"
+          className="adreem-counterparty-settlement-toggle"
+          aria-label={settlementPinned ? 'إلغاء تثبيت التسوية' : 'تثبيت للتسوية'}
+          aria-pressed={settlementPinned}
+          title={settlementPinned ? 'إلغاء تثبيت التسوية' : 'تثبيت للتسوية'}
+          onClick={() => onToggleSettlement?.(group)}
+        >
+          <Pin aria-hidden="true" size={15} fill={settlementPinned ? 'currentColor' : 'none'} />
+        </button>
+      </div>
       {isFocused ? (
         <Motion.div key="channels" className="adreem-counterparty-channels" initial={{ opacity: 0, y: -2 }} animate={{ opacity: 1, y: 0 }} transition={UI_MOTION_TRANSITION}>
           {group.rows.map((bucket) => {
@@ -1844,7 +1885,7 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
   )
 }
 
-export function CounterpartyList({ title, groups = [], focusedId = '', onFocus, onOpen, hideHeader = false }) {
+export function CounterpartyList({ title, groups = [], focusedId = '', onFocus, onOpen, onToggleSettlement, hideHeader = false }) {
   const hasFocus = groups.some((group) => group.id === focusedId)
   return (
     <section className={`adreem-counterparty-list ${hasFocus ? 'has-focus' : ''}`}>
@@ -1856,7 +1897,7 @@ export function CounterpartyList({ title, groups = [], focusedId = '', onFocus, 
       ) : null}
       {groups.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
       <div className="adreem-counterparty-grid">
-        {groups.map((group) => <CounterpartyCard key={group.id} group={group} isFocused={group.id === focusedId} isDimmed={hasFocus && group.id !== focusedId} onFocus={onFocus} onOpen={onOpen} />)}
+        {groups.map((group) => <CounterpartyCard key={group.id} group={group} isFocused={group.id === focusedId} isDimmed={hasFocus && group.id !== focusedId} onFocus={onFocus} onOpen={onOpen} onToggleSettlement={onToggleSettlement} />)}
       </div>
     </section>
   )
@@ -4643,6 +4684,29 @@ export default function LedgerApp() {
     ))
   }
 
+  function toggleCounterpartySettlement(group) {
+    const groupId = String(group?.id || '').trim()
+    if (!groupId) return
+    const accountIds = accounts
+      .filter((account) => counterpartyGroupKey(account) === groupId)
+      .map((account) => account.id)
+    if (!accountIds.length) return
+    const nextPinned = !group.settlementPinned
+    const updatedAt = new Date().toISOString()
+    setAccounts((current) => setCounterpartySettlementPin(current, groupId, nextPinned, updatedAt))
+    setLedgerExtras((current) => ({
+      ...current,
+      auditEvents: [
+        ...(current.auditEvents || []),
+        createAuditEvent(nextPinned ? 'counterparty.settlement_pinned' : 'counterparty.settlement_unpinned', {
+          counterpartyId: groupId,
+          accountIds,
+        }),
+      ],
+    }))
+    setFeedback(nextPinned ? 'تم تثبيت الشخص للتسوية.' : 'تم إلغاء تثبيت التسوية.')
+  }
+
   function switchSection(section) {
     if (section === activeSection) return
     const currentIndex = sectionOrder.indexOf(activeSection)
@@ -5942,6 +6006,7 @@ export default function LedgerApp() {
                     focusedId={activeFocusedCounterpartyId}
                     onFocus={(groupId) => setFocusedCounterpartyId((current) => current === groupId ? '' : groupId)}
                     onOpen={setSelectedAccountId}
+                    onToggleSettlement={toggleCounterpartySettlement}
                     hideHeader
                   />
                 </>
