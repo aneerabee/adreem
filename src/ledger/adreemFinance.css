@@ -1200,10 +1200,19 @@
 .adreem-counterparty-focus:hover { background: color-mix(in srgb, var(--counterparty-soft) 42%, transparent); }
 .adreem-counterparty-focus:focus-visible { outline: 2px solid var(--counterparty-tone); outline-offset: -2px; }
 .adreem-counterparty-avatar { grid-area: avatar; width: 29px; height: 29px; display: grid; place-items: center; border-radius: 7px; background: var(--counterparty-soft); color: var(--counterparty-tone); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--counterparty-tone) 12%, transparent); }
-.adreem-counterparty-identity { grid-area: identity; min-width: 0; display: flex; align-items: center; gap: 6px; }
-.adreem-counterparty-identity strong { min-width: 0; overflow: hidden; color: var(--finance-ink); font-size: 0.82rem; text-overflow: ellipsis; white-space: nowrap; }
-.adreem-counterparty-identity small { flex: 0 0 auto; padding: 2px 5px; border-radius: 999px; background: var(--counterparty-soft); color: var(--counterparty-ink); font-size: 0.53rem; font-weight: 790; }
-.adreem-counterparty-settlement-tag { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 2px; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--finance-gold) 34%, transparent); border-radius: 999px; background: var(--finance-gold-soft); color: var(--finance-gold); font-size: 0.5rem; font-weight: 850; line-height: 1; }
+.adreem-counterparty-identity {
+  grid-area: identity;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-areas: "name name name" "status settlement .";
+  align-content: center;
+  justify-content: start;
+  gap: 3px 5px;
+}
+.adreem-counterparty-identity strong { grid-area: name; min-width: 0; color: var(--finance-ink); font-size: 0.82rem; }
+.adreem-counterparty-identity small { grid-area: status; justify-self: start; padding: 2px 5px; border-radius: 999px; background: var(--counterparty-soft); color: var(--counterparty-ink); font-size: 0.53rem; font-weight: 790; }
+.adreem-counterparty-settlement-tag { grid-area: settlement; justify-self: start; display: inline-flex; align-items: center; gap: 2px; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--finance-gold) 34%, transparent); border-radius: 999px; background: var(--finance-gold-soft); color: var(--finance-gold); font-size: 0.5rem; font-weight: 850; line-height: 1; }
 .adreem-counterparty-settlement-toggle { width: 38px; min-width: 38px; min-height: 38px; display: grid; place-items: center; align-self: stretch; padding: 0; border: 0; border-inline-start: 1px solid var(--finance-line); border-radius: 0; background: transparent; color: var(--finance-muted); }
 .adreem-counterparty-settlement-toggle:hover { background: color-mix(in srgb, var(--finance-gold-soft) 66%, transparent); color: var(--finance-gold); }
 .adreem-counterparty-settlement-toggle[aria-pressed="true"] { background: color-mix(in srgb, var(--finance-gold-soft) 84%, white); color: var(--finance-gold); }
@@ -2252,3 +2261,19 @@
   .adreem-counterparty-card,
   .adreem-counterparty-chevron { transform: none !important; }
 }
+
+/* A person or account name is financial identity data and must never be abbreviated. */
+.adreem-app .adreem-account-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible !important;
+  overflow-wrap: anywhere;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  word-break: normal;
+  line-height: 1.3;
+}
+
+.ml3-history-route .adreem-account-name { flex: 1 1 0; }
+.ml3-today-effects .adreem-account-name { display: inline; font: inherit; }
+.adreem-expense-category-tag.adreem-account-name { flex-wrap: wrap; }

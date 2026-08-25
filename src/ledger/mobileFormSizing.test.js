@@ -43,6 +43,15 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('overflow-wrap: anywhere;')
   })
 
+  it('never abbreviates a person or account name on desktop or phone', () => {
+    expect(financeStylesheet).toContain('.adreem-app .adreem-account-name {')
+    expect(financeStylesheet).toContain('overflow: visible !important;')
+    expect(financeStylesheet).toContain('text-overflow: clip !important;')
+    expect(financeStylesheet).toContain('white-space: normal !important;')
+    expect(financeStylesheet).toContain('grid-template-areas: "name name name" "status settlement .";')
+    expect((ledgerSource.match(/adreem-account-name/g) || []).length).toBeGreaterThanOrEqual(25)
+  })
+
   it('keeps net results and opening balances inside narrow phone layouts', () => {
     expect(financeStylesheet).toContain('.adreem-net-calc > * { min-width: 0; }')
     expect(financeStylesheet).toContain('.adreem-net-calc { grid-template-columns: repeat(2, minmax(0, 1fr)); }')

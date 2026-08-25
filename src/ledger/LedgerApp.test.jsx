@@ -1359,6 +1359,33 @@ describe('LedgerApp people account views', () => {
     expect(markup).toContain('aria-pressed="true"')
   })
 
+  it('keeps long person and account names complete in pinned cards and account rows', () => {
+    const longName = 'شركة الاستثمار والنقل الدولي فرع طريق المطار الجديد'
+    const account = {
+      id: 'long-name-cash',
+      ownerName: longName,
+      subAccountName: 'كاش',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+      counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    }
+    const group = {
+      id: 'person:long-name',
+      ownerName: longName,
+      settlementPinned: true,
+      receivable: { dinar: 800, usd: 0, try: 0 },
+      payable: { dinar: 0, usd: 0, try: 0 },
+      rows: [{ account, dinar: 800, usd: 0, try: 0 }],
+    }
+    const cardMarkup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} onToggleSettlement={() => {}} />))
+    const rowMarkup = stripUiDataProtection(renderToStaticMarkup(<AccountRow bucket={{ account, dinar: 800, usd: 0, try: 0 }} />))
+
+    expect(cardMarkup).toContain(`<strong class="adreem-account-name">${longName}</strong>`)
+    expect(rowMarkup).toContain(`<strong class="adreem-account-name">${longName}</strong>`)
+  })
+
   it('shows a settled search result in the same people card without empty balance rows', () => {
     const group = {
       id: 'person:zero',

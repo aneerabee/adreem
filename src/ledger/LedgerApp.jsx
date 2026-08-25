@@ -222,7 +222,7 @@ function FlowProgress({ current, total, items = [], onEdit }) {
               <Motion.button type="button" key={item.key} whileTap={{ scale: 0.97 }} transition={UI_MOTION_TRANSITION} onClick={() => onEdit?.(item.step)} title={getActiveUiLanguage() === 'en' ? `Edit ${translateUiText(item.label, 'en')}` : `تعديل ${item.label}`}>
                 <Check aria-hidden="true" size={13} strokeWidth={2.7} />
                 <span>{item.label}</span>
-                <strong>{item.value}</strong>
+                <strong className={['source', 'destination', 'name'].includes(item.key) ? 'adreem-account-name' : undefined}>{item.value}</strong>
               </Motion.button>
             ))}
           </div>
@@ -1278,7 +1278,7 @@ export function NetPositionPanel({
                   <i className="adreem-net-exclusion-mark" aria-hidden="true">{isExcluded ? <Check size={13} /> : null}</i>
                   <span className="adreem-net-account-copy">
                     <AccountChoiceIcon account={item.account} size={15} />
-                    <span><strong>{protectedAccountPrimaryName(item.account)}</strong><small>{protectedAccountContext(item.account)}</small></span>
+                    <span><strong className="adreem-account-name">{protectedAccountPrimaryName(item.account)}</strong><small>{protectedAccountContext(item.account)}</small></span>
                   </span>
                   <span className={`adreem-net-account-values${displayValues.length > 1 ? ' is-multi' : ''}`}>
                     {displayValues.map((value) => (
@@ -1379,7 +1379,7 @@ export function SeparateLedgerPanel({ records, names, totals, query, draft, edit
                 <i>{direction === SEPARATE_RECORD_DIRECTIONS.RECEIVABLE ? <ArrowDownToLine aria-hidden="true" size={16} /> : direction === SEPARATE_RECORD_DIRECTIONS.PAYABLE ? <ArrowUpFromLine aria-hidden="true" size={16} /> : <NotebookPen aria-hidden="true" size={16} />}</i>
                 <span className="adreem-separate-record-copy">
                   <span className="adreem-separate-record-heading">
-                    <strong>{preserveUiData(movement.relatedName || 'بدون اسم')}</strong>
+                    <strong className="adreem-account-name">{preserveUiData(movement.relatedName || 'بدون اسم')}</strong>
                     {isPinned ? <b className="adreem-separate-featured-tag"><Star aria-hidden="true" size={11} fill="currentColor" /> مميز</b> : null}
                   </span>
                   <small>{preserveUiData(movement.note)}</small>
@@ -1419,7 +1419,7 @@ export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
         <i className="ml3-account-row-icon"><AccountChoiceIcon account={account} size={16} /></i>
         <span className="ml3-account-copy">
-          <strong>{protectedAccountPrimaryName(account)}</strong>
+          <strong className="adreem-account-name">{protectedAccountPrimaryName(account)}</strong>
           <span className="ml3-account-meta">
             <small className="ml3-account-context">{protectedAccountContext(account)}</small>
             {account.status === ACCOUNT_STATUSES.NEEDS_REVIEW ? <b>تأكيد</b> : null}
@@ -1488,11 +1488,11 @@ function AccountEditHistory({ accountId, auditEvents = [] }) {
                 <span className="ml3-account-edit-values">
                   <span>
                     <small>كان</small>
-                    <b>{change.protectsUserData ? preserveUiData(change.before) : change.before}</b>
+                    <b className={change.protectsUserData ? 'adreem-account-name' : undefined}>{change.protectsUserData ? preserveUiData(change.before) : change.before}</b>
                   </span>
                   <span>
                     <small>أصبح</small>
-                    <em>{change.protectsUserData ? preserveUiData(change.after) : change.after}</em>
+                    <em className={change.protectsUserData ? 'adreem-account-name' : undefined}>{change.protectsUserData ? preserveUiData(change.after) : change.after}</em>
                   </span>
                 </span>
               </div>
@@ -1582,7 +1582,7 @@ export function ExpenseCategoryPicker({ value = '', categories = [], onChange, o
           return (
             <button type="button" key={category.id} className={`adreem-category-tone-${tone}`} aria-pressed={value === category.id} onClick={() => onChange?.(category.id)}>
               <i aria-hidden="true" />
-              <span>{protectedAccountPrimaryName(category)}</span>
+              <span className="adreem-account-name">{protectedAccountPrimaryName(category)}</span>
             </button>
           )
         })}
@@ -1649,7 +1649,7 @@ export function ExpenseReportList({ rows = [], onOpen }) {
             <>
               <i className="ml3-account-row-icon"><ReceiptText aria-hidden="true" size={16} /></i>
               <span className="ml3-account-copy">
-                <strong className={`adreem-expense-category-tag ${row.categoryId ? `adreem-category-tone-${categoryTone}` : 'is-none'}`}><i aria-hidden="true" />{row.categoryId ? preserveUiData(row.name) : 'بدون تصنيف'}</strong>
+                <strong className={`adreem-expense-category-tag adreem-account-name ${row.categoryId ? `adreem-category-tone-${categoryTone}` : 'is-none'}`}><i aria-hidden="true" />{row.categoryId ? preserveUiData(row.name) : 'بدون تصنيف'}</strong>
                 <small className="ml3-account-context">{row.count ? `${formatCount(row.count)} حركة` : 'لا حركات'}</small>
               </span>
             </>
@@ -1837,7 +1837,7 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
         <button type="button" className="adreem-counterparty-focus" aria-expanded={isFocused} onClick={() => onFocus?.(group.id)}>
           <span className="adreem-counterparty-avatar"><UserRound aria-hidden="true" size={16} /></span>
           <span className="adreem-counterparty-identity">
-            <strong>{preserveUiData(group.ownerName)}</strong>
+            <strong className="adreem-account-name">{preserveUiData(group.ownerName)}</strong>
             <small>{balanceStatus}</small>
             {settlementPinned ? <b className="adreem-counterparty-settlement-tag"><Pin aria-hidden="true" size={10} fill="currentColor" /> تسوية</b> : null}
           </span>
@@ -1998,7 +1998,7 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
     <div className="ml3-account-picker" aria-label={label}>
       <div className={`ml3-picked-account ${selectedAccount ? `is-selected ml3-picked-account--${visualKind(selectedAccount)}` : ''}`}>
         <div>
-          <strong>{selectedAccount ? protectedAccountPrimaryName(selectedAccount) : 'اختر الحساب'}</strong>
+          <strong className={selectedAccount ? 'adreem-account-name' : undefined}>{selectedAccount ? protectedAccountPrimaryName(selectedAccount) : 'اختر الحساب'}</strong>
           {selectedAccount ? <small>{conciseAccountChoiceContext(selectedAccount)}</small> : null}
         </div>
         {selectedAccount ? (
@@ -2052,7 +2052,7 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
                     <button type="button" key={account.id} className={`${accountChoiceClasses('ml3-picker-favorite', account)} ${account.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => chooseAccount(account.id)}>
                       <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', account)}`}><AccountChoiceIcon account={account} size={15} /></span>
                       <span className="ml3-picker-favorite-copy">
-                        <strong>{protectedAccountPrimaryName(account)}</strong>
+                        <strong className="adreem-account-name">{protectedAccountPrimaryName(account)}</strong>
                         <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(account)}</small>
                       </span>
                       <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
@@ -2092,7 +2092,7 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
                 <button type="button" key={account.id} className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => chooseAccount(account.id)}>
                   <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', account)}`}><AccountChoiceIcon account={account} size={16} /></span>
                   <span className="ml3-picker-option-copy">
-                    <strong>{protectedAccountPrimaryName(account)}</strong>
+                    <strong className="adreem-account-name">{protectedAccountPrimaryName(account)}</strong>
                     <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(account)}</small>
                   </span>
                   <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
@@ -2258,8 +2258,8 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
         </span>
       </div>
       <div className="ml3-today-route">
-        {source ? <b>{protectedAccountLabel(source)}</b> : null}
-        {destination ? <b>{protectedAccountLabel(destination)}</b> : null}
+        {source ? <b className="adreem-account-name">{protectedAccountLabel(source)}</b> : null}
+        {destination ? <b className="adreem-account-name">{protectedAccountLabel(destination)}</b> : null}
       </div>
       {effects.length ? (
         <div className="ml3-today-effects">
@@ -2267,7 +2267,7 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
             const account = accountById.get(effect.accountId)
             return (
               <span key={`${effect.accountId}-${effect.currency}`}>
-                {account ? protectedAccountPrimaryName(account) : preserveUiData(effect.accountId)} {signedMoney(effect.delta, effect.currency)}
+                <b className="adreem-account-name">{account ? protectedAccountPrimaryName(account) : preserveUiData(effect.accountId)}</b> {signedMoney(effect.delta, effect.currency)}
               </span>
             )
           })}
@@ -2276,7 +2276,7 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
       {showNote ? <small>{preserveUiData(movement.note)}</small> : null}
       {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
       {expenseCategory ? (
-        <span className={`adreem-expense-category-tag adreem-category-tone-${expenseCategoryTone(expenseCategory.ownerName)}`} aria-label={`نوع المصروف: ${protectedAccountPrimaryName(expenseCategory)}`}>
+        <span className={`adreem-expense-category-tag adreem-account-name adreem-category-tone-${expenseCategoryTone(expenseCategory.ownerName)}`} aria-label={`نوع المصروف: ${protectedAccountPrimaryName(expenseCategory)}`}>
           <i aria-hidden="true" />{protectedAccountPrimaryName(expenseCategory)}
         </span>
       ) : null}
@@ -2322,9 +2322,9 @@ export function HistoryMovementRow({ movement, accountById, attachments = [], di
         <span className="ml3-movement-copy">
           <strong>{movementLabels[movement.type] || movement.type}</strong>
           <small className="ml3-history-route">
-            {source ? <b>{protectedAccountLabel(source)}</b> : null}
+            {source ? <b className="adreem-account-name">{protectedAccountLabel(source)}</b> : null}
             {source && destination ? <span className="ml3-history-arrow" aria-hidden="true">←</span> : null}
-            {destination ? <b>{protectedAccountLabel(destination)}</b> : null}
+            {destination ? <b className="adreem-account-name">{protectedAccountLabel(destination)}</b> : null}
           </small>
         </span>
       </div>
@@ -2345,7 +2345,7 @@ export function HistoryMovementRow({ movement, accountById, attachments = [], di
           {showNote ? <p className="ml3-history-note"><span aria-hidden="true">●</span>{preserveUiData(movement.note)}</p> : null}
           {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
           {expenseCategory ? (
-            <span className={`adreem-expense-category-tag adreem-category-tone-${expenseCategoryTone(expenseCategory.ownerName)}`} aria-label={`نوع المصروف: ${protectedAccountPrimaryName(expenseCategory)}`}>
+            <span className={`adreem-expense-category-tag adreem-account-name adreem-category-tone-${expenseCategoryTone(expenseCategory.ownerName)}`} aria-label={`نوع المصروف: ${protectedAccountPrimaryName(expenseCategory)}`}>
               <i aria-hidden="true" />{protectedAccountPrimaryName(expenseCategory)}
             </span>
           ) : null}
@@ -2476,7 +2476,7 @@ export function MovementActionDialog({ action, accountById, isSaving = false, on
         <div className="adreem-movement-action-summary">
           <span><strong>{movementLabels[movement.type] || 'حركة'}</strong><small>{movementDateTime(movement.createdAt || movement.updatedAt)}</small></span>
           <b>{money(movement.amount, movement.currency)}</b>
-          {(source || destination) ? <p>{source ? protectedAccountLabel(source) : 'بدون مصدر'} {source && destination ? '←' : ''} {destination ? protectedAccountLabel(destination) : ''}</p> : null}
+          {(source || destination) ? <p className="adreem-account-name">{source ? protectedAccountLabel(source) : 'بدون مصدر'} {source && destination ? '←' : ''} {destination ? protectedAccountLabel(destination) : ''}</p> : null}
           {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
         </div>
 
@@ -2486,7 +2486,7 @@ export function MovementActionDialog({ action, accountById, isSaving = false, on
             <div>
               {postingEntries.map((entry) => {
                 const account = accountById.get(entry.accountId)
-                return <span key={`${entry.accountId}-${entry.currency}`}><b>{account ? protectedAccountPrimaryName(account) : preserveUiData(entry.accountId)}</b><em>{signedMoney(-entry.delta, entry.currency)}</em></span>
+                return <span key={`${entry.accountId}-${entry.currency}`}><b className="adreem-account-name">{account ? protectedAccountPrimaryName(account) : preserveUiData(entry.accountId)}</b><em>{signedMoney(-entry.delta, entry.currency)}</em></span>
               })}
             </div>
           ) : null}
@@ -2582,7 +2582,7 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
               {preview.validation.errors.map((error) => <span key={`${error.field}-${error.message}`}>{error.message}</span>)}
               {preview.effects.map((effect) => (
                 <div className="ml3-effect" key={`${effect.accountId}-${effect.currency}`}>
-                  <span>{protectedAccountLabel(effect.account)}</span>
+                  <span className="adreem-account-name">{protectedAccountLabel(effect.account)}</span>
                   <b>{money(effect.before, effect.currency)}</b>
                   <i>{signedMoney(effect.delta, effect.currency)}</i>
                   <strong>{money(effect.after, effect.currency)}</strong>
@@ -2708,7 +2708,7 @@ export function AccountStatement({ account, accounts, movements, isLoading = fal
           <i><ReceiptText aria-hidden="true" size={18} /></i>
           <div>
             <small>ADREEM · كشف الحساب</small>
-            <h3>{protectedAccountPrimaryName(account)}</h3>
+            <h3 className="adreem-account-name">{protectedAccountPrimaryName(account)}</h3>
             <p>{statementRange}</p>
           </div>
         </div>
@@ -2941,7 +2941,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
             <i><AccountChoiceIcon account={account} size={18} /></i>
             <div>
               <span>{protectedAccountContext(account)}</span>
-              <h2>{protectedAccountPrimaryName(account)}</h2>
+              <h2 className="adreem-account-name">{protectedAccountPrimaryName(account)}</h2>
               <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'ما لك وما عليك معه' : account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK ? 'مكان من أماكن فلوسك' : 'حساب للمتابعة'}</p>
             </div>
           </div>
@@ -3075,7 +3075,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
                   <article className="ml3-profile-movement" key={movement.id}>
                     <div>
                       <strong>{movementLabels[movement.type] || movement.type}</strong>
-                      <span>
+                      <span className={movement.type === MOVEMENT_TYPES.RECORD_ONLY ? undefined : 'adreem-account-name'}>
                         {movement.type === MOVEMENT_TYPES.RECORD_ONLY
                           ? preserveUiData(movement.note || 'تسجيل للمتابعة فقط')
                           : <>{source ? protectedAccountLabel(source) : 'بدون مصدر'} ← {destination ? protectedAccountLabel(destination) : 'بدون وجهة'}</>}
@@ -3126,7 +3126,7 @@ export function ReviewAccountCard({ bucket, activeAccounts, onResolve, onMerge, 
     <article className="ml3-review-card">
       <div className="ml3-review-card-head">
         <div>
-          <strong>{protectedAccountPrimaryName(account)}</strong>
+          <strong className="adreem-account-name">{protectedAccountPrimaryName(account)}</strong>
           <span>{account.notes ? preserveUiData(account.notes) : 'يحتاج تحديد طريقة التعامل معه.'}</span>
         </div>
         <b>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</b>
@@ -3176,7 +3176,7 @@ export function ExternalAccountCard({ account, onCreate, onIgnore }) {
     <article className="ml3-review-card">
       <div className="ml3-review-card-head">
         <div>
-          <strong>{protectedAccountPrimaryName(draftAccount)}</strong>
+          <strong className="adreem-account-name">{protectedAccountPrimaryName(draftAccount)}</strong>
           <span>{preserveUiData(account.notes)}</span>
         </div>
         <b>اسم جديد</b>
@@ -6044,7 +6044,7 @@ export default function LedgerApp() {
               {reviewItems.map((item, index) => (
                 <button type="button" key={item.key} className={`ml3-review-ticket ml3-review-ticket--${item.tone} ${activeReviewItem?.key === item.key ? 'is-active' : ''}`} aria-pressed={activeReviewItem?.key === item.key} onClick={() => setActiveReviewKey(item.key)}>
                   <span>{formatCount(index + 1)}</span>
-                  <strong>{item.type === 'movement' ? item.label : preserveUiData(item.label)}</strong>
+                  <strong className={item.type === 'movement' ? undefined : 'adreem-account-name'}>{item.type === 'movement' ? item.label : preserveUiData(item.label)}</strong>
                   <b>{item.detail}</b>
                 </button>
               ))}
@@ -6566,7 +6566,7 @@ export default function LedgerApp() {
                       ))}
                       {preview.effects.map((effect) => (
                         <div className="ml3-effect" key={`${effect.accountId}-${effect.currency}`}>
-                          <span>{protectedAccountLabel(effect.account)}</span>
+                          <span className="adreem-account-name">{protectedAccountLabel(effect.account)}</span>
                           <b>{money(effect.before, effect.currency)}</b>
                           <i>{signedMoney(effect.delta, effect.currency)}</i>
                           <strong>{money(effect.after, effect.currency)}</strong>
@@ -6837,7 +6837,7 @@ export default function LedgerApp() {
 
                   {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
                     <div className="ml3-account-summary">
-                      <strong>{protectedAccountDraftSummary(accountDraft)}</strong>
+                      <strong className="adreem-account-name">{protectedAccountDraftSummary(accountDraft)}</strong>
                       {accountIsCounterpartyBundle ? (
                         <div className="adreem-counterparty-summary">
                           {counterpartyAccountChannels.map((channel) => {
