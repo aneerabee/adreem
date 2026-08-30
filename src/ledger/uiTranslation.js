@@ -810,6 +810,8 @@ const ENGLISH_TEXT = Object.freeze({
   'أمر غير معروف.': 'Unknown command.',
   'أمر المراجعة غير معروف.': 'Unknown review command.',
   'الحساب الحالي:': 'Current account:',
+  'اختر حسابًا بديلًا': 'Choose another account',
+  'إبقاء الحالي': 'Keep current',
   'الحسابات ستتفلتر حسب العملة.': 'Accounts will be filtered by currency.',
   'الحفظ سيضيف مطابقة، وقد ينشئ تصحيحًا.': 'Saving adds a reconciliation and may create an adjustment.',
   'الرصيد الافتتاحي: صفر': 'Opening balance: zero',

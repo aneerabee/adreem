@@ -17,6 +17,7 @@ import {
   AccountClassificationEditorFields,
   ExternalAccountCard,
   HistoryMovementRow,
+  MovementMiniRow,
   MovementActionDialog,
   ReviewAccountCard,
   CounterpartyCard,
@@ -469,6 +470,33 @@ describe('LedgerApp movement account picker', () => {
 })
 
 describe('LedgerApp compact history rows', () => {
+  it('shows each transfer account only once in the latest-today row', () => {
+    const accountById = new Map([
+      ['cash', { id: 'cash', ownerName: 'أنا', subAccountName: 'كاش', valueKind: VALUE_KINDS.CASH }],
+      ['person', { id: 'person', ownerName: 'سعيد', subAccountName: 'كاش بيننا', valueKind: VALUE_KINDS.RECEIVABLE }],
+    ])
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <MovementMiniRow
+        accountById={accountById}
+        movement={{
+          id: 'today-transfer',
+          type: MOVEMENT_TYPES.TRANSFER,
+          status: MOVEMENT_STATUSES.POSTED,
+          amount: 300,
+          currency: CURRENCIES.DINAR,
+          sourceAccountId: 'cash',
+          destinationAccountId: 'person',
+          createdAt: '2026-08-30T10:00:00.000Z',
+        }}
+      />,
+    ))
+
+    expect(markup.match(/كاش عندي/g)).toHaveLength(1)
+    expect(markup.match(/سعيد/g)).toHaveLength(1)
+    expect(markup).toContain('ml3-today-arrow')
+    expect(markup).not.toContain('ml3-today-effects')
+  })
+
   it('keeps the exchange result and rate visible without restoring the full posting breakdown', () => {
     const accountById = new Map([
       ['usd', { id: 'usd', ownerName: 'أنا', subAccountName: 'دولار', valueKind: VALUE_KINDS.CASH }],

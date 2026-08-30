@@ -52,6 +52,15 @@ describe('mobile form sizing', () => {
     expect((ledgerSource.match(/adreem-account-name/g) || []).length).toBeGreaterThanOrEqual(25)
   })
 
+  it('keeps account selection in one unpinned non-scrolling surface', () => {
+    expect(ledgerSource).toContain('selectedAccount && !isChanging ? (')
+    expect(ledgerSource).toContain('className="ml3-account-chooser"')
+    expect(ledgerSource).toContain('onClick={cancelAccountChange}>إبقاء الحالي</button>')
+    expect(financeStylesheet).toContain('.ml3-picker-results {\n  max-height: none !important;')
+    expect(financeStylesheet).toContain('.ml3-entry-card:has(.ml3-step--source.is-open),')
+    expect(financeStylesheet).toContain('.ml3-step--destination.is-open { overflow: visible;')
+  })
+
   it('keeps net results and opening balances inside narrow phone layouts', () => {
     expect(financeStylesheet).toContain('.adreem-net-calc > * { min-width: 0; }')
     expect(financeStylesheet).toContain('.adreem-net-calc { grid-template-columns: repeat(2, minmax(0, 1fr)); }')

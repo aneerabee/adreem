@@ -1994,14 +1994,21 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
     setShowAllResults(false)
   }
 
+  function cancelAccountChange() {
+    setQuery('')
+    setQuickFilter('')
+    setIsChanging(false)
+    setShowAllResults(false)
+  }
+
   return (
     <div className="ml3-account-picker" aria-label={label}>
-      <div className={`ml3-picked-account ${selectedAccount ? `is-selected ml3-picked-account--${visualKind(selectedAccount)}` : ''}`}>
-        <div>
-          <strong className={selectedAccount ? 'adreem-account-name' : undefined}>{selectedAccount ? protectedAccountPrimaryName(selectedAccount) : 'اختر الحساب'}</strong>
-          {selectedAccount ? <small>{conciseAccountChoiceContext(selectedAccount)}</small> : null}
-        </div>
-        {selectedAccount ? (
+      {selectedAccount && !isChanging ? (
+        <div className={`ml3-picked-account is-selected ml3-picked-account--${visualKind(selectedAccount)}`}>
+          <div>
+            <strong className="adreem-account-name">{protectedAccountPrimaryName(selectedAccount)}</strong>
+            <small>{conciseAccountChoiceContext(selectedAccount)}</small>
+          </div>
           <div className="ml3-picked-actions">
             <b className={`ml3-balance-chip is-${selectedBalance.tone}`}>{selectedBalance.text}</b>
             <button type="button" onClick={() => setIsChanging(true)}>
@@ -2013,10 +2020,16 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
               </button>
             ) : null}
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {showChooser ? (
-        <>
+        <div className="ml3-account-chooser">
+          {selectedAccount && isChanging ? (
+            <div className="ml3-picker-change-head">
+              <span>اختر حسابًا بديلًا</span>
+              <button type="button" onClick={cancelAccountChange}>إبقاء الحالي</button>
+            </div>
+          ) : null}
           <SearchField
             className="ml3-search-box"
             value={query}
@@ -2107,7 +2120,7 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
             ) : null}
             {normalizedQuery && resultAccounts.length === 0 ? <p>لا توجد نتيجة</p> : null}
           </div>
-        </>
+        </div>
       ) : null}
     </div>
   )
@@ -2237,10 +2250,13 @@ function AttachmentLink({ attachment, onDelete }) {
   )
 }
 
-function MovementMiniRow({ movement, accountById, attachments = [], dimensions = [], onEdit, onCancel, onDeleteAttachment }) {
+export function MovementMiniRow({ movement, accountById, attachments = [], dimensions = [], onEdit, onCancel, onDeleteAttachment }) {
   const source = accountById.get(movement.sourceAccountId)
   const destination = accountById.get(movement.destinationAccountId)
-  const effects = movement.status === MOVEMENT_STATUSES.POSTED ? buildPostingEntries(movement) : []
+  const routeAccountIds = new Set([movement.sourceAccountId, movement.destinationAccountId].filter(Boolean))
+  const effects = movement.status === MOVEMENT_STATUSES.POSTED
+    ? buildPostingEntries(movement).filter((effect) => !routeAccountIds.has(effect.accountId))
+    : []
   const movementAttachments = attachmentsForRecord(attachments, {
     movementId: movement.id,
   })
@@ -2257,8 +2273,9 @@ function MovementMiniRow({ movement, accountById, attachments = [], dimensions =
           <small>{movementTime(movement.createdAt)} · {money(movement.amount, movement.currency)} · {movementStatusLabel(movement.status)}</small>
         </span>
       </div>
-      <div className="ml3-today-route">
+      <div className={`ml3-today-route ${source && destination ? 'is-paired' : 'is-single'}`}>
         {source ? <b className="adreem-account-name">{protectedAccountLabel(source)}</b> : null}
+        {source && destination ? <span className="ml3-today-arrow" aria-hidden="true">←</span> : null}
         {destination ? <b className="adreem-account-name">{protectedAccountLabel(destination)}</b> : null}
       </div>
       {effects.length ? (

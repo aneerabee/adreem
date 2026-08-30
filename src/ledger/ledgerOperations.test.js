@@ -554,7 +554,10 @@ describe('adreem operational features', () => {
       sourceAccountId: 'missing-account',
       note: 'إيجار',
     }
-    const rule = createRecurringRuleFromMovement(movement)
+    const rule = {
+      ...createRecurringRuleFromMovement(movement, { dayOfMonth: 25 }),
+      createdAt: '2026-04-01T12:00:00.000Z',
+    }
     const date = new Date('2026-05-25T12:00:00.000Z')
     const run = runRecurringRule(rule, accounts, date)
 

@@ -2277,3 +2277,49 @@
 .ml3-history-route .adreem-account-name { flex: 1 1 0; }
 .ml3-today-effects .adreem-account-name { display: inline; font: inherit; }
 .adreem-expense-category-tag.adreem-account-name { flex-wrap: wrap; }
+
+/* Account selection is one natural page surface, never a scrollable box inside another scroll area. */
+.ml3-account-chooser { min-width: 0; display: grid; gap: 7px; }
+.ml3-picker-change-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 1px;
+  color: var(--finance-muted);
+  font-size: 0.64rem;
+  font-weight: 760;
+}
+.ml3-picker-change-head button {
+  min-height: var(--finance-control-compact);
+  border: 1px solid var(--finance-line);
+  border-radius: var(--finance-control-radius);
+  padding-inline: 9px;
+  background: var(--finance-paper);
+  color: var(--flow-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.ml3-picker-results {
+  max-height: none !important;
+  overflow-y: visible !important;
+  overscroll-behavior: auto;
+  scrollbar-gutter: auto;
+}
+.ml3-entry-card:has(.ml3-step--source.is-open),
+.ml3-entry-card:has(.ml3-step--destination.is-open) { height: auto; max-height: none; contain: none; }
+.adreem-flow-stage-motion:has(.ml3-step--source.is-open),
+.adreem-flow-stage-motion:has(.ml3-step--destination.is-open),
+.ml3-step--source.is-open,
+.ml3-step--destination.is-open { overflow: visible; scrollbar-gutter: auto; }
+
+/* Today's compact feed names each side once; the amount remains in the movement heading. */
+.ml3-today-route.is-paired {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+}
+.ml3-today-route.is-single { display: block; }
+.ml3-today-arrow { color: var(--finance-muted); font-size: 0.72rem; text-align: center; }
