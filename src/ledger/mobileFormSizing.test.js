@@ -52,13 +52,25 @@ describe('mobile form sizing', () => {
     expect((ledgerSource.match(/adreem-account-name/g) || []).length).toBeGreaterThanOrEqual(25)
   })
 
-  it('keeps account selection in one unpinned non-scrolling surface', () => {
+  it('keeps account selection unpinned with one stable scrolling result surface', () => {
     expect(ledgerSource).toContain('selectedAccount && !isChanging ? (')
     expect(ledgerSource).toContain('className="ml3-account-chooser"')
     expect(ledgerSource).toContain('onClick={cancelAccountChange}>إبقاء الحالي</button>')
-    expect(financeStylesheet).toContain('.ml3-picker-results {\n  max-height: none !important;')
-    expect(financeStylesheet).toContain('.ml3-entry-card:has(.ml3-step--source.is-open),')
-    expect(financeStylesheet).toContain('.ml3-step--destination.is-open { overflow: visible;')
+    expect(financeStylesheet).toContain('.ml3-step--source .ml3-route-picker,')
+    expect(financeStylesheet).toContain('overflow-y: auto;')
+    expect(financeStylesheet).toContain('scrollbar-gutter: stable;')
+    expect(financeStylesheet).toContain('.ml3-step--source .ml3-route-picker::-webkit-scrollbar-thumb,')
+    expect(financeStylesheet).toContain('.ml3-step--source .ml3-search-box,')
+    expect(financeStylesheet).toContain('max-height: none !important;\n  overflow: visible !important;')
+    expect(financeStylesheet).not.toContain('.ml3-entry-card:has(.ml3-step--source.is-open)')
+  })
+
+  it('lets today movement rows grow around labelled source and destination details', () => {
+    expect(financeStylesheet).toContain('.ml3-today-list {\n  grid-auto-rows: max-content;')
+    expect(financeStylesheet).toContain('.ml3-today-row {\n  height: auto !important;')
+    expect(financeStylesheet).toContain('contain: none !important;')
+    expect(financeStylesheet).toContain('.ml3-today-route.is-paired,')
+    expect(financeStylesheet).toContain('.ml3-today-endpoint.is-destination .ml3-today-endpoint-label')
   })
 
   it('keeps net results and opening balances inside narrow phone layouts', () => {

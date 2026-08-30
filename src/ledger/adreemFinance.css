@@ -2278,7 +2278,7 @@
 .ml3-today-effects .adreem-account-name { display: inline; font: inherit; }
 .adreem-expense-category-tag.adreem-account-name { flex-wrap: wrap; }
 
-/* Account selection is one natural page surface, never a scrollable box inside another scroll area. */
+/* Account selection has one bounded scroll surface while its search stays available. */
 .ml3-account-chooser { min-width: 0; display: grid; gap: 7px; }
 .ml3-picker-change-head {
   min-width: 0;
@@ -2301,25 +2301,111 @@
   font: inherit;
   cursor: pointer;
 }
+.ml3-step--source .ml3-route-picker,
+.ml3-step--destination .ml3-route-picker {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-color: color-mix(in srgb, var(--flow-tone) 42%, var(--finance-line)) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.ml3-step--source .ml3-route-picker::-webkit-scrollbar,
+.ml3-step--destination .ml3-route-picker::-webkit-scrollbar { width: 7px; }
+.ml3-step--source .ml3-route-picker::-webkit-scrollbar-track,
+.ml3-step--destination .ml3-route-picker::-webkit-scrollbar-track { background: transparent; }
+.ml3-step--source .ml3-route-picker::-webkit-scrollbar-thumb,
+.ml3-step--destination .ml3-route-picker::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--flow-tone) 42%, var(--finance-line));
+  background-clip: padding-box;
+}
+.ml3-step--source .ml3-search-box,
+.ml3-step--destination .ml3-search-box {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  box-shadow: 0 5px 12px color-mix(in srgb, var(--finance-ink) 5%, transparent);
+}
 .ml3-picker-results {
   max-height: none !important;
-  overflow-y: visible !important;
-  overscroll-behavior: auto;
+  overflow: visible !important;
   scrollbar-gutter: auto;
 }
-.ml3-entry-card:has(.ml3-step--source.is-open),
-.ml3-entry-card:has(.ml3-step--destination.is-open) { height: auto; max-height: none; contain: none; }
-.adreem-flow-stage-motion:has(.ml3-step--source.is-open),
-.adreem-flow-stage-motion:has(.ml3-step--destination.is-open),
-.ml3-step--source.is-open,
-.ml3-step--destination.is-open { overflow: visible; scrollbar-gutter: auto; }
+.ml3-picker-results > button { scroll-margin-block: 46px; }
 
-/* Today's compact feed names each side once; the amount remains in the movement heading. */
-.ml3-today-route.is-paired {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
-  align-items: center;
-  gap: 5px;
+/* Today's compact feed gives the source and destination a full, clearly labelled row. */
+.ml3-today-list {
+  grid-auto-rows: max-content;
+  align-items: start;
 }
-.ml3-today-route.is-single { display: block; }
-.ml3-today-arrow { color: var(--finance-muted); font-size: 0.72rem; text-align: center; }
+.ml3-today-row {
+  height: auto !important;
+  align-self: start;
+  contain: none !important;
+}
+.ml3-today-route.is-paired,
+.ml3-today-route.is-single {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--movement-tone) 14%, var(--finance-line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--movement-soft) 34%, var(--finance-paper));
+}
+.ml3-today-endpoint {
+  min-width: 0;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border: 1px solid var(--finance-line);
+  border-radius: 6px;
+  background: var(--finance-paper);
+}
+.ml3-today-endpoint-label {
+  width: 30px;
+  min-height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--finance-charcoal-soft);
+  color: var(--finance-charcoal-dark) !important;
+  font-size: 0.58rem !important;
+  font-weight: 850;
+}
+.ml3-today-endpoint.is-destination .ml3-today-endpoint-label {
+  background: var(--finance-green-soft);
+  color: var(--finance-green-dark) !important;
+}
+.ml3-today-endpoint-copy {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 7px;
+}
+.ml3-today-endpoint-copy .adreem-account-name { font-size: 0.7rem; font-weight: 800; }
+.ml3-today-endpoint-copy em {
+  color: var(--finance-muted);
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ml3-today-arrow {
+  height: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--movement-tone);
+}
+
+@media (max-width: 720px) {
+  .ml3-today-endpoint-copy { grid-template-columns: minmax(0, 1fr); }
+}

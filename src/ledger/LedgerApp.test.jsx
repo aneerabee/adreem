@@ -493,6 +493,10 @@ describe('LedgerApp compact history rows', () => {
 
     expect(markup.match(/كاش عندي/g)).toHaveLength(1)
     expect(markup.match(/سعيد/g)).toHaveLength(1)
+    expect(markup).toContain('ml3-today-endpoint is-source')
+    expect(markup).toContain('ml3-today-endpoint is-destination')
+    expect(markup).toContain('ml3-today-endpoint-label">من<')
+    expect(markup).toContain('ml3-today-endpoint-label">إلى<')
     expect(markup).toContain('ml3-today-arrow')
     expect(markup).not.toContain('ml3-today-effects')
   })

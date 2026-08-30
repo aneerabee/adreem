@@ -2274,9 +2274,25 @@ export function MovementMiniRow({ movement, accountById, attachments = [], dimen
         </span>
       </div>
       <div className={`ml3-today-route ${source && destination ? 'is-paired' : 'is-single'}`}>
-        {source ? <b className="adreem-account-name">{protectedAccountLabel(source)}</b> : null}
-        {source && destination ? <span className="ml3-today-arrow" aria-hidden="true">←</span> : null}
-        {destination ? <b className="adreem-account-name">{protectedAccountLabel(destination)}</b> : null}
+        {source ? (
+          <span className="ml3-today-endpoint is-source">
+            <small className="ml3-today-endpoint-label">من</small>
+            <span className="ml3-today-endpoint-copy">
+              <b className="adreem-account-name">{protectedAccountPrimaryName(source)}</b>
+              <em>{conciseAccountChoiceContext(source)}</em>
+            </span>
+          </span>
+        ) : null}
+        {source && destination ? <span className="ml3-today-arrow" aria-hidden="true"><ChevronDown size={14} /></span> : null}
+        {destination ? (
+          <span className="ml3-today-endpoint is-destination">
+            <small className="ml3-today-endpoint-label">إلى</small>
+            <span className="ml3-today-endpoint-copy">
+              <b className="adreem-account-name">{protectedAccountPrimaryName(destination)}</b>
+              <em>{conciseAccountChoiceContext(destination)}</em>
+            </span>
+          </span>
+        ) : null}
       </div>
       {effects.length ? (
         <div className="ml3-today-effects">
