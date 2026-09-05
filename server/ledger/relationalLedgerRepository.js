@@ -204,6 +204,7 @@ function accountFromRow(row = {}) {
     balanceDinar: safeDatabaseInteger(row.balance_dinar, 'account balance'),
     balanceUsd: safeDatabaseInteger(row.balance_usd, 'account balance'),
     balanceTry: safeDatabaseInteger(row.balance_try, 'account balance'),
+    balanceEur: safeDatabaseInteger(row.balance_eur, 'account balance'),
     postedCount: safeDatabaseInteger(row.posted_count, 'posted movement count'),
     structureLocked: Boolean(row.structure_locked),
     balanceSource: 'database',
@@ -445,14 +446,18 @@ export function normalizeRelationalReports(value = {}) {
       expenseUsd: safeDatabaseInteger(report?.expenseUsd, 'report amount'),
       netUsd: safeDatabaseInteger(report?.netUsd, 'report amount'),
       incomeTry: safeDatabaseInteger(report?.incomeTry, 'report amount'),
+      incomeEur: safeDatabaseInteger(report?.incomeEur, 'report amount'),
       expenseTry: safeDatabaseInteger(report?.expenseTry, 'report amount'),
+      expenseEur: safeDatabaseInteger(report?.expenseEur, 'report amount'),
       netTry: safeDatabaseInteger(report?.netTry, 'report amount'),
+      netEur: safeDatabaseInteger(report?.netEur, 'report amount'),
     })),
     expenseCategories: expenseCategories.map((report) => ({
       ...report,
       dinar: safeDatabaseInteger(report?.dinar, 'report amount'),
       usd: safeDatabaseInteger(report?.usd, 'report amount'),
       try: safeDatabaseInteger(report?.try, 'report amount'),
+      eur: safeDatabaseInteger(report?.eur, 'report amount'),
       count: safeDatabaseInteger(report?.count, 'report movement count'),
     })),
   }
@@ -502,7 +507,7 @@ export function createRelationalLedgerRepository(client, options = {}) {
     const [movementResult, reviewResult, accounts, dimensions, attachments, recurringRules, reconciliations, auditEvents, ignoredRows] = await Promise.all([
       movementRequest,
       reviewRequest,
-      fetchAll(client, 'adreem_accounts', 'record_id, payload, balance_dinar, balance_usd, balance_try, posted_count, structure_locked', ledger.id),
+      fetchAll(client, 'adreem_accounts', 'record_id, payload, balance_dinar, balance_usd, balance_try, balance_eur, posted_count, structure_locked', ledger.id),
       fetchAll(client, 'adreem_dimensions', 'record_id, payload', ledger.id),
       attachmentRequest,
       loadOptions.includeAllMovements

@@ -30,7 +30,7 @@ const ACCOUNT_PAIRS = new Set([
 ])
 
 const DATABASE_DERIVED_RECORD_FIELDS = {
-  accounts: new Set(['balanceDinar', 'balanceUsd', 'balanceTry', 'postedCount', 'structureLocked', 'balanceSource']),
+  accounts: new Set(['balanceDinar', 'balanceUsd', 'balanceTry', 'balanceEur', 'postedCount', 'structureLocked', 'balanceSource']),
   movements: new Set(['databaseSequence']),
 }
 
@@ -95,6 +95,7 @@ function postingTotals(state = {}) {
     dinar: 0,
     usd: 0,
     try: 0,
+    eur: 0,
     postedCount: 0,
   }]))
   for (const movement of state.movements || []) {
@@ -105,6 +106,7 @@ function postingTotals(state = {}) {
       if (entry.currency === CURRENCIES.DINAR) bucket.dinar += Math.round(Number(entry.delta || 0))
       if (entry.currency === CURRENCIES.USD) bucket.usd += Math.round(Number(entry.delta || 0))
       if (entry.currency === CURRENCIES.TRY) bucket.try += Math.round(Number(entry.delta || 0))
+      if (entry.currency === CURRENCIES.EUR) bucket.eur += Math.round(Number(entry.delta || 0))
       bucket.postedCount += 1
     }
   }
@@ -218,7 +220,7 @@ export function validateLedgerProjection(sourceState = {}, options = {}) {
     if (!ACCOUNT_PAIRS.has(`${account.type}:${account.valueKind}`)) {
       errors.push({ code: 'invalid-account-structure', accountId: account.id })
     }
-    if (![CURRENCIES.DINAR, CURRENCIES.USD, CURRENCIES.TRY, 'multi'].includes(account.currencyKind)) {
+    if (![CURRENCIES.DINAR, CURRENCIES.USD, CURRENCIES.TRY, CURRENCIES.EUR, 'multi'].includes(account.currencyKind)) {
       errors.push({ code: 'invalid-account-currency', accountId: account.id })
     }
     if (![ACCOUNT_STATUSES.ACTIVE, ACCOUNT_STATUSES.INACTIVE, ACCOUNT_STATUSES.NEEDS_REVIEW].includes(account.status)) {
@@ -291,10 +293,10 @@ export function validateLedgerProjection(sourceState = {}, options = {}) {
 
   const totals = postingTotals(state)
   for (const account of state.accounts) {
-    const total = totals.get(account.id) || { dinar: 0, usd: 0, try: 0 }
+    const total = totals.get(account.id) || { dinar: 0, usd: 0, try: 0, eur: 0 }
     if ([VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET].includes(account.valueKind) &&
-      (total.dinar < 0 || total.usd < 0 || total.try < 0)) {
-      errors.push({ code: 'negative-owned-balance', accountId: account.id, dinar: total.dinar, usd: total.usd, try: total.try })
+      (total.dinar < 0 || total.usd < 0 || total.try < 0 || total.eur < 0)) {
+      errors.push({ code: 'negative-owned-balance', accountId: account.id, dinar: total.dinar, usd: total.usd, try: total.try, eur: total.eur })
     }
   }
 
@@ -403,13 +405,14 @@ export function compareProjectedLedger(sourceState = {}, targetState = {}) {
     const actualDinar = Math.round(Number(actual.balanceDinar || 0))
     const actualUsd = Math.round(Number(actual.balanceUsd || 0))
     const actualTry = Math.round(Number(actual.balanceTry || 0))
+    const actualEur = Math.round(Number(actual.balanceEur || 0))
     const actualPostedCount = Math.round(Number(actual.postedCount || 0))
-    if (actualDinar !== expected.dinar || actualUsd !== expected.usd || actualTry !== expected.try || actualPostedCount !== expected.postedCount) {
+    if (actualDinar !== expected.dinar || actualUsd !== expected.usd || actualTry !== expected.try || actualEur !== expected.eur || actualPostedCount !== expected.postedCount) {
       errors.push({
         code: 'balance-mismatch',
         accountId,
         expected,
-        actual: { dinar: actualDinar, usd: actualUsd, try: actualTry, postedCount: actualPostedCount },
+        actual: { dinar: actualDinar, usd: actualUsd, try: actualTry, eur: actualEur, postedCount: actualPostedCount },
       })
     }
   }

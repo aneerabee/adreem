@@ -39,6 +39,8 @@ const ENGLISH_TEXT = Object.freeze({
   'أدخل سعري LYD وTRY مقابل USD.': 'Enter the LYD and TRY rates against USD.',
   'أدخل سعر LYD مقابل USD.': 'Enter the LYD rate against USD.',
   'أدخل سعر TRY مقابل USD.': 'Enter the TRY rate against USD.',
+  'أدخل سعر EUR مقابل USD.': 'Enter the EUR rate against USD.',
+  'كاش وشيك · LYD وUSD وTRY وEUR': 'Cash and cheque · LYD, USD, TRY and EUR',
   'بيع USD يبدأ بمبلغ USD.': 'A USD sale starts with a USD amount.',
   'شراء USD يبدأ بمبلغ LYD.': 'A USD purchase starts with a LYD amount.',
   'بيع USD يحتاج حساب USD كمصدر.': 'A USD sale needs a USD source account.',

@@ -45,9 +45,9 @@ export function accountEditChanges(before = {}, after = {}) {
 
 export function accountUpdateCurrency(account, classification, requestedCurrencyKind) {
   if (!accountNeedsCurrency(classification)) return account.currencyKind
-  if ([ACCOUNT_CURRENCY_KINDS.DINAR, ACCOUNT_CURRENCY_KINDS.USD, ACCOUNT_CURRENCY_KINDS.TRY].includes(requestedCurrencyKind)) return requestedCurrencyKind
+  if ([ACCOUNT_CURRENCY_KINDS.DINAR, ACCOUNT_CURRENCY_KINDS.USD, ACCOUNT_CURRENCY_KINDS.TRY, ACCOUNT_CURRENCY_KINDS.EUR].includes(requestedCurrencyKind)) return requestedCurrencyKind
   if (requestedCurrencyKind === ACCOUNT_CURRENCY_KINDS.MULTI && account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI) return requestedCurrencyKind
-  return account.currencyKind === ACCOUNT_CURRENCY_KINDS.USD || account.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY || account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI
+  return account.currencyKind === ACCOUNT_CURRENCY_KINDS.USD || account.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY || account.currencyKind === ACCOUNT_CURRENCY_KINDS.EUR || account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI
     ? account.currencyKind
     : ACCOUNT_CURRENCY_KINDS.DINAR
 }
@@ -115,6 +115,7 @@ export function accountDeletionEligibility(accountOrId, {
     Number(item.balanceDinar || item.openingDinar || 0) !== 0
     || Number(item.balanceUsd || item.openingUsd || 0) !== 0
     || Number(item.balanceTry || item.openingTry || 0) !== 0
+    || Number(item.balanceEur || item.openingEur || 0) !== 0
     || Number(item.postedCount || 0) > 0
     || item.structureLocked
   ))) blockers.add('account-used')

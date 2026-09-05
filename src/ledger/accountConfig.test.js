@@ -100,8 +100,8 @@ describe('account display wording', () => {
       openingBalanceAmount: '800',
     }
 
-    expect(accountOpeningAmounts(person)).toEqual({ openingDinar: 0, openingUsd: -1_250, openingTry: 0 })
-    expect(accountOpeningAmounts(cash)).toEqual({ openingDinar: 800, openingUsd: 0, openingTry: 0 })
+    expect(accountOpeningAmounts(person)).toEqual({ openingDinar: 0, openingUsd: -1_250, openingTry: 0, openingEur: 0 })
+    expect(accountOpeningAmounts(cash)).toEqual({ openingDinar: 800, openingUsd: 0, openingTry: 0, openingEur: 0 })
   })
 
   it('offers opening balances only for real balance accounts', () => {

@@ -17,16 +17,17 @@ function personDraft(overrides = {}) {
 }
 
 describe('counterparty account bundles', () => {
-  it('creates the four supported person balance channels as one linked bundle', () => {
+  it('creates the five supported person balance channels as one linked bundle', () => {
     const accounts = buildCounterpartyAccountBundle(personDraft())
 
-    expect(accounts).toHaveLength(4)
+    expect(accounts).toHaveLength(5)
     expect(new Set(accounts.map((account) => account.counterpartyId)).size).toBe(1)
     expect(accounts.map((account) => [account.counterpartyKind, account.subAccountName, account.currencyKind])).toEqual([
       [COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 'كاش بيننا', CURRENCIES.DINAR],
       [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 'شيك بيننا', CURRENCIES.DINAR],
       [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 'دولار بيننا', CURRENCIES.USD],
       [COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, 'TRY بيننا', CURRENCIES.TRY],
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_EUR, 'EUR بيننا', CURRENCIES.EUR],
     ])
   })
 
@@ -49,6 +50,7 @@ describe('counterparty account bundles', () => {
       [COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -450, 0, 0],
       [COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, 80, 0],
       [COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, 0, 0, -200],
+      [COUNTERPARTY_ACCOUNT_KINDS.CASH_EUR, 0, 0, 0],
     ])
   })
 
@@ -73,7 +75,7 @@ describe('counterparty account bundles', () => {
     const result = validateCounterpartyAccountBundle(draft, existing)
 
     expect(result.validation.ok).toBe(false)
-    expect(result.validation.errors.filter((error) => error.field === 'subAccountName')).toHaveLength(4)
+    expect(result.validation.errors.filter((error) => error.field === 'subAccountName')).toHaveLength(5)
   })
 
   it('groups mixed directions under one person while exposing receivable and payable views', () => {
@@ -82,15 +84,15 @@ describe('counterparty account bundles', () => {
       { account: accounts[0], dinar: 1200, usd: 0 },
       { account: accounts[1], dinar: -450, usd: 0 },
       { account: accounts[2], dinar: 0, usd: 80 },
-      { account: accounts[3], dinar: 0, usd: 0, try: -200 },
+      { account: accounts[3], dinar: 0, usd: 0, try: -200, eur: 0 },
     ]
     const views = buildCounterpartyBalanceViews(rows)
 
     expect(views.all).toHaveLength(1)
     expect(views.receivable).toHaveLength(1)
     expect(views.payable).toHaveLength(1)
-    expect(views.all[0].receivable).toEqual({ dinar: 1200, usd: 80, try: 0 })
-    expect(views.all[0].payable).toEqual({ dinar: 450, usd: 0, try: 200 })
+    expect(views.all[0].receivable).toEqual({ dinar: 1200, usd: 80, try: 0, eur: 0 })
+    expect(views.all[0].payable).toEqual({ dinar: 450, usd: 0, try: 200, eur: 0 })
   })
 
   it('sorts each direction by its own largest value instead of the opposite balance', () => {
@@ -116,8 +118,8 @@ describe('counterparty account bundles', () => {
         settlementPinnedAt: '2026-08-25T08:00:00.000Z',
       }))
     const views = buildCounterpartyBalanceViews([
-      { account: largeAccounts[0], dinar: 50_000, usd: 0, try: 0 },
-      { account: pinnedAccounts[0], dinar: 100, usd: 0, try: 0 },
+      { account: largeAccounts[0], dinar: 50_000, usd: 0, try: 0, eur: 0 },
+      { account: pinnedAccounts[0], dinar: 100, usd: 0, try: 0, eur: 0 },
     ])
 
     expect(views.all.map((group) => group.ownerName)).toEqual(['تسوية عاجلة', 'رصيد كبير'])

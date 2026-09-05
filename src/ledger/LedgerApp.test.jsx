@@ -245,10 +245,10 @@ describe('LedgerApp recurring movement binding', () => {
 
 describe('LedgerApp net position controls', () => {
   it('shows only currencies that actually contribute to each account', () => {
-    expect(netContributionDisplayValues({ dinar: 0, usd: -450, try: 0 })).toEqual([
+    expect(netContributionDisplayValues({ dinar: 0, usd: -450, try: 0, eur: 0 })).toEqual([
       { currency: CURRENCIES.USD, amount: -450 },
     ])
-    expect(netContributionDisplayValues({ dinar: 1_200, usd: 80, try: 0 })).toEqual([
+    expect(netContributionDisplayValues({ dinar: 1_200, usd: 80, try: 0, eur: 0 })).toEqual([
       { currency: CURRENCIES.DINAR, amount: 1_200 },
       { currency: CURRENCIES.USD, amount: 80 },
     ])
@@ -447,7 +447,7 @@ describe('LedgerApp movement account picker', () => {
           ['saeed-cash', { dinar: 12_000, usd: 0 }],
           ['saeed-cheque', { dinar: -4_500, usd: 0 }],
           ['saeed-usd', { dinar: 0, usd: 700 }],
-          ['saeed-try', { dinar: 0, usd: 0, try: 2_400 }],
+          ['saeed-try', { dinar: 0, usd: 0, try: 2_400, eur: 0 }],
         ])}
       />,
     ))
@@ -714,8 +714,8 @@ describe('LedgerApp balance ordering', () => {
 
   it('ranks a multi-currency account by its non-zero TRY balance', () => {
     const rows = [
-      { account: { id: 'small', ownerName: 'أ', currencyKind: CURRENCIES.DINAR }, dinar: 100, usd: 0, try: 0 },
-      { account: { id: 'try-large', ownerName: 'ب', currencyKind: 'multi' }, dinar: 0, usd: 0, try: 9_000 },
+      { account: { id: 'small', ownerName: 'أ', currencyKind: CURRENCIES.DINAR }, dinar: 100, usd: 0, try: 0, eur: 0 },
+      { account: { id: 'try-large', ownerName: 'ب', currencyKind: 'multi' }, dinar: 0, usd: 0, try: 9_000, eur: 0 },
     ]
 
     expect(rows.sort(compareBalanceBuckets).map((row) => row.account.id)).toEqual(['try-large', 'small'])
@@ -1069,11 +1069,11 @@ describe('LedgerApp people account views', () => {
       bucket('person-usd', VALUE_KINDS.RECEIVABLE, 0, -80),
       bucket('asset', VALUE_KINDS.ASSET, 9000, 0),
     ])).toEqual({
-      cash: { dinar: 1500, usd: 0, try: 0 },
-      bank: { dinar: 0, usd: 300, try: 0 },
-      money: { dinar: 1500, usd: 300, try: 0 },
-      receivable: { dinar: 700, usd: 0, try: 0 },
-      payable: { dinar: 0, usd: 80, try: 0 },
+      cash: { dinar: 1500, usd: 0, try: 0, eur: 0 },
+      bank: { dinar: 0, usd: 300, try: 0, eur: 0 },
+      money: { dinar: 1500, usd: 300, try: 0, eur: 0 },
+      receivable: { dinar: 700, usd: 0, try: 0, eur: 0 },
+      payable: { dinar: 0, usd: 80, try: 0, eur: 0 },
     })
   })
 
@@ -1153,7 +1153,7 @@ describe('LedgerApp people account views', () => {
           },
           dinar: 0,
           usd: 0,
-          try: 2_400,
+          try: 2_400, eur: 0,
         }}
       />,
     )
@@ -1187,8 +1187,8 @@ describe('LedgerApp people account views', () => {
 
     expect(markup).toContain('class="is-positive">لي 500 LYD')
     expect(markup).toContain('class="is-negative">عليّ 250 USD')
-    expect(views.positive).toEqual([expect.objectContaining({ dinar: 500, usd: 0, try: 0 })])
-    expect(views.negative).toEqual([expect.objectContaining({ dinar: 0, usd: -250, try: 0 })])
+    expect(views.positive).toEqual([expect.objectContaining({ dinar: 500, usd: 0, try: 0, eur: 0 })])
+    expect(views.negative).toEqual([expect.objectContaining({ dinar: 0, usd: -250, try: 0, eur: 0 })])
     expect(views.withBalance).toHaveLength(1)
     expect(views.all).toHaveLength(1)
   })
@@ -1206,19 +1206,19 @@ describe('LedgerApp people account views', () => {
       row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -450),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 80, ACCOUNT_CURRENCY_KINDS.USD),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, -900, ACCOUNT_CURRENCY_KINDS.TRY),
-    ], { dinar: 1_200, usd: 80, try: 0 }, { dinar: 450, usd: 0, try: 900 })
+    ], { dinar: 1_200, usd: 80, try: 0, eur: 0 }, { dinar: 450, usd: 0, try: 900, eur: 0 })
     const chequeOnly = group('cheque', [
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 0),
       row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, -300),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, ACCOUNT_CURRENCY_KINDS.USD),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, 0, ACCOUNT_CURRENCY_KINDS.TRY),
-    ], { dinar: 0, usd: 0, try: 0 }, { dinar: 300, usd: 0, try: 0 })
+    ], { dinar: 0, usd: 0, try: 0, eur: 0 }, { dinar: 300, usd: 0, try: 0, eur: 0 })
     const zero = group('zero', [
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, 0),
       row(COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, 0),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, 0, ACCOUNT_CURRENCY_KINDS.USD),
       row(COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, 0, ACCOUNT_CURRENCY_KINDS.TRY),
-    ], { dinar: 0, usd: 0, try: 0 }, { dinar: 0, usd: 0, try: 0 })
+    ], { dinar: 0, usd: 0, try: 0, eur: 0 }, { dinar: 0, usd: 0, try: 0, eur: 0 })
     const groups = [mixed, chequeOnly, zero]
 
     const receivable = filterCounterpartyGroups(groups, 'receivable')
@@ -1230,13 +1230,13 @@ describe('LedgerApp people account views', () => {
 
     expect(receivable.map((item) => item.id)).toEqual(['mixed'])
     expect(receivable[0].rows).toHaveLength(2)
-    expect(receivable[0].payable).toEqual({ dinar: 0, usd: 0, try: 0 })
+    expect(receivable[0].payable).toEqual({ dinar: 0, usd: 0, try: 0, eur: 0 })
     expect(payable.map((item) => item.id)).toEqual(['mixed', 'cheque'])
     expect(payable[0].rows).toHaveLength(2)
-    expect(payable[0].receivable).toEqual({ dinar: 0, usd: 0, try: 0 })
+    expect(payable[0].receivable).toEqual({ dinar: 0, usd: 0, try: 0, eur: 0 })
     expect(cash.map((item) => item.id)).toEqual(['mixed'])
     expect(cash[0].rows.map((item) => item.account.counterpartyKind)).toEqual([COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR])
-    expect(cash[0].receivable).toEqual({ dinar: 1_200, usd: 0, try: 0 })
+    expect(cash[0].receivable).toEqual({ dinar: 1_200, usd: 0, try: 0, eur: 0 })
     expect(cheque.map((item) => item.id)).toEqual(['mixed', 'cheque'])
     expect(cheque.every((item) => item.rows.every((bucket) => bucket.account.counterpartyKind === COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR))).toBe(true)
     expect(usd.map((item) => item.id)).toEqual(['mixed'])
@@ -1252,12 +1252,12 @@ describe('LedgerApp people account views', () => {
     const group = {
       id: 'person:mixed',
       ownerName: 'سعيد',
-      receivable: { dinar: 1_200, usd: 80, try: 0 },
-      payable: { dinar: 450, usd: 0, try: 0 },
+      receivable: { dinar: 1_200, usd: 80, try: 0, eur: 0 },
+      payable: { dinar: 450, usd: 0, try: 0, eur: 0 },
       rows: [
-        { account: { id: 'cash', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }, dinar: 1_200, usd: 0, try: 0 },
-        { account: { id: 'cheque', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }, dinar: -450, usd: 0, try: 0 },
-        { account: { id: 'usd', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }, dinar: 0, usd: 80, try: 0 },
+        { account: { id: 'cash', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }, dinar: 1_200, usd: 0, try: 0, eur: 0 },
+        { account: { id: 'cheque', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR }, dinar: -450, usd: 0, try: 0, eur: 0 },
+        { account: { id: 'usd', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, currencyKind: ACCOUNT_CURRENCY_KINDS.USD }, dinar: 0, usd: 80, try: 0, eur: 0 },
       ],
     }
     const filtered = filterCounterpartyGroups([group], COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR)
@@ -1373,13 +1373,13 @@ describe('LedgerApp people account views', () => {
       ownerName: 'سعيد',
       settlementPinned: true,
       settlementPinnedAt: '2026-08-25T08:00:00.000Z',
-      receivable: { dinar: 1_200, usd: 0, try: 0 },
-      payable: { dinar: 0, usd: 0, try: 0 },
+      receivable: { dinar: 1_200, usd: 0, try: 0, eur: 0 },
+      payable: { dinar: 0, usd: 0, try: 0, eur: 0 },
       rows: [{
         account: { id: 'cash', counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR, currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR },
         dinar: 1_200,
         usd: 0,
-        try: 0,
+        try: 0, eur: 0,
       }],
     }
     const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} onToggleSettlement={() => {}} />))
@@ -1407,12 +1407,12 @@ describe('LedgerApp people account views', () => {
       id: 'person:long-name',
       ownerName: longName,
       settlementPinned: true,
-      receivable: { dinar: 800, usd: 0, try: 0 },
-      payable: { dinar: 0, usd: 0, try: 0 },
-      rows: [{ account, dinar: 800, usd: 0, try: 0 }],
+      receivable: { dinar: 800, usd: 0, try: 0, eur: 0 },
+      payable: { dinar: 0, usd: 0, try: 0, eur: 0 },
+      rows: [{ account, dinar: 800, usd: 0, try: 0, eur: 0 }],
     }
     const cardMarkup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} onToggleSettlement={() => {}} />))
-    const rowMarkup = stripUiDataProtection(renderToStaticMarkup(<AccountRow bucket={{ account, dinar: 800, usd: 0, try: 0 }} />))
+    const rowMarkup = stripUiDataProtection(renderToStaticMarkup(<AccountRow bucket={{ account, dinar: 800, usd: 0, try: 0, eur: 0 }} />))
 
     expect(cardMarkup).toContain(`<strong class="adreem-account-name">${longName}</strong>`)
     expect(rowMarkup).toContain(`<strong class="adreem-account-name">${longName}</strong>`)
@@ -1794,7 +1794,7 @@ describe('LedgerApp history filtering', () => {
     }
     const markup = renderToStaticMarkup(
       <AccountProfile
-        bucket={{ account, dinar: 100, usd: 25, try: 50, postedCount: 1 }}
+        bucket={{ account, dinar: 100, usd: 25, try: 50, eur: 0, postedCount: 1 }}
         movements={[]}
         accounts={[account]}
         onClose={() => {}}
@@ -1860,7 +1860,7 @@ describe('LedgerApp history filtering', () => {
 
     const markup = renderToStaticMarkup(
       <AccountProfile
-        bucket={{ account, dinar: 0, usd: 0, try: 0, postedCount: 0 }}
+        bucket={{ account, dinar: 0, usd: 0, try: 0, eur: 0, postedCount: 0 }}
         movements={[]}
         accounts={[account]}
         onClose={() => {}}

@@ -331,7 +331,7 @@ describe('account editing', () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(result.accountIds).toHaveLength(4)
+    expect(result.accountIds).toHaveLength(5)
     expect(new Set(result.accounts.map((account) => account.ownerName))).toEqual(new Set(['شركة سعيد']))
   })
 

@@ -12,6 +12,7 @@ import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailDisplayName, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyGroupKey, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
+import { completeAccountCurrencies } from './accountCurrencyUpgrade'
 import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
 import { formatZonedDate, formatZonedDateTime, formatZonedTime, isZonedToday, isZonedYesterday, zonedDayKey, zonedDayRange } from './dateRange'
@@ -54,11 +55,13 @@ const COUNTERPARTY_BALANCE_FILTERS = Object.freeze([
   { key: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR, label: 'شيك', icon: Landmark },
   { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_USD, label: 'USD', icon: CircleDollarSign },
   { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY, label: 'TRY', icon: CircleDollarSign },
+  { key: COUNTERPARTY_ACCOUNT_KINDS.CASH_EUR, label: 'EUR', icon: CircleDollarSign },
 ])
 const CURRENCY_OPTIONS = Object.freeze([
   { value: CURRENCIES.DINAR, label: 'LYD', field: 'dinar' },
   { value: CURRENCIES.USD, label: 'USD', field: 'usd' },
   { value: CURRENCIES.TRY, label: 'TRY', field: 'try' },
+  { value: CURRENCIES.EUR, label: 'EUR', field: 'eur' },
 ])
 
 function currencyField(currency) {
@@ -168,7 +171,7 @@ function AccountChoiceIcon({ account, size = 16 }) {
   const kind = accountChoiceKind(account)
   if (kind === 'person-cash') return <Banknote {...props} />
   if (kind === 'person-bank') return <Landmark {...props} />
-  if (kind === 'person-usd' || kind === 'person-try') return <CircleDollarSign {...props} />
+  if (kind === 'person-usd' || kind === 'person-try' || kind === 'person-eur') return <CircleDollarSign {...props} />
   if (kind === VALUE_KINDS.CASH) return <Banknote {...props} />
   if (kind === VALUE_KINDS.BANK) return <Landmark {...props} />
   if (kind === VALUE_KINDS.ASSET) return <Boxes {...props} />
@@ -324,6 +327,7 @@ export function balanceAmountIsWide(value) {
     formatMoneyNumber(value?.dinar).length,
     formatMoneyNumber(value?.usd).length,
     formatMoneyNumber(value?.try).length,
+    formatMoneyNumber(value?.eur).length,
   ) > 13
 }
 
@@ -707,7 +711,7 @@ function movementStepCopy(step, config = {}) {
 }
 
 function nonZero(bucket) {
-  return hasMoneyValue(bucket.dinar) || hasMoneyValue(bucket.usd) || hasMoneyValue(bucket.try)
+  return hasMoneyValue(bucket.dinar) || hasMoneyValue(bucket.usd) || hasMoneyValue(bucket.try) || hasMoneyValue(bucket.eur)
 }
 
 function externalAccountKey(account = {}) {
@@ -1013,7 +1017,7 @@ function visualKind(account) {
   if (account.valueKind === VALUE_KINDS.ASSET) return 'asset'
   if (account.valueKind === VALUE_KINDS.RECEIVABLE) {
     const choiceKind = accountChoiceKind(account)
-    if (['person-bank', 'person-usd', 'person-try'].includes(choiceKind)) return choiceKind
+    if (['person-bank', 'person-usd', 'person-try', 'person-eur'].includes(choiceKind)) return choiceKind
   }
   return 'person'
 }
@@ -1026,13 +1030,17 @@ export function accountBalanceChip(account, bucket, currency = '') {
   const dinar = Number(bucket?.dinar || 0)
   const usd = Number(bucket?.usd || 0)
   const tryAmount = Number(bucket?.try || 0)
+  const eurAmount = Number(bucket?.eur || 0)
   if (currency === CURRENCIES.DINAR) return accountBalanceChipForCurrency(account, dinar, CURRENCIES.DINAR)
   if (currency === CURRENCIES.USD) return accountBalanceChipForCurrency(account, usd, CURRENCIES.USD)
+  if (currency === CURRENCIES.EUR) return accountBalanceChipForCurrency(account, eurAmount, CURRENCIES.EUR)
   if (currency === CURRENCIES.TRY) return accountBalanceChipForCurrency(account, tryAmount, CURRENCIES.TRY)
   const hasDinar = hasMoneyValue(dinar)
   const hasUsd = hasMoneyValue(usd)
   const hasTry = hasMoneyValue(tryAmount)
+  const hasEur = hasMoneyValue(eurAmount)
 
+  if (!hasDinar && !hasUsd && !hasTry && hasEur) return accountBalanceChipForCurrency(account, eurAmount, CURRENCIES.EUR)
   if (!hasDinar && !hasUsd && hasTry) return accountBalanceChipForCurrency(account, tryAmount, CURRENCIES.TRY)
 
   if (!hasDinar && hasUsd) {
@@ -1084,8 +1092,8 @@ function accountBalanceChipForCurrency(account, amount, currency) {
 }
 
 export function compareBalanceBuckets(a, b) {
-  const aActive = Math.abs(a.dinar) > 0.000001 || Math.abs(a.usd) > 0.000001 || Math.abs(a.try) > 0.000001
-  const bActive = Math.abs(b.dinar) > 0.000001 || Math.abs(b.usd) > 0.000001 || Math.abs(b.try) > 0.000001
+  const aActive = Math.abs(a.dinar) > 0.000001 || Math.abs(a.usd) > 0.000001 || Math.abs(a.try) > 0.000001 || Math.abs(a.eur || 0) > 0.000001
+  const bActive = Math.abs(b.dinar) > 0.000001 || Math.abs(b.usd) > 0.000001 || Math.abs(b.try) > 0.000001 || Math.abs(b.eur || 0) > 0.000001
   const aPrimary = accountPrimaryBalance(a)
   const bPrimary = accountPrimaryBalance(b)
   return Number(bActive) - Number(aActive)
@@ -1100,6 +1108,7 @@ function accountPrimaryBalance(bucket = {}) {
     { amount: Number(bucket.dinar || 0), currency: CURRENCIES.DINAR },
     { amount: Number(bucket.usd || 0), currency: CURRENCIES.USD },
     { amount: Number(bucket.try || 0), currency: CURRENCIES.TRY },
+    { amount: Number(bucket.eur || 0), currency: CURRENCIES.EUR },
   ]
   const preferredCurrency = bucket.account?.currencyKind
   const ordered = preferredCurrency === ACCOUNT_CURRENCY_KINDS.MULTI
@@ -1124,6 +1133,7 @@ export function buildPeopleAccountViews(rows = []) {
     dinar: direction > 0 ? Math.max(0, Number(bucket.dinar || 0)) : Math.min(0, Number(bucket.dinar || 0)),
     usd: direction > 0 ? Math.max(0, Number(bucket.usd || 0)) : Math.min(0, Number(bucket.usd || 0)),
     try: direction > 0 ? Math.max(0, Number(bucket.try || 0)) : Math.min(0, Number(bucket.try || 0)),
+    eur: direction > 0 ? Math.max(0, Number(bucket.eur || 0)) : Math.min(0, Number(bucket.eur || 0)),
   })
   const positive = withBalance.map((bucket) => signedView(bucket, 1)).filter(nonZero).sort(compareBalanceBuckets)
   const negative = withBalance.map((bucket) => signedView(bucket, -1)).filter(nonZero).sort(compareBalanceBuckets)
@@ -1141,29 +1151,36 @@ export function buildBalanceOverview(rows = []) {
   let cashDinar = 0
   let cashUsd = 0
   let cashTry = 0
+  let cashEur = 0
   let bankDinar = 0
   let bankUsd = 0
   let bankTry = 0
+  let bankEur = 0
   let receivableDinar = 0
   let receivableUsd = 0
   let receivableTry = 0
+  let receivableEur = 0
   let payableDinar = 0
   let payableUsd = 0
   let payableTry = 0
+  let payableEur = 0
   for (const bucket of rows) {
     const kind = bucket.account?.valueKind
     const dinar = Number(bucket.dinar || 0)
     const usd = Number(bucket.usd || 0)
     const tryAmount = Number(bucket.try || 0)
+    const eurAmount = Number(bucket.eur || 0)
     if (kind === VALUE_KINDS.CASH) {
       cashDinar += dinar
       cashUsd += usd
       cashTry += tryAmount
+      cashEur += eurAmount
     }
     if (kind === VALUE_KINDS.BANK) {
       bankDinar += dinar
       bankUsd += usd
       bankTry += tryAmount
+      bankEur += eurAmount
     }
     if (kind === VALUE_KINDS.RECEIVABLE) {
       if (dinar > 0) receivableDinar += dinar
@@ -1171,15 +1188,17 @@ export function buildBalanceOverview(rows = []) {
       if (usd > 0) receivableUsd += usd
       if (usd < 0) payableUsd += Math.abs(usd)
       if (tryAmount > 0) receivableTry += tryAmount
+      if (eurAmount > 0) receivableEur += eurAmount
       if (tryAmount < 0) payableTry += Math.abs(tryAmount)
+      if (eurAmount < 0) payableEur += Math.abs(eurAmount)
     }
   }
   return {
-    cash: { dinar: cashDinar, usd: cashUsd, try: cashTry },
-    bank: { dinar: bankDinar, usd: bankUsd, try: bankTry },
-    money: { dinar: cashDinar + bankDinar, usd: cashUsd + bankUsd, try: cashTry + bankTry },
-    receivable: { dinar: receivableDinar, usd: receivableUsd, try: receivableTry },
-    payable: { dinar: payableDinar, usd: payableUsd, try: payableTry },
+    cash: { dinar: cashDinar, usd: cashUsd, try: cashTry, eur: cashEur },
+    bank: { dinar: bankDinar, usd: bankUsd, try: bankTry, eur: bankEur },
+    money: { dinar: cashDinar + bankDinar, usd: cashUsd + bankUsd, try: cashTry + bankTry, eur: cashEur + bankEur },
+    receivable: { dinar: receivableDinar, usd: receivableUsd, try: receivableTry, eur: receivableEur },
+    payable: { dinar: payableDinar, usd: payableUsd, try: payableTry, eur: payableEur },
   }
 }
 
@@ -1190,6 +1209,7 @@ function BalanceAmountPair({ value }) {
       <strong><b>{formatInteger(value.dinar)}</b><span>LYD</span></strong>
       <small><b>{formatInteger(value.usd)}</b><span>USD</span></small>
       {hasMoneyValue(value.try) ? <small><b>{formatInteger(value.try)}</b><span>TRY</span></small> : null}
+      {hasMoneyValue(value.eur) ? <small><b>{formatInteger(value.eur)}</b><span>EUR</span></small> : null}
     </span>
   )
 }
@@ -1214,16 +1234,18 @@ export function NetPositionPanel({
   query = '',
   rate,
   tryRate,
+  eurRate,
   targetCurrency,
   onRateChange,
   onTryRateChange,
+  onEurRateChange,
   onTargetCurrencyChange,
   onQueryChange = () => {},
   onToggleAccount = () => {},
   onResetExclusions = () => {},
   onClose,
 }) {
-  const conversion = convertNetPosition(position, rate, targetCurrency, tryRate)
+  const conversion = convertNetPosition(position, rate, targetCurrency, tryRate, eurRate)
   const excluded = new Set(excludedAccountIds)
   const excludedCount = allContributions.reduce((count, item) => count + (excluded.has(item.accountId) ? 1 : 0), 0)
   const visibleContributions = filterNetContributions(allContributions, query)
@@ -1237,10 +1259,12 @@ export function NetPositionPanel({
         <span><small>LYD</small><strong>{money(position.dinar, CURRENCIES.DINAR)}</strong></span>
         <span><small>USD</small><strong>{money(position.usd, CURRENCIES.USD)}</strong></span>
         <span><small>TRY</small><strong>{money(position.try, CURRENCIES.TRY)}</strong></span>
+        <span><small>EUR</small><strong>{money(position.eur, CURRENCIES.EUR)}</strong></span>
       </div>
       <div className="adreem-net-calc">
         <NumericEntry compact label="1 USD = ? LYD" value={rate} onChange={onRateChange} placeholder="0" allowDecimal />
         <NumericEntry compact label="1 USD = ? TRY" value={tryRate} onChange={onTryRateChange} placeholder="0" allowDecimal />
+        <NumericEntry compact label="1 USD = ? EUR" value={eurRate} onChange={onEurRateChange} placeholder="0" allowDecimal />
         <div className="adreem-net-target" aria-label="عملة الصافي">
           {CURRENCY_OPTIONS.map((option) => <button type="button" key={option.value} className={targetCurrency === option.value ? 'is-active' : ''} aria-pressed={targetCurrency === option.value} onClick={() => onTargetCurrencyChange(option.value)}>{option.label}</button>)}
         </div>
@@ -1307,14 +1331,15 @@ export function SeparateLedgerPanel({ records, names, totals, query, draft, edit
   const dinarTotals = totals[CURRENCIES.DINAR] || { receivable: 0, payable: 0 }
   const usdTotals = totals[CURRENCIES.USD] || { receivable: 0, payable: 0 }
   const tryTotals = totals[CURRENCIES.TRY] || { receivable: 0, payable: 0 }
+  const eurTotals = totals[CURRENCIES.EUR] || { receivable: 0, payable: 0 }
   const suggestedNames = names
     .filter((name) => !normalizedDraftName || name.toLocaleLowerCase('ar').includes(normalizedDraftName))
     .slice(0, 6)
   return (
     <section className="adreem-separate-ledger">
       <div className="adreem-separate-summary" aria-label="ملخص السجل المنفصل">
-        <span className="is-positive"><ArrowDownToLine aria-hidden="true" size={16} /><small>لي</small><strong>{money(dinarTotals.receivable)}</strong><b>{money(usdTotals.receivable, CURRENCIES.USD)}</b>{tryTotals.receivable ? <b>{money(tryTotals.receivable, CURRENCIES.TRY)}</b> : null}</span>
-        <span className="is-negative"><ArrowUpFromLine aria-hidden="true" size={16} /><small>عليّ</small><strong>{money(dinarTotals.payable)}</strong><b>{money(usdTotals.payable, CURRENCIES.USD)}</b>{tryTotals.payable ? <b>{money(tryTotals.payable, CURRENCIES.TRY)}</b> : null}</span>
+        <span className="is-positive"><ArrowDownToLine aria-hidden="true" size={16} /><small>لي</small><strong>{money(dinarTotals.receivable)}</strong><b>{money(usdTotals.receivable, CURRENCIES.USD)}</b>{tryTotals.receivable ? <b>{money(tryTotals.receivable, CURRENCIES.TRY)}</b> : null}{eurTotals.receivable ? <b>{money(eurTotals.receivable, CURRENCIES.EUR)}</b> : null}</span>
+        <span className="is-negative"><ArrowUpFromLine aria-hidden="true" size={16} /><small>عليّ</small><strong>{money(dinarTotals.payable)}</strong><b>{money(usdTotals.payable, CURRENCIES.USD)}</b>{tryTotals.payable ? <b>{money(tryTotals.payable, CURRENCIES.TRY)}</b> : null}{eurTotals.payable ? <b>{money(eurTotals.payable, CURRENCIES.EUR)}</b> : null}</span>
       </div>
 
       <div className={`adreem-separate-toolbar${showSearch ? '' : ' is-action-only'}`}>
@@ -1609,6 +1634,7 @@ export function buildExpenseBalanceRows(accounts = [], reports = []) {
       dinar: 0,
       usd: 0,
       try: 0,
+      eur: 0,
       count: 0,
     })
   }
@@ -1626,12 +1652,13 @@ export function buildExpenseBalanceRows(accounts = [], reports = []) {
       dinar: Math.abs(Number(report?.dinar || 0)),
       usd: Math.abs(Number(report?.usd || 0)),
       try: Math.abs(Number(report?.try || 0)),
+      eur: Math.abs(Number(report?.eur || 0)),
       count: Math.max(0, Number(report?.count || 0)),
     })
   }
 
   return Array.from(rowsById.values()).sort((left, right) => (
-    (right.dinar + right.usd + right.try) - (left.dinar + left.usd + left.try)
+    (right.dinar + right.usd + right.try + right.eur) - (left.dinar + left.usd + left.try + left.eur)
     || right.count - left.count
     || left.name.localeCompare(right.name, 'ar')
     || left.id.localeCompare(right.id)
@@ -1665,7 +1692,8 @@ export function ExpenseReportList({ rows = [], onOpen }) {
                 {row.dinar ? <strong>{money(row.dinar, CURRENCIES.DINAR)}</strong> : null}
                 {row.usd ? <strong>{money(row.usd, CURRENCIES.USD)}</strong> : null}
                 {row.try ? <strong>{money(row.try, CURRENCIES.TRY)}</strong> : null}
-                {!row.dinar && !row.usd && !row.try ? <span>صفر</span> : null}
+                {row.eur ? <strong>{money(row.eur, CURRENCIES.EUR)}</strong> : null}
+                {!row.dinar && !row.usd && !row.try && !row.eur ? <span>صفر</span> : null}
               </div>
             </Motion.article>
           )
@@ -1676,9 +1704,7 @@ export function ExpenseReportList({ rows = [], onOpen }) {
 }
 
 function counterpartyBucketAmount(bucket = {}) {
-  const currency = bucket.account?.currencyKind === ACCOUNT_CURRENCY_KINDS.USD
-    ? CURRENCIES.USD
-    : bucket.account?.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? CURRENCIES.TRY : CURRENCIES.DINAR
+  const currency = CURRENCY_OPTIONS.find((option) => option.value === bucket.account?.currencyKind)?.value || CURRENCIES.DINAR
   return {
     amount: Number(bucket[currencyField(currency)] || 0),
     currency,
@@ -1687,7 +1713,7 @@ function counterpartyBucketAmount(bucket = {}) {
 
 function counterpartyHasDirection(group = {}, direction) {
   const value = group?.[direction] || {}
-  return Number(value.dinar || 0) > 0 || Number(value.usd || 0) > 0 || Number(value.try || 0) > 0
+  return Number(value.dinar || 0) > 0 || Number(value.usd || 0) > 0 || Number(value.try || 0) > 0 || Number(value.eur || 0) > 0
 }
 
 export function setCounterpartySettlementPin(accounts = [], groupId = '', pinned = true, updatedAt = new Date().toISOString()) {
@@ -1710,15 +1736,15 @@ export function setCounterpartySettlementPin(accounts = [], groupId = '', pinned
 
 function counterpartyGroupFromRows(group = {}, rows = []) {
   const totals = rows.reduce((result, bucket) => {
-    for (const field of ['dinar', 'usd', 'try']) {
+    for (const { field } of CURRENCY_OPTIONS) {
       const amount = Number(bucket?.[field] || 0)
       result.receivable[field] += Math.max(0, amount)
       result.payable[field] += Math.abs(Math.min(0, amount))
     }
     return result
   }, {
-    receivable: { dinar: 0, usd: 0, try: 0 },
-    payable: { dinar: 0, usd: 0, try: 0 },
+    receivable: { dinar: 0, usd: 0, try: 0, eur: 0 },
+    payable: { dinar: 0, usd: 0, try: 0, eur: 0 },
   })
   return { ...group, rows, ...totals }
 }
@@ -1730,6 +1756,7 @@ function counterpartyRowsForDirection(group = {}, direction) {
     dinar: keepPositive ? Math.max(0, Number(bucket.dinar || 0)) : Math.min(0, Number(bucket.dinar || 0)),
     usd: keepPositive ? Math.max(0, Number(bucket.usd || 0)) : Math.min(0, Number(bucket.usd || 0)),
     try: keepPositive ? Math.max(0, Number(bucket.try || 0)) : Math.min(0, Number(bucket.try || 0)),
+    eur: keepPositive ? Math.max(0, Number(bucket.eur || 0)) : Math.min(0, Number(bucket.eur || 0)),
   })).filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
 }
 
@@ -1773,7 +1800,7 @@ export function filterMoneyBalanceRows(rows = [], focus = '') {
 
 export function counterpartyMagnitudeForFilter(group = {}, filterKey = 'all') {
   if (filterKey === 'receivable' || filterKey === 'payable') {
-    return Math.max(Number(group?.[filterKey]?.dinar || 0), Number(group?.[filterKey]?.usd || 0), Number(group?.[filterKey]?.try || 0))
+    return Math.max(Number(group?.[filterKey]?.dinar || 0), Number(group?.[filterKey]?.usd || 0), Number(group?.[filterKey]?.try || 0), Number(group?.[filterKey]?.eur || 0))
   }
   if (filterKey && !['all', 'zero'].includes(filterKey)) {
     return Math.max(0, ...group.rows
@@ -1784,9 +1811,11 @@ export function counterpartyMagnitudeForFilter(group = {}, filterKey = 'all') {
     Number(group.receivable?.dinar || 0),
     Number(group.receivable?.usd || 0),
     Number(group.receivable?.try || 0),
+    Number(group.receivable?.eur || 0),
     Number(group.payable?.dinar || 0),
     Number(group.payable?.usd || 0),
     Number(group.payable?.try || 0),
+    Number(group.payable?.eur || 0),
   )
 }
 
@@ -1818,8 +1847,8 @@ function CounterpartyChannel({ bucket }) {
 }
 
 export function CounterpartyCard({ group, isFocused = false, isDimmed = false, onFocus, onOpen, onToggleSettlement }) {
-  const hasReceivable = group.receivable.dinar > 0 || group.receivable.usd > 0 || group.receivable.try > 0
-  const hasPayable = group.payable.dinar > 0 || group.payable.usd > 0 || group.payable.try > 0
+  const hasReceivable = group.receivable.dinar > 0 || group.receivable.usd > 0 || group.receivable.try > 0 || Number(group.receivable.eur || 0) > 0
+  const hasPayable = group.payable.dinar > 0 || group.payable.usd > 0 || group.payable.try > 0 || Number(group.payable.eur || 0) > 0
   const settlementPinned = Boolean(group.settlementPinned)
   const balanceStatus = hasReceivable && hasPayable ? 'أقبض وأدفع' : hasReceivable ? 'أقبض منه' : hasPayable ? 'أدفع له' : 'مسكر'
   const tone = hasReceivable && hasPayable ? 'mixed' : hasReceivable ? 'receivable' : hasPayable ? 'payable' : 'zero'
@@ -1930,13 +1959,14 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
   const selectedBalance = selectedAccount ? accountBalanceChip(selectedAccount, balanceByAccountId.get(selectedAccount.id), balanceCurrency) : null
   const showChooser = !selectedAccount || isChanging
   const preferredIndexById = new Map(preferredAccountIds.map((accountId, index) => [accountId, index]))
-  const accountBucket = (account) => balanceByAccountId.get(account.id) || { dinar: 0, usd: 0, try: 0 }
+  const accountBucket = (account) => balanceByAccountId.get(account.id) || { dinar: 0, usd: 0, try: 0, eur: 0 }
   const accountMagnitude = (account) => {
     const bucket = accountBucket(account)
     if (balanceCurrency === CURRENCIES.USD) return Math.abs(Number(bucket.usd || 0))
     if (balanceCurrency === CURRENCIES.DINAR) return Math.abs(Number(bucket.dinar || 0))
+    if (balanceCurrency === CURRENCIES.EUR) return Math.abs(Number(bucket.eur || 0))
     if (balanceCurrency === CURRENCIES.TRY) return Math.abs(Number(bucket.try || 0))
-    return Math.max(Math.abs(Number(bucket.dinar || 0)), Math.abs(Number(bucket.usd || 0)), Math.abs(Number(bucket.try || 0)))
+    return Math.max(Math.abs(Number(bucket.dinar || 0)), Math.abs(Number(bucket.usd || 0)), Math.abs(Number(bucket.try || 0)), Math.abs(Number(bucket.eur || 0)))
   }
   const hasVisibleBalance = (account) => accountMagnitude(account) > 0
   const preferredAccounts = preferredAccountIds.map((accountId) => accounts.find((account) => account.id === accountId)).filter(Boolean)
@@ -3396,6 +3426,11 @@ function OperationsPanel({ reports, expenseReports, dueRules, recurringRules, at
                 TRY: دخل {money(item.incomeTry, CURRENCIES.TRY)} · مصروف {money(item.expenseTry, CURRENCIES.TRY)}
               </small>
             ) : null}
+            {item.incomeEur || item.expenseEur ? (
+              <small>
+                EUR: دخل {money(item.incomeEur, CURRENCIES.EUR)} · مصروف {money(item.expenseEur, CURRENCIES.EUR)}
+              </small>
+            ) : null}
           </div>
         ))}
       </article>
@@ -3411,6 +3446,7 @@ function OperationsPanel({ reports, expenseReports, dueRules, recurringRules, at
             <b>{money(item.dinar)}</b>
             {item.usd ? <small>{money(item.usd, CURRENCIES.USD)}</small> : null}
             {item.try ? <small>{money(item.try, CURRENCIES.TRY)}</small> : null}
+            {item.eur ? <small>{money(item.eur, CURRENCIES.EUR)}</small> : null}
           </div>
         ))}
       </article>
@@ -3532,6 +3568,7 @@ export default function LedgerApp() {
   const [netRate, setNetRate] = useState('')
   const [netTargetCurrency, setNetTargetCurrency] = useState(CURRENCIES.DINAR)
   const [netTryRate, setNetTryRate] = useState('')
+  const [netEurRate, setNetEurRate] = useState('')
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
   const [activeAccountDetail, setActiveAccountDetail] = useState('')
@@ -3640,10 +3677,10 @@ export default function LedgerApp() {
   const accountOpening = accountOpeningAmounts(accountDraft)
   const accountOpeningCurrency = accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.USD
     ? CURRENCIES.USD
-    : accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? CURRENCIES.TRY : CURRENCIES.DINAR
+    : accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? CURRENCIES.TRY : accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.EUR ? CURRENCIES.EUR : CURRENCIES.DINAR
   const accountOpeningValue = accountOpeningCurrency === CURRENCIES.USD
     ? accountOpening.openingUsd
-    : accountOpeningCurrency === CURRENCIES.TRY ? accountOpening.openingTry : accountOpening.openingDinar
+    : accountOpeningCurrency === CURRENCIES.TRY ? accountOpening.openingTry : accountOpeningCurrency === CURRENCIES.EUR ? accountOpening.openingEur : accountOpening.openingDinar
   const accountOpeningDirectionReady = (accountIsCounterpartyBundle ? counterpartyOpeningDraftErrors(accountDraft) : accountOpeningDraftErrors(accountDraft)).length === 0
   const counterpartyOpeningCount = accountIsCounterpartyBundle
     ? counterpartyAccountChannels.filter((channel) => counterpartyOpeningFor(accountDraft, channel.key).amount > 0).length
@@ -3976,6 +4013,15 @@ export default function LedgerApp() {
       cancelled = true
     }
   }, [initialState])
+
+  useEffect(() => {
+    if (!isHydrated || !canPersist) return undefined
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) setAccounts((current) => completeAccountCurrencies(current))
+    })
+    return () => { cancelled = true }
+  }, [isHydrated, canPersist])
 
   useEffect(() => {
     if (!isHydrated || ledgerStorageMode !== 'relational' || !Number.isSafeInteger(ledgerRevision)) return undefined
@@ -5952,9 +5998,11 @@ export default function LedgerApp() {
               query={netAccountQuery}
               rate={netRate}
               tryRate={netTryRate}
+              eurRate={netEurRate}
               targetCurrency={netTargetCurrency}
               onRateChange={setNetRate}
               onTryRateChange={setNetTryRate}
+              onEurRateChange={setNetEurRate}
               onTargetCurrencyChange={setNetTargetCurrency}
               onQueryChange={setNetAccountQuery}
               onToggleAccount={toggleTemporaryNetAccount}
@@ -6766,6 +6814,17 @@ export default function LedgerApp() {
                         }}
                       >
                         <strong>TRY</strong>
+                      </button>
+                      <button
+                        type="button"
+                        className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.EUR ? 'is-active' : ''}
+                        aria-pressed={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.EUR}
+                        onClick={() => {
+                          setAccountDraft((current) => ({ ...current, currencyKind: ACCOUNT_CURRENCY_KINDS.EUR }))
+                          goToAccountWizardStep(accountNeedsOpeningBalance ? ACCOUNT_WIZARD_STEPS.OPENING : ACCOUNT_WIZARD_STEPS.SAVE)
+                        }}
+                      >
+                        <strong>EUR</strong>
                       </button>
                     </div>
                   ) : null}

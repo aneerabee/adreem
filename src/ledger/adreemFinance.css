@@ -281,7 +281,8 @@
   isolation: isolate;
   container: balance-summary / inline-size;
   min-width: 0;
-  height: var(--finance-summary);
+  min-height: var(--finance-summary);
+  height: auto;
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
@@ -575,18 +576,20 @@
 .adreem-net-calc {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(90px, 0.8fr) auto minmax(115px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   gap: 6px;
 }
 
 .adreem-net-calc > * { min-width: 0; }
+.adreem-net-calc > .adreem-net-target,
+.adreem-net-calc > output { grid-column: 1 / -1; }
 .adreem-net-calc .ml3-number-compact,
 .adreem-net-calc .ml3-number-compact input { width: 100%; max-width: 100%; min-width: 0; }
 .adreem-net-calc .ml3-number-compact { position: relative; display: block; }
 .adreem-net-calc .ml3-number-compact > span { position: absolute; z-index: 1; inset-block-start: 5px; inset-inline-start: 8px; direction: ltr; color: var(--finance-muted); font-size: 0.52rem; font-weight: 800; unicode-bidi: isolate; pointer-events: none; }
 .adreem-net-calc .ml3-number-compact input { height: 48px; min-height: 48px; padding-block: 17px 4px; border-color: #d8d1e4; background: white; }
-.adreem-net-target { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border: 1px solid #d8d1e4; border-radius: 7px; background: #ebe7f1; }
+.adreem-net-target { min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 2px; border: 1px solid #d8d1e4; border-radius: 7px; background: #ebe7f1; }
 .adreem-net-target button { min-height: 42px; border: 0; border-radius: 5px; background: transparent; color: #685b82; font-size: 0.62rem; font-weight: 800; }
 .adreem-net-target button.is-active { background: white; color: #493d61; box-shadow: 0 2px 7px rgba(50, 39, 67, 0.11); }
 
@@ -954,11 +957,13 @@
 .ml3-balances-surface .ml3-account-row--person.is-positive,
 .ml3-balances-surface .ml3-account-row--person-bank.is-positive,
 .ml3-balances-surface .ml3-account-row--person-usd.is-positive,
-.ml3-balances-surface .ml3-account-row--person-try.is-positive { --row-tone: var(--finance-green); --row-soft: var(--finance-green-soft); }
+.ml3-balances-surface .ml3-account-row--person-try.is-positive,
+.ml3-balances-surface .ml3-account-row--person-eur.is-positive { --row-tone: var(--finance-green); --row-soft: var(--finance-green-soft); }
 .ml3-balances-surface .ml3-account-row--person.is-negative,
 .ml3-balances-surface .ml3-account-row--person-bank.is-negative,
 .ml3-balances-surface .ml3-account-row--person-usd.is-negative,
-.ml3-balances-surface .ml3-account-row--person-try.is-negative { --row-tone: var(--finance-debt); --row-soft: var(--finance-debt-soft); }
+.ml3-balances-surface .ml3-account-row--person-try.is-negative,
+.ml3-balances-surface .ml3-account-row--person-eur.is-negative { --row-tone: var(--finance-debt); --row-soft: var(--finance-debt-soft); }
 .ml3-balances-surface .ml3-account-row.is-zero { --row-tone: var(--finance-muted); --row-soft: var(--finance-surface); }
 .ml3-balances-surface .ml3-account-row:hover { background: color-mix(in srgb, var(--row-soft) 52%, white); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--row-tone) 12%, transparent); }
 
@@ -1599,7 +1604,7 @@
   .ml3-balance-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
   .ml3-balance-ledger button.has-wide-balance,
   .ml3-home-grid .ml3-home-card.has-wide-balance { grid-column: 1 / -1; }
-  .ml3-balance-ledger button { height: var(--finance-summary); grid-template-columns: 31px minmax(0, 1fr); gap: 6px; padding: 7px; box-shadow: 0 4px 12px color-mix(in srgb, var(--finance-ink) 5%, transparent); }
+  .ml3-balance-ledger button { height: auto; min-height: var(--finance-summary); grid-template-columns: 31px minmax(0, 1fr); gap: 6px; padding: 7px; box-shadow: 0 4px 12px color-mix(in srgb, var(--finance-ink) 5%, transparent); }
   .ml3-balance-ledger button > i { width: 31px; height: 31px; }
   .ml3-balance-ledger button > span { gap: 3px; }
   .ml3-balance-ledger button > span > b { font-size: 0.65rem; }

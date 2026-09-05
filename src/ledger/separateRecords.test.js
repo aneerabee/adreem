@@ -63,6 +63,7 @@ describe('separate records', () => {
       [CURRENCIES.DINAR]: { receivable: 500, payable: 120 },
       [CURRENCIES.USD]: { receivable: 40, payable: 0 },
       [CURRENCIES.TRY]: { receivable: 0, payable: 0 },
+      [CURRENCIES.EUR]: { receivable: 0, payable: 0 },
     })
   })
 

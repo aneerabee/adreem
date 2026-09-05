@@ -107,6 +107,7 @@ export function separateRecordTotals(movements = []) {
     [CURRENCIES.DINAR]: emptyCurrency(),
     [CURRENCIES.USD]: emptyCurrency(),
     [CURRENCIES.TRY]: emptyCurrency(),
+    [CURRENCIES.EUR]: emptyCurrency(),
   }
   for (const movement of activeSeparateRecords(movements)) {
     const currency = Object.values(CURRENCIES).includes(movement.currency) ? movement.currency : CURRENCIES.DINAR

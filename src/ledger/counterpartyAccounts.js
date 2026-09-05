@@ -72,21 +72,24 @@ export function groupCounterpartyBalanceBuckets(rows = []) {
       id: key,
       ownerName: account.ownerName || '',
       rows: [],
-      receivable: { dinar: 0, usd: 0, try: 0 },
-      payable: { dinar: 0, usd: 0, try: 0 },
+      receivable: { dinar: 0, usd: 0, try: 0, eur: 0 },
+      payable: { dinar: 0, usd: 0, try: 0, eur: 0 },
       settlementPinned: false,
       settlementPinnedAt: null,
     }
     const dinar = Number(bucket.dinar || 0)
     const usd = Number(bucket.usd || 0)
     const tryAmount = Number(bucket.try || 0)
+    const eurAmount = Number(bucket.eur || 0)
     current.rows.push(bucket)
     current.receivable.dinar += Math.max(0, dinar)
     current.receivable.usd += Math.max(0, usd)
     current.receivable.try += Math.max(0, tryAmount)
+    current.receivable.eur += Math.max(0, eurAmount)
     current.payable.dinar += Math.abs(Math.min(0, dinar))
     current.payable.usd += Math.abs(Math.min(0, usd))
     current.payable.try += Math.abs(Math.min(0, tryAmount))
+    current.payable.eur += Math.abs(Math.min(0, eurAmount))
     if (account.settlementPinned) {
       const pinnedAt = String(account.settlementPinnedAt || account.updatedAt || account.createdAt || '')
       current.settlementPinned = true
@@ -105,15 +108,17 @@ function groupMagnitude(group = {}) {
     Number(group.receivable?.dinar || 0),
     Number(group.receivable?.usd || 0),
     Number(group.receivable?.try || 0),
+    Number(group.receivable?.eur || 0),
     Number(group.payable?.dinar || 0),
     Number(group.payable?.usd || 0),
     Number(group.payable?.try || 0),
+    Number(group.payable?.eur || 0),
   )
 }
 
 function directionMagnitude(group = {}, direction) {
   const bucket = group?.[direction] || {}
-  return Math.max(Number(bucket.dinar || 0), Number(bucket.usd || 0), Number(bucket.try || 0))
+  return Math.max(Number(bucket.dinar || 0), Number(bucket.usd || 0), Number(bucket.try || 0), Number(bucket.eur || 0))
 }
 
 function compareGroupsByMagnitude(left, right, direction = '') {
@@ -130,8 +135,8 @@ function compareGroupsByMagnitude(left, right, direction = '') {
 export function buildCounterpartyBalanceViews(rows = []) {
   const groups = groupCounterpartyBalanceBuckets(rows)
     .sort((left, right) => compareGroupsByMagnitude(left, right))
-  const hasReceivable = (group) => group.receivable.dinar > 0 || group.receivable.usd > 0 || group.receivable.try > 0
-  const hasPayable = (group) => group.payable.dinar > 0 || group.payable.usd > 0 || group.payable.try > 0
+  const hasReceivable = (group) => group.receivable.dinar > 0 || group.receivable.usd > 0 || group.receivable.try > 0 || group.receivable.eur > 0
+  const hasPayable = (group) => group.payable.dinar > 0 || group.payable.usd > 0 || group.payable.try > 0 || group.payable.eur > 0
   return {
     all: groups,
     withBalance: groups.filter((group) => hasReceivable(group) || hasPayable(group)),

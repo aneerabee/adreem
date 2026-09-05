@@ -149,9 +149,10 @@ export function buildExpenseCategoryReports(state = {}) {
     if (movement?.status !== MOVEMENT_STATUSES.POSTED) continue
     if (movement.type !== MOVEMENT_TYPES.EXPENSE && movement.type !== MOVEMENT_TYPES.TRUCK_EXPENSE) continue
     const categoryId = categories.has(movement.expenseCategoryId) ? movement.expenseCategoryId : ''
-    const current = totals.get(categoryId) || { categoryId, dinar: 0, usd: 0, try: 0, count: 0 }
+    const current = totals.get(categoryId) || { categoryId, dinar: 0, usd: 0, try: 0, eur: 0, count: 0 }
     if (movement.currency === CURRENCIES.USD) current.usd += Math.abs(Number(movement.amount || 0))
     else if (movement.currency === CURRENCIES.TRY) current.try += Math.abs(Number(movement.amount || 0))
+    else if (movement.currency === CURRENCIES.EUR) current.eur += Math.abs(Number(movement.amount || 0))
     else current.dinar += Math.abs(Number(movement.amount || 0))
     current.count += 1
     totals.set(categoryId, current)
@@ -162,7 +163,7 @@ export function buildExpenseCategoryReports(state = {}) {
       ...item,
       name: item.categoryId ? categories.get(item.categoryId)?.ownerName || 'مصروف' : 'بدون تصنيف',
     }))
-    .sort((left, right) => (right.dinar + right.usd + right.try) - (left.dinar + left.usd + left.try) || right.count - left.count)
+    .sort((left, right) => (right.dinar + right.usd + right.try + right.eur) - (left.dinar + left.usd + left.try + left.eur) || right.count - left.count)
 }
 
 export function buildDimensionReports(state = {}) {
@@ -193,7 +194,7 @@ export function buildDimensionReports(state = {}) {
     const totals = related.reduce(
       (acc, movement) => {
         const amount = Math.abs(Number(movement.amount || 0))
-        const bucket = movement.currency === CURRENCIES.USD ? acc.usd : movement.currency === CURRENCIES.TRY ? acc.try : acc.dinar
+        const bucket = movement.currency === CURRENCIES.USD ? acc.usd : movement.currency === CURRENCIES.TRY ? acc.try : movement.currency === CURRENCIES.EUR ? acc.eur : acc.dinar
         if (movement.type === MOVEMENT_TYPES.EXPENSE || movement.type === MOVEMENT_TYPES.TRUCK_EXPENSE) bucket.expense += amount
         if (movement.type === MOVEMENT_TYPES.EXTERNAL_INCOME || movement.type === MOVEMENT_TYPES.TRUCK_INCOME) bucket.income += amount
         return acc
@@ -202,11 +203,13 @@ export function buildDimensionReports(state = {}) {
         dinar: { income: 0, expense: 0 },
         usd: { income: 0, expense: 0 },
         try: { income: 0, expense: 0 },
+        eur: { income: 0, expense: 0 },
       },
     )
     const net = totals.dinar.income - totals.dinar.expense
     const netUsd = totals.usd.income - totals.usd.expense
     const netTry = totals.try.income - totals.try.expense
+    const netEur = totals.eur.income - totals.eur.expense
     return {
       dimension,
       movementCount: related.length,
@@ -217,10 +220,13 @@ export function buildDimensionReports(state = {}) {
       expenseUsd: totals.usd.expense,
       netUsd,
       incomeTry: totals.try.income,
+      incomeEur: totals.eur.income,
       expenseTry: totals.try.expense,
+      expenseEur: totals.eur.expense,
       netTry,
+      netEur,
     }
-  }).sort((a, b) => (Math.abs(b.net) + Math.abs(b.netUsd) + Math.abs(b.netTry)) - (Math.abs(a.net) + Math.abs(a.netUsd) + Math.abs(a.netTry)) || b.movementCount - a.movementCount)
+  }).sort((a, b) => (Math.abs(b.net) + Math.abs(b.netUsd) + Math.abs(b.netTry) + Math.abs(b.netEur)) - (Math.abs(a.net) + Math.abs(a.netUsd) + Math.abs(a.netTry) + Math.abs(a.netEur)) || b.movementCount - a.movementCount)
 }
 
 export function validateAttachmentDraft({ label = '', url = '', mimeType = '', sizeBytes = 0 } = {}) {
@@ -293,26 +299,31 @@ export function hideAttachment(attachment, hiddenAt = nowIso()) {
   }
 }
 
-export function createReconciliation({ accountId, actualDinar, actualUsd, actualTry, expectedDinar, expectedUsd, expectedTry, note = '' }) {
+export function createReconciliation({ accountId, actualDinar, actualUsd, actualTry, actualEur, expectedDinar, expectedUsd, expectedTry, expectedEur, note = '' }) {
   const createdAt = nowIso()
   const roundedActualDinar = roundMoney(Number(actualDinar || 0))
   const roundedActualUsd = roundMoney(Number(actualUsd || 0))
   const roundedActualTry = roundMoney(Number(actualTry || 0))
+  const roundedActualEur = roundMoney(Number(actualEur || 0))
   const roundedExpectedDinar = roundMoney(Number(expectedDinar || 0))
   const roundedExpectedUsd = roundMoney(Number(expectedUsd || 0))
   const roundedExpectedTry = roundMoney(Number(expectedTry || 0))
+  const roundedExpectedEur = roundMoney(Number(expectedEur || 0))
   return {
     id: stableId('reconcile', `${accountId}-${createdAt}`),
     accountId,
     actualDinar: roundedActualDinar,
     actualUsd: roundedActualUsd,
     actualTry: roundedActualTry,
+    actualEur: roundedActualEur,
     expectedDinar: roundedExpectedDinar,
     expectedUsd: roundedExpectedUsd,
     expectedTry: roundedExpectedTry,
+    expectedEur: roundedExpectedEur,
     diffDinar: roundMoney(roundedActualDinar - roundedExpectedDinar),
     diffUsd: roundMoney(roundedActualUsd - roundedExpectedUsd),
     diffTry: roundMoney(roundedActualTry - roundedExpectedTry),
+    diffEur: roundMoney(roundedActualEur - roundedExpectedEur),
     note: String(note || '').trim(),
     createdAt,
   }
@@ -325,6 +336,7 @@ export function buildReconciliationCorrectionDrafts(reconciliation) {
     { currency: CURRENCIES.DINAR, delta: Number(reconciliation.diffDinar || 0) },
     { currency: CURRENCIES.USD, delta: Number(reconciliation.diffUsd || 0) },
     { currency: CURRENCIES.TRY, delta: Number(reconciliation.diffTry || 0) },
+    { currency: CURRENCIES.EUR, delta: Number(reconciliation.diffEur || 0) },
   ]
     .filter((item) => item.delta !== 0)
     .map((item) => ({
@@ -353,17 +365,19 @@ export function findUnresolvedReconciliationDifferences(reconciliations = [], mo
         (totals, movement) => {
           if (movement.currency === CURRENCIES.USD) return { ...totals, usd: roundMoney(totals.usd + Number(movement.amount || 0)) }
           if (movement.currency === CURRENCIES.TRY) return { ...totals, try: roundMoney(totals.try + Number(movement.amount || 0)) }
+          if (movement.currency === CURRENCIES.EUR) return { ...totals, eur: roundMoney(totals.eur + Number(movement.amount || 0)) }
           return { ...totals, dinar: roundMoney(totals.dinar + Number(movement.amount || 0)) }
         },
-        { dinar: 0, usd: 0, try: 0 },
+        { dinar: 0, usd: 0, try: 0, eur: 0 },
       )
     return {
       reconciliation,
       unresolvedDinar: roundMoney(Number(reconciliation.diffDinar || 0) - corrected.dinar),
       unresolvedUsd: roundMoney(Number(reconciliation.diffUsd || 0) - corrected.usd),
       unresolvedTry: roundMoney(Number(reconciliation.diffTry || 0) - corrected.try),
+      unresolvedEur: roundMoney(Number(reconciliation.diffEur || 0) - corrected.eur),
     }
-  }).filter((item) => item.unresolvedDinar !== 0 || item.unresolvedUsd !== 0 || item.unresolvedTry !== 0)
+  }).filter((item) => item.unresolvedDinar !== 0 || item.unresolvedUsd !== 0 || item.unresolvedTry !== 0 || item.unresolvedEur !== 0)
 }
 
 export function lastReconciliationForAccount(reconciliations = [], accountId) {
@@ -441,7 +455,7 @@ export function buildLedgerAlerts({
   const alerts = []
   const negativeMoneyAccounts = balances.filter((bucket) =>
     (bucket.account?.valueKind === VALUE_KINDS.CASH || bucket.account?.valueKind === VALUE_KINDS.BANK) &&
-    [bucket.dinar, bucket.usd, bucket.try].some((amount) => Math.round(amount || 0) < 0),
+    [bucket.dinar, bucket.usd, bucket.try, bucket.eur].some((amount) => Math.round(amount || 0) < 0),
   )
   const liveMovements = (Array.isArray(movements) ? movements : [])
     .filter((movement) => movement?.status !== MOVEMENT_STATUSES.VOIDED)

@@ -11,6 +11,7 @@ export const COUNTERPARTY_ACCOUNT_KINDS = {
   CHEQUE_DINAR: 'cheque-dinar',
   CASH_USD: 'cash-usd',
   CASH_TRY: 'cash-try',
+  CASH_EUR: 'cash-eur',
 }
 
 export const counterpartyAccountChannels = [
@@ -42,6 +43,13 @@ export const counterpartyAccountChannels = [
     subAccountName: 'TRY بيننا',
     currencyKind: ACCOUNT_CURRENCY_KINDS.TRY,
   },
+  {
+    key: COUNTERPARTY_ACCOUNT_KINDS.CASH_EUR,
+    label: 'كاش · EUR',
+    shortLabel: 'EUR',
+    subAccountName: 'EUR بيننا',
+    currencyKind: ACCOUNT_CURRENCY_KINDS.EUR,
+  },
 ]
 
 const OPENING_BALANCE_VALUE_KINDS = new Set([
@@ -55,7 +63,7 @@ export const accountPresets = [
   {
     key: 'person-cash',
     title: 'شخص أو جهة',
-    detail: 'كاش وشيك · LYD وUSD وTRY',
+    detail: 'كاش وشيك · LYD وUSD وTRY وEUR',
     type: ACCOUNT_TYPES.PERSON,
     valueKind: VALUE_KINDS.RECEIVABLE,
     subAccountName: 'كاش بيننا',
@@ -211,7 +219,7 @@ export function accountSupportsOpeningBalance(draftOrAccount = {}) {
 }
 
 export function accountOpeningAmounts(draft = {}) {
-  if (!accountSupportsOpeningBalance(draft)) return { openingDinar: 0, openingUsd: 0, openingTry: 0 }
+  if (!accountSupportsOpeningBalance(draft)) return { openingDinar: 0, openingUsd: 0, openingTry: 0, openingEur: 0 }
 
   const hasWizardAmount = Object.hasOwn(draft, 'openingBalanceAmount')
   if (!hasWizardAmount) {
@@ -219,6 +227,7 @@ export function accountOpeningAmounts(draft = {}) {
       openingDinar: openingInputNumber(draft.openingDinar),
       openingUsd: openingInputNumber(draft.openingUsd),
       openingTry: openingInputNumber(draft.openingTry),
+      openingEur: openingInputNumber(draft.openingEur),
     }
   }
 
@@ -232,6 +241,7 @@ export function accountOpeningAmounts(draft = {}) {
     openingDinar: currencyKind === ACCOUNT_CURRENCY_KINDS.DINAR ? signedAmount : 0,
     openingUsd: currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? signedAmount : 0,
     openingTry: currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? signedAmount : 0,
+    openingEur: currencyKind === ACCOUNT_CURRENCY_KINDS.EUR ? signedAmount : 0,
   }
 }
 
@@ -292,6 +302,7 @@ export function counterpartyAccountDrafts(draft = {}) {
       openingDinar: channel.currencyKind === ACCOUNT_CURRENCY_KINDS.DINAR ? signedAmount : 0,
       openingUsd: channel.currencyKind === ACCOUNT_CURRENCY_KINDS.USD ? signedAmount : 0,
       openingTry: channel.currencyKind === ACCOUNT_CURRENCY_KINDS.TRY ? signedAmount : 0,
+      openingEur: channel.currencyKind === ACCOUNT_CURRENCY_KINDS.EUR ? signedAmount : 0,
       counterpartyKind: channel.key,
       notes: String(draft.notes || '').trim(),
     }
@@ -299,6 +310,9 @@ export function counterpartyAccountDrafts(draft = {}) {
 }
 
 export function counterpartyChannelForAccount(account = {}) {
+  if (accountCurrencyKindFor(account) === ACCOUNT_CURRENCY_KINDS.EUR) {
+    return counterpartyAccountChannels.find((channel) => channel.key === COUNTERPARTY_ACCOUNT_KINDS.CASH_EUR)
+  }
   const explicit = counterpartyAccountChannels.find((channel) => channel.key === account.counterpartyKind)
   if (explicit) return explicit
   const detail = normalizeAccountText(account.subAccountName)
@@ -356,6 +370,7 @@ export function accountDetailDisplayName(account = {}) {
   if (detail === 'شيك بيننا') return 'شيك'
   if (detail === 'دولار بيننا') return 'USD'
   if (detail === 'TRY بيننا') return 'TRY'
+  if (detail === 'EUR بيننا') return 'EUR'
   return detail
 }
 
@@ -466,6 +481,7 @@ export function accountContextLabel(account = {}) {
 export function accountChoiceKind(account = {}) {
   const kind = accountPresentationValueKind(account)
   if (kind !== VALUE_KINDS.RECEIVABLE) return kind
+  if (counterpartyChannelForAccount(account)?.key === COUNTERPARTY_ACCOUNT_KINDS.CASH_EUR) return 'person-eur'
   if (counterpartyChannelForAccount(account)?.key === COUNTERPARTY_ACCOUNT_KINDS.CASH_USD) return 'person-usd'
   if (counterpartyChannelForAccount(account)?.key === COUNTERPARTY_ACCOUNT_KINDS.CASH_TRY) return 'person-try'
   return /مصرف|بنك|شيك|حساب|bank/i.test(account.subAccountName || '') ? 'person-bank' : 'person-cash'
@@ -473,6 +489,7 @@ export function accountChoiceKind(account = {}) {
 
 export function accountChoiceKindLabel(account = {}) {
   const kind = accountChoiceKind(account)
+  if (kind === 'person-eur') return 'EUR'
   if (kind === VALUE_KINDS.CASH) return 'كاش'
   if (kind === VALUE_KINDS.BANK) return 'مصرف'
   if (kind === 'person-bank') return 'شيك'

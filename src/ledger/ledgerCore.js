@@ -14,6 +14,7 @@ export const CURRENCIES = {
   DINAR: 'LYD',
   USD: 'USD',
   TRY: 'TRY',
+  EUR: 'EUR',
 }
 
 export const MAX_MONEY_AMOUNT = 999_999_999_999_999
@@ -134,11 +135,26 @@ export function createOpeningMovements(accounts = [], createdAt = isoNow()) {
         updatedAt: createdAt,
       })
     }
+    if (asNumber(account.openingEur)) {
+      entries.push({
+        id: `opening-${account.id}-eur`,
+        type: MOVEMENT_TYPES.OPENING_BALANCE,
+        status: MOVEMENT_STATUSES.POSTED,
+        currency: CURRENCIES.EUR,
+        amount: roundMoney(account.openingEur),
+        destinationAccountId: account.id,
+        sourceAccountId: null,
+        note: `رصيد افتتاحي: ${account.legacyName}`,
+        createdAt,
+        updatedAt: createdAt,
+      })
+    }
     return entries
   })
 }
 
 export function currencyBalanceField(currency) {
+  if (currency === CURRENCIES.EUR) return 'eur'
   if (currency === CURRENCIES.USD) return 'usd'
   if (currency === CURRENCIES.TRY) return 'try'
   return 'dinar'
@@ -158,7 +174,8 @@ function hasDatabaseBalance(account) {
   return account?.balanceSource === 'database' &&
     Number.isFinite(Number(account.balanceDinar)) &&
     Number.isFinite(Number(account.balanceUsd)) &&
-    Number.isFinite(Number(account.balanceTry ?? 0))
+    Number.isFinite(Number(account.balanceTry ?? 0)) &&
+    Number.isFinite(Number(account.balanceEur ?? 0))
 }
 
 function validateNonNegativeOwnBalances(movement, accounts = [], movements = [], accountMap = buildAccountMap(accounts), options = {}) {
@@ -453,6 +470,7 @@ export function summarizeBalances(accounts = [], movements = []) {
       dinar: databaseAccountIds.has(account.id) ? roundMoney(Number(account.balanceDinar)) : 0,
       usd: databaseAccountIds.has(account.id) ? roundMoney(Number(account.balanceUsd)) : 0,
       try: databaseAccountIds.has(account.id) ? roundMoney(Number(account.balanceTry || 0)) : 0,
+      eur: databaseAccountIds.has(account.id) ? roundMoney(Number(account.balanceEur || 0)) : 0,
       postedCount: databaseAccountIds.has(account.id) ? Math.max(0, Math.round(Number(account.postedCount || 0))) : 0,
     }]))
 
@@ -544,6 +562,7 @@ export function createAccount({
   openingDinar = 0,
   openingUsd = 0,
   openingTry = 0,
+  openingEur = 0,
   currencyKind,
   notes = '',
   status = ACCOUNT_STATUSES.ACTIVE,
@@ -565,6 +584,7 @@ export function createAccount({
     openingDinar,
     openingUsd,
     openingTry,
+    openingEur,
   }))
   const stableCurrencySuffix = normalizedCurrencyKind === 'multi' ? 'multi' : normalizedCurrencyKind.toLowerCase()
   const normalizedSummaryScope = accountSummaryScope({ valueKind: normalizedValueKind, summaryScope })
@@ -579,6 +599,7 @@ export function createAccount({
     openingDinar: roundMoney(openingDinar),
     openingUsd: roundMoney(openingUsd),
     openingTry: roundMoney(openingTry),
+    openingEur: roundMoney(openingEur),
     currencyKind: normalizedCurrencyKind,
     status,
     notes,
@@ -607,12 +628,13 @@ export function validateAccount(account, existingAccounts = []) {
   const openingDinar = Number(account?.openingDinar || 0)
   const openingUsd = Number(account?.openingUsd || 0)
   const openingTry = Number(account?.openingTry || 0)
-  for (const [field, amount] of [['openingDinar', openingDinar], ['openingUsd', openingUsd], ['openingTry', openingTry]]) {
+  const openingEur = Number(account?.openingEur || 0)
+  for (const [field, amount] of [['openingDinar', openingDinar], ['openingUsd', openingUsd], ['openingTry', openingTry], ['openingEur', openingEur]]) {
     if (!Number.isSafeInteger(amount) || Math.abs(amount) > MAX_MONEY_AMOUNT) {
       errors.push({ field, message: 'الرصيد الافتتاحي يجب أن يكون عددًا صحيحًا ضمن الحد المسموح.' })
     }
   }
-  const hasOpeningBalance = openingDinar !== 0 || openingUsd !== 0 || openingTry !== 0
+  const hasOpeningBalance = openingDinar !== 0 || openingUsd !== 0 || openingTry !== 0 || openingEur !== 0
   const supportsOpeningBalance = [VALUE_KINDS.RECEIVABLE, VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET].includes(account?.valueKind)
   if (hasOpeningBalance && !supportsOpeningBalance) {
     errors.push({ field: 'openingDinar', message: 'هذا النوع لا يحمل رصيدًا افتتاحيًا.' })
@@ -626,6 +648,9 @@ export function validateAccount(account, existingAccounts = []) {
   if (cannotGoNegative(account) && openingTry < 0) {
     errors.push({ field: 'openingTry', message: 'فلوسك أو قيمة الأصل لا يمكن أن تبدأ بالسالب.' })
   }
+  if (cannotGoNegative(account) && openingEur < 0) {
+    errors.push({ field: 'openingEur', message: 'فلوسك أو قيمة الأصل لا يمكن أن تبدأ بالسالب.' })
+  }
   const currencyKind = normalizeAccountCurrencyKind(account?.currencyKind, inferAccountCurrencyKind(account))
   if (accountSupportsNetScope(account) && account?.summaryScope && !Object.values(ACCOUNT_SUMMARY_SCOPES).includes(account.summaryScope)) {
     errors.push({ field: 'summaryScope', message: 'حالة الحساب في الصافي غير معروفة.' })
@@ -637,6 +662,7 @@ export function validateAccount(account, existingAccounts = []) {
     [CURRENCIES.DINAR]: openingDinar,
     [CURRENCIES.USD]: openingUsd,
     [CURRENCIES.TRY]: openingTry,
+    [CURRENCIES.EUR]: openingEur,
   }
   if (currencyKind !== 'multi' && Object.entries(openingByCurrency).some(([currency, amount]) => currency !== currencyKind && amount !== 0)) {
     errors.push({ field: 'currencyKind', message: 'الرصيد الافتتاحي يجب أن يطابق عملة الحساب.' })

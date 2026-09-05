@@ -269,7 +269,7 @@ describe('adreem operational features', () => {
         reconciliation: reconciliations[1],
         unresolvedDinar: 25,
         unresolvedUsd: -5,
-        unresolvedTry: 0,
+        unresolvedTry: 0, unresolvedEur: 0,
       },
     ])
   })
