@@ -1202,16 +1202,24 @@ export function buildBalanceOverview(rows = []) {
   }
 }
 
-function BalanceAmountPair({ value }) {
-  const wide = balanceAmountIsWide(value)
+export function CurrencyAmountGrid({ value, className = 'ml3-balance-pair' }) {
+  const cells = CURRENCY_OPTIONS.map((option) => ({
+    ...option,
+    amount: Number(value?.[option.field] || 0),
+  }))
   return (
-    <span className={`ml3-balance-pair${wide ? ' is-wide' : ''}`}>
-      <strong><b>{formatInteger(value.dinar)}</b><span>LYD</span></strong>
-      <small><b>{formatInteger(value.usd)}</b><span>USD</span></small>
-      {hasMoneyValue(value.try) ? <small><b>{formatInteger(value.try)}</b><span>TRY</span></small> : null}
-      {hasMoneyValue(value.eur) ? <small><b>{formatInteger(value.eur)}</b><span>EUR</span></small> : null}
+    <span className={className}>
+      {cells.map((cell, index) => {
+        const Tag = index === 0 ? 'strong' : 'small'
+        return <Tag key={cell.value}><b>{formatInteger(cell.amount)}</b><span>{cell.label}</span></Tag>
+      })}
     </span>
   )
+}
+
+function BalanceAmountPair({ value }) {
+  const wide = balanceAmountIsWide(value)
+  return <CurrencyAmountGrid className={`ml3-balance-pair${wide ? ' is-wide' : ''}`} value={value} />
 }
 
 export function netContributionDisplayValues(item = {}) {
@@ -1332,14 +1340,16 @@ export function SeparateLedgerPanel({ records, names, totals, query, draft, edit
   const usdTotals = totals[CURRENCIES.USD] || { receivable: 0, payable: 0 }
   const tryTotals = totals[CURRENCIES.TRY] || { receivable: 0, payable: 0 }
   const eurTotals = totals[CURRENCIES.EUR] || { receivable: 0, payable: 0 }
+  const receivableTotals = { dinar: dinarTotals.receivable, usd: usdTotals.receivable, try: tryTotals.receivable, eur: eurTotals.receivable }
+  const payableTotals = { dinar: dinarTotals.payable, usd: usdTotals.payable, try: tryTotals.payable, eur: eurTotals.payable }
   const suggestedNames = names
     .filter((name) => !normalizedDraftName || name.toLocaleLowerCase('ar').includes(normalizedDraftName))
     .slice(0, 6)
   return (
     <section className="adreem-separate-ledger">
       <div className="adreem-separate-summary" aria-label="ملخص السجل المنفصل">
-        <span className="is-positive"><ArrowDownToLine aria-hidden="true" size={16} /><small>لي</small><strong>{money(dinarTotals.receivable)}</strong><b>{money(usdTotals.receivable, CURRENCIES.USD)}</b>{tryTotals.receivable ? <b>{money(tryTotals.receivable, CURRENCIES.TRY)}</b> : null}{eurTotals.receivable ? <b>{money(eurTotals.receivable, CURRENCIES.EUR)}</b> : null}</span>
-        <span className="is-negative"><ArrowUpFromLine aria-hidden="true" size={16} /><small>عليّ</small><strong>{money(dinarTotals.payable)}</strong><b>{money(usdTotals.payable, CURRENCIES.USD)}</b>{tryTotals.payable ? <b>{money(tryTotals.payable, CURRENCIES.TRY)}</b> : null}{eurTotals.payable ? <b>{money(eurTotals.payable, CURRENCIES.EUR)}</b> : null}</span>
+        <span className="is-positive"><ArrowDownToLine aria-hidden="true" size={16} /><small>لي</small><CurrencyAmountGrid className="adreem-separate-currencies" value={receivableTotals} /></span>
+        <span className="is-negative"><ArrowUpFromLine aria-hidden="true" size={16} /><small>عليّ</small><CurrencyAmountGrid className="adreem-separate-currencies" value={payableTotals} /></span>
       </div>
 
       <div className={`adreem-separate-toolbar${showSearch ? '' : ' is-action-only'}`}>

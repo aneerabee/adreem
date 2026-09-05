@@ -33,6 +33,7 @@ import {
   accountReviewSelection,
   activeRecurringRuleForMovement,
   buildBalanceOverview,
+  CurrencyAmountGrid,
   buildAccountStatement,
   balanceAmountIsWide,
   buildExpenseBalanceRows,
@@ -1055,6 +1056,15 @@ describe('LedgerApp account review', () => {
 })
 
 describe('LedgerApp people account views', () => {
+  it('shows all four currencies in balance summaries even when some are zero', () => {
+    const markup = renderToStaticMarkup(<CurrencyAmountGrid value={{ dinar: 1_500, usd: 0, try: 0, eur: 25 }} />)
+
+    expect(markup.match(/LYD|USD|TRY|EUR/g)).toEqual(['LYD', 'USD', 'TRY', 'EUR'])
+    expect(markup).toContain('1,500')
+    expect(markup).toContain('>25<')
+    expect(markup.match(/>0</g)).toHaveLength(2)
+  })
+
   it('keeps own money, receivables, and payables separated in both currencies', () => {
     const bucket = (id, valueKind, dinar, usd) => ({
       account: { id, valueKind },

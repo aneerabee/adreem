@@ -369,7 +369,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 0.82fr);
   align-items: baseline;
-  gap: 6px;
+  gap: 3px 6px;
   direction: ltr;
   font-variant-numeric: tabular-nums;
 }
@@ -647,7 +647,7 @@
   min-width: 0;
   min-height: 47px;
   display: grid;
-  grid-template-columns: 24px auto minmax(0, 1fr) minmax(0, 0.82fr);
+  grid-template-columns: 24px auto minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
@@ -664,6 +664,25 @@
 .adreem-separate-summary strong,
 .adreem-separate-summary b { min-width: 0; overflow: hidden; font-size: var(--finance-number-summary); font-variant-numeric: tabular-nums; font-weight: var(--finance-number-weight); line-height: 1.15; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-separate-summary b { opacity: 0.82; }
+.adreem-separate-currencies {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px 6px;
+  direction: ltr;
+}
+.adreem-separate-currencies strong,
+.adreem-separate-currencies small {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  overflow: hidden;
+  color: currentColor;
+  white-space: nowrap;
+}
+.adreem-separate-currencies b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.adreem-separate-currencies span { flex: 0 0 auto; font-size: 0.52rem; font-weight: 760; opacity: 0.72; }
 
 @container separate-summary (min-width: 250px) {
   .adreem-separate-summary strong,
@@ -1604,14 +1623,14 @@
   .ml3-balance-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
   .ml3-balance-ledger button.has-wide-balance,
   .ml3-home-grid .ml3-home-card.has-wide-balance { grid-column: 1 / -1; }
-  .ml3-balance-ledger button { height: auto; min-height: var(--finance-summary); grid-template-columns: 31px minmax(0, 1fr); gap: 6px; padding: 7px; box-shadow: 0 4px 12px color-mix(in srgb, var(--finance-ink) 5%, transparent); }
-  .ml3-balance-ledger button > i { width: 31px; height: 31px; }
-  .ml3-balance-ledger button > span { gap: 3px; }
-  .ml3-balance-ledger button > span > b { font-size: 0.65rem; }
-  .ml3-balance-pair { grid-template-columns: minmax(0, 1fr); gap: 1px; }
+  .ml3-balance-ledger button { height: auto; min-height: 76px; display: block; padding: 7px; box-shadow: 0 4px 12px color-mix(in srgb, var(--finance-ink) 5%, transparent); }
+  .ml3-balance-ledger button > i { position: absolute; inset-block-start: 7px; inset-inline-start: 7px; width: 29px; height: 29px; }
+  .ml3-balance-ledger button > span { width: 100%; gap: 3px; }
+  .ml3-balance-ledger button > span > b { min-height: 29px; display: flex; align-items: center; padding-inline-start: 34px; font-size: 0.65rem; }
+  .ml3-balance-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 4px; }
   .ml3-balance-ledger button .ml3-balance-pair strong,
-  .ml3-balance-ledger button .ml3-balance-pair small { font-size: 0.82rem; }
-  .ml3-balance-pair.is-wide { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .ml3-balance-ledger button .ml3-balance-pair small { font-size: 0.76rem; }
+  .ml3-balance-pair.is-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 4px; }
 
   .ml3-balances-workspace { min-height: 0; grid-template-columns: 1fr; border-radius: 8px; }
   .ml3-account-switcher {
@@ -1650,7 +1669,6 @@
   .ml3-balance-pane-title h2 { font-size: 0.82rem; }
   .ml3-account-toolbar { height: 36px; padding-inline: 7px; }
   .adreem-separate-summary > span { grid-template-columns: 21px auto minmax(0, 1fr); gap: 4px; }
-  .adreem-separate-summary > span b { grid-column: 3; }
   .adreem-separate-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; padding: 7px; }
   .adreem-separate-name,
   .adreem-separate-note { grid-column: 1 / -1; }
