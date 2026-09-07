@@ -877,7 +877,7 @@
 .ml3-picker-lane-head strong { color: var(--ink); }
 .ml3-picker-favorites,
 .ml3-picker-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.ml3-picker-favorites button,
+.ml3-picker-favorites > button,
 .ml3-picker-chips button {
   min-height: 32px;
   border: 1px solid var(--line);
@@ -887,7 +887,7 @@
   color: var(--ink);
   cursor: pointer;
 }
-.ml3-picker-favorites button { min-width: 104px; display: grid; text-align: start; }
+.ml3-picker-favorites > button { min-width: 104px; display: grid; text-align: start; }
 .ml3-picker-favorites strong { font-size: 0.72rem; }
 .ml3-picker-favorites span { color: var(--muted); font-size: 0.62rem; }
 .ml3-picker-chips button { font-size: 0.68rem; font-weight: 600; }

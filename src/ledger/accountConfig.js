@@ -473,6 +473,7 @@ export function accountContextLabel(account = {}) {
   if (kind === VALUE_KINDS.REVIEW) return 'مراجعة'
   if (kind === VALUE_KINDS.RECEIVABLE) {
     const detail = accountDetailDisplayName({ ...account, type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE })
+    if (detail === accountCurrencyLabel(account)) return detail
     return `${detail || 'رصيد'}${currencySuffix}`
   }
   return accountKindLabel(account)

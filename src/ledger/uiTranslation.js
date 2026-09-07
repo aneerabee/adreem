@@ -248,6 +248,7 @@ const ENGLISH_TEXT = Object.freeze({
   'اختر نوع الحركة': 'Choose entry type',
   'اختر نوع المصروف': 'Choose expense type',
   'اختيارات سريعة': 'Quick choices',
+  'اختيار': 'choice',
   'اختياري': 'Optional',
   'تفاصيل': 'Details',
   'تفصيل الرصيد': 'Balance breakdown',

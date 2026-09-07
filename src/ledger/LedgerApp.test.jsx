@@ -13,6 +13,7 @@ import {
   SeparateLedgerPanel,
   SearchField,
   AccountRow,
+  MoneyAccountList,
   AccountSearchSelect,
   AccountClassificationEditorFields,
   ExternalAccountCard,
@@ -47,6 +48,7 @@ import {
   filterMoneyBalanceRows,
   formatMoneyNumber,
   expenseCategoryTone,
+  groupNetContributionsForDisplay,
   compareBalanceBuckets,
   counterpartyMagnitudeForFilter,
   unifiedCounterpartyGroups,
@@ -253,6 +255,18 @@ describe('LedgerApp net position controls', () => {
       { currency: CURRENCIES.DINAR, amount: 1_200 },
       { currency: CURRENCIES.USD, amount: 80 },
     ])
+  })
+
+  it('shows one name for multiple financial channels without merging their controls', () => {
+    const person = { ownerName: 'سعيد', type: ACCOUNT_TYPES.PERSON, valueKind: VALUE_KINDS.RECEIVABLE, status: ACCOUNT_STATUSES.ACTIVE, counterpartyId: 'person:saeed' }
+    const cash = { accountId: 'friend-cash', account: { ...person, id: 'friend-cash', subAccountName: 'كاش بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR, counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CASH_DINAR }, dinar: 1_500 }
+    const cheque = { accountId: 'friend-cheque', account: { ...person, id: 'friend-cheque', subAccountName: 'شيك بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR, counterpartyKind: COUNTERPARTY_ACCOUNT_KINDS.CHEQUE_DINAR }, dinar: -500 }
+
+    const groups = groupNetContributionsForDisplay([cheque, cash])
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0].label).toBe('سعيد')
+    expect(groups[0].items.map((item) => item.accountId)).toEqual(['friend-cash', 'friend-cheque'])
   })
 
   it('reveals raw currencies, the converted result, and every included account', () => {
@@ -467,6 +481,8 @@ describe('LedgerApp movement account picker', () => {
     expect(markup).toContain('أدفع 4,500 LYD')
     expect(markup).toContain('700 USD')
     expect(markup).toContain('2,400 TRY')
+    expect(markup.match(/>سعيد<\/strong>/g)).toHaveLength(1)
+    expect(markup.match(/ml3-picker-choice-channels/g)).toHaveLength(1)
   })
 })
 
@@ -1056,6 +1072,34 @@ describe('LedgerApp account review', () => {
 })
 
 describe('LedgerApp people account views', () => {
+  it('shows one own-money location with separate compact currency buttons', () => {
+    const lyd = createAccount({ id: 'safe-lyd', ownerName: 'أنا', subAccountName: 'الخزنة', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.DINAR })
+    const eur = createAccount({ id: 'safe-eur', ownerName: 'أنا', subAccountName: 'الخزنة', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.EUR })
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <MoneyAccountList rows={[
+        { account: lyd, dinar: 100, usd: 0, try: 0, eur: 0 },
+        { account: eur, dinar: 0, usd: 0, try: 0, eur: 50 },
+      ]} onOpen={() => {}} />,
+    ))
+
+    expect(markup.match(/>الخزنة<\/strong>/g)).toHaveLength(1)
+    expect(markup).toContain('100 LYD')
+    expect(markup).toContain('50 EUR')
+    expect(markup.match(/adreem-money-group-channels/g)).toHaveLength(1)
+  })
+
+  it('keeps every stored currency visible for a legacy multi-currency location', () => {
+    const account = createAccount({ id: 'safe-multi', ownerName: 'أنا', subAccountName: 'الخزنة', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, currencyKind: ACCOUNT_CURRENCY_KINDS.MULTI })
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <MoneyAccountList rows={[{ account, dinar: 100, usd: 20, try: 300, eur: 40 }]} onOpen={() => {}} />,
+    ))
+
+    expect(markup).toContain('100 LYD')
+    expect(markup).toContain('20 USD')
+    expect(markup).toContain('300 TRY')
+    expect(markup).toContain('40 EUR')
+  })
+
   it('shows all four currencies in balance summaries even when some are zero', () => {
     const markup = renderToStaticMarkup(<CurrencyAmountGrid value={{ dinar: 1_500, usd: 0, try: 0, eur: 25 }} />)
 

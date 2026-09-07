@@ -1092,6 +1092,73 @@
 .ml3-account-copy > strong { overflow: hidden; font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
 .ml3-account-values strong.is-positive { color: var(--positive); }
 .ml3-account-values strong.is-negative { color: var(--negative); }
+.adreem-money-groups {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.adreem-money-group {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 6px 8px;
+  background: #fff;
+}
+.adreem-money-group-head {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+.adreem-money-group-head > i {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--accounts-soft);
+  color: var(--accounts);
+  font-style: normal;
+}
+.adreem-money-group-head > span { min-width: 0; display: grid; gap: 1px; }
+.adreem-money-group-head strong {
+  min-width: 0;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.adreem-money-group-head small { color: var(--muted); font-size: 0.61rem; }
+.adreem-money-group-channels {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  gap: 4px;
+}
+.adreem-money-group-channels button {
+  min-width: 0;
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e3e9e6;
+  border-radius: 5px;
+  padding: 4px 6px;
+  background: #f8faf9;
+  color: var(--ink);
+  cursor: pointer;
+}
+.adreem-money-group-channels button:hover { border-color: #8fb3a6; background: var(--accounts-soft); }
+.adreem-money-group-channels small { color: var(--muted); font-size: 0.58rem; font-weight: 800; }
+.adreem-money-group-channels strong { min-width: 0; font-size: 0.72rem; text-align: end; white-space: nowrap; }
+.adreem-money-group-channels strong.is-positive { color: var(--positive); }
+.adreem-money-group-channels strong.is-negative { color: var(--negative); }
+.adreem-money-group-channels strong.is-zero { color: var(--muted); }
 
 .ml3-filter-disclosure { margin-bottom: 9px; }
 .ml3-filter-disclosure > summary { border-color: var(--section-line); color: var(--section-ink); }
@@ -1553,6 +1620,9 @@
   .ml3-account-sections { grid-template-columns: 1fr; }
   .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(88px, auto); padding-inline: 7px; }
   .ml3-account-row-icon { width: 25px; height: 25px; }
+  .adreem-money-group { grid-template-columns: 1fr; gap: 5px; padding: 6px; }
+  .adreem-money-group-channels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adreem-money-group-channels button { min-height: 34px; }
   .ml3-history-filters { grid-template-columns: 1fr 1fr; }
   .ml3-history-filters > input { grid-column: 1 / -1; }
   .ml3-history-filters > select:last-child { grid-column: 1 / -1; }
@@ -2029,7 +2099,7 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   grid-template-columns: repeat(auto-fit, minmax(min(148px, 100%), 1fr));
   gap: 5px;
 }
-.ml3-picker-favorites button {
+.ml3-picker-favorites > button {
   min-width: 0;
   min-height: 58px;
   display: grid;
@@ -2042,7 +2112,7 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   align-content: center;
   padding: 5px 6px;
 }
-.ml3-picker-favorites button > .ml3-picker-type-icon { grid-area: icon; }
+.ml3-picker-favorites > button > .ml3-picker-type-icon { grid-area: icon; }
 .ml3-picker-favorite-copy {
   grid-area: identity;
   min-width: 0;
@@ -2068,6 +2138,60 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   overflow: visible;
   overscroll-behavior: auto;
   padding-bottom: 3px;
+}
+.ml3-picker-choice-group {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px;
+  background: #fff;
+}
+.ml3-picker-choice-group.is-favorite {
+  background: color-mix(in srgb, var(--section-soft) 42%, #fff);
+}
+.ml3-picker-choice-group-head {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+.ml3-picker-choice-group-head strong {
+  min-width: 0;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.ml3-picker-choice-channels {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(118px, 100%), 1fr));
+  gap: 4px;
+}
+.ml3-picker-choice-channels button {
+  min-width: 0;
+  min-height: 32px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 5px;
+  background: #f8faf9;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ml3-picker-choice-channels button:hover { border-color: #8fb3a6; background: #f2f8f5; }
+.ml3-picker-choice-channels button.is-selected { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
+.ml3-picker-choice-channels .ml3-balance-chip {
+  width: 100%;
+  max-width: none;
+  justify-content: center;
+  padding-inline: 4px;
+  text-align: center;
 }
 .ml3-picker-results > button:not(.ml3-picker-more) {
   min-height: 48px;
@@ -2157,11 +2281,13 @@ html.adreem-overlay-open .adreem-app .adreem-view {
   .ml3-picker-results .ml3-balance-chip { max-width: 112px; }
   .ml3-picker-results > button:not(.ml3-picker-more) { grid-template-columns: 28px minmax(0, 1fr) auto; }
   .ml3-picker-results > button em { display: none; }
-  .ml3-picker-favorites button:last-child:nth-child(odd):not(:only-child) {
+  .ml3-picker-favorites > button:last-child:nth-child(odd):not(:only-child) {
     grid-column: 1 / -1;
     width: calc(50% - 2.5px);
     justify-self: center;
   }
+  .ml3-picker-choice-group-head strong { white-space: normal; }
+  .ml3-picker-choice-channels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {

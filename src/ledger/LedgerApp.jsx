@@ -12,6 +12,7 @@ import AdreemChrome from './AdreemChrome'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailDisplayName, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyGroupKey, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
+import { accountDisplayGroupKey, groupAccountsForDisplay, groupBalanceRowsForDisplay } from './accountDisplayGroups'
 import { completeAccountCurrencies } from './accountCurrencyUpgrade'
 import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
@@ -480,7 +481,9 @@ function conciseAccountChoiceContext(account) {
   const primary = normalizeAccountSearchText(accountPrimaryName(account))
   const normalizedKind = normalizeAccountSearchText(kindLabel)
   const currency = accountCurrencyLabel(account)
-  return primary.includes(normalizedKind) ? currency : `${kindLabel} · ${currency}`
+  if (primary.includes(normalizedKind)) return currency
+  if (normalizedKind === normalizeAccountSearchText(currency)) return kindLabel
+  return `${kindLabel} · ${currency}`
 }
 
 function protectedAccountDraftSummary(accountDraft) {
@@ -1228,6 +1231,17 @@ export function netContributionDisplayValues(item = {}) {
     .filter((value) => Number.isFinite(value.amount) && value.amount !== 0)
 }
 
+export function groupNetContributionsForDisplay(items = []) {
+  const itemByAccountId = new Map(items
+    .filter((item) => item?.accountId && item?.account)
+    .map((item) => [item.accountId, item]))
+  return groupAccountsForDisplay(items.map((item) => item?.account).filter(Boolean))
+    .map((group) => ({
+      ...group,
+      items: group.accounts.map((account) => itemByAccountId.get(account.id)).filter(Boolean),
+    }))
+}
+
 export function activeRecurringRuleForMovement(rules = [], movementId = '') {
   if (!movementId) return null
   return (Array.isArray(rules) ? rules : []).find((rule) => (
@@ -1257,6 +1271,7 @@ export function NetPositionPanel({
   const excluded = new Set(excludedAccountIds)
   const excludedCount = allContributions.reduce((count, item) => count + (excluded.has(item.accountId) ? 1 : 0), 0)
   const visibleContributions = filterNetContributions(allContributions, query)
+  const visibleContributionGroups = groupNetContributionsForDisplay(visibleContributions)
   return (
     <Motion.section className="adreem-net-panel" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={UI_MOTION_TRANSITION} aria-label="الصافي العام">
       <header>
@@ -1302,27 +1317,34 @@ export function NetPositionPanel({
             ) : null}
           </div>
           <div className="adreem-net-account-list">
-            {visibleContributions.map((item) => {
-              const isExcluded = excluded.has(item.accountId)
-              const displayValues = netContributionDisplayValues(item)
-              return (
-                <button type="button" key={item.accountId} className={isExcluded ? 'is-excluded' : ''} aria-pressed={isExcluded} title={isExcluded ? 'مستبعد مؤقتًا' : 'داخل الصافي'} onClick={() => onToggleAccount(item.accountId)}>
-                  <i className="adreem-net-exclusion-mark" aria-hidden="true">{isExcluded ? <Check size={13} /> : null}</i>
-                  <span className="adreem-net-account-copy">
-                    <AccountChoiceIcon account={item.account} size={15} />
-                    <span><strong className="adreem-account-name">{protectedAccountPrimaryName(item.account)}</strong><small>{protectedAccountContext(item.account)}</small></span>
-                  </span>
-                  <span className={`adreem-net-account-values${displayValues.length > 1 ? ' is-multi' : ''}`}>
-                    {displayValues.map((value) => (
-                      <span className={value.amount < 0 ? 'is-negative' : 'is-positive'} key={value.currency}>
-                        <b>{formatInteger(value.amount)}</b><small>{value.currency}</small>
-                      </span>
-                    ))}
-                  </span>
-                </button>
-              )
-            })}
-            {visibleContributions.length === 0 ? <p className="ml3-empty">لا توجد نتيجة.</p> : null}
+            {visibleContributionGroups.map((group) => (
+              <section className="adreem-net-account-group" key={group.id}>
+                <header>
+                  <AccountChoiceIcon account={group.accounts[0]} size={15} />
+                  <strong className="adreem-account-name">{protectUiValues(group.label, [group.label])}</strong>
+                </header>
+                <div>
+                  {group.items.map((item) => {
+                    const isExcluded = excluded.has(item.accountId)
+                    const displayValues = netContributionDisplayValues(item)
+                    return (
+                      <button type="button" key={item.accountId} className={isExcluded ? 'is-excluded' : ''} aria-pressed={isExcluded} title={isExcluded ? 'مستبعد مؤقتًا' : 'داخل الصافي'} onClick={() => onToggleAccount(item.accountId)}>
+                        <i className="adreem-net-exclusion-mark" aria-hidden="true">{isExcluded ? <Check size={13} /> : null}</i>
+                        <small>{protectedAccountContext(item.account)}</small>
+                        <span className={`adreem-net-account-values${displayValues.length > 1 ? ' is-multi' : ''}`}>
+                          {displayValues.map((value) => (
+                            <span className={value.amount < 0 ? 'is-negative' : 'is-positive'} key={value.currency}>
+                              <b>{formatInteger(value.amount)}</b><small>{value.currency}</small>
+                            </span>
+                          ))}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            ))}
+            {visibleContributionGroups.length === 0 ? <p className="ml3-empty">لا توجد نتيجة.</p> : null}
           </div>
         </div>
       </details>
@@ -1559,6 +1581,50 @@ function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', onConfi
         </AnimatePresence>
       </div>
     </Tag>
+  )
+}
+
+export function MoneyAccountList({ rows = [], onOpen }) {
+  const groups = groupBalanceRowsForDisplay(rows)
+  return (
+    <div className="adreem-money-groups">
+      {groups.length === 0 ? <p className="ml3-empty">لا شيء</p> : null}
+      <AnimatePresence initial={false}>
+        {groups.map((group) => {
+          const primaryAccount = group.accounts[0]
+          const channels = group.rows.flatMap((bucket) => {
+            const currencies = bucket.account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI
+              ? CURRENCY_OPTIONS
+              : CURRENCY_OPTIONS.filter((option) => option.value === (bucket.account.currencyKind || CURRENCIES.DINAR))
+            return currencies.map(({ value: currency, field }) => ({
+              id: `${bucket.account.id}:${currency}`,
+              accountId: bucket.account.id,
+              currency,
+              amount: Number(bucket[field] || 0),
+            }))
+          })
+          return (
+            <Motion.article layout="position" key={group.id} className={`adreem-money-group is-${primaryAccount.valueKind}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }} transition={UI_MOTION_TRANSITION}>
+              <div className="adreem-money-group-head">
+                <i><AccountChoiceIcon account={primaryAccount} size={16} /></i>
+                <span>
+                  <strong className="adreem-account-name">{protectedAccountPrimaryName(primaryAccount)}</strong>
+                  <small>{primaryAccount.valueKind === VALUE_KINDS.BANK ? 'مصرف' : 'كاش'}</small>
+                </span>
+              </div>
+              <div className="adreem-money-group-channels">
+                {channels.map((channel) => (
+                  <button type="button" key={channel.id} onClick={() => onOpen?.(channel.accountId)}>
+                    <small>{channel.currency}</small>
+                    <strong className={channel.amount < 0 ? 'is-negative' : channel.amount > 0 ? 'is-positive' : 'is-zero'}>{channel.amount ? money(channel.amount, channel.currency) : 'صفر'}</strong>
+                  </button>
+                ))}
+              </div>
+            </Motion.article>
+          )
+        })}
+      </AnimatePresence>
+    </div>
   )
 }
 
@@ -1959,6 +2025,61 @@ function CounterpartyFilters({ options = COUNTERPARTY_BALANCE_FILTERS, value = '
   )
 }
 
+function AccountPickerChoiceGroup({ group, value, balanceByAccountId, balanceCurrency, hasVisibleBalance, onChoose, favorite = false }) {
+  const groupAccounts = group.accounts || []
+  const primaryAccount = groupAccounts[0]
+  if (!primaryAccount) return null
+
+  if (groupAccounts.length === 1) {
+    const balanceChip = accountBalanceChip(primaryAccount, balanceByAccountId.get(primaryAccount.id), balanceCurrency)
+    const choiceKind = accountChoiceKind(primaryAccount)
+    if (favorite) {
+      return (
+        <button type="button" className={`${accountChoiceClasses('ml3-picker-favorite', primaryAccount)} ${primaryAccount.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(primaryAccount)}، ${accountChoiceKindLabel(primaryAccount)}، ${balanceChip.text}`} onClick={() => onChoose(primaryAccount.id)}>
+          <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}><AccountChoiceIcon account={primaryAccount} size={15} /></span>
+          <span className="ml3-picker-favorite-copy">
+            <strong className="adreem-account-name">{protectedAccountPrimaryName(primaryAccount)}</strong>
+            <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(primaryAccount)}</small>
+          </span>
+          <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
+        </button>
+      )
+    }
+    return (
+      <button type="button" className={`ml3-picker-option--${visualKind(primaryAccount)} ${primaryAccount.ownerName === 'أنا' ? 'is-preferred' : ''} ${hasVisibleBalance(primaryAccount) ? 'has-balance' : ''} ${primaryAccount.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(primaryAccount)}، ${accountChoiceKindLabel(primaryAccount)}، ${balanceChip.text}`} onClick={() => onChoose(primaryAccount.id)}>
+        <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}><AccountChoiceIcon account={primaryAccount} size={16} /></span>
+        <span className="ml3-picker-option-copy">
+          <strong className="adreem-account-name">{protectedAccountPrimaryName(primaryAccount)}</strong>
+          <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(primaryAccount)}</small>
+        </span>
+        <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
+        {primaryAccount.id === value ? <em>مختار</em> : null}
+      </button>
+    )
+  }
+
+  return (
+    <div className={`ml3-picker-choice-group ${favorite ? 'is-favorite' : ''}`}>
+      <div className="ml3-picker-choice-group-head">
+        <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}><AccountChoiceIcon account={primaryAccount} size={16} /></span>
+        <strong className="adreem-account-name">{protectedAccountPrimaryName(primaryAccount)}</strong>
+      </div>
+      <div className="ml3-picker-choice-channels">
+        {groupAccounts.map((account) => {
+          const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id), balanceCurrency)
+          const choiceKind = accountChoiceKind(account)
+          return (
+            <button type="button" key={account.id} className={`${account.id === value ? 'is-selected' : ''} ${hasVisibleBalance(account) ? 'has-balance' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => onChoose(account.id)}>
+              <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(account)}</small>
+              <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = true, preferredAccountIds = [], balanceByAccountId = new Map(), balanceCurrency = '' }) {
   const [query, setQuery] = useState('')
   const [isChanging, setIsChanging] = useState(false)
@@ -2019,12 +2140,14 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
     .sort((a, b) => rankAccount(a) - rankAccount(b) || accountLabel(a).localeCompare(accountLabel(b), 'ar'))
   const visibleAccounts = selectedAccount && !filteredAccounts.some((account) => account.id === selectedAccount.id) ? [selectedAccount, ...filteredAccounts] : filteredAccounts
   const resultAccounts = visibleAccounts
-  const showPreferredAccounts = !normalizedQuery && !quickFilter && preferredAccounts.length > 0
-  const preferredAccountIdSet = new Set(preferredAccounts.map((account) => account.id))
-  const listResultAccounts = showPreferredAccounts ? resultAccounts.filter((account) => !preferredAccountIdSet.has(account.id)) : resultAccounts
+  const resultGroups = groupAccountsForDisplay(resultAccounts)
+  const preferredGroupIdSet = new Set(preferredAccounts.map((account) => accountDisplayGroupKey(account)))
+  const preferredGroups = resultGroups.filter((group) => preferredGroupIdSet.has(group.id))
+  const showPreferredAccounts = !normalizedQuery && !quickFilter && preferredGroups.length > 0
+  const listResultGroups = showPreferredAccounts ? resultGroups.filter((group) => !preferredGroupIdSet.has(group.id)) : resultGroups
   const shouldLimitResults = !normalizedQuery && !quickFilter && !showAllResults
-  const shownResultAccounts = shouldLimitResults ? listResultAccounts.slice(0, 8) : listResultAccounts
-  const kindLegendAccounts = [...new Map(resultAccounts.map((account) => [accountChoiceKind(account), account])).values()]
+  const shownResultGroups = shouldLimitResults ? listResultGroups.slice(0, 8) : listResultGroups
+  const kindLegendAccounts = [...new Map(resultAccounts.map((account) => [accountChoiceKindLabel(account), account])).values()]
 
   function chooseAccount(accountId) {
     onChange(accountId)
@@ -2082,7 +2205,7 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
             ariaLabel="بحث عن حساب"
           />
           <div className="ml3-picker-context" aria-label="أنواع الحسابات المتاحة">
-            <span>{formatCount(resultAccounts.length)} حساب</span>
+            <span>{formatCount(resultGroups.length)} اختيار</span>
             <div>
               {kindLegendAccounts.map((account) => (
                 <span className={`ml3-picker-kind ${accountChoiceClasses('ml3-picker-kind', account)}`} key={accountChoiceKind(account)}>
@@ -2098,20 +2221,7 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
                 <strong>الأقرب</strong>
               </div>
               <div className="ml3-picker-favorites" aria-label="اختيارات سريعة">
-                {preferredAccounts.map((account) => {
-                  const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id), balanceCurrency)
-                  const choiceKind = accountChoiceKind(account)
-                  return (
-                    <button type="button" key={account.id} className={`${accountChoiceClasses('ml3-picker-favorite', account)} ${account.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => chooseAccount(account.id)}>
-                      <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', account)}`}><AccountChoiceIcon account={account} size={15} /></span>
-                      <span className="ml3-picker-favorite-copy">
-                        <strong className="adreem-account-name">{protectedAccountPrimaryName(account)}</strong>
-                        <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(account)}</small>
-                      </span>
-                      <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
-                    </button>
-                  )
-                })}
+                {preferredGroups.map((group) => <AccountPickerChoiceGroup key={group.id} group={group} value={value} balanceByAccountId={balanceByAccountId} balanceCurrency={balanceCurrency} hasVisibleBalance={hasVisibleBalance} onChoose={chooseAccount} favorite />)}
               </div>
             </div>
           ) : null}
@@ -2137,25 +2247,10 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
             </div>
           ) : null}
           <div className="ml3-picker-results">
-            {shownResultAccounts.map((account) => {
-              const balanceChip = accountBalanceChip(account, balanceByAccountId.get(account.id), balanceCurrency)
-              const hasBalance = hasVisibleBalance(account)
-              const choiceKind = accountChoiceKind(account)
-              return (
-                <button type="button" key={account.id} className={`ml3-picker-option--${visualKind(account)} ${account.ownerName === normalizedPreferredOwner ? 'is-preferred' : ''} ${hasBalance ? 'has-balance' : ''} ${account.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(account)}، ${accountChoiceKindLabel(account)}، ${balanceChip.text}`} onClick={() => chooseAccount(account.id)}>
-                  <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', account)}`}><AccountChoiceIcon account={account} size={16} /></span>
-                  <span className="ml3-picker-option-copy">
-                    <strong className="adreem-account-name">{protectedAccountPrimaryName(account)}</strong>
-                    <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(account)}</small>
-                  </span>
-                  <b className={`ml3-balance-chip is-${balanceChip.tone}`}>{balanceChip.text}</b>
-                  {account.id === value ? <em>مختار</em> : null}
-                </button>
-              )
-            })}
-            {shouldLimitResults && listResultAccounts.length > shownResultAccounts.length ? (
+            {shownResultGroups.map((group) => <AccountPickerChoiceGroup key={group.id} group={group} value={value} balanceByAccountId={balanceByAccountId} balanceCurrency={balanceCurrency} hasVisibleBalance={hasVisibleBalance} onChoose={chooseAccount} />)}
+            {shouldLimitResults && listResultGroups.length > shownResultGroups.length ? (
               <button type="button" className="ml3-picker-more" onClick={() => setShowAllResults(true)}>
-                عرض الكل · {formatCount(listResultAccounts.length)}
+                عرض الكل · {formatCount(listResultGroups.length)}
               </button>
             ) : null}
             {normalizedQuery && resultAccounts.length === 0 ? <p>لا توجد نتيجة</p> : null}
@@ -3667,6 +3762,7 @@ export default function LedgerApp() {
   }, [accountWizardStep, activeEntryMode, activeSection, movementStep])
 
   const activeAccounts = useMemo(() => getActivePostingAccounts(accounts), [accounts])
+  const historyAccountGroups = useMemo(() => groupAccountsForDisplay(activeAccounts), [activeAccounts])
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts])
   const activeDimensions = useMemo(() => dimensionsFromAccounts(accounts, ledgerExtras.dimensions), [accounts, ledgerExtras.dimensions])
   const dimensionById = useMemo(() => new Map(activeDimensions.map((dimension) => [dimension.id, dimension])), [activeDimensions])
@@ -6102,7 +6198,7 @@ export default function LedgerApp() {
                   />
                 </>
               ) : activeGroup.key === 'money' ? (
-                <AccountList title="فلوسي" rows={rows} onOpen={setSelectedAccountId} embedded tone="money" compactValues hideHeader />
+                <MoneyAccountList rows={rows} onOpen={setSelectedAccountId} />
               ) : activeGroup.key === 'expenses' ? (
                 <>
                   <div className="adreem-expense-toolbar">
@@ -6191,10 +6287,12 @@ export default function LedgerApp() {
               </select>
               <select aria-label="حساب السجل" value={historyAccountId} onChange={(event) => setHistoryAccountId(event.target.value)}>
                 <option value="">كل الحسابات</option>
-                {activeAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {protectedAccountLabel(account)}
-                  </option>
+                {historyAccountGroups.map((group) => group.accounts.length === 1 ? (
+                  <option key={group.id} value={group.accounts[0].id}>{protectedAccountLabel(group.accounts[0])}</option>
+                ) : (
+                  <optgroup key={group.id} label={protectUiValues(group.label, [group.label])}>
+                    {group.accounts.map((account) => <option key={account.id} value={account.id}>{protectedAccountContext(account)}</option>)}
+                  </optgroup>
                 ))}
               </select>
               <select aria-label="المشروع أو الأصل" value={historyDimensionId} onChange={(event) => setHistoryDimensionId(event.target.value)}>

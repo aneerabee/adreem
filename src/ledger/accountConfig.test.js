@@ -60,6 +60,9 @@ describe('account display wording', () => {
     expect(accountDisplayName(cash)).toBe('خزنة البيت · كاش · LYD')
     expect(accountDisplayName(bank)).toBe('الجمهورية · حساب مصرفي · USD')
     expect(accountDisplayName(asset)).toBe('الشاحنة · أصل')
+    expect(accountContextLabel({ ...person, subAccountName: 'دولار بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.USD })).toBe('USD')
+    expect(accountContextLabel({ ...person, subAccountName: 'TRY بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.TRY })).toBe('TRY')
+    expect(accountContextLabel({ ...person, subAccountName: 'EUR بيننا', currencyKind: ACCOUNT_CURRENCY_KINDS.EUR })).toBe('EUR')
   })
 
   it('keeps legacy own-money accounts understandable without rewriting them', () => {
