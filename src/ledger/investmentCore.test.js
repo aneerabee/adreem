@@ -125,6 +125,18 @@ describe('investment portfolio core', () => {
     expect(microsToUsd(summary.costBasisUsdMicros)).toBe(180)
   })
 
+  it('keeps a new empty holding visible until its first trade', () => {
+    const { platform, holding } = fixture()
+    const summary = summarizeInvestmentPortfolio({ platforms: [platform], holdings: [holding], trades: [], movements: [] })
+
+    expect(summary.platforms[0].holdings).toHaveLength(1)
+    expect(summary.platforms[0].holdings[0]).toEqual(expect.objectContaining({
+      holding: expect.objectContaining({ id: holding.id }),
+      quantityUnits: 0,
+      marketValueUsdMicros: 0,
+    }))
+  })
+
   it('keeps realized profit in the portfolio after the full position is sold', () => {
     const { platform, holding, deposit } = fixture()
     const buy = createInvestmentTrade({

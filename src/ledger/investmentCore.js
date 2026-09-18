@@ -241,7 +241,10 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     const allHoldingRows = activeHoldings
       .filter((holding) => holding.platformId === platform.id)
       .map((holding) => summarizeHolding(holding, platformTrades))
-    const holdingRows = allHoldingRows.filter((row) => row.quantityUnits > 0)
+    const holdingRows = allHoldingRows.filter((row) => (
+      row.quantityUnits > 0
+      || !platformTrades.some((trade) => trade.holdingId === row.holding.id)
+    ))
     return {
       platform,
       freeCashUsdMicros: cashFromLedgerUsdMicros + tradeCashUsdMicros,
