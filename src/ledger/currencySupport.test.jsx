@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { completeAccountCurrencies } from './accountCurrencyUpgrade.js'
+import { buildFinancialAccountCurrencyBundle, completeAccountCurrencies } from './accountCurrencyUpgrade.js'
 import { createAccount, createOpeningMovements, summarizeBalances, validateAccount, validateMovement, currencyBalanceField } from './ledgerCore.js'
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews } from './counterpartyAccounts.js'
 import { emptyAccountDraft } from './accountConfig.js'
@@ -10,6 +10,7 @@ import { createEmptyAdreemState, mergeLedgerStates } from './ledgerState.js'
 import { validateLedgerStateTransition } from '../../server/ledger/stateValidation.js'
 import { accountDeletionEligibility } from './accountEditing.js'
 import { AccountRow, NetPositionPanel, buildBalanceOverview, filterCounterpartyGroups, accountBalanceChip } from './LedgerApp.jsx'
+import { getMovementAccounts } from './movementAccounts.js'
 
 const at = '2026-09-05T12:00:00.000Z'
 const currencies = ['LYD', 'USD', 'TRY', 'EUR']
@@ -62,7 +63,7 @@ describe.each(currencies)('%s full currency paths', (currency) => {
 })
 
 describe('currency account upgrades', () => {
-  it('adds only missing TRY/EUR with zero openings and preserves financial identity and movements', () => {
+  it('adds missing person channels with zero openings and preserves financial identity and movements', () => {
     const old = person().filter((account) => !['TRY','EUR'].includes(account.currencyKind))
     old[0] = { ...old[0], openingDinar: 550, settlementPinned: true, settlementPinnedAt: at }
     const openings = createOpeningMovements(old, at)
@@ -90,7 +91,14 @@ describe('currency account upgrades', () => {
     const accounts = [createAccount({ id: 'legacy-person', ownerName: 'Legacy Person', subAccountName: 'كاش بيننا', type: 'person', valueKind: 'receivable', currencyKind: 'LYD', openingDinar: 550 })]
     const state = { ...createEmptyAdreemState(at), accounts, movements: createOpeningMovements(accounts, at) }
     const upgraded = completeAccountCurrencies(accounts, at)
-    expect(upgraded).toHaveLength(3)
+    expect(upgraded).toHaveLength(5)
+    expect(upgraded.map((account) => account.subAccountName)).toEqual(expect.arrayContaining([
+      'كاش بيننا',
+      'شيك بيننا',
+      'دولار بيننا',
+      'TRY بيننا',
+      'EUR بيننا',
+    ]))
     expect(upgraded.every((account) => !account.counterpartyId)).toBe(true)
     expect(validateLedgerStateTransition({ ...state, accounts: upgraded }, state, { now: at }).errors).toEqual([])
   })
@@ -102,9 +110,20 @@ describe('currency account upgrades', () => {
   it('groups own cash and bank by place without mixing them or changing the old currency', () => {
     const accounts = [bank('LYD','cash'), bank('USD','bank','bank')]
     const upgraded = completeAccountCurrencies(accounts, at)
-    expect(upgraded).toHaveLength(6)
-    expect(upgraded.filter((a) => a.valueKind === 'bank').map((a) => a.currencyKind)).toEqual(['USD','TRY','EUR'])
+    expect(upgraded).toHaveLength(8)
+    expect(upgraded.filter((a) => a.valueKind === 'cash').map((a) => a.currencyKind)).toEqual(expect.arrayContaining(currencies))
+    expect(upgraded.filter((a) => a.valueKind === 'bank').map((a) => a.currencyKind)).toEqual(expect.arrayContaining(currencies))
     expect(upgraded[0].openingDinar).toBe(1000)
+  })
+  it('creates every currency channel immediately for a new cash or bank location', () => {
+    const base = bank('EUR', 'new-wallet')
+    const bundle = buildFinancialAccountCurrencyBundle(base, at)
+
+    expect(bundle).toHaveLength(4)
+    expect(bundle.map((account) => account.currencyKind)).toEqual(expect.arrayContaining(currencies))
+    expect(bundle.find((account) => account.currencyKind === 'EUR')?.openingEur).toBe(1000)
+    expect(bundle.filter((account) => account.currencyKind !== 'EUR').every((account) => createOpeningMovements([account], at).length === 0)).toBe(true)
+    expect(bundle.every((account) => Number(account.currencyChannelsVersion) >= 2)).toBe(true)
   })
   it('uses stable IDs across retries and concurrent devices within the same isolated ledger', () => {
     const accounts = person().filter((a) => !['TRY','EUR'].includes(a.currencyKind))
@@ -114,6 +133,37 @@ describe('currency account upgrades', () => {
     expect(mergeLedgerStates(left, right, base).accounts).toHaveLength(5)
     expect(completeAccountCurrencies([], at)).toEqual([])
     expect(base.accounts).toHaveLength(3)
+  })
+  it('makes every upgraded currency available in transfer, expense, income, deposit, withdrawal, sale, and purchase routes', () => {
+    const legacyPerson = createAccount({ id: 'legacy-route-person', ownerName: 'Route Person', subAccountName: 'كاش بيننا', type: 'person', valueKind: 'receivable', currencyKind: 'LYD' })
+    const upgraded = completeAccountCurrencies([
+      bank('LYD', 'route-cash', 'cash'),
+      bank('LYD', 'route-bank', 'bank'),
+      legacyPerson,
+    ], at)
+    const accountFor = (valueKind, currency, detail = '') => upgraded.find((account) => (
+      account.valueKind === valueKind && account.currencyKind === currency && (!detail || account.subAccountName === detail)
+    ))
+
+    for (const currency of currencies) {
+      const cash = accountFor('cash', currency)
+      const bankAccount = accountFor('bank', currency)
+      const personAccount = accountFor('receivable', currency, currency === 'LYD' ? 'كاش بيننا' : '')
+      expect(cash).toBeTruthy()
+      expect(bankAccount).toBeTruthy()
+      expect(personAccount).toBeTruthy()
+      expect(getMovementAccounts(upgraded, new Map(), 'expense', 'source', { currency }).map((account) => account.id)).toContain(cash.id)
+      expect(getMovementAccounts(upgraded, new Map(), 'external_income', 'destination', { currency }).map((account) => account.id)).toContain(cash.id)
+      expect(getMovementAccounts(upgraded, new Map(), 'cash_deposit', 'source', { currency }).map((account) => account.id)).toContain(cash.id)
+      expect(getMovementAccounts(upgraded, new Map(), 'cash_deposit', 'destination', { currency }).map((account) => account.id)).toContain(bankAccount.id)
+      expect(getMovementAccounts(upgraded, new Map(), 'cash_withdrawal', 'source', { currency }).map((account) => account.id)).toContain(bankAccount.id)
+      expect(getMovementAccounts(upgraded, new Map(), 'cash_withdrawal', 'destination', { currency }).map((account) => account.id)).toContain(cash.id)
+    }
+
+    expect(getMovementAccounts(upgraded, new Map(), 'usd_sale', 'source', { currency: 'USD' }).some((account) => account.currencyKind === 'USD')).toBe(true)
+    expect(getMovementAccounts(upgraded, new Map(), 'usd_sale', 'destination', { currency: 'USD' }).every((account) => account.currencyKind === 'LYD')).toBe(true)
+    expect(getMovementAccounts(upgraded, new Map(), 'usd_purchase', 'source', { currency: 'LYD' }).every((account) => account.currencyKind === 'LYD')).toBe(true)
+    expect(getMovementAccounts(upgraded, new Map(), 'usd_purchase', 'destination', { currency: 'LYD' }).every((account) => account.currencyKind === 'USD')).toBe(true)
   })
 })
 

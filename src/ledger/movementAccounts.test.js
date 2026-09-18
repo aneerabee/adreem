@@ -57,6 +57,17 @@ describe('shared movement account choices', () => {
     expect(result.map((item) => item.id)).toEqual(['cash'])
   })
 
+  it('keeps closed accounts out of choices and exposes only relevant closed references when requested', () => {
+    const accounts = [
+      account('active-lyd', VALUE_KINDS.CASH),
+      account('closed-lyd', VALUE_KINDS.CASH, { status: ACCOUNT_STATUSES.INACTIVE }),
+      account('closed-usd', VALUE_KINDS.CASH, { status: ACCOUNT_STATUSES.INACTIVE, currencyKind: CURRENCIES.USD }),
+    ]
+
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.EXPENSE, 'source', { currency: CURRENCIES.DINAR }).map((item) => item.id)).toEqual(['active-lyd'])
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.EXPENSE, 'source', { currency: CURRENCIES.DINAR }, { includeInactive: true }).map((item) => item.id)).toEqual(['active-lyd', 'closed-lyd'])
+  })
+
   it('filters transfer destinations to the same kind and currency', () => {
     const accounts = [
       account('cash-lyd-a', VALUE_KINDS.CASH, { ownerName: 'أنا', subAccountName: 'خزنة 1' }),
@@ -134,6 +145,20 @@ describe('shared movement account choices', () => {
 
     expect(rankMovementAccounts(accounts, balances, '', CURRENCIES.USD).map((item) => item.id)).toEqual(['large-usd', 'large-dinar'])
     expect(rankMovementAccounts(accounts, balances, '', CURRENCIES.DINAR).map((item) => item.id)).toEqual(['large-dinar', 'large-usd'])
+  })
+
+  it('ranks TRY and EUR choices by their own balances', () => {
+    const accounts = [
+      account('large-try', VALUE_KINDS.CASH, { currencyKind: 'multi' }),
+      account('large-eur', VALUE_KINDS.CASH, { currencyKind: 'multi' }),
+    ]
+    const balances = new Map([
+      ['large-try', { dinar: 0, usd: 0, try: 90_000, eur: 4 }],
+      ['large-eur', { dinar: 0, usd: 0, try: 10, eur: 700 }],
+    ])
+
+    expect(rankMovementAccounts(accounts, balances, '', CURRENCIES.TRY).map((item) => item.id)).toEqual(['large-try', 'large-eur'])
+    expect(rankMovementAccounts(accounts, balances, '', CURRENCIES.EUR).map((item) => item.id)).toEqual(['large-eur', 'large-try'])
   })
 
   it('puts matching people first when money leaves an own account', () => {

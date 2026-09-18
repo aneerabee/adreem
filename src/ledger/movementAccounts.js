@@ -24,15 +24,16 @@ function searchableText(account) {
   return normalizeAccountSearchText(`${account?.ownerName || ''} ${account?.subAccountName || ''} ${account?.legacyName || ''}`)
 }
 
-function isPostingAccount(account) {
-  return account?.status === ACCOUNT_STATUSES.ACTIVE &&
+function isPostingAccount(account, includeInactive = false) {
+  const hasAllowedStatus = account?.status === ACCOUNT_STATUSES.ACTIVE || (includeInactive && account?.status === ACCOUNT_STATUSES.INACTIVE)
+  return hasAllowedStatus &&
     account.valueKind !== VALUE_KINDS.EXPENSE &&
     account.valueKind !== VALUE_KINDS.ASSET &&
     account.valueKind !== VALUE_KINDS.PROJECT
 }
 
-export function getMovementAccounts(accounts = [], balancesByAccountId = new Map(), movementType, role, selected = {}) {
-  const moneyOrPerson = accounts.filter(isPostingAccount)
+export function getMovementAccounts(accounts = [], balancesByAccountId = new Map(), movementType, role, selected = {}, options = {}) {
+  const moneyOrPerson = accounts.filter((account) => isPostingAccount(account, options.includeInactive === true))
   const supportsCurrency = (account, currency = selected.currency) =>
     accountSupportsTransferCurrency(account, currency, balancesByAccountId.get(account.id))
   const currencyReadyAccounts = moneyOrPerson.filter((account) => supportsCurrency(account))
@@ -82,7 +83,14 @@ export function rankMovementAccounts(accounts = [], balancesByAccountId = new Ma
     const bucket = balancesByAccountId.get(account.id)
     if (currency === 'USD') return Math.abs(Math.round(bucket?.usd || 0))
     if (currency === 'LYD') return Math.abs(Math.round(bucket?.dinar || 0))
-    return Math.max(Math.abs(Math.round(bucket?.dinar || 0)), Math.abs(Math.round(bucket?.usd || 0)))
+    if (currency === 'TRY') return Math.abs(Math.round(bucket?.try || 0))
+    if (currency === 'EUR') return Math.abs(Math.round(bucket?.eur || 0))
+    return Math.max(
+      Math.abs(Math.round(bucket?.dinar || 0)),
+      Math.abs(Math.round(bucket?.usd || 0)),
+      Math.abs(Math.round(bucket?.try || 0)),
+      Math.abs(Math.round(bucket?.eur || 0)),
+    )
   }
 
   return accounts

@@ -484,6 +484,54 @@ describe('LedgerApp movement account picker', () => {
     expect(markup.match(/>سعيد<\/strong>/g)).toHaveLength(1)
     expect(markup.match(/ml3-picker-choice-channels/g)).toHaveLength(1)
   })
+
+  it('shows a matching closed account as a dark non-selectable search reference', () => {
+    const active = {
+      id: 'active-saeed',
+      ownerName: 'سعيد',
+      subAccountName: 'كاش بيننا',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
+      status: ACCOUNT_STATUSES.ACTIVE,
+    }
+    const closed = {
+      ...active,
+      id: 'closed-nader',
+      ownerName: 'نادر القديم',
+      status: ACCOUNT_STATUSES.INACTIVE,
+    }
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <AccountSearchSelect
+        label="اختر الطرف"
+        value={null}
+        accounts={[active]}
+        referenceAccounts={[active, closed]}
+        initialQuery="نادر"
+        onChange={() => {}}
+        allowEmpty={false}
+      />,
+    ))
+
+    expect(markup).toContain('ml3-picker-closed-account')
+    expect(markup).toContain('نادر القديم')
+    expect(markup).toContain('مغلق')
+    expect(markup).toContain('aria-disabled="true"')
+    expect(markup).not.toContain('لا توجد نتيجة')
+    expect(markup).not.toContain('button type="button" class="ml3-picker-closed-account"')
+
+    const withoutSearch = stripUiDataProtection(renderToStaticMarkup(
+      <AccountSearchSelect
+        label="اختر الطرف"
+        value={null}
+        accounts={[active]}
+        referenceAccounts={[active, closed]}
+        onChange={() => {}}
+        allowEmpty={false}
+      />,
+    ))
+    expect(withoutSearch).not.toContain('ml3-picker-closed-account')
+  })
 })
 
 describe('LedgerApp compact history rows', () => {

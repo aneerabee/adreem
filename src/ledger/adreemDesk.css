@@ -923,6 +923,27 @@
 .ml3-picker-dot--review { background: var(--red); }
 .ml3-picker-more { min-height: 34px; border: 1px dashed #9db3aa; border-radius: 6px; background: #f4f8f6; color: var(--green); font-size: 0.7rem; font-weight: 700; cursor: pointer; }
 .ml3-picker-results > p { margin: 0; padding: 10px; color: var(--muted); font-size: 0.75rem; text-align: center; }
+.ml3-picker-closed-list { display: grid; gap: 4px; border-top: 1px solid #d8cecf; padding-top: 6px; }
+.ml3-picker-closed-list > span { color: #71383c; font-size: 0.63rem; font-weight: 800; }
+.ml3-picker-closed-account {
+  min-width: 0;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  border: 1px solid #5d393c;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: #30282a;
+  color: #fff8f6;
+  cursor: not-allowed;
+}
+.ml3-picker-closed-account .ml3-picker-type-icon { border-color: #755055; background: #413436; color: #f7c8c5; }
+.ml3-picker-closed-account .ml3-picker-option-copy strong { color: #fff8f6; }
+.ml3-picker-closed-account .ml3-picker-option-copy small { color: #ddc7c7; }
+.ml3-picker-closed-account > b { border-radius: 4px; padding: 3px 6px; background: #8e252b; color: #fff8f6; font-size: 0.62rem; }
 
 .ml3-today-panel {
   grid-area: today;

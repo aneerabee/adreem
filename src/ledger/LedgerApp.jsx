@@ -13,7 +13,7 @@ import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, g
 import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailDisplayName, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyGroupKey, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
 import { accountDisplayGroupKey, groupAccountsForDisplay, groupBalanceRowsForDisplay } from './accountDisplayGroups'
-import { completeAccountCurrencies } from './accountCurrencyUpgrade'
+import { buildFinancialAccountCurrencyBundle, completeAccountCurrencies } from './accountCurrencyUpgrade'
 import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
 import { formatZonedDate, formatZonedDateTime, formatZonedTime, isZonedToday, isZonedYesterday, zonedDayKey, zonedDayRange } from './dateRange'
@@ -2080,8 +2080,38 @@ function AccountPickerChoiceGroup({ group, value, balanceByAccountId, balanceCur
   )
 }
 
-export function AccountSearchSelect({ label, value, accounts, onChange, allowEmpty = true, preferredAccountIds = [], balanceByAccountId = new Map(), balanceCurrency = '' }) {
-  const [query, setQuery] = useState('')
+export function closedAccountMatchesForSearch(referenceAccounts = [], selectableAccounts = [], query = '') {
+  const normalizedQuery = normalizeAccountSearchText(query)
+  if (!normalizedQuery) return []
+  const selectableIds = new Set(selectableAccounts.map((account) => account.id))
+  return referenceAccounts
+    .filter((account) => {
+      if (!account?.id || selectableIds.has(account.id)) return false
+      if (account.status !== ACCOUNT_STATUSES.INACTIVE && !account.mergedIntoAccountId) return false
+      const haystack = normalizeAccountSearchText(`${account.ownerName || ''} ${account.subAccountName || ''} ${accountDetailName(account)} ${account.legacyName || ''}`)
+      return haystack.includes(normalizedQuery)
+    })
+    .sort((left, right) => accountLabel(left).localeCompare(accountLabel(right), 'ar') || left.id.localeCompare(right.id))
+}
+
+function ClosedAccountReferenceGroup({ group }) {
+  const primaryAccount = group.accounts?.[0]
+  if (!primaryAccount) return null
+  const channelLabels = [...new Set(group.accounts.map((account) => accountChoiceKindLabel(account)).filter(Boolean))]
+  return (
+    <div className="ml3-picker-closed-account" role="note" aria-disabled="true">
+      <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}><AccountChoiceIcon account={primaryAccount} size={16} /></span>
+      <span className="ml3-picker-option-copy">
+        <strong className="adreem-account-name">{protectedAccountPrimaryName(primaryAccount)}</strong>
+        <small>{channelLabels.join(' · ')}</small>
+      </span>
+      <b>مغلق</b>
+    </div>
+  )
+}
+
+export function AccountSearchSelect({ label, value, accounts, referenceAccounts = [], initialQuery = '', onChange, allowEmpty = true, preferredAccountIds = [], balanceByAccountId = new Map(), balanceCurrency = '' }) {
+  const [query, setQuery] = useState(initialQuery)
   const [isChanging, setIsChanging] = useState(false)
   const [quickFilter, setQuickFilter] = useState('')
   const [showAllResults, setShowAllResults] = useState(false)
@@ -2141,6 +2171,7 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
   const visibleAccounts = selectedAccount && !filteredAccounts.some((account) => account.id === selectedAccount.id) ? [selectedAccount, ...filteredAccounts] : filteredAccounts
   const resultAccounts = visibleAccounts
   const resultGroups = groupAccountsForDisplay(resultAccounts)
+  const closedReferenceGroups = groupAccountsForDisplay(closedAccountMatchesForSearch(referenceAccounts, accounts, normalizedQuery))
   const preferredGroupIdSet = new Set(preferredAccounts.map((account) => accountDisplayGroupKey(account)))
   const preferredGroups = resultGroups.filter((group) => preferredGroupIdSet.has(group.id))
   const showPreferredAccounts = !normalizedQuery && !quickFilter && preferredGroups.length > 0
@@ -2253,7 +2284,13 @@ export function AccountSearchSelect({ label, value, accounts, onChange, allowEmp
                 عرض الكل · {formatCount(listResultGroups.length)}
               </button>
             ) : null}
-            {normalizedQuery && resultAccounts.length === 0 ? <p>لا توجد نتيجة</p> : null}
+            {closedReferenceGroups.length ? (
+              <div className="ml3-picker-closed-list" aria-label="حسابات مغلقة">
+                <span>حسابات مغلقة</span>
+                {closedReferenceGroups.map((group) => <ClosedAccountReferenceGroup key={group.id} group={group} />)}
+              </div>
+            ) : null}
+            {normalizedQuery && resultAccounts.length === 0 && closedReferenceGroups.length === 0 ? <p>لا توجد نتيجة</p> : null}
           </div>
         </div>
       ) : null}
@@ -2672,7 +2709,7 @@ export function MovementActionDialog({ action, accountById, isSaving = false, on
   )
 }
 
-export function MovementEditDialog({ movement, draft, config, preview, changes = [], stage = 'fields', balanceByAccountId, sourceAccounts = [], destinationAccounts = [], preferredSourceIds = [], preferredDestinationIds = [], dimensions = [], expenseCategories = [], isSaving = false, canSave = false, onDraftChange, onReview, onBack, onClose, onSave }) {
+export function MovementEditDialog({ movement, draft, config, preview, changes = [], stage = 'fields', balanceByAccountId, sourceAccounts = [], destinationAccounts = [], sourceReferenceAccounts = [], destinationReferenceAccounts = [], preferredSourceIds = [], preferredDestinationIds = [], dimensions = [], expenseCategories = [], isSaving = false, canSave = false, onDraftChange, onReview, onBack, onClose, onSave }) {
   const panelRef = useRef(null)
   const closeButtonRef = useRef(null)
   useLedgerDialogFocus(panelRef, closeButtonRef, onClose, isSaving)
@@ -2706,12 +2743,12 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
             </div>
             {movementNeedsSource(draft.type) ? (
               <div className="adreem-movement-edit-party">
-                <AccountSearchSelect label={config.sourceLabel || 'من'} value={draft.sourceAccountId || ''} accounts={sourceAccounts} onChange={(value) => onDraftChange('sourceAccountId', value || '')} preferredAccountIds={preferredSourceIds} balanceByAccountId={balanceByAccountId} balanceCurrency={sourceCurrency} />
+                <AccountSearchSelect label={config.sourceLabel || 'من'} value={draft.sourceAccountId || ''} accounts={sourceAccounts} referenceAccounts={sourceReferenceAccounts} onChange={(value) => onDraftChange('sourceAccountId', value || '')} preferredAccountIds={preferredSourceIds} balanceByAccountId={balanceByAccountId} balanceCurrency={sourceCurrency} />
               </div>
             ) : null}
             {config.needsDestination ? (
               <div className="adreem-movement-edit-party">
-                <AccountSearchSelect label={config.destinationLabel || 'إلى'} value={draft.destinationAccountId || ''} accounts={destinationAccounts} onChange={(value) => onDraftChange('destinationAccountId', value || '')} preferredAccountIds={preferredDestinationIds} balanceByAccountId={balanceByAccountId} balanceCurrency={destinationCurrency} />
+                <AccountSearchSelect label={config.destinationLabel || 'إلى'} value={draft.destinationAccountId || ''} accounts={destinationAccounts} referenceAccounts={destinationReferenceAccounts} onChange={(value) => onDraftChange('destinationAccountId', value || '')} preferredAccountIds={preferredDestinationIds} balanceByAccountId={balanceByAccountId} balanceCurrency={destinationCurrency} />
               </div>
             ) : null}
             <label className="adreem-movement-edit-note">
@@ -3364,7 +3401,7 @@ export function ExternalAccountCard({ account, onCreate, onIgnore }) {
   )
 }
 
-function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onResolve, onEdit, onCancel }) {
+function ReviewMovementCard({ movement, activeAccounts, referenceAccounts = activeAccounts, balanceByAccountId, onResolve, onEdit, onCancel }) {
   const errors = movement.validation?.errors || []
   const [reviewDraft, setReviewDraft] = useState({
     type: movement.type || MOVEMENT_TYPES.TRANSFER,
@@ -3379,6 +3416,8 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
   const reviewNeedsSource = movementNeedsSource(reviewDraft.type)
   const reviewSourceAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'source', reviewDraft)
   const reviewDestinationAccounts = getMovementAccounts(activeAccounts, balanceByAccountId, reviewDraft.type, 'destination', reviewDraft)
+  const reviewSourceReferenceAccounts = getMovementAccounts(referenceAccounts, balanceByAccountId, reviewDraft.type, 'source', reviewDraft, { includeInactive: true })
+  const reviewDestinationReferenceAccounts = getMovementAccounts(referenceAccounts, balanceByAccountId, reviewDraft.type, 'destination', reviewDraft, { includeInactive: true })
   const reviewSourceCurrency = movementAccountCurrencyForRole(reviewDraft.type, 'source', reviewDraft.currency)
   const reviewDestinationCurrency = movementAccountCurrencyForRole(reviewDraft.type, 'destination', reviewDraft.currency)
   const reviewSourceAccount = activeAccounts.find((account) => account.id === reviewDraft.sourceAccountId)
@@ -3444,12 +3483,12 @@ function ReviewMovementCard({ movement, activeAccounts, balanceByAccountId, onRe
         ) : null}
         {reviewNeedsSource ? (
           <div className="ml3-decision-wide">
-            <AccountSearchSelect label={reviewConfig.sourceLabel || 'من'} value={reviewDraft.sourceAccountId || ''} accounts={reviewSourceAccounts} onChange={(value) => updateReviewDraft('sourceAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewSourceAccounts, balanceByAccountId, reviewSourceCurrency)} balanceByAccountId={balanceByAccountId} balanceCurrency={reviewSourceCurrency} />
+            <AccountSearchSelect label={reviewConfig.sourceLabel || 'من'} value={reviewDraft.sourceAccountId || ''} accounts={reviewSourceAccounts} referenceAccounts={reviewSourceReferenceAccounts} onChange={(value) => updateReviewDraft('sourceAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewSourceAccounts, balanceByAccountId, reviewSourceCurrency)} balanceByAccountId={balanceByAccountId} balanceCurrency={reviewSourceCurrency} />
           </div>
         ) : null}
         {reviewConfig.needsDestination ? (
           <div className="ml3-decision-wide">
-            <AccountSearchSelect label={reviewConfig.destinationLabel || 'إلى'} value={reviewDraft.destinationAccountId || ''} accounts={reviewDestinationAccounts} onChange={(value) => updateReviewDraft('destinationAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewDestinationAccounts, balanceByAccountId, reviewDestinationCurrency, { movementType: reviewDraft.type, role: 'destination', counterpartAccount: reviewSourceAccount })} balanceByAccountId={balanceByAccountId} balanceCurrency={reviewDestinationCurrency} />
+            <AccountSearchSelect label={reviewConfig.destinationLabel || 'إلى'} value={reviewDraft.destinationAccountId || ''} accounts={reviewDestinationAccounts} referenceAccounts={reviewDestinationReferenceAccounts} onChange={(value) => updateReviewDraft('destinationAccountId', value || '')} preferredAccountIds={preferredAccountIdsFor(reviewDestinationAccounts, balanceByAccountId, reviewDestinationCurrency, { movementType: reviewDraft.type, role: 'destination', counterpartAccount: reviewSourceAccount })} balanceByAccountId={balanceByAccountId} balanceCurrency={reviewDestinationCurrency} />
           </div>
         ) : null}
         <label className="ml3-decision-wide">
@@ -5017,6 +5056,10 @@ export default function LedgerApp() {
     return getMovementAccounts(accounts, balanceByAccountId, movementDraft.type, role, movementDraft)
   }
 
+  function movementReferenceAccountsFor(role) {
+    return getMovementAccounts(accounts, balanceByAccountId, movementDraft.type, role, movementDraft, { includeInactive: true })
+  }
+
   function preferredMovementAccountIds(role) {
     const currency = movementAccountCurrencyForRole(movementDraft.type, role, movementDraft.currency)
     const counterpartAccount = role === 'destination' ? draftSourceAccount : draftDestinationAccount
@@ -5499,9 +5542,10 @@ export default function LedgerApp() {
       return
     }
     const openingAmounts = accountOpeningAmounts(accountDraft)
+    const createdAccount = accountIsCounterpartyBundle ? null : createAccount({ ...accountDraft, ...openingAmounts })
     const nextAccounts = accountIsCounterpartyBundle
       ? buildCounterpartyAccountBundle(accountDraft, { source: 'web' })
-      : [createAccount({ ...accountDraft, ...openingAmounts })]
+      : buildFinancialAccountCurrencyBundle(createdAccount)
     const validationErrors = []
     const acceptedAccounts = [...accounts]
     for (const account of nextAccounts) {
@@ -5541,7 +5585,7 @@ export default function LedgerApp() {
       })],
     }))
     setFeedback(accountIsCounterpartyBundle
-      ? openingMovements.length ? 'تم إنشاء الشخص وحساباته الثلاثة مع الأرصدة السابقة.' : 'تم إنشاء الشخص وحساباته الثلاثة.'
+      ? openingMovements.length ? 'تم إنشاء الشخص وحساباته مع الأرصدة السابقة.' : 'تم إنشاء الشخص وحساباته.'
       : openingMovements.length ? 'تم إنشاء الحساب وتسجيل رصيده الأول.' : 'تم إنشاء الحساب.')
     setAccountDraft(emptyAccountDraft())
     setActiveAccountPresetGroup('')
@@ -6246,7 +6290,7 @@ export default function LedgerApp() {
             <div className="ml3-review-active">
               {activeReviewItem?.type === 'account' ? <ReviewAccountCard key={activeReviewItem.bucket.account.id} bucket={activeReviewItem.bucket} activeAccounts={activeAccounts} onResolve={resolveReviewAccount} onMerge={mergeReviewAccount} onDisable={disableAccount} /> : null}
               {activeReviewItem?.type === 'external' ? <ExternalAccountCard key={activeReviewItem.account.id} account={activeReviewItem.account} onCreate={addExternalAccount} onIgnore={ignoreExternalAccount} /> : null}
-              {activeReviewItem?.type === 'movement' ? <ReviewMovementCard key={activeReviewItem.movement.id} movement={activeReviewItem.movement} activeAccounts={activeAccounts} balanceByAccountId={balanceByAccountId} onResolve={resolveReviewMovement} onEdit={editReviewMovement} onCancel={requestMovementCancellation} /> : null}
+              {activeReviewItem?.type === 'movement' ? <ReviewMovementCard key={activeReviewItem.movement.id} movement={activeReviewItem.movement} activeAccounts={activeAccounts} referenceAccounts={accounts} balanceByAccountId={balanceByAccountId} onResolve={resolveReviewMovement} onEdit={editReviewMovement} onCancel={requestMovementCancellation} /> : null}
             </div>
           </div>
           <details className="ml3-ops-disclosure">
@@ -6651,7 +6695,7 @@ export default function LedgerApp() {
                 {movementSourceRequired && movementStep === MOVEMENT_ENTRY_STEPS.SOURCE ? (
                   <section className="ml3-step ml3-step--source is-open">
                     <div className="ml3-route-picker is-single">
-                      <AccountSearchSelect label={movementConfig.sourceLabel} value={movementDraft.sourceAccountId || ''} accounts={movementAccountsFor('source')} onChange={(value) => updateMovementDraft('sourceAccountId', value)} preferredAccountIds={preferredMovementAccountIds('source')} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'source', movementDraft.currency)} />
+                      <AccountSearchSelect label={movementConfig.sourceLabel} value={movementDraft.sourceAccountId || ''} accounts={movementAccountsFor('source')} referenceAccounts={movementReferenceAccountsFor('source')} onChange={(value) => updateMovementDraft('sourceAccountId', value)} preferredAccountIds={preferredMovementAccountIds('source')} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'source', movementDraft.currency)} />
                     </div>
                     <div className="ml3-step-controls">
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
@@ -6667,7 +6711,7 @@ export default function LedgerApp() {
                 {movementConfig.needsDestination && movementStep === MOVEMENT_ENTRY_STEPS.DESTINATION ? (
                   <section className="ml3-step ml3-step--destination is-open">
                     <div className="ml3-route-picker is-single">
-                      <AccountSearchSelect label={movementConfig.destinationLabel} value={movementDraft.destinationAccountId || ''} accounts={movementAccountsFor('destination')} onChange={(value) => updateMovementDraft('destinationAccountId', value)} preferredAccountIds={preferredMovementAccountIds('destination')} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'destination', movementDraft.currency)} />
+                      <AccountSearchSelect label={movementConfig.destinationLabel} value={movementDraft.destinationAccountId || ''} accounts={movementAccountsFor('destination')} referenceAccounts={movementReferenceAccountsFor('destination')} onChange={(value) => updateMovementDraft('destinationAccountId', value)} preferredAccountIds={preferredMovementAccountIds('destination')} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'destination', movementDraft.currency)} />
                     </div>
                     <div className="ml3-step-controls">
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>
@@ -7115,6 +7159,8 @@ export default function LedgerApp() {
             balanceByAccountId={balanceByAccountId}
             sourceAccounts={movementAccountsFor('source')}
             destinationAccounts={movementAccountsFor('destination')}
+            sourceReferenceAccounts={movementReferenceAccountsFor('source')}
+            destinationReferenceAccounts={movementReferenceAccountsFor('destination')}
             preferredSourceIds={preferredMovementAccountIds('source')}
             preferredDestinationIds={preferredMovementAccountIds('destination')}
             dimensions={activeDimensions}
