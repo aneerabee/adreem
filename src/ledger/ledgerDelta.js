@@ -5,6 +5,9 @@ export const LEDGER_DELTA_COLLECTIONS = [
   'attachments',
   'recurringRules',
   'reconciliations',
+  'investmentPlatforms',
+  'investmentHoldings',
+  'investmentTrades',
   'auditEvents',
 ]
 

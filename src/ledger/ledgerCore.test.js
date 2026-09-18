@@ -22,6 +22,74 @@ import {
 } from './ledgerCore'
 
 describe('adreem ledger core', () => {
+  it('posts investment deposits and withdrawals only against owned USD money', () => {
+    const cash = createAccount({
+      id: 'own-usd', ownerName: 'أنا', subAccountName: 'USD', type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.USD, openingUsd: 500,
+    })
+    const existingMovements = createOpeningMovements([cash])
+    const platform = { id: 'platform-1', name: 'IBKR', status: 'active' }
+    const options = {
+      investmentPlatforms: [platform],
+      investmentAvailableCashUsdMicros: new Map([[platform.id, 500_000_000]]),
+    }
+    const deposit = postMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
+      amount: 200,
+      currency: CURRENCIES.USD,
+      sourceAccountId: cash.id,
+      investmentPlatformId: platform.id,
+    }, [cash], existingMovements, options)
+    const withdrawal = postMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL,
+      amount: 150,
+      currency: CURRENCIES.USD,
+      destinationAccountId: cash.id,
+      investmentPlatformId: platform.id,
+    }, [cash], existingMovements, options)
+
+    expect(deposit.validation.ok).toBe(true)
+    expect(withdrawal.validation.ok).toBe(true)
+    expect(buildPostingEntries(deposit)).toEqual([{ accountId: cash.id, currency: CURRENCIES.USD, delta: -200 }])
+    expect(buildPostingEntries(withdrawal)).toEqual([{ accountId: cash.id, currency: CURRENCIES.USD, delta: 150 }])
+  })
+
+  it('rejects an investment movement with the wrong currency, platform, account, or free cash', () => {
+    const cash = createAccount({
+      id: 'own-usd', ownerName: 'أنا', subAccountName: 'USD', type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.USD,
+    })
+    const person = createAccount({
+      id: 'person-usd', ownerName: 'سيف', subAccountName: 'USD', type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE, currencyKind: CURRENCIES.USD,
+    })
+    const platform = { id: 'platform-1', name: 'IBKR', status: 'active' }
+    const options = {
+      investmentPlatforms: [platform],
+      investmentAvailableCashUsdMicros: new Map([[platform.id, 100_000_000]]),
+    }
+
+    const invalid = validateMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL,
+      amount: 200,
+      currency: CURRENCIES.DINAR,
+      destinationAccountId: person.id,
+      investmentPlatformId: 'missing',
+    }, [cash, person], [], options)
+
+    expect(invalid.ok).toBe(false)
+    expect(invalid.errors.map((error) => error.field)).toEqual(expect.arrayContaining(['currency', 'investmentPlatformId', 'destinationAccountId']))
+
+    const excessive = validateMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL,
+      amount: 101,
+      currency: CURRENCIES.USD,
+      destinationAccountId: cash.id,
+      investmentPlatformId: platform.id,
+    }, [cash], [], options)
+    expect(excessive.errors).toContainEqual(expect.objectContaining({ field: 'amount' }))
+  })
+
   it('allows a person opening debt but rejects a negative owned-money opening', () => {
     const person = createAccount({
       id: 'person-opening-debt',

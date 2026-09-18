@@ -504,7 +504,7 @@ export function createRelationalLedgerRepository(client, options = {}) {
             const movementAttachments = await loadMovementAttachments(client, ledger.id, movementIds)
             return mergeRowsByRecordId(accountAttachments, movementAttachments)
           })
-    const [movementResult, reviewResult, accounts, dimensions, attachments, recurringRules, reconciliations, auditEvents, ignoredRows] = await Promise.all([
+    const [movementResult, reviewResult, accounts, dimensions, attachments, recurringRules, reconciliations, investmentPlatforms, investmentHoldings, investmentTrades, auditEvents, ignoredRows] = await Promise.all([
       movementRequest,
       reviewRequest,
       fetchAll(client, 'adreem_accounts', 'record_id, payload, balance_dinar, balance_usd, balance_try, balance_eur, posted_count, structure_locked', ledger.id),
@@ -516,6 +516,9 @@ export function createRelationalLedgerRepository(client, options = {}) {
       loadOptions.includeAllMovements
         ? fetchAll(client, 'adreem_reconciliations', 'record_id, payload', ledger.id)
         : loadLatestReconciliations(client, ledger.id),
+      fetchAll(client, 'adreem_investment_platforms', 'record_id, payload', ledger.id),
+      fetchAll(client, 'adreem_investment_holdings', 'record_id, payload', ledger.id),
+      fetchAll(client, 'adreem_investment_trades', 'record_id, payload', ledger.id),
       includeAllAuditEvents
         ? loadAllAuditEvents(client, ledger.id)
         : loadRecentAuditEvents(client, ledger.id),
@@ -535,6 +538,9 @@ export function createRelationalLedgerRepository(client, options = {}) {
       attachments: attachments.map(payloadFromRow),
       recurringRules: recurringRules.map(payloadFromRow),
       reconciliations: reconciliations.map(payloadFromRow),
+      investmentPlatforms: investmentPlatforms.map(payloadFromRow),
+      investmentHoldings: investmentHoldings.map(payloadFromRow),
+      investmentTrades: investmentTrades.map(payloadFromRow),
       auditEvents: auditEvents.map(payloadFromRow),
       ignoredExternalAccounts: ignoredRows.map((row) => row.account_id),
       version: Number(confirmedLedger.version || 3),
@@ -570,7 +576,7 @@ export function createRelationalLedgerRepository(client, options = {}) {
     const ledger = await ledgerRow()
     const revision = normalizeRevision(expectedRevision)
     if (revision === null) throw new ConcurrentLedgerUpdateError('Reload the ledger before saving.')
-    const { data, error } = await client.rpc('adreem_apply_ledger_delta', {
+    const { data, error } = await client.rpc('adreem_apply_ledger_delta_v2', {
       p_ledger_id: ledger.id,
       p_expected_revision: revision,
       p_delta: delta,

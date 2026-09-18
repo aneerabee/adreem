@@ -31,6 +31,9 @@ const TARGET_LEDGER_TABLES = [
   'adreem_attachments',
   'adreem_recurring_rules',
   'adreem_reconciliations',
+  'adreem_investment_platforms',
+  'adreem_investment_holdings',
+  'adreem_investment_trades',
   'adreem_audit_events',
   'adreem_ignored_external_accounts',
 ]
@@ -45,6 +48,9 @@ const TARGET_V3_SCHEMA_MARKERS = [
   ['adreem_attachments', 'ledger_id, owner_id, record_id, storage_path, payload'],
   ['adreem_recurring_rules', 'ledger_id, owner_id, record_id, payload'],
   ['adreem_reconciliations', 'ledger_id, owner_id, record_id, payload'],
+  ['adreem_investment_platforms', 'ledger_id, owner_id, record_id, payload'],
+  ['adreem_investment_holdings', 'ledger_id, owner_id, record_id, platform_id, payload'],
+  ['adreem_investment_trades', 'ledger_id, owner_id, record_id, platform_id, holding_id, payload'],
   ['adreem_audit_events', 'ledger_id, owner_id, record_id, payload'],
   ['adreem_ignored_external_accounts', 'ledger_id, owner_id, account_id'],
 ]
@@ -60,6 +66,9 @@ const TARGET_SECURITY_POLICIES = [
   ['adreem_attachments', 'adreem_attachments_own', 'r', false, 'owner'],
   ['adreem_recurring_rules', 'adreem_recurring_rules_own', 'r', false, 'owner'],
   ['adreem_reconciliations', 'adreem_reconciliations_own', 'r', false, 'owner'],
+  ['adreem_investment_platforms', 'adreem_investment_platforms_own', 'r', false, 'owner'],
+  ['adreem_investment_holdings', 'adreem_investment_holdings_own', 'r', false, 'owner'],
+  ['adreem_investment_trades', 'adreem_investment_trades_own', 'r', false, 'owner'],
   ['adreem_audit_events', 'adreem_audit_events_own', 'r', false, 'owner'],
   ['adreem_ignored_external_accounts', 'adreem_ignored_accounts_own', 'r', false, 'owner'],
 ]
@@ -83,6 +92,12 @@ with target_tables(table_name) as (
   from pg_proc as procedure
   join pg_namespace as namespace on namespace.oid = procedure.pronamespace
   where namespace.nspname = 'public' and procedure.proname = 'adreem_apply_ledger_delta'
+), apply_function_v2 as (
+  select procedure.oid, procedure.prosecdef, procedure.proacl, procedure.proowner,
+         pg_get_function_identity_arguments(procedure.oid) as identity_arguments
+  from pg_proc as procedure
+  join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+  where namespace.nspname = 'public' and procedure.proname = 'adreem_apply_ledger_delta_v2'
 ), delete_account_function as (
   select procedure.oid, procedure.prosecdef, procedure.proacl, procedure.proowner,
          pg_get_function_identity_arguments(procedure.oid) as identity_arguments
@@ -153,6 +168,20 @@ select json_build_object(
       )
     )
     from apply_function as apply_proc
+  ),
+  'applyFunctionV2', (
+    select json_build_object(
+      'securityDefiner', apply_proc.prosecdef,
+      'identityArguments', apply_proc.identity_arguments,
+      'anonExecute', has_function_privilege('anon', apply_proc.oid, 'EXECUTE'),
+      'authenticatedExecute', has_function_privilege('authenticated', apply_proc.oid, 'EXECUTE'),
+      'serviceRoleExecute', has_function_privilege('service_role', apply_proc.oid, 'EXECUTE'),
+      'publicExecute', exists (
+        select 1 from aclexplode(coalesce(apply_proc.proacl, acldefault('f', apply_proc.proowner))) as acl
+        where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
+      )
+    )
+    from apply_function_v2 as apply_proc
   ),
   'deleteAccountFunction', (
     select json_build_object(
@@ -316,6 +345,15 @@ export function verifyTargetSecurityManifest(manifest) {
     applyFunction.anonExecute || applyFunction.publicExecute ||
     !applyFunction.authenticatedExecute || !applyFunction.serviceRoleExecute
   ) errors.push('invalid adreem_apply_ledger_delta security or grants')
+
+  const applyFunctionV2 = manifest?.applyFunctionV2
+  if (!applyFunctionV2) errors.push('missing adreem_apply_ledger_delta_v2 function')
+  else if (
+    !applyFunctionV2.securityDefiner ||
+    applyFunctionV2.identityArguments !== 'p_ledger_id uuid, p_expected_revision bigint, p_delta jsonb, p_owner_id uuid' ||
+    applyFunctionV2.anonExecute || applyFunctionV2.publicExecute ||
+    !applyFunctionV2.authenticatedExecute || !applyFunctionV2.serviceRoleExecute
+  ) errors.push('invalid adreem_apply_ledger_delta_v2 security or grants')
 
   const deleteAccountFunction = manifest?.deleteAccountFunction
   if (!deleteAccountFunction) errors.push('missing adreem_delete_unused_account function')
@@ -632,7 +670,8 @@ function payloadRecord(row = {}, derived = {}) {
 export async function loadTargetMigrationState(target, ledgerId) {
   const [
     ledgerResult, accounts, movements, movementEntries, dimensions, attachments,
-    recurringRules, reconciliations, auditEvents, ignoredExternalAccounts,
+    recurringRules, reconciliations, investmentPlatforms, investmentHoldings,
+    investmentTrades, auditEvents, ignoredExternalAccounts,
   ] = await Promise.all([
     target.from('adreem_ledgers').select('reset_at').eq('id', ledgerId).maybeSingle(),
     targetRows(target, 'adreem_accounts', 'record_id, payload, balance_dinar, balance_usd, balance_try, posted_count', ledgerId),
@@ -642,6 +681,9 @@ export async function loadTargetMigrationState(target, ledgerId) {
     targetRows(target, 'adreem_attachments', 'record_id, payload', ledgerId),
     targetRows(target, 'adreem_recurring_rules', 'record_id, payload', ledgerId),
     targetRows(target, 'adreem_reconciliations', 'record_id, payload', ledgerId),
+    targetRows(target, 'adreem_investment_platforms', 'record_id, payload', ledgerId),
+    targetRows(target, 'adreem_investment_holdings', 'record_id, payload', ledgerId),
+    targetRows(target, 'adreem_investment_trades', 'record_id, payload', ledgerId),
     targetRows(target, 'adreem_audit_events', 'record_id, payload', ledgerId),
     targetRows(target, 'adreem_ignored_external_accounts', 'account_id', ledgerId),
   ])
@@ -667,6 +709,9 @@ export async function loadTargetMigrationState(target, ledgerId) {
     attachments: attachments.map((row) => payloadRecord(row)),
     recurringRules: recurringRules.map((row) => payloadRecord(row)),
     reconciliations: reconciliations.map((row) => payloadRecord(row)),
+    investmentPlatforms: investmentPlatforms.map((row) => payloadRecord(row)),
+    investmentHoldings: investmentHoldings.map((row) => payloadRecord(row)),
+    investmentTrades: investmentTrades.map((row) => payloadRecord(row)),
     auditEvents: auditEvents.map((row) => payloadRecord(row)),
     ignoredExternalAccounts: ignoredExternalAccounts.map((row) => row.account_id),
     resetAt: ledgerResult.data.reset_at || null,
@@ -882,7 +927,7 @@ async function applyBatches(context) {
       pendingBatch,
     }
     writeCheckpoint(checkpointFile, checkpoint)
-    const { data, error } = await target.rpc('adreem_apply_ledger_delta', {
+    const { data, error } = await target.rpc('adreem_apply_ledger_delta_v2', {
       p_ledger_id: ledgerId,
       p_expected_revision: currentRevision,
       p_delta: batch.delta,

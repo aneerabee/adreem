@@ -45,4 +45,21 @@ describe('ledger delta', () => {
     expect(result.movements.map(({ id }) => id)).toEqual(['old', 'new'])
     expect(result.ignoredExternalAccounts).toEqual(['external'])
   })
+
+  it('saves and restores every investment collection through the same delta', () => {
+    const base = {
+      investmentPlatforms: [],
+      investmentHoldings: [],
+      investmentTrades: [],
+    }
+    const next = {
+      investmentPlatforms: [{ id: 'platform-1', name: 'IBKR' }],
+      investmentHoldings: [{ id: 'holding-1', platformId: 'platform-1', symbol: 'AAPL' }],
+      investmentTrades: [{ id: 'trade-1', holdingId: 'holding-1', type: 'buy' }],
+    }
+    const delta = createLedgerDelta(next, base)
+
+    expect(delta).toEqual(next)
+    expect(applyLedgerDelta(base, delta)).toEqual(next)
+  })
 })

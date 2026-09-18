@@ -32,6 +32,9 @@ const SECURITY_TABLES = [
   'adreem_attachments',
   'adreem_recurring_rules',
   'adreem_reconciliations',
+  'adreem_investment_platforms',
+  'adreem_investment_holdings',
+  'adreem_investment_trades',
   'adreem_audit_events',
   'adreem_ignored_external_accounts',
 ]
@@ -47,6 +50,9 @@ const SECURITY_POLICIES = [
   ['adreem_attachments', 'adreem_attachments_own', 'r', false],
   ['adreem_recurring_rules', 'adreem_recurring_rules_own', 'r', false],
   ['adreem_reconciliations', 'adreem_reconciliations_own', 'r', false],
+  ['adreem_investment_platforms', 'adreem_investment_platforms_own', 'r', false],
+  ['adreem_investment_holdings', 'adreem_investment_holdings_own', 'r', false],
+  ['adreem_investment_trades', 'adreem_investment_trades_own', 'r', false],
   ['adreem_audit_events', 'adreem_audit_events_own', 'r', false],
   ['adreem_ignored_external_accounts', 'adreem_ignored_accounts_own', 'r', false],
 ]
@@ -79,6 +85,14 @@ function securityManifest() {
       { role: 'service_role', columns: ['is_active'] },
     ],
     applyFunction: {
+      securityDefiner: true,
+      identityArguments: 'p_ledger_id uuid, p_expected_revision bigint, p_delta jsonb, p_owner_id uuid',
+      anonExecute: false,
+      authenticatedExecute: true,
+      serviceRoleExecute: true,
+      publicExecute: false,
+    },
+    applyFunctionV2: {
       securityDefiner: true,
       identityArguments: 'p_ledger_id uuid, p_expected_revision bigint, p_delta jsonb, p_owner_id uuid',
       anonExecute: false,
@@ -370,7 +384,7 @@ describe('ADREEM v3 migration safety', () => {
       },
     }
     await ensureEmptyTarget(target, { id: 'ledger-a', revision: 0 })
-    expect(selected).toHaveLength(9)
+    expect(selected).toHaveLength(12)
     expect(selected.every(({ columns, options }) => columns === '*' && options.count === 'exact' && options.head === true)).toBe(true)
   })
 

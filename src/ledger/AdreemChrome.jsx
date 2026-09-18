@@ -9,6 +9,7 @@ import {
   Cloud,
   History,
   Landmark,
+  ChartCandlestick,
   LogOut,
   Plus,
   RefreshCw,
@@ -22,6 +23,7 @@ import { setActiveUiLanguage } from './uiTranslation'
 const sections = [
   { key: 'entry', label: 'إضافة', icon: Plus },
   { key: 'accounts', label: 'الأرصدة', icon: Landmark },
+  { key: 'investments', label: 'محفظتي', icon: ChartCandlestick },
   { key: 'history', label: 'السجل', icon: History, countKey: 'today' },
   { key: 'review', label: 'المراجعة', icon: ClipboardCheck, countKey: 'review' },
 ]

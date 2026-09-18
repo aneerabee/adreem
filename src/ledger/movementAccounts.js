@@ -54,6 +54,15 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
       })
       : list
 
+  if (movementType === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && role === 'source') {
+    return moneyOrPerson.filter((account) =>
+      [VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(account.valueKind) && supportsCurrency(account, 'USD'))
+  }
+  if (movementType === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL && role === 'destination') {
+    return moneyOrPerson.filter((account) =>
+      [VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(account.valueKind) && supportsCurrency(account, 'USD'))
+  }
+
   if (movementType === MOVEMENT_TYPES.USD_SALE && role === 'source') {
     return moneyOrPerson.filter((account) => supportsCurrency(account, 'USD'))
   }

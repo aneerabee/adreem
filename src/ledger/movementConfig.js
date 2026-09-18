@@ -13,6 +13,8 @@ export const movementLabels = {
   [MOVEMENT_TYPES.EXTERNAL_INCOME]: 'دخل',
   [MOVEMENT_TYPES.CORRECTION]: 'تعديل رصيد',
   [MOVEMENT_TYPES.RECORD_ONLY]: 'تسجيل فقط',
+  [MOVEMENT_TYPES.INVESTMENT_DEPOSIT]: 'إيداع استثمار',
+  [MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL]: 'سحب استثمار',
 }
 
 export const movementTypeOptions = [
@@ -63,6 +65,18 @@ export const movementTypeOptions = [
     label: 'تسجيل فقط',
     detail: 'معلومة للمتابعة دون تغيير الأرصدة',
     tone: 'record',
+  },
+  {
+    type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
+    label: 'إيداع استثمار',
+    detail: 'USD من فلوسك إلى محفظتي',
+    tone: 'investment',
+  },
+  {
+    type: MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL,
+    label: 'سحب استثمار',
+    detail: 'USD من محفظتي إلى فلوسك',
+    tone: 'investment',
   },
 ]
 
@@ -197,6 +211,34 @@ export const movementConfigs = {
     sourceQuestion: 'لا يحتاج حسابًا.',
     routeTitle: 'تسجيل فقط',
   },
+  [MOVEMENT_TYPES.INVESTMENT_DEPOSIT]: {
+    amountLabel: 'كم USD ستودع؟',
+    currency: CURRENCIES.USD,
+    currencyText: 'USD',
+    currencyLocked: true,
+    needsSource: true,
+    needsDestination: false,
+    needsInvestmentPlatform: true,
+    needsRate: false,
+    sourceLabel: 'يخرج من',
+    sourceQuestion: 'من أي حساب USD يخرج المبلغ؟',
+    platformQuestion: 'إلى أي منصة؟',
+    routeTitle: 'إيداع الاستثمار',
+  },
+  [MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL]: {
+    amountLabel: 'كم USD ستسحب؟',
+    currency: CURRENCIES.USD,
+    currencyText: 'USD',
+    currencyLocked: true,
+    needsSource: false,
+    needsDestination: true,
+    needsInvestmentPlatform: true,
+    needsRate: false,
+    destinationLabel: 'يدخل إلى',
+    destinationQuestion: 'إلى أي حساب USD يدخل المبلغ؟',
+    platformQuestion: 'من أي منصة؟',
+    routeTitle: 'سحب الاستثمار',
+  },
 }
 
 export const movementDefaultAccounts = {
@@ -211,6 +253,8 @@ export const movementDefaultAccounts = {
   [MOVEMENT_TYPES.EXTERNAL_INCOME]: { sourceAccountId: '', destinationAccountId: '' },
   [MOVEMENT_TYPES.CORRECTION]: { sourceAccountId: '', destinationAccountId: '' },
   [MOVEMENT_TYPES.RECORD_ONLY]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.INVESTMENT_DEPOSIT]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL]: { sourceAccountId: '', destinationAccountId: '' },
 }
 
 export const MOVEMENT_ENTRY_STEPS = {
@@ -222,6 +266,7 @@ export const MOVEMENT_ENTRY_STEPS = {
   DESTINATION: 6,
   NOTE: 7,
   REVIEW: 8,
+  INVESTMENT_PLATFORM: 9,
 }
 
 export function movementConfigFor(type) {
@@ -273,6 +318,7 @@ export function movementAccountCurrencyForRole(type, role, fallback = CURRENCIES
 }
 
 export function movementTone(type) {
+  if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT || type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL) return 'investment'
   if (type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) return 'expense'
   if (type === MOVEMENT_TYPES.EXTERNAL_INCOME || type === MOVEMENT_TYPES.TRUCK_INCOME) return 'income'
   if (type === MOVEMENT_TYPES.USD_SALE) return 'sale'

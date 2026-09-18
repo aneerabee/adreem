@@ -5,6 +5,7 @@ import { createSupabaseAuthService } from './ledger/supabaseAuth.js'
 import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './ledger/attachmentValidation.js'
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/ledger/ledgerOperations.js'
 import { ConcurrentLedgerUpdateError } from './ledger/ledgerRepository.js'
+import { createMarketPriceService, MarketPriceError } from './investments/marketPrices.js'
 
 const DEFAULT_BODY_LIMIT = 1_000_000
 const ATTACHMENT_BODY_LIMIT = 15_000_000
@@ -605,6 +606,7 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
   }))
   const now = options.now || Date.now
   const rateLimit = createRateLimiter(now)
+  const marketPriceService = options.marketPriceService || createMarketPriceService(env, { now })
   const attachmentUsage = options.attachmentUsage || ((context) => ledgerAttachmentUsage(authService, env, context))
   const attachmentReferenceLoader = options.attachmentReference || attachmentReference
   const withAttachmentLock = createKeyedLock()
@@ -820,6 +822,19 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
       responseCookies = authenticated.cookies
       const { context } = authenticated
       const repository = repositoryFactory(context)
+
+      if (url.pathname === '/api/investments/prices') {
+        if (req.method !== 'POST') throw new V3ApiError('Method not allowed.', 405)
+        if (!rateLimit(`market-price:${context.profile.id}`, 12)) throw new V3ApiError('Too many requests. Try again later.', 429)
+        try {
+          return reply(200, await marketPriceService.refresh(await readJson(req)))
+        } catch (error) {
+          if (!(error instanceof MarketPriceError)) throw error
+          const mapped = new V3ApiError(error.message, error.statusCode)
+          mapped.code = error.code
+          throw mapped
+        }
+      }
 
       if (url.pathname === '/api/profile') {
         if (req.method === 'GET') return reply(200, { user: context.publicUser })

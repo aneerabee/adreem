@@ -34,6 +34,9 @@ const LEDGER_RECORD_COLLECTIONS = [
   'attachments',
   'recurringRules',
   'reconciliations',
+  'investmentPlatforms',
+  'investmentHoldings',
+  'investmentTrades',
   'auditEvents',
 ]
 const LEGACY_LEDGER_STORAGE_PREFIXES = [
@@ -255,6 +258,14 @@ export async function adreemApiJson(path, options = {}, allowRefresh = true) {
     }
     throw error
   }
+}
+
+export async function refreshAdreemInvestmentPrices(items = []) {
+  return adreemApiJson('/api/investments/prices', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ items }),
+  })
 }
 
 const apiJson = adreemApiJson

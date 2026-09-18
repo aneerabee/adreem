@@ -15,6 +15,9 @@ const RECORD_COLLECTIONS = [
   'attachments',
   'recurringRules',
   'reconciliations',
+  'investmentPlatforms',
+  'investmentHoldings',
+  'investmentTrades',
   'auditEvents',
 ]
 
@@ -313,7 +316,7 @@ export function createLedgerMigrationBatches(sourceState = {}, options = {}) {
   const state = validation.state
   const batchSize = options.batchSize || 250
   const batches = []
-  for (const collection of ['accounts', 'dimensions', 'movements', 'attachments', 'recurringRules', 'reconciliations', 'auditEvents']) {
+  for (const collection of ['accounts', 'dimensions', 'movements', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'auditEvents']) {
     for (const records of chunks(state[collection], batchSize)) {
       batches.push({ collection, delta: { [collection]: records } })
     }

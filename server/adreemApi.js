@@ -20,6 +20,7 @@ import {
 } from './auth/userRegistry.js'
 import { createAdreemV3ApiHandler } from './adreemV3Api.js'
 import { supabaseAuthEnabled } from './ledger/supabaseAuth.js'
+import { createMarketPriceService, MarketPriceError } from './investments/marketPrices.js'
 
 const DEFAULT_PORT = 8787
 const DEFAULT_JSON_BODY_LIMIT = 5_000_000
@@ -30,6 +31,7 @@ const RATE_LIMITS = {
   ledgerRead: { limit: 240, windowMs: 60 * 1000 },
   ledgerWrite: { limit: 80, windowMs: 60 * 1000 },
   attachment: { limit: 30, windowMs: 60 * 1000 },
+  marketPrice: { limit: 12, windowMs: 60 * 1000 },
 }
 const MOVEMENT_AUDIT_FIELDS = [
   'id',
@@ -39,6 +41,7 @@ const MOVEMENT_AUDIT_FIELDS = [
   'currency',
   'sourceAccountId',
   'destinationAccountId',
+  'investmentPlatformId',
   'rate',
   'dimensionId',
   'expenseCategoryId',
@@ -366,6 +369,7 @@ export function createAdreemApiHandler(env = process.env) {
   const repositories = new Map()
   const allowedOrigin = env.ADREEM_WEB_ALLOWED_ORIGIN || '*'
   const rateLimiter = createMemoryRateLimiter()
+  const marketPriceService = createMarketPriceService(env)
   let testRepository = null
   let testRepositoryFactory = null
   let readinessRepository = null
@@ -602,6 +606,23 @@ export function createAdreemApiHandler(env = process.env) {
           return sendJson(res, error.statusCode, { error: error.message }, allowedOrigin)
         }
         return sendJson(res, 500, { error: 'ADREEM admin API failed.' }, allowedOrigin)
+      }
+    }
+    if (url.pathname === '/api/investments/prices') {
+      const priceLimit = rateLimiter.check(rateKey(req, 'market-price'), RATE_LIMITS.marketPrice)
+      if (!priceLimit.ok) return rejectRateLimited(res, allowedOrigin, priceLimit)
+      const token = tokenFromAuthHeader(req.headers.authorization)
+      const ledgerId = ledgerIdForToken(token)
+      if (!ledgerId) return sendJson(res, 401, { error: 'Invalid ledger token.' }, allowedOrigin)
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
+      try {
+        const result = await marketPriceService.refresh(await readJsonBody(req))
+        audit(env, { action: 'investment.prices.refreshed', ledgerId, count: result.prices.length })
+        return sendJson(res, 200, result, allowedOrigin)
+      } catch (error) {
+        const status = error instanceof MarketPriceError ? error.statusCode : 500
+        audit(env, { action: 'investment.prices.failed', ledgerId, code: error?.code || '', status })
+        return sendJson(res, status, { error: status >= 500 && !(error instanceof MarketPriceError) ? 'Market price request failed.' : error.message, code: error?.code || 'market-price-failed' }, allowedOrigin)
       }
     }
     if (url.pathname === '/api/attachments') {

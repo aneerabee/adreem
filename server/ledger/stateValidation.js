@@ -19,9 +19,10 @@ import {
   normalizeRecurringDateKey,
   validateAttachmentDraft,
 } from '../../src/ledger/ledgerOperations.js'
+import { INVESTMENT_RECORD_STATUSES, validateInvestmentState } from '../../src/ledger/investmentCore.js'
 
 const OWN_VALUE_KINDS = new Set([VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET])
-const RECORD_LISTS = ['accounts', 'movements', 'dimensions', 'attachments', 'recurringRules', 'reconciliations', 'auditEvents']
+const RECORD_LISTS = ['accounts', 'movements', 'dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'auditEvents']
 const ACCOUNT_CLASSIFICATION_FIELDS = ['type', 'valueKind', 'currencyKind']
 const ACTIVE_STATUS = 'active'
 const INACTIVE_STATUS = 'inactive'
@@ -56,6 +57,7 @@ const SOURCE_REQUIRED_RULE_TYPES = new Set([
   MOVEMENT_TYPES.TRUCK_EXPENSE,
   MOVEMENT_TYPES.USD_SALE,
   MOVEMENT_TYPES.USD_PURCHASE,
+  MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
 ])
 const DESTINATION_REQUIRED_RULE_TYPES = new Set([
   MOVEMENT_TYPES.TRANSFER,
@@ -66,6 +68,7 @@ const DESTINATION_REQUIRED_RULE_TYPES = new Set([
   MOVEMENT_TYPES.USD_PURCHASE,
   MOVEMENT_TYPES.EXTERNAL_INCOME,
   MOVEMENT_TYPES.CORRECTION,
+  MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL,
 ])
 const DIMENSION_MOVEMENT_TYPES = new Set([
   MOVEMENT_TYPES.EXPENSE,
@@ -83,6 +86,7 @@ const MOVEMENT_VALUE_FIELDS = [
   'destinationAccountId',
   'dimensionId',
   'expenseCategoryId',
+  'investmentPlatformId',
   'note',
 ]
 
@@ -250,6 +254,7 @@ function rawPostingEntries(movement) {
       return [{ accountId: movement.destinationAccountId, currency, delta: amount }]
     case MOVEMENT_TYPES.EXPENSE:
     case MOVEMENT_TYPES.TRUCK_EXPENSE:
+    case MOVEMENT_TYPES.INVESTMENT_DEPOSIT:
       return [{ accountId: movement.sourceAccountId, currency, delta: -Math.abs(amount) }]
     case MOVEMENT_TYPES.TRANSFER:
     case MOVEMENT_TYPES.CASH_DEPOSIT:
@@ -277,6 +282,7 @@ function rawPostingEntries(movement) {
         },
       ]
     case MOVEMENT_TYPES.CORRECTION:
+    case MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL:
       return [{ accountId: movement.destinationAccountId, currency, delta: amount }]
     default:
       return []
@@ -541,6 +547,9 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   const reconciliations = Array.isArray(nextState.reconciliations) ? nextState.reconciliations : []
   const recurringRules = Array.isArray(nextState.recurringRules) ? nextState.recurringRules : []
   const auditEvents = Array.isArray(nextState.auditEvents) ? nextState.auditEvents : []
+  const investmentPlatforms = Array.isArray(nextState.investmentPlatforms) ? nextState.investmentPlatforms : []
+  const investmentHoldings = Array.isArray(nextState.investmentHoldings) ? nextState.investmentHoldings : []
+  const investmentTrades = Array.isArray(nextState.investmentTrades) ? nextState.investmentTrades : []
   const previousAccounts = recordsById(currentState.accounts)
   const previousMovements = recordsById(currentState.movements)
   const previousDimensions = recordsById(currentState.dimensions)
@@ -799,7 +808,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
       movement,
       accounts,
       movements.filter((item) => item.id !== movement.id),
-      { originalMovement: previousMovement },
+      { originalMovement: previousMovement, investmentPlatforms },
     )
     validation.errors.forEach((error) => errors.push({
       code: 'invalid-posted-movement',
@@ -807,6 +816,38 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
       field: error.field,
       message: error.message,
     }))
+  }
+
+  const investmentValidation = validateInvestmentState({
+    platforms: investmentPlatforms,
+    holdings: investmentHoldings,
+    trades: investmentTrades,
+    movements,
+  })
+  investmentValidation.errors.forEach((error) => errors.push({
+    code: 'invalid-investment-state',
+    recordType: error.field,
+    id: error.id,
+    field: error.field,
+    message: error.message,
+  }))
+  for (const previousPlatform of currentState.investmentPlatforms || []) {
+    if (investmentPlatforms.some((platform) => platform.id === previousPlatform.id)) continue
+    errors.push({ code: 'investment-platform-deletion-not-allowed', recordType: 'investmentPlatforms', id: previousPlatform.id, message: 'أوقف المنصة بدل حذفها من مسار الحفظ.' })
+  }
+  for (const previousHolding of currentState.investmentHoldings || []) {
+    if (investmentHoldings.some((holding) => holding.id === previousHolding.id)) continue
+    errors.push({ code: 'investment-holding-deletion-not-allowed', recordType: 'investmentHoldings', id: previousHolding.id, message: 'أوقف الاستثمار بدل حذفه من مسار الحفظ.' })
+  }
+  for (const previousTrade of currentState.investmentTrades || []) {
+    if (investmentTrades.some((trade) => trade.id === previousTrade.id)) continue
+    errors.push({ code: 'investment-trade-deletion-not-allowed', recordType: 'investmentTrades', id: previousTrade.id, message: 'ألغ عملية الاستثمار بدل حذفها من مسار الحفظ.' })
+  }
+  for (const trade of investmentTrades) {
+    const previousTrade = (currentState.investmentTrades || []).find((item) => item.id === trade.id)
+    if (previousTrade?.status === INVESTMENT_RECORD_STATUSES.VOIDED && changedRecord(trade, recordsById(currentState.investmentTrades))) {
+      errors.push({ code: 'voided-investment-trade-immutable', recordType: 'investmentTrades', id: trade.id, message: 'لا يمكن تعديل عملية استثمار ملغاة.' })
+    }
   }
 
   const balances = summarizeBalances(accounts, movements)

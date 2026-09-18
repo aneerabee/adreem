@@ -33,6 +33,8 @@ export const MOVEMENT_TYPES = {
   EXTERNAL_INCOME: 'external_income',
   CORRECTION: 'correction',
   RECORD_ONLY: 'record_only',
+  INVESTMENT_DEPOSIT: 'investment_deposit',
+  INVESTMENT_WITHDRAWAL: 'investment_withdrawal',
 }
 
 export const MOVEMENT_STATUSES = {
@@ -48,6 +50,7 @@ const TWO_SIDED_TYPES = new Set([
   MOVEMENT_TYPES.CASH_WITHDRAWAL,
   MOVEMENT_TYPES.USD_SALE,
   MOVEMENT_TYPES.USD_PURCHASE,
+  MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
 ])
 
 const SOURCE_REQUIRED_TYPES = new Set([
@@ -70,6 +73,7 @@ const DESTINATION_REQUIRED_TYPES = new Set([
   MOVEMENT_TYPES.USD_PURCHASE,
   MOVEMENT_TYPES.EXTERNAL_INCOME,
   MOVEMENT_TYPES.CORRECTION,
+  MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL,
 ])
 
 const optimisticPreviousMovements = new WeakMap()
@@ -231,6 +235,9 @@ export function validateMovement(movement, accounts = [], movements = [], option
   const currency = movement?.currency
   const sourceId = movement?.sourceAccountId || null
   const destinationId = movement?.destinationAccountId || null
+  const investmentPlatformId = String(movement?.investmentPlatformId || '').trim()
+  const sourceAccount = sourceId ? accountMap.get(sourceId) : null
+  const destinationAccount = destinationId ? accountMap.get(destinationId) : null
 
   if (!type || !Object.values(MOVEMENT_TYPES).includes(type)) {
     errors.push({ field: 'type', message: 'نوع الحركة مطلوب وغير معروف.' })
@@ -253,6 +260,45 @@ export function validateMovement(movement, accounts = [], movements = [], option
   if (type === MOVEMENT_TYPES.USD_PURCHASE && currency && currency !== CURRENCIES.DINAR) {
     errors.push({ field: 'currency', message: 'شراء USD يبدأ بمبلغ LYD.' })
   }
+  if ([MOVEMENT_TYPES.INVESTMENT_DEPOSIT, MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL].includes(type)) {
+    if (currency && currency !== CURRENCIES.USD) {
+      errors.push({ field: 'currency', message: 'حركات محفظتي تستخدم USD فقط.' })
+    }
+    const platforms = Array.isArray(options.investmentPlatforms) ? options.investmentPlatforms : []
+    const platform = platforms.find((item) => item?.id === investmentPlatformId && item?.status !== ACCOUNT_STATUSES.INACTIVE)
+    if (!investmentPlatformId || !platform) {
+      errors.push({ field: 'investmentPlatformId', message: 'اختر منصة استثمار نشطة.' })
+    }
+    if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && sourceId && sourceAccount && ![VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(sourceAccount.valueKind)) {
+      errors.push({ field: 'sourceAccountId', message: 'إيداع الاستثمار يخرج من كاش أو مصرف تملكه.' })
+    }
+    if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && sourceAccount && !accountSupportsTransferCurrency(sourceAccount, CURRENCIES.USD)) {
+      errors.push({ field: 'sourceAccountId', message: 'حساب المصدر لا يدعم USD.' })
+    }
+    if (type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL && destinationId && destinationAccount && ![VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(destinationAccount.valueKind)) {
+      errors.push({ field: 'destinationAccountId', message: 'سحب الاستثمار يدخل إلى كاش أو مصرف تملكه.' })
+    }
+    if (type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL && destinationAccount && !accountSupportsTransferCurrency(destinationAccount, CURRENCIES.USD)) {
+      errors.push({ field: 'destinationAccountId', message: 'حساب الوجهة لا يدعم USD.' })
+    }
+    const currentAvailableCashMicros = options.investmentAvailableCashUsdMicros?.get?.(investmentPlatformId)
+    const originalWithdrawalMicros = options.originalMovement?.type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL &&
+      options.originalMovement?.status === MOVEMENT_STATUSES.POSTED &&
+      options.originalMovement?.investmentPlatformId === investmentPlatformId
+      ? Math.abs(Number(options.originalMovement.amount || 0)) * 1_000_000
+      : 0
+    const availableCashMicros = Number.isSafeInteger(currentAvailableCashMicros)
+      ? currentAvailableCashMicros + originalWithdrawalMicros
+      : currentAvailableCashMicros
+    if (
+      type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL &&
+      Number.isSafeInteger(availableCashMicros) &&
+      Number.isFinite(amount) &&
+      Math.abs(amount) * 1_000_000 > availableCashMicros
+    ) {
+      errors.push({ field: 'amount', message: 'المبلغ أكبر من النقد الحر في منصة الاستثمار.' })
+    }
+  }
   if (SOURCE_REQUIRED_TYPES.has(type) && !sourceId) {
     errors.push({ field: 'sourceAccountId', message: 'حساب المصدر مطلوب لهذه الحركة.' })
   }
@@ -272,8 +318,6 @@ export function validateMovement(movement, accounts = [], movements = [], option
       errors.push({ field: 'destinationAccountId', message: transferCompatibilityMessage(sourceAccount, destinationAccount, currency) })
     }
   }
-  const sourceAccount = sourceId ? accountMap.get(sourceId) : null
-  const destinationAccount = destinationId ? accountMap.get(destinationId) : null
   if (type === MOVEMENT_TYPES.OPENING_BALANCE) {
     if (sourceId) errors.push({ field: 'sourceAccountId', message: 'الرصيد الافتتاحي لا يحتاج حساب مصدر.' })
     if (destinationAccount && !accountSupportsTransferCurrency(destinationAccount, currency)) {
@@ -420,6 +464,7 @@ export function buildPostingEntries(movement) {
       return [{ accountId: movement.destinationAccountId, currency, delta: amount }]
     case MOVEMENT_TYPES.EXPENSE:
     case MOVEMENT_TYPES.TRUCK_EXPENSE:
+    case MOVEMENT_TYPES.INVESTMENT_DEPOSIT:
       return [{ accountId: movement.sourceAccountId, currency, delta: -Math.abs(amount) }]
     case MOVEMENT_TYPES.TRANSFER:
     case MOVEMENT_TYPES.CASH_DEPOSIT:
@@ -447,6 +492,7 @@ export function buildPostingEntries(movement) {
         },
       ]
     case MOVEMENT_TYPES.CORRECTION:
+    case MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL:
       return [{ accountId: movement.destinationAccountId, currency, delta: amount }]
     case MOVEMENT_TYPES.RECORD_ONLY:
       return []
@@ -502,8 +548,8 @@ export function getAccountBalance(accountId, accounts = [], movements = []) {
   return summarizeBalances(accounts, movements).find((bucket) => bucket.account.id === accountId) || null
 }
 
-export function previewMovement(movement, accounts = [], movements = []) {
-  const validation = validateMovement(movement, accounts, movements)
+export function previewMovement(movement, accounts = [], movements = [], options = {}) {
+  const validation = validateMovement(movement, accounts, movements, options)
   const before = summarizeBalances(accounts, movements)
   const beforeById = new Map(before.map((bucket) => [bucket.account.id, bucket]))
   const postingEntries = validation.ok ? buildPostingEntries({ ...movement, status: MOVEMENT_STATUSES.POSTED }) : []

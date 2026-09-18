@@ -76,6 +76,9 @@ ADREEM_API_PUBLIC_ORIGIN=https://adreem.example.com
 SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=server-only-service-role-key
+# أسعار محفظتي؛ يبقى على الخادم فقط
+TWELVE_DATA_API_KEY=server-only-market-key
+TWELVE_DATA_API_URL=https://api.twelvedata.com
 # اختياري، الافتراضي 30 يومًا
 ADREEM_AUTH_REFRESH_MAX_AGE_SECONDS=2592000
 ```
@@ -83,6 +86,8 @@ ADREEM_AUTH_REFRESH_MAX_AGE_SECONDS=2592000
 اكتب الأصل بلا شرطة مائلة أخيرة وبلا مسار. يجب أن ينهي الوكيل HTTPS وأن يمرر `Set-Cookie` كما هو. لا تضف `Domain` إلى ملفات الارتباط ولا تغيّر `Path=/`.
 
 لا تضف `VITE_SUPABASE_URL` أو `VITE_SUPABASE_ANON_KEY` إلى بناء الإنتاج.
+
+مفتاح أسعار «محفظتي» يبقى على الخادم فقط. إذا لم تضبط `TWELVE_DATA_API_KEY` تبقى الأسعار اليدوية والحسابات محفوظة وتظهر رسالة واضحة عند طلب التحديث، ولا تُمسح آخر أسعار مؤكدة.
 
 `VITE_ADREEM_API_URL` في نشر الأصل الموحد هو الأصل نفسه بلا `/api`، لأن الواجهة تضيف مسارات `/api/...` إلى هذه القيمة. لا تضع فيه رمزًا أو مفتاحًا.
 

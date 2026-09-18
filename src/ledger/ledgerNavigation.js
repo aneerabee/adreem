@@ -1,4 +1,4 @@
-const SECTION_KEYS = new Set(['entry', 'accounts', 'history', 'review'])
+const SECTION_KEYS = new Set(['entry', 'accounts', 'investments', 'history', 'review'])
 const ENTRY_MODE_KEYS = new Set(['movement', 'account'])
 const ACCOUNT_GROUP_KEYS = new Set(['money', 'people', 'assets', 'expenses', 'separate', 'review'])
 const BALANCE_FOCUS_KEYS = new Set(['cash', 'bank', 'receivable', 'payable'])

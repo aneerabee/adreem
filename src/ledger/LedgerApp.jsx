@@ -3,12 +3,13 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Pin, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Star, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, ChartCandlestick, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Pin, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Star, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
 import './adreemFinance.css'
 import AdreemChrome from './AdreemChrome'
+import InvestmentsPanel from './InvestmentsPanel'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailDisplayName, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyGroupKey, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
@@ -18,7 +19,7 @@ import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, ac
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
 import { formatZonedDate, formatZonedDateTime, formatZonedTime, isZonedToday, isZonedYesterday, zonedDayKey, zonedDayRange } from './dateRange'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, createOpeningMovements, markOptimisticMovementChange, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, validateMovementBalanceTransition, voidMovement } from './ledgerCore'
-import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUnusedAccount, deleteAdreemUploadedAttachment, getLedgerPersistenceMode, loadAdreemMovementPage, loadPersistedLedgerState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, resolveAdreemAttachmentUrl, savePersistedLedgerState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './ledgerPersistence'
+import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUnusedAccount, deleteAdreemUploadedAttachment, getLedgerPersistenceMode, loadAdreemMovementPage, loadPersistedLedgerState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, refreshAdreemInvestmentPrices, resolveAdreemAttachmentUrl, savePersistedLedgerState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './ledgerPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeLedgerAccounts, sameRecordVersions, sameSerializableContent } from './ledgerState'
 import { buildNetPosition, convertNetPosition, filterNetContributions, isAccountIncludedInNet } from './ledgerScope'
@@ -29,6 +30,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
+import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -118,6 +120,7 @@ const ACCOUNT_WIZARD_STEPS = {
 const sectionTitles = {
   entry: 'إضافة',
   accounts: 'الأرصدة',
+  investments: 'محفظتي',
   history: 'السجل',
   review: 'المراجعة',
 }
@@ -142,6 +145,12 @@ const movementOptionGroups = [
     hint: 'بيع أو شراء',
     types: [MOVEMENT_TYPES.USD_SALE, MOVEMENT_TYPES.USD_PURCHASE],
   },
+  {
+    key: 'investment',
+    title: 'محفظتي',
+    hint: 'إيداع أو سحب USD',
+    types: [MOVEMENT_TYPES.INVESTMENT_DEPOSIT, MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL],
+  },
 ]
 
 function MovementTypeIcon({ type }) {
@@ -152,6 +161,7 @@ function MovementTypeIcon({ type }) {
   if (type === MOVEMENT_TYPES.CASH_DEPOSIT) return <Landmark {...props} />
   if (type === MOVEMENT_TYPES.CASH_WITHDRAWAL) return <ArrowUpFromLine {...props} />
   if (type === MOVEMENT_TYPES.USD_SALE || type === MOVEMENT_TYPES.USD_PURCHASE) return <CircleDollarSign {...props} />
+  if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT || type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL) return <ChartCandlestick {...props} />
   if (type === MOVEMENT_TYPES.RECORD_ONLY) return <NotebookPen {...props} />
   return <Banknote {...props} />
 }
@@ -257,6 +267,9 @@ function ledgerExtrasFromState(state) {
     attachments: normalized.attachments,
     recurringRules: normalized.recurringRules,
     reconciliations: normalized.reconciliations,
+    investmentPlatforms: normalized.investmentPlatforms,
+    investmentHoldings: normalized.investmentHoldings,
+    investmentTrades: normalized.investmentTrades,
     ignoredExternalAccounts: normalized.ignoredExternalAccounts,
     auditEvents: normalized.auditEvents,
   }
@@ -405,6 +418,7 @@ function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
     currency: config.currency || CURRENCIES.DINAR,
     sourceAccountId: '',
     destinationAccountId: '',
+    investmentPlatformId: '',
     rate: '',
     note: '',
     dimensionId: '',
@@ -589,6 +603,7 @@ const MOVEMENT_EDITABLE_FIELDS = Object.freeze([
   'rate',
   'sourceAccountId',
   'destinationAccountId',
+  'investmentPlatformId',
   'note',
   'dimensionId',
   'expenseCategoryId',
@@ -614,6 +629,7 @@ export function movementEditChanges(originalMovement = {}, candidateMovement = {
     { field: 'rate', label: 'سعر الصرف', format: (value) => value ? formatRate(value) : 'بدون' },
     { field: 'sourceAccountId', label: 'من', format: (value) => labels.accounts?.get(value) || 'بدون' },
     { field: 'destinationAccountId', label: 'إلى', format: (value) => labels.accounts?.get(value) || 'بدون' },
+    { field: 'investmentPlatformId', label: 'المنصة', format: (value) => labels.platforms?.get(value) || 'بدون' },
     { field: 'note', label: 'الملاحظة', format: (value) => String(value || '').trim() || 'بدون' },
     { field: 'dimensionId', label: 'المشروع / الأصل', format: (value) => labels.dimensions?.get(value) || 'بدون' },
     { field: 'expenseCategoryId', label: 'نوع المصروف', format: (value) => labels.expenseCategories?.get(value) || 'بدون' },
@@ -683,7 +699,7 @@ function openAdminUsersPage() {
 }
 
 function movementVisibleSteps(config, needsSource) {
-  return [MOVEMENT_ENTRY_STEPS.TYPE, MOVEMENT_ENTRY_STEPS.AMOUNT, config.currencyLocked ? null : MOVEMENT_ENTRY_STEPS.CURRENCY, config.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : null, needsSource ? MOVEMENT_ENTRY_STEPS.SOURCE : null, config.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : null, MOVEMENT_ENTRY_STEPS.NOTE, MOVEMENT_ENTRY_STEPS.REVIEW].filter(Boolean)
+  return [MOVEMENT_ENTRY_STEPS.TYPE, MOVEMENT_ENTRY_STEPS.AMOUNT, config.currencyLocked ? null : MOVEMENT_ENTRY_STEPS.CURRENCY, config.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : null, config.needsInvestmentPlatform ? MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM : null, needsSource ? MOVEMENT_ENTRY_STEPS.SOURCE : null, config.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : null, MOVEMENT_ENTRY_STEPS.NOTE, MOVEMENT_ENTRY_STEPS.REVIEW].filter(Boolean)
 }
 
 function movementStepCopy(step, config = {}) {
@@ -695,6 +711,7 @@ function movementStepCopy(step, config = {}) {
       title: 'سعر الصرف',
       summary: '',
     }
+  if (step === MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM) return { title: config.platformQuestion || 'اختر المنصة', summary: '' }
   if (step === MOVEMENT_ENTRY_STEPS.SOURCE)
     return {
       title: config.sourceQuestion || config.sourceLabel || 'من',
@@ -726,10 +743,10 @@ export function movementHistoryForPreview(movements = [], editingMovementId = ''
   return movements.filter((movement) => movement.id !== editingMovementId)
 }
 
-export function previewMovementEdit(candidateMovement, originalMovement, accounts = [], movements = []) {
-  if (!originalMovement) return previewMovement(candidateMovement, accounts, movements)
+export function previewMovementEdit(candidateMovement, originalMovement, accounts = [], movements = [], options = {}) {
+  if (!originalMovement) return previewMovement(candidateMovement, accounts, movements, options)
   const movementsWithoutOriginal = movementHistoryForPreview(movements, originalMovement.id)
-  const validation = validateMovement(candidateMovement, accounts, movementsWithoutOriginal, { originalMovement })
+  const validation = validateMovement(candidateMovement, accounts, movementsWithoutOriginal, { ...options, originalMovement })
   if (!validation.ok) return { validation, effects: [] }
 
   const beforeById = new Map(summarizeBalances(accounts, movements).map((bucket) => [bucket.account.id, bucket]))
@@ -2422,9 +2439,12 @@ function AttachmentLink({ attachment, onDelete }) {
   )
 }
 
-export function MovementMiniRow({ movement, accountById, attachments = [], dimensions = [], onEdit, onCancel, onDeleteAttachment }) {
+export function MovementMiniRow({ movement, accountById, investmentPlatformById = new Map(), attachments = [], dimensions = [], onEdit, onCancel, onDeleteAttachment }) {
   const source = accountById.get(movement.sourceAccountId)
   const destination = accountById.get(movement.destinationAccountId)
+  const investmentPlatform = investmentPlatformById.get(movement.investmentPlatformId)
+  const routeSource = source || (movement.type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL ? investmentPlatform : null)
+  const routeDestination = destination || (movement.type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT ? investmentPlatform : null)
   const routeAccountIds = new Set([movement.sourceAccountId, movement.destinationAccountId].filter(Boolean))
   const effects = movement.status === MOVEMENT_STATUSES.POSTED
     ? buildPostingEntries(movement).filter((effect) => !routeAccountIds.has(effect.accountId))
@@ -2445,23 +2465,23 @@ export function MovementMiniRow({ movement, accountById, attachments = [], dimen
           <small>{movementTime(movement.createdAt)} · {money(movement.amount, movement.currency)} · {movementStatusLabel(movement.status)}</small>
         </span>
       </div>
-      <div className={`ml3-today-route ${source && destination ? 'is-paired' : 'is-single'}`}>
-        {source ? (
+      <div className={`ml3-today-route ${routeSource && routeDestination ? 'is-paired' : 'is-single'}`}>
+        {routeSource ? (
           <span className="ml3-today-endpoint is-source">
             <small className="ml3-today-endpoint-label">من</small>
             <span className="ml3-today-endpoint-copy">
-              <b className="adreem-account-name">{protectedAccountPrimaryName(source)}</b>
-              <em>{conciseAccountChoiceContext(source)}</em>
+              <b className="adreem-account-name">{source ? protectedAccountPrimaryName(source) : preserveUiData(investmentPlatform.name)}</b>
+              <em>{source ? conciseAccountChoiceContext(source) : 'محفظتي · USD'}</em>
             </span>
           </span>
         ) : null}
-        {source && destination ? <span className="ml3-today-arrow" aria-hidden="true"><ChevronDown size={14} /></span> : null}
-        {destination ? (
+        {routeSource && routeDestination ? <span className="ml3-today-arrow" aria-hidden="true"><ChevronDown size={14} /></span> : null}
+        {routeDestination ? (
           <span className="ml3-today-endpoint is-destination">
             <small className="ml3-today-endpoint-label">إلى</small>
             <span className="ml3-today-endpoint-copy">
-              <b className="adreem-account-name">{protectedAccountPrimaryName(destination)}</b>
-              <em>{conciseAccountChoiceContext(destination)}</em>
+              <b className="adreem-account-name">{destination ? protectedAccountPrimaryName(destination) : preserveUiData(investmentPlatform.name)}</b>
+              <em>{destination ? conciseAccountChoiceContext(destination) : 'محفظتي · USD'}</em>
             </span>
           </span>
         ) : null}
@@ -2502,9 +2522,12 @@ export function MovementMiniRow({ movement, accountById, attachments = [], dimen
   )
 }
 
-export function HistoryMovementRow({ movement, accountById, attachments = [], dimensions = [], onEdit, onCancel, onDeleteAttachment }) {
+export function HistoryMovementRow({ movement, accountById, investmentPlatformById = new Map(), attachments = [], dimensions = [], onEdit, onCancel, onDeleteAttachment }) {
   const source = accountById.get(movement.sourceAccountId)
   const destination = accountById.get(movement.destinationAccountId)
+  const investmentPlatform = investmentPlatformById.get(movement.investmentPlatformId)
+  const routeSource = source || (movement.type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL ? investmentPlatform : null)
+  const routeDestination = destination || (movement.type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT ? investmentPlatform : null)
   const effects = movement.status === MOVEMENT_STATUSES.POSTED ? buildPostingEntries(movement) : []
   const conversionEffect = movement.rate
     ? effects.find((effect) => effect.currency !== movement.currency)
@@ -2527,9 +2550,9 @@ export function HistoryMovementRow({ movement, accountById, attachments = [], di
         <span className="ml3-movement-copy">
           <strong>{movementLabels[movement.type] || movement.type}</strong>
           <small className="ml3-history-route">
-            {source ? <b className="adreem-account-name">{protectedAccountLabel(source)}</b> : null}
-            {source && destination ? <span className="ml3-history-arrow" aria-hidden="true">←</span> : null}
-            {destination ? <b className="adreem-account-name">{protectedAccountLabel(destination)}</b> : null}
+            {routeSource ? <b className="adreem-account-name">{source ? protectedAccountLabel(source) : preserveUiData(investmentPlatform.name)}</b> : null}
+            {routeSource && routeDestination ? <span className="ml3-history-arrow" aria-hidden="true">←</span> : null}
+            {routeDestination ? <b className="adreem-account-name">{destination ? protectedAccountLabel(destination) : preserveUiData(investmentPlatform.name)}</b> : null}
           </small>
         </span>
       </div>
@@ -2653,7 +2676,7 @@ export function ExpenseCategoryDialog({ name = '', error = '', isSaving = false,
   )
 }
 
-export function MovementActionDialog({ action, accountById, isSaving = false, onClose, onConfirm }) {
+export function MovementActionDialog({ action, accountById, investmentPlatformById = new Map(), isSaving = false, onClose, onConfirm }) {
   const panelRef = useRef(null)
   const closeButtonRef = useRef(null)
   useLedgerDialogFocus(panelRef, closeButtonRef, onClose, isSaving)
@@ -2662,6 +2685,9 @@ export function MovementActionDialog({ action, accountById, isSaving = false, on
   const movement = action.movement
   const source = accountById.get(movement.sourceAccountId)
   const destination = accountById.get(movement.destinationAccountId)
+  const investmentPlatform = investmentPlatformById.get(movement.investmentPlatformId)
+  const routeSource = source || (movement.type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL ? investmentPlatform : null)
+  const routeDestination = destination || (movement.type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT ? investmentPlatform : null)
   const isRestore = action.kind === 'restore'
   const postingEntries = movement.status === MOVEMENT_STATUSES.POSTED ? buildPostingEntries(movement) : []
 
@@ -2681,7 +2707,7 @@ export function MovementActionDialog({ action, accountById, isSaving = false, on
         <div className="adreem-movement-action-summary">
           <span><strong>{movementLabels[movement.type] || 'حركة'}</strong><small>{movementDateTime(movement.createdAt || movement.updatedAt)}</small></span>
           <b>{money(movement.amount, movement.currency)}</b>
-          {(source || destination) ? <p className="adreem-account-name">{source ? protectedAccountLabel(source) : 'بدون مصدر'} {source && destination ? '←' : ''} {destination ? protectedAccountLabel(destination) : ''}</p> : null}
+          {(routeSource || routeDestination) ? <p className="adreem-account-name">{routeSource ? source ? protectedAccountLabel(source) : preserveUiData(investmentPlatform.name) : 'بدون مصدر'} {routeSource && routeDestination ? '←' : ''} {routeDestination ? destination ? protectedAccountLabel(destination) : preserveUiData(investmentPlatform.name) : ''}</p> : null}
           {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
         </div>
 
@@ -2709,7 +2735,7 @@ export function MovementActionDialog({ action, accountById, isSaving = false, on
   )
 }
 
-export function MovementEditDialog({ movement, draft, config, preview, changes = [], stage = 'fields', balanceByAccountId, sourceAccounts = [], destinationAccounts = [], sourceReferenceAccounts = [], destinationReferenceAccounts = [], preferredSourceIds = [], preferredDestinationIds = [], dimensions = [], expenseCategories = [], isSaving = false, canSave = false, onDraftChange, onReview, onBack, onClose, onSave }) {
+export function MovementEditDialog({ movement, draft, config, preview, changes = [], stage = 'fields', balanceByAccountId, sourceAccounts = [], destinationAccounts = [], sourceReferenceAccounts = [], destinationReferenceAccounts = [], preferredSourceIds = [], preferredDestinationIds = [], dimensions = [], expenseCategories = [], investmentPlatforms = [], isSaving = false, canSave = false, onDraftChange, onReview, onBack, onClose, onSave }) {
   const panelRef = useRef(null)
   const closeButtonRef = useRef(null)
   useLedgerDialogFocus(panelRef, closeButtonRef, onClose, isSaving)
@@ -2741,6 +2767,15 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
               <NumericEntry compact label={config.amountLabel || 'المبلغ'} value={draft.amount} onChange={(value) => onDraftChange('amount', value)} />
               {config.needsRate ? <NumericEntry compact label={config.rateLabel || 'سعر الصرف'} value={draft.rate} onChange={(value) => onDraftChange('rate', value)} placeholder="7.5" allowDecimal /> : null}
             </div>
+            {config.needsInvestmentPlatform ? (
+              <label className="adreem-movement-edit-platform">
+                <span>المنصة</span>
+                <select value={draft.investmentPlatformId || ''} onChange={(event) => onDraftChange('investmentPlatformId', event.target.value)}>
+                  <option value="">اختر المنصة</option>
+                  {investmentPlatforms.map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}
+                </select>
+              </label>
+            ) : null}
             {movementNeedsSource(draft.type) ? (
               <div className="adreem-movement-edit-party">
                 <AccountSearchSelect label={config.sourceLabel || 'من'} value={draft.sourceAccountId || ''} accounts={sourceAccounts} referenceAccounts={sourceReferenceAccounts} onChange={(value) => onDraftChange('sourceAccountId', value || '')} preferredAccountIds={preferredSourceIds} balanceByAccountId={balanceByAccountId} balanceCurrency={sourceCurrency} />
@@ -3401,7 +3436,7 @@ export function ExternalAccountCard({ account, onCreate, onIgnore }) {
   )
 }
 
-function ReviewMovementCard({ movement, activeAccounts, referenceAccounts = activeAccounts, balanceByAccountId, onResolve, onEdit, onCancel }) {
+function ReviewMovementCard({ movement, activeAccounts, referenceAccounts = activeAccounts, balanceByAccountId, investmentPlatforms = [], onResolve, onEdit, onCancel }) {
   const errors = movement.validation?.errors || []
   const [reviewDraft, setReviewDraft] = useState({
     type: movement.type || MOVEMENT_TYPES.TRANSFER,
@@ -3409,6 +3444,7 @@ function ReviewMovementCard({ movement, activeAccounts, referenceAccounts = acti
     currency: movement.currency || CURRENCIES.DINAR,
     sourceAccountId: movement.sourceAccountId || '',
     destinationAccountId: movement.destinationAccountId || '',
+    investmentPlatformId: movement.investmentPlatformId || '',
     rate: movement.rate ? String(movement.rate) : '',
     note: movement.note || '',
   })
@@ -3429,6 +3465,7 @@ function ReviewMovementCard({ movement, activeAccounts, referenceAccounts = acti
         const config = movementConfigFor(value)
         next.currency = config.currency || next.currency
         next.destinationAccountId = config.needsDestination ? next.destinationAccountId : ''
+        next.investmentPlatformId = config.needsInvestmentPlatform ? next.investmentPlatformId : ''
         next.rate = config.needsRate ? next.rate : ''
       }
       return next
@@ -3480,6 +3517,15 @@ function ReviewMovementCard({ movement, activeAccounts, referenceAccounts = acti
           <div>
             <NumericEntry label={reviewConfig.rateLabel || 'سعر الصرف'} value={reviewDraft.rate} onChange={(value) => updateReviewDraft('rate', value)} placeholder="7.5" allowDecimal compact />
           </div>
+        ) : null}
+        {reviewConfig.needsInvestmentPlatform ? (
+          <label className="ml3-decision-wide">
+            المنصة
+            <select value={reviewDraft.investmentPlatformId} onChange={(event) => updateReviewDraft('investmentPlatformId', event.target.value)}>
+              <option value="">اختر المنصة</option>
+              {investmentPlatforms.map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}
+            </select>
+          </label>
         ) : null}
         {reviewNeedsSource ? (
           <div className="ml3-decision-wide">
@@ -3713,6 +3759,7 @@ export default function LedgerApp() {
   const [netTargetCurrency, setNetTargetCurrency] = useState(CURRENCIES.DINAR)
   const [netTryRate, setNetTryRate] = useState('')
   const [netEurRate, setNetEurRate] = useState('')
+  const [isRefreshingInvestmentPrices, setIsRefreshingInvestmentPrices] = useState(false)
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
   const [activeAccountDetail, setActiveAccountDetail] = useState('')
@@ -4046,6 +4093,17 @@ export default function LedgerApp() {
     )
   }, [balances])
   const balanceOverview = useMemo(() => buildBalanceOverview(balances), [balances])
+  const investmentSummary = useMemo(() => summarizeInvestmentPortfolio({
+    platforms: ledgerExtras.investmentPlatforms || [],
+    holdings: ledgerExtras.investmentHoldings || [],
+    trades: ledgerExtras.investmentTrades || [],
+    movements,
+  }), [ledgerExtras.investmentHoldings, ledgerExtras.investmentPlatforms, ledgerExtras.investmentTrades, movements])
+  const investmentAvailableCashUsdMicros = useMemo(() => new Map(
+    investmentSummary.platforms.map((row) => [row.platform.id, row.freeCashUsdMicros]),
+  ), [investmentSummary])
+  const activeInvestmentPlatforms = useMemo(() => (ledgerExtras.investmentPlatforms || []).filter((platform) => platform.status !== INVESTMENT_RECORD_STATUSES.INACTIVE), [ledgerExtras.investmentPlatforms])
+  const investmentPlatformById = useMemo(() => new Map((ledgerExtras.investmentPlatforms || []).map((platform) => [platform.id, platform])), [ledgerExtras.investmentPlatforms])
   const fullNetPosition = useMemo(() => buildNetPosition(balances), [balances])
   const netPosition = useMemo(() => buildNetPosition(balances, netExcludedAccountIds), [balances, netExcludedAccountIds])
 
@@ -4058,6 +4116,7 @@ export default function LedgerApp() {
     currency: movementConfig.currency || movementDraft.currency,
     sourceAccountId: movementSourceRequired ? movementDraft.sourceAccountId : null,
     destinationAccountId: movementConfig.needsDestination ? movementDraft.destinationAccountId : null,
+    investmentPlatformId: movementConfig.needsInvestmentPlatform ? movementDraft.investmentPlatformId : null,
     rate: movementDraft.rate === '' ? undefined : parseLocalizedDecimal(movementDraft.rate),
     dimensionId: movementUsesDimension ? movementDraft.dimensionId || '' : '',
     expenseCategoryId: movementDraft.type === MOVEMENT_TYPES.EXPENSE || movementDraft.type === MOVEMENT_TYPES.TRUCK_EXPENSE ? movementDraft.expenseCategoryId || '' : '',
@@ -4068,13 +4127,14 @@ export default function LedgerApp() {
       || editingMovementBaseline
     : null
   const preview = editingMovement
-    ? previewMovementEdit(normalizedDraft, editingMovement, accounts, movements)
-    : previewMovement(normalizedDraft, accounts, movements)
+    ? previewMovementEdit(normalizedDraft, editingMovement, accounts, movements, { investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros })
+    : previewMovement(normalizedDraft, accounts, movements, { investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros })
   const movementEditLabels = useMemo(() => ({
     accounts: new Map(accounts.map((account) => [account.id, protectedAccountLabel(account)])),
     dimensions: new Map(activeDimensions.map((dimension) => [dimension.id, preserveUiData(dimension.name)])),
     expenseCategories: new Map(activeExpenseCategories.map((category) => [category.id, preserveUiData(category.ownerName)])),
-  }), [accounts, activeDimensions, activeExpenseCategories])
+    platforms: new Map(activeInvestmentPlatforms.map((platform) => [platform.id, preserveUiData(platform.name)])),
+  }), [accounts, activeDimensions, activeExpenseCategories, activeInvestmentPlatforms])
   const editingMovementCandidate = editingMovement ? {
     ...editingMovement,
     ...normalizedDraft,
@@ -4111,8 +4171,8 @@ export default function LedgerApp() {
     normalizedRecurringFirstRunOn && normalizedRecurringFirstRunOn >= earliestRecurringFirstRunOn,
   )
   const reconciliationDiffCount = useMemo(() => findUnresolvedReconciliationDifferences(ledgerExtras.reconciliations, movements).length, [ledgerExtras.reconciliations, movements])
-  const hasMovementAccounts = (!movementSourceRequired || Boolean(movementDraft.sourceAccountId)) && (!movementConfig.needsDestination || Boolean(movementDraft.destinationAccountId)) && (!movementConfig.needsDestination || !selectedSourceAccount || !sameLogicalAccount(selectedSourceAccount, selectedDestinationAccount))
-  const canReviewMovement = canChooseMovementAccounts && hasMovementAccounts && movementStep >= MOVEMENT_ENTRY_STEPS.REVIEW
+  const hasMovementAccounts = (!movementSourceRequired || Boolean(movementDraft.sourceAccountId)) && (!movementConfig.needsDestination || Boolean(movementDraft.destinationAccountId)) && (!movementConfig.needsInvestmentPlatform || Boolean(movementDraft.investmentPlatformId)) && (!movementConfig.needsDestination || !selectedSourceAccount || !sameLogicalAccount(selectedSourceAccount, selectedDestinationAccount))
+  const canReviewMovement = canChooseMovementAccounts && hasMovementAccounts && movementStep === MOVEMENT_ENTRY_STEPS.REVIEW
   const selectedBucket = balances.find((bucket) => bucket.account.id === selectedAccountId) || null
   const draftSourceAccount = selectedSourceAccount
   const draftDestinationAccount = selectedDestinationAccount
@@ -4792,6 +4852,7 @@ export default function LedgerApp() {
         currency: config.currency || current.currency,
         sourceAccountId: '',
         destinationAccountId: '',
+        investmentPlatformId: '',
         rate: config.needsRate ? current.rate : '',
         dimensionId: movementSupportsDimension(type) ? current.dimensionId : '',
         expenseCategoryId: type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE ? current.expenseCategoryId : '',
@@ -4800,11 +4861,12 @@ export default function LedgerApp() {
   }
 
   function nextMovementStep(step = movementStep) {
-    const firstAccountStep = movementSourceRequired ? MOVEMENT_ENTRY_STEPS.SOURCE : movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : MOVEMENT_ENTRY_STEPS.NOTE
+    const firstAccountStep = movementConfig.needsInvestmentPlatform ? MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM : movementSourceRequired ? MOVEMENT_ENTRY_STEPS.SOURCE : movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : MOVEMENT_ENTRY_STEPS.NOTE
     if (step === MOVEMENT_ENTRY_STEPS.TYPE) return MOVEMENT_ENTRY_STEPS.AMOUNT
     if (step === MOVEMENT_ENTRY_STEPS.AMOUNT) return movementConfig.currencyLocked ? (movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : firstAccountStep) : MOVEMENT_ENTRY_STEPS.CURRENCY
     if (step === MOVEMENT_ENTRY_STEPS.CURRENCY) return movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : firstAccountStep
     if (step === MOVEMENT_ENTRY_STEPS.RATE) return firstAccountStep
+    if (step === MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM) return movementSourceRequired ? MOVEMENT_ENTRY_STEPS.SOURCE : movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : MOVEMENT_ENTRY_STEPS.NOTE
     if (step === MOVEMENT_ENTRY_STEPS.SOURCE) return movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : MOVEMENT_ENTRY_STEPS.NOTE
     if (step === MOVEMENT_ENTRY_STEPS.DESTINATION) return MOVEMENT_ENTRY_STEPS.NOTE
     if (step === MOVEMENT_ENTRY_STEPS.NOTE) return MOVEMENT_ENTRY_STEPS.REVIEW
@@ -5305,7 +5367,7 @@ export default function LedgerApp() {
         },
         accounts,
         validationMovements,
-        { originalMovement },
+        { originalMovement, investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros },
       )
       if (!canCommitMovementEdit(originalMovement, movement)) {
         setFeedback(`لم يتم حفظ التعديل. أصلح الحركة أولًا حتى لا يتغير الرصيد: ${movement.validation.errors.map((error) => error.message).join(' ')}`)
@@ -6042,6 +6104,7 @@ export default function LedgerApp() {
       currency: movement.currency || CURRENCIES.DINAR,
       sourceAccountId: movement.sourceAccountId || '',
       destinationAccountId: movement.destinationAccountId || '',
+      investmentPlatformId: movement.investmentPlatformId || '',
       rate: movement.rate ? String(movement.rate) : '',
       note: movement.note || '',
       dimensionId: movementSupportsDimension(movement.type) ? movement.dimensionId || '' : '',
@@ -6066,6 +6129,7 @@ export default function LedgerApp() {
         currency: config.currency || reviewDraft.currency,
         sourceAccountId: movementNeedsSource(reviewDraft.type) ? reviewDraft.sourceAccountId || null : null,
         destinationAccountId: config.needsDestination ? reviewDraft.destinationAccountId || null : null,
+        investmentPlatformId: config.needsInvestmentPlatform ? reviewDraft.investmentPlatformId || null : null,
         rate: reviewDraft.rate === '' ? undefined : parseLocalizedDecimal(reviewDraft.rate),
         note: String(reviewDraft.note || '').trim(),
         dimensionId: movementSupportsDimension(reviewDraft.type) ? movement.dimensionId || '' : '',
@@ -6073,6 +6137,7 @@ export default function LedgerApp() {
       },
       accounts,
       movements.filter((item) => item.id !== movement.id),
+      { originalMovement: movement, investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros },
     )
     markOptimisticMovementChange(candidate, movement)
     setMovements((current) => current.map((item) => (item.id === movement.id ? candidate : item)))
@@ -6090,6 +6155,164 @@ export default function LedgerApp() {
       ],
     }))
     setFeedback(candidate.status === MOVEMENT_STATUSES.POSTED ? 'تم إصلاح الحركة.' : 'ما زالت ناقصة.')
+  }
+
+  function addInvestmentPlatform(draft) {
+    const name = String(draft?.name || '').trim()
+    if (!name) return false
+    if ((ledgerExtras.investmentPlatforms || []).some((platform) => platform.status !== INVESTMENT_RECORD_STATUSES.INACTIVE && platform.name.trim().toLocaleLowerCase('ar') === name.toLocaleLowerCase('ar'))) {
+      setFeedback('هذه المنصة موجودة بالفعل.')
+      return false
+    }
+    const platform = createInvestmentPlatform(draft)
+    setLedgerExtras((current) => ({
+      ...current,
+      investmentPlatforms: [...(current.investmentPlatforms || []), platform],
+      auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.platform.created', { platformId: platform.id })],
+    }))
+    setFeedback('تمت إضافة المنصة.')
+    return true
+  }
+
+  function addInvestmentHolding(draft) {
+    const initialQuantity = Number(draft?.initialQuantity || 0)
+    const initialPriceUsd = Number(draft?.initialPriceUsd || 0)
+    if ((initialQuantity > 0) !== (initialPriceUsd > 0)) {
+      setFeedback('الرصيد السابق يحتاج الكمية ومتوسط الشراء معًا.')
+      return false
+    }
+    const duplicate = (ledgerExtras.investmentHoldings || []).some((holding) =>
+      holding.status !== INVESTMENT_RECORD_STATUSES.INACTIVE &&
+      holding.platformId === draft.platformId &&
+      holding.symbol.toUpperCase() === String(draft.symbol || '').trim().toUpperCase())
+    if (duplicate) {
+      setFeedback('هذا الرمز موجود في المنصة نفسها.')
+      return false
+    }
+    const holding = createInvestmentHolding(draft)
+    const openingTrade = initialQuantity > 0 ? createInvestmentTrade({
+      platformId: holding.platformId,
+      holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(initialQuantity),
+      priceUsdMicros: usdToMicros(initialPriceUsd),
+      note: 'رصيد استثمار عند البداية',
+    }) : null
+    const candidate = {
+      platforms: ledgerExtras.investmentPlatforms || [],
+      holdings: [...(ledgerExtras.investmentHoldings || []), holding],
+      trades: openingTrade ? [...(ledgerExtras.investmentTrades || []), openingTrade] : ledgerExtras.investmentTrades || [],
+      movements,
+    }
+    const validation = validateInvestmentState(candidate)
+    if (!validation.ok) {
+      setFeedback(validation.errors[0]?.message || 'لم تتم إضافة الاستثمار.')
+      return false
+    }
+    setLedgerExtras((current) => ({
+      ...current,
+      investmentHoldings: [...(current.investmentHoldings || []), holding],
+      investmentTrades: openingTrade ? [...(current.investmentTrades || []), openingTrade] : current.investmentTrades || [],
+      auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.holding.created', { holdingId: holding.id, platformId: holding.platformId, openingTradeId: openingTrade?.id || '' })],
+    }))
+    setFeedback('تمت إضافة الاستثمار.')
+    return true
+  }
+
+  function addInvestmentTrade(draft) {
+    const holding = (ledgerExtras.investmentHoldings || []).find((item) => item.id === draft.holdingId && item.status !== INVESTMENT_RECORD_STATUSES.INACTIVE)
+    if (!holding) {
+      setFeedback('الاستثمار غير موجود.')
+      return false
+    }
+    const trade = createInvestmentTrade({
+      platformId: holding.platformId,
+      holdingId: holding.id,
+      type: draft.type,
+      quantityUnits: quantityToUnits(draft.quantity),
+      priceUsdMicros: usdToMicros(draft.priceUsd),
+      feeUsdMicros: usdToMicros(draft.feeUsd || 0),
+      note: draft.note,
+    })
+    const nextTrades = [...(ledgerExtras.investmentTrades || []), trade]
+    const validation = validateInvestmentState({
+      platforms: ledgerExtras.investmentPlatforms || [],
+      holdings: ledgerExtras.investmentHoldings || [],
+      trades: nextTrades,
+      movements,
+    })
+    if (!validation.ok) {
+      setFeedback(validation.errors[0]?.message || 'لم تتم عملية الاستثمار.')
+      return false
+    }
+    setLedgerExtras((current) => ({
+      ...current,
+      investmentTrades: [...(current.investmentTrades || []), trade],
+      auditEvents: [...(current.auditEvents || []), createAuditEvent(`investment.trade.${trade.type}`, { tradeId: trade.id, holdingId: holding.id, platformId: holding.platformId })],
+    }))
+    setFeedback(trade.type === INVESTMENT_TRADE_TYPES.BUY ? 'تم تسجيل الشراء.' : 'تم تسجيل البيع.')
+    return true
+  }
+
+  function updateInvestmentManualPrice(holdingId, priceUsd) {
+    const priceUsdMicros = usdToMicros(priceUsd)
+    if (!priceUsdMicros) {
+      setFeedback('السعر يجب أن يكون أكبر من صفر.')
+      return false
+    }
+    const updatedAt = new Date().toISOString()
+    setLedgerExtras((current) => ({
+      ...current,
+      investmentHoldings: (current.investmentHoldings || []).map((holding) => holding.id === holdingId ? {
+        ...holding,
+        lastPriceUsdMicros: priceUsdMicros,
+        lastPriceNativeMicros: priceUsdMicros,
+        lastPriceAt: updatedAt,
+        lastPriceSource: 'manual',
+        updatedAt,
+      } : holding),
+      auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.price.manual', { holdingId })],
+    }))
+    setFeedback('تم حفظ السعر اليدوي.')
+    return true
+  }
+
+  async function refreshInvestmentPrices() {
+    const items = (ledgerExtras.investmentHoldings || [])
+      .filter((holding) => holding.status !== INVESTMENT_RECORD_STATUSES.INACTIVE && holding.providerSymbol)
+      .map((holding) => ({ id: holding.id, providerSymbol: holding.providerSymbol, quoteCurrency: holding.quoteCurrency || CURRENCIES.USD }))
+    if (!items.length || isRefreshingInvestmentPrices) return
+    setIsRefreshingInvestmentPrices(true)
+    try {
+      const result = await refreshAdreemInvestmentPrices(items)
+      const prices = new Map((result.prices || []).filter((price) => price?.ok).map((price) => [price.id, price]))
+      if (!prices.size) {
+        setFeedback('لم يصل سعر مؤكد. بقيت الأسعار السابقة كما هي.')
+        return
+      }
+      const updatedIds = Array.from(prices.keys())
+      setLedgerExtras((current) => ({
+        ...current,
+        investmentHoldings: (current.investmentHoldings || []).map((holding) => {
+          const price = prices.get(holding.id)
+          return price ? {
+            ...holding,
+            lastPriceUsdMicros: price.priceUsdMicros,
+            lastPriceNativeMicros: price.nativePriceMicros,
+            lastPriceAt: price.refreshedAt,
+            lastPriceSource: price.source,
+            updatedAt: price.refreshedAt,
+          } : holding
+        }),
+        auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.prices.refreshed', { holdingIds: updatedIds })],
+      }))
+      const missing = items.length - prices.size
+      setFeedback(missing ? `تحدثت ${formatCount(prices.size)} أسعار. بقي ${formatCount(missing)} على سعره السابق.` : 'تم تحديث الأسعار.')
+    } catch (error) {
+      setFeedback(error?.message || 'تعذر تحديث الأسعار. بقيت الأسعار السابقة محفوظة.')
+    } finally {
+      setIsRefreshingInvestmentPrices(false)
+    }
   }
 
   function renderAccountsSection() {
@@ -6282,6 +6505,19 @@ export default function LedgerApp() {
       return null
     }
     if (activeSection === 'accounts') return renderAccountsSection()
+    if (activeSection === 'investments') return (
+      <InvestmentsPanel
+        summary={investmentSummary}
+        platforms={ledgerExtras.investmentPlatforms || []}
+        holdings={ledgerExtras.investmentHoldings || []}
+        isRefreshing={isRefreshingInvestmentPrices}
+        onAddPlatform={addInvestmentPlatform}
+        onAddHolding={addInvestmentHolding}
+        onAddTrade={addInvestmentTrade}
+        onManualPrice={updateInvestmentManualPrice}
+        onRefreshPrices={refreshInvestmentPrices}
+      />
+    )
     if (activeSection === 'review') {
       return (
         <section className="ml3-panel" aria-label="المراجعة">
@@ -6307,7 +6543,7 @@ export default function LedgerApp() {
             <div className="ml3-review-active">
               {activeReviewItem?.type === 'account' ? <ReviewAccountCard key={activeReviewItem.bucket.account.id} bucket={activeReviewItem.bucket} activeAccounts={activeAccounts} onResolve={resolveReviewAccount} onMerge={mergeReviewAccount} onDisable={disableAccount} /> : null}
               {activeReviewItem?.type === 'external' ? <ExternalAccountCard key={activeReviewItem.account.id} account={activeReviewItem.account} onCreate={addExternalAccount} onIgnore={ignoreExternalAccount} /> : null}
-              {activeReviewItem?.type === 'movement' ? <ReviewMovementCard key={activeReviewItem.movement.id} movement={activeReviewItem.movement} activeAccounts={activeAccounts} referenceAccounts={accounts} balanceByAccountId={balanceByAccountId} onResolve={resolveReviewMovement} onEdit={editReviewMovement} onCancel={requestMovementCancellation} /> : null}
+              {activeReviewItem?.type === 'movement' ? <ReviewMovementCard key={activeReviewItem.movement.id} movement={activeReviewItem.movement} activeAccounts={activeAccounts} referenceAccounts={accounts} balanceByAccountId={balanceByAccountId} investmentPlatforms={activeInvestmentPlatforms} onResolve={resolveReviewMovement} onEdit={editReviewMovement} onCancel={requestMovementCancellation} /> : null}
             </div>
           </div>
           <details className="ml3-ops-disclosure">
@@ -6384,7 +6620,7 @@ export default function LedgerApp() {
                   <span>{formatCount(group.movements.length)}</span>
                 </div>
                 {group.movements.map((movement) => (
-                  <HistoryMovementRow key={movement.id} movement={movement} accountById={accountById} attachments={ledgerExtras.attachments || []} dimensions={activeDimensions} onEdit={editReviewMovement} onCancel={requestMovementCancellation} onDeleteAttachment={deleteAttachment} />
+                  <HistoryMovementRow key={movement.id} movement={movement} accountById={accountById} investmentPlatformById={investmentPlatformById} attachments={ledgerExtras.attachments || []} dimensions={activeDimensions} onEdit={editReviewMovement} onCancel={requestMovementCancellation} onDeleteAttachment={deleteAttachment} />
                 ))}
               </section>
             ))}
@@ -6501,6 +6737,14 @@ export default function LedgerApp() {
           value: movementDraft.rate ? formatRate(movementDraft.rate) : 'لم يدخل',
         }
       : null,
+    movementConfig.needsInvestmentPlatform
+      ? {
+          key: 'investment-platform',
+          step: MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM,
+          label: 'المنصة',
+          value: investmentPlatformById.get(movementDraft.investmentPlatformId)?.name ? preserveUiData(investmentPlatformById.get(movementDraft.investmentPlatformId).name) : 'اختر',
+        }
+      : null,
     movementSourceRequired
       ? {
           key: 'source',
@@ -6562,7 +6806,7 @@ export default function LedgerApp() {
       if (typeof window === 'undefined') return
       if (window.confirm('سيتم فتح آخر نسخة حفظتها السحابة. هل تريد المتابعة؟')) window.location.reload()
     }} onOpenAdmin={openAdminUsersPage} onLogout={requestCloudLogout} onSectionChange={switchSection}>
-      {activeSection !== 'entry' && activeSection !== 'accounts' ? <AlertBoard reviewAccounts={balancesByKind.review} reviewMovements={reviewMovements} externalMissing={unresolvedExternalAccounts} balances={balances} movements={postedUserMovements} totals={totals} dueRecurringCount={dueRules.length} reconciliationDiffCount={reconciliationDiffCount} /> : null}
+      {activeSection !== 'entry' && activeSection !== 'accounts' && activeSection !== 'investments' ? <AlertBoard reviewAccounts={balancesByKind.review} reviewMovements={reviewMovements} externalMissing={unresolvedExternalAccounts} balances={balances} movements={postedUserMovements} totals={totals} dueRecurringCount={dueRules.length} reconciliationDiffCount={reconciliationDiffCount} /> : null}
 
       <section key={activeSection} className={`ml3-layout ml3-layout--${activeSection} ${activeSection === 'entry' ? 'is-entry' : 'is-content-only'}`}>
         {activeSection === 'entry' ? (
@@ -6709,6 +6953,29 @@ export default function LedgerApp() {
                   </section>
                 ) : null}
 
+                {movementConfig.needsInvestmentPlatform && movementStep === MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM ? (
+                  <section className="ml3-step ml3-step--investment-platform is-open">
+                    <div className="adreem-investment-platform-picker" aria-label="منصة الاستثمار">
+                      {activeInvestmentPlatforms.length ? activeInvestmentPlatforms.map((platform) => {
+                        const platformCash = investmentAvailableCashUsdMicros.get(platform.id) || 0
+                        return (
+                          <button type="button" key={platform.id} className={movementDraft.investmentPlatformId === platform.id ? 'is-active' : ''} aria-pressed={movementDraft.investmentPlatformId === platform.id} onClick={() => updateMovementDraft('investmentPlatformId', platform.id)}>
+                            <i><Landmark aria-hidden="true" size={17} /></i>
+                            <span><strong>{preserveUiData(platform.name)}</strong><small>{preserveUiData(platform.location || 'محفظة استثمار')}</small></span>
+                            <b>{`${(platformCash / 1_000_000).toLocaleString('en-US', { maximumFractionDigits: 2 })} USD`}</b>
+                          </button>
+                        )
+                      }) : (
+                        <button type="button" className="is-create" onClick={() => switchSection('investments')}><Plus aria-hidden="true" size={16} /> أضف منصة أولًا</button>
+                      )}
+                    </div>
+                    <div className="ml3-step-controls">
+                      <button type="button" className="ml3-step-back" onClick={retreatMovementStep}><ChevronRight aria-hidden="true" size={17} /> رجوع</button>
+                      <button type="button" className="ml3-step-next" disabled={!movementDraft.investmentPlatformId} onClick={advanceMovementStep}>التالي <ChevronLeft aria-hidden="true" size={17} /></button>
+                    </div>
+                  </section>
+                ) : null}
+
                 {movementSourceRequired && movementStep === MOVEMENT_ENTRY_STEPS.SOURCE ? (
                   <section className="ml3-step ml3-step--source is-open">
                     <div className="ml3-route-picker is-single">
@@ -6777,7 +7044,7 @@ export default function LedgerApp() {
                         <span>{movementAttachmentFile?.name ? preserveUiData(movementAttachmentFile.name) : 'اختر ملفًا'}</span>
                         <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setMovementAttachmentFile(event.target.files?.[0] || null)} />
                       </label>
-                      {editingRecurringRule ? (
+                      {movementConfig.needsInvestmentPlatform ? null : editingRecurringRule ? (
                         <div className="ml3-recurring-linked">
                           <Check aria-hidden="true" size={16} />
                           <span>مرتبطة شهريًا</span>
@@ -6789,7 +7056,7 @@ export default function LedgerApp() {
                           حركة شهرية
                         </label>
                       )}
-                      {movementDraft.recurringEnabled && !editingRecurringRule ? (
+                      {movementDraft.recurringEnabled && !editingRecurringRule && !movementConfig.needsInvestmentPlatform ? (
                         <label className="ml3-recurring-start">
                           الموعد القادم
                           <input type="date" min={earliestRecurringFirstRunOn} value={movementDraft.recurringFirstRunOn} onChange={(event) => updateMovementDraft('recurringFirstRunOn', event.target.value)} />
@@ -6860,7 +7127,7 @@ export default function LedgerApp() {
                 <div className="ml3-today-list">
                   {todayMovementCount === 0 ? <p className="ml3-empty">لا توجد حركات اليوم.</p> : null}
                   {todayPreviewMovements.map((movement) => (
-                    <MovementMiniRow key={movement.id} movement={movement} accountById={accountById} attachments={ledgerExtras.attachments || []} dimensions={activeDimensions} onEdit={editReviewMovement} onCancel={requestMovementCancellation} onDeleteAttachment={deleteAttachment} />
+                    <MovementMiniRow key={movement.id} movement={movement} accountById={accountById} investmentPlatformById={investmentPlatformById} attachments={ledgerExtras.attachments || []} dimensions={activeDimensions} onEdit={editReviewMovement} onCancel={requestMovementCancellation} onDeleteAttachment={deleteAttachment} />
                   ))}
                 </div>
             </section>
@@ -7182,6 +7449,7 @@ export default function LedgerApp() {
             preferredDestinationIds={preferredMovementAccountIds('destination')}
             dimensions={activeDimensions}
             expenseCategories={activeExpenseCategories}
+            investmentPlatforms={activeInvestmentPlatforms}
             isSaving={isSavingMovement}
             canSave={Boolean(editingMovementChanges.length && preview.validation.ok)}
             onDraftChange={updateMovementDraft}
@@ -7195,6 +7463,7 @@ export default function LedgerApp() {
           <MovementActionDialog
             action={pendingMovementAction}
             accountById={accountById}
+            investmentPlatformById={investmentPlatformById}
             isSaving={isSavingMovement}
             onClose={() => !isSavingMovement && setPendingMovementAction(null)}
             onConfirm={confirmMovementAction}

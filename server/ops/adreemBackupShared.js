@@ -24,6 +24,9 @@ select json_build_object(
   'public.adreem_attachments', (select count(*)::text from public.adreem_attachments),
   'public.adreem_recurring_rules', (select count(*)::text from public.adreem_recurring_rules),
   'public.adreem_reconciliations', (select count(*)::text from public.adreem_reconciliations),
+  'public.adreem_investment_platforms', (select count(*)::text from public.adreem_investment_platforms),
+  'public.adreem_investment_holdings', (select count(*)::text from public.adreem_investment_holdings),
+  'public.adreem_investment_trades', (select count(*)::text from public.adreem_investment_trades),
   'public.adreem_audit_events', (select count(*)::text from public.adreem_audit_events),
   'public.adreem_ignored_external_accounts', (select count(*)::text from public.adreem_ignored_external_accounts),
   'adreem_private.adreem_security_events', (select count(*)::text from adreem_private.adreem_security_events)
@@ -136,6 +139,10 @@ export const ADREEM_CRITICAL_FUNCTION_PRIVILEGES = Object.freeze([
   Object.freeze({ function: 'adreem_private.handle_new_auth_user', executeGrantedTo: Object.freeze([]) }),
   Object.freeze({
     function: 'public.adreem_apply_ledger_delta',
+    executeGrantedTo: Object.freeze(['authenticated', 'service_role']),
+  }),
+  Object.freeze({
+    function: 'public.adreem_apply_ledger_delta_v2',
     executeGrantedTo: Object.freeze(['authenticated', 'service_role']),
   }),
   Object.freeze({ function: 'public.adreem_current_owner_is_active', executeGrantedTo: Object.freeze(['authenticated']) }),

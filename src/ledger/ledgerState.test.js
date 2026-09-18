@@ -161,6 +161,9 @@ describe('adreem ledger state migration', () => {
     expect(state.attachments).toEqual([])
     expect(state.recurringRules).toEqual([])
     expect(state.reconciliations).toEqual([])
+    expect(state.investmentPlatforms).toEqual([])
+    expect(state.investmentHoldings).toEqual([])
+    expect(state.investmentTrades).toEqual([])
     expect(state.auditEvents).toEqual([])
   })
 
@@ -185,6 +188,25 @@ describe('adreem ledger state migration', () => {
     expect(merged.attachments.map((item) => item.id)).toEqual(['att-1'])
     expect(merged.recurringRules.map((item) => item.id)).toEqual(['rent-monthly'])
     expect(merged.reconciliations.map((item) => item.id)).toEqual(['cash-check-1'])
+  })
+
+  it('keeps investment records isolated by id while merging confirmed snapshots', () => {
+    const fallback = createFallbackLedgerState('2026-09-18T00:00:00.000Z')
+    const local = normalizeLedgerState({
+      ...fallback,
+      investmentPlatforms: [{ id: 'platform-a', name: 'A', updatedAt: '2026-09-18T01:00:00.000Z' }],
+      investmentHoldings: [{ id: 'holding-a', platformId: 'platform-a', symbol: 'AAA' }],
+    }, fallback)
+    const remote = normalizeLedgerState({
+      ...fallback,
+      investmentPlatforms: [{ id: 'platform-b', name: 'B', updatedAt: '2026-09-18T02:00:00.000Z' }],
+      investmentTrades: [{ id: 'trade-b', holdingId: 'holding-b', updatedAt: '2026-09-18T02:00:00.000Z' }],
+    }, fallback)
+
+    const merged = mergeLedgerStates(local, remote, fallback)
+    expect(merged.investmentPlatforms.map((item) => item.id).sort()).toEqual(['platform-a', 'platform-b'])
+    expect(merged.investmentHoldings.map((item) => item.id)).toEqual(['holding-a'])
+    expect(merged.investmentTrades.map((item) => item.id)).toEqual(['trade-b'])
   })
 
   it('keeps audit events even when an older record has no id yet', () => {

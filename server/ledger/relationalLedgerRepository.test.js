@@ -313,7 +313,7 @@ describe('relational ledger repository', () => {
       },
     }))
 
-    expect(client.rpc).toHaveBeenCalledWith('adreem_apply_ledger_delta', expect.objectContaining({
+    expect(client.rpc).toHaveBeenCalledWith('adreem_apply_ledger_delta_v2', expect.objectContaining({
       p_expected_revision: 4,
       p_owner_id: '22222222-2222-2222-2222-222222222222',
       p_delta: {
