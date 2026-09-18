@@ -373,6 +373,24 @@ async function loadAllMovements(client, ledgerId) {
   }
 }
 
+async function loadInvestmentFundingMovements(client, ledgerId) {
+  const rows = []
+  for (let from = 0; ; from += TABLE_PAGE_SIZE) {
+    const { data } = await requiredResult(
+      client
+        .from('adreem_movements')
+        .select('record_id, payload, sequence')
+        .eq('ledger_id', ledgerId)
+        .in('movement_type', ['investment_deposit', 'investment_withdrawal'])
+        .order('sequence', { ascending: false })
+        .range(from, from + TABLE_PAGE_SIZE - 1),
+      'Failed to load investment funding movements.',
+    )
+    rows.push(...(data || []))
+    if (!data || data.length < TABLE_PAGE_SIZE) return rows.map(payloadFromRow)
+  }
+}
+
 async function loadMovementRecords(client, ledgerId, movementIds = []) {
   const ids = (Array.isArray(movementIds) ? movementIds : [])
     .map((id) => String(id || '').trim())
@@ -504,9 +522,10 @@ export function createRelationalLedgerRepository(client, options = {}) {
             const movementAttachments = await loadMovementAttachments(client, ledger.id, movementIds)
             return mergeRowsByRecordId(accountAttachments, movementAttachments)
           })
-    const [movementResult, reviewResult, accounts, dimensions, attachments, recurringRules, reconciliations, investmentPlatforms, investmentHoldings, investmentTrades, auditEvents, ignoredRows] = await Promise.all([
+    const [movementResult, reviewResult, investmentFundingMovements, accounts, dimensions, attachments, recurringRules, reconciliations, investmentPlatforms, investmentHoldings, investmentTrades, auditEvents, ignoredRows] = await Promise.all([
       movementRequest,
       reviewRequest,
+      loadOptions.includeAllMovements ? Promise.resolve([]) : loadInvestmentFundingMovements(client, ledger.id),
       fetchAll(client, 'adreem_accounts', 'record_id, payload, balance_dinar, balance_usd, balance_try, balance_eur, posted_count, structure_locked', ledger.id),
       fetchAll(client, 'adreem_dimensions', 'record_id, payload', ledger.id),
       attachmentRequest,
@@ -533,7 +552,7 @@ export function createRelationalLedgerRepository(client, options = {}) {
     const state = normalizeLedgerState({
       ...identity,
       accounts: accounts.map(accountFromRow),
-      movements: mergeRelationalMovements(movementResult.movements, reviewResult.movements),
+      movements: mergeRelationalMovements(movementResult.movements, reviewResult.movements, investmentFundingMovements),
       dimensions: dimensions.map(payloadFromRow),
       attachments: attachments.map(payloadFromRow),
       recurringRules: recurringRules.map(payloadFromRow),

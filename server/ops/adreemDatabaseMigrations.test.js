@@ -10,6 +10,8 @@ const movementInvariantSql = readFileSync(new URL('../../supabase/migrations/202
 const movementIdentitySql = readFileSync(new URL('../../supabase/migrations/20260822232245_lock_movement_type_and_currency.sql', import.meta.url), 'utf8')
 const tryCurrencySql = readFileSync(new URL('../../supabase/migrations/20260823160000_add_try_currency.sql', import.meta.url), 'utf8')
 const botRemovalSql = readFileSync(new URL('../../supabase/migrations/20260823190000_remove_telegram_bot.sql', import.meta.url), 'utf8')
+const investmentsSql = readFileSync(new URL('../../supabase/migrations/20260918213000_add_adreem_investments.sql', import.meta.url), 'utf8')
+const investmentHardeningSql = readFileSync(new URL('../../supabase/migrations/20260918220000_harden_adreem_investments.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -71,6 +73,17 @@ describe('ADREEM v3 database migration invariants', () => {
     expect(botRemovalSql).toContain('drop table if exists adreem_private.adreem_bot_state')
     expect(botRemovalSql).toContain('alter table public.adreem_profiles drop column if exists telegram_user_id')
     expect(botRemovalSql).not.toMatch(/delete from public\.adreem_(accounts|movements|movement_entries)/)
+  })
+
+  it('keeps investment writes isolated, append-only, and unavailable through the legacy delta function', () => {
+    expect(investmentsSql).toContain('function public.adreem_apply_ledger_delta_v2')
+    expect(investmentsSql).toContain('ADREEM_INVESTMENT_CASH_NEGATIVE')
+    expect(investmentsSql).toContain('ADREEM_INVESTMENT_POSITION_NEGATIVE')
+    expect(investmentHardeningSql).toContain('revoke execute on function public.adreem_apply_ledger_delta(uuid, bigint, jsonb, uuid) from authenticated')
+    expect(investmentHardeningSql).toContain('ADREEM_INVESTMENT_TRADE_IMMUTABLE')
+    expect(investmentHardeningSql).toContain('adreem_investment_trades_active_position_idx')
+    expect(investmentHardeningSql).toContain('adreem_movements_investment_platform_idx')
+    expect(investmentHardeningSql).toContain('ADREEM_INVESTMENT_PLATFORM_IN_USE')
   })
 
   it('removes the legacy blob tables only from an empty v3 target', () => {

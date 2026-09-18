@@ -138,6 +138,26 @@ describe('relational ledger repository', () => {
     })
   })
 
+  it('merges older investment funding into a bounded snapshot', async () => {
+    const client = clientFixture()
+    const originalFrom = client.from
+    let movementReads = 0
+    client.from = vi.fn((table) => {
+      if (table !== 'adreem_movements') return originalFrom(table)
+      movementReads += 1
+      if (movementReads === 1) return queryResult([{ record_id: 'recent', payload: { id: 'recent', type: 'expense' }, sequence: 9 }], 101)
+      return queryResult([{ record_id: 'old-deposit', payload: { id: 'old-deposit', type: 'investment_deposit', amount: 500 }, sequence: 1 }])
+    })
+    const repository = createRelationalLedgerRepository(client, {
+      ownerId: '22222222-2222-2222-2222-222222222222',
+    })
+
+    const result = await repository.load({ movementLimit: 1 })
+
+    expect(result.state.movements.map((movement) => movement.id)).toEqual(expect.arrayContaining(['recent', 'old-deposit']))
+    expect(result.movementPage.total).toBe(101)
+  })
+
   it('deletes an unused account through the owner-scoped revision function', async () => {
     const client = clientFixture()
     client.rpc.mockResolvedValueOnce({

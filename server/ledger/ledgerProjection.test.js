@@ -107,6 +107,24 @@ describe('ADREEM relational migration projection', () => {
     expect(migration.batches.every((batch) => Object.values(batch.delta)[0].length <= 3)).toBe(true)
   })
 
+  it('migrates investment identities before their funding movements and trades', () => {
+    const source = sourceFixture()
+    source.investmentPlatforms = [{ id: 'platform-1', name: 'Broker', kind: 'broker', status: 'active' }]
+    source.investmentHoldings = [{
+      id: 'holding-1', platformId: 'platform-1', name: 'Apple', symbol: 'AAPL', providerSymbol: 'AAPL:NASDAQ',
+      assetType: 'stock', quoteCurrency: 'USD', status: 'active',
+    }]
+    source.investmentTrades = [{
+      id: 'trade-1', platformId: 'platform-1', holdingId: 'holding-1', type: 'opening', status: 'active',
+      quantityUnits: 100_000_000, priceUsdMicros: 100_000_000, feeUsdMicros: 0,
+    }]
+    const batches = createLedgerMigrationBatches(source, { batchSize: 3 }).batches.map((batch) => batch.collection)
+
+    expect(batches.indexOf('investmentPlatforms')).toBeLessThan(batches.indexOf('investmentHoldings'))
+    expect(batches.indexOf('investmentHoldings')).toBeLessThan(batches.indexOf('movements'))
+    expect(batches.indexOf('movements')).toBeLessThan(batches.indexOf('investmentTrades'))
+  })
+
   it('rejects money and exchange values outside the exact application range', () => {
     const source = sourceFixture()
     source.movements.push({

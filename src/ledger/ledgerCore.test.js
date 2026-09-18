@@ -88,6 +88,23 @@ describe('adreem ledger core', () => {
       investmentPlatformId: platform.id,
     }, [cash], [], options)
     expect(excessive.errors).toContainEqual(expect.objectContaining({ field: 'amount' }))
+
+    const missingSource = validateMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
+      amount: 50,
+      currency: CURRENCIES.USD,
+      investmentPlatformId: platform.id,
+    }, [cash], [], options)
+    expect(missingSource.errors).toContainEqual(expect.objectContaining({ field: 'sourceAccountId' }))
+
+    const unsafeScale = validateMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
+      amount: 9_007_199_255,
+      currency: CURRENCIES.USD,
+      sourceAccountId: cash.id,
+      investmentPlatformId: platform.id,
+    }, [cash], [], options)
+    expect(unsafeScale.errors).toContainEqual(expect.objectContaining({ field: 'amount' }))
   })
 
   it('allows a person opening debt but rejects a negative owned-money opening', () => {

@@ -845,8 +845,8 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   }
   for (const trade of investmentTrades) {
     const previousTrade = (currentState.investmentTrades || []).find((item) => item.id === trade.id)
-    if (previousTrade?.status === INVESTMENT_RECORD_STATUSES.VOIDED && changedRecord(trade, recordsById(currentState.investmentTrades))) {
-      errors.push({ code: 'voided-investment-trade-immutable', recordType: 'investmentTrades', id: trade.id, message: 'لا يمكن تعديل عملية استثمار ملغاة.' })
+    if (previousTrade && !isDeepStrictEqual(previousTrade, trade)) {
+      errors.push({ code: 'investment-trade-immutable', recordType: 'investmentTrades', id: trade.id, message: 'عملية الاستثمار المثبتة لا تعدل؛ سجّل عملية تصحيح جديدة.' })
     }
   }
 

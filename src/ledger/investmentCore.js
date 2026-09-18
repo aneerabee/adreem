@@ -2,6 +2,8 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 
 export const INVESTMENT_QUANTITY_SCALE = 100_000_000
 export const INVESTMENT_PRICE_SCALE = 1_000_000
+export const MAX_INVESTMENT_USD_MICROS = Number.MAX_SAFE_INTEGER
+export const MAX_INVESTMENT_USD = Math.floor(MAX_INVESTMENT_USD_MICROS / INVESTMENT_PRICE_SCALE)
 export const INVESTMENT_RECORD_STATUSES = Object.freeze({
   ACTIVE: 'active',
   INACTIVE: 'inactive',
@@ -36,13 +38,45 @@ function safePositiveInteger(value) {
   return number > 0 ? number : 0
 }
 
+function safeScaledProduct(left, right, divisor) {
+  const leftInteger = safePositiveInteger(left)
+  const rightInteger = safePositiveInteger(right)
+  if (!leftInteger || !rightInteger) return 0
+  const divisorInteger = BigInt(divisor)
+  const result = ((BigInt(leftInteger) * BigInt(rightInteger)) + (divisorInteger / 2n)) / divisorInteger
+  return result <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(result) : 0
+}
+
+function localizedDigits(value) {
+  return String(value ?? '')
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+}
+
+export function parseInvestmentDecimal(value) {
+  let text = localizedDigits(value)
+    .trim()
+    .replace(/[\s'\u066c]/g, '')
+    .replace(/\u066b/g, '.')
+  if (text.includes(',') && text.includes('.')) {
+    const decimalSeparator = text.lastIndexOf(',') > text.lastIndexOf('.') ? ',' : '.'
+    const groupingSeparator = decimalSeparator === ',' ? /\./g : /,/g
+    text = text.replace(groupingSeparator, '').replace(decimalSeparator, '.')
+  } else {
+    text = text.replace(',', '.')
+  }
+  if (!/^\+?\d*(?:\.\d*)?$/.test(text)) return 0
+  const number = Number(text)
+  return Number.isFinite(number) && number >= 0 ? number : 0
+}
+
 function createdTime(record) {
   const value = new Date(record?.occurredAt || record?.createdAt || record?.updatedAt || 0).getTime()
   return Number.isFinite(value) ? value : 0
 }
 
 export function quantityToUnits(value) {
-  const number = Number(value)
+  const number = parseInvestmentDecimal(value)
   if (!Number.isFinite(number) || number <= 0) return 0
   const units = Math.round(number * INVESTMENT_QUANTITY_SCALE)
   return Number.isSafeInteger(units) ? units : 0
@@ -53,7 +87,7 @@ export function unitsToQuantity(value) {
 }
 
 export function usdToMicros(value) {
-  const number = Number(value)
+  const number = parseInvestmentDecimal(value)
   if (!Number.isFinite(number) || number < 0) return 0
   const micros = Math.round(number * INVESTMENT_PRICE_SCALE)
   return Number.isSafeInteger(micros) ? micros : 0
@@ -67,8 +101,7 @@ export function investmentTradeValueMicros(trade = {}) {
   const quantityUnits = safePositiveInteger(trade.quantityUnits)
   const priceUsdMicros = safePositiveInteger(trade.priceUsdMicros)
   if (!quantityUnits || !priceUsdMicros) return 0
-  const total = Math.round((quantityUnits * priceUsdMicros) / INVESTMENT_QUANTITY_SCALE)
-  return Number.isSafeInteger(total) ? total : 0
+  return safeScaledProduct(quantityUnits, priceUsdMicros, INVESTMENT_QUANTITY_SCALE)
 }
 
 export function createInvestmentPlatform(draft = {}, createdAt = new Date().toISOString()) {
@@ -134,8 +167,9 @@ export function createInvestmentTrade(draft = {}, createdAt = new Date().toISOSt
 
 export function investmentMovementCashMicros(movement = {}) {
   if (movement.status !== MOVEMENT_STATUSES.POSTED || movement.currency !== CURRENCIES.USD) return 0
-  const amountMicros = safeInteger(movement.amount) * INVESTMENT_PRICE_SCALE
-  if (!Number.isSafeInteger(amountMicros)) return 0
+  const amount = safePositiveInteger(Math.abs(movement.amount))
+  const amountMicros = amount ? safeScaledProduct(amount, INVESTMENT_PRICE_SCALE, 1) : 0
+  if (!amountMicros) return 0
   if (movement.type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT) return Math.abs(amountMicros)
   if (movement.type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL) return -Math.abs(amountMicros)
   return 0
@@ -161,7 +195,7 @@ function summarizeHolding(holding, trades = []) {
     }
     if (trade.type === INVESTMENT_TRADE_TYPES.SELL && quantity <= quantityUnits) {
       const removedCost = quantityUnits > 0
-        ? Math.round((costBasisUsdMicros * quantity) / quantityUnits)
+        ? safeScaledProduct(costBasisUsdMicros, quantity, quantityUnits)
         : 0
       quantityUnits -= quantity
       costBasisUsdMicros -= removedCost
@@ -169,8 +203,10 @@ function summarizeHolding(holding, trades = []) {
     }
   }
 
-  const marketValueUsdMicros = Math.round(
-    (quantityUnits * safePositiveInteger(holding.lastPriceUsdMicros)) / INVESTMENT_QUANTITY_SCALE,
+  const marketValueUsdMicros = safeScaledProduct(
+    quantityUnits,
+    safePositiveInteger(holding.lastPriceUsdMicros),
+    INVESTMENT_QUANTITY_SCALE,
   )
   const unrealizedProfitUsdMicros = marketValueUsdMicros - costBasisUsdMicros
   return {
@@ -178,7 +214,7 @@ function summarizeHolding(holding, trades = []) {
     quantityUnits,
     costBasisUsdMicros,
     averageCostUsdMicros: quantityUnits > 0
-      ? Math.round((costBasisUsdMicros * INVESTMENT_QUANTITY_SCALE) / quantityUnits)
+      ? safeScaledProduct(costBasisUsdMicros, INVESTMENT_QUANTITY_SCALE, quantityUnits)
       : 0,
     marketValueUsdMicros,
     unrealizedProfitUsdMicros,
@@ -269,35 +305,65 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
       continue
     }
     if (holdingById.get(trade.holdingId)?.platformId !== trade.platformId) errors.push({ field: 'investmentTrades', id: trade.id, message: 'الاستثمار لا يتبع المنصة المختارة.' })
-    if (!Object.values(INVESTMENT_TRADE_TYPES).includes(trade.type) || !safePositiveInteger(trade.quantityUnits) || !safePositiveInteger(trade.priceUsdMicros) || ![INVESTMENT_RECORD_STATUSES.ACTIVE, INVESTMENT_RECORD_STATUSES.VOIDED].includes(trade.status) || safeInteger(trade.feeUsdMicros, -1) < 0) {
+    if (!Object.values(INVESTMENT_TRADE_TYPES).includes(trade.type) || !safePositiveInteger(trade.quantityUnits) || !safePositiveInteger(trade.priceUsdMicros) || !investmentTradeValueMicros(trade) || ![INVESTMENT_RECORD_STATUSES.ACTIVE, INVESTMENT_RECORD_STATUSES.VOIDED].includes(trade.status) || safeInteger(trade.feeUsdMicros, -1) < 0) {
       errors.push({ field: 'investmentTrades', id: trade.id, message: 'كمية أو سعر عملية الاستثمار غير صالح.' })
     }
   }
   for (const holding of holdings) {
-    let availableUnits = 0
+    let availableUnits = 0n
+    let grossCostUsdMicros = 0n
     const holdingTrades = trades
       .filter((trade) => trade?.holdingId === holding.id && trade.status !== INVESTMENT_RECORD_STATUSES.VOIDED)
       .sort((left, right) => createdTime(left) - createdTime(right) || String(left.id).localeCompare(String(right.id)))
     for (const trade of holdingTrades) {
       const quantityUnits = safePositiveInteger(trade.quantityUnits)
-      if (trade.type === INVESTMENT_TRADE_TYPES.OPENING || trade.type === INVESTMENT_TRADE_TYPES.BUY) availableUnits += quantityUnits
-      if (trade.type === INVESTMENT_TRADE_TYPES.SELL) {
-        if (quantityUnits > availableUnits) {
-          errors.push({ field: 'investmentTrades', id: trade.id, message: 'لا يمكن بيع كمية أكبر من الكمية الموجودة.' })
-        } else {
-          availableUnits -= quantityUnits
+      const quantity = BigInt(quantityUnits)
+      if (trade.type === INVESTMENT_TRADE_TYPES.OPENING || trade.type === INVESTMENT_TRADE_TYPES.BUY) {
+        availableUnits += quantity
+        grossCostUsdMicros += BigInt(investmentTradeValueMicros(trade)) + BigInt(Math.max(0, safeInteger(trade.feeUsdMicros)))
+        if (availableUnits > BigInt(Number.MAX_SAFE_INTEGER) || grossCostUsdMicros > BigInt(Number.MAX_SAFE_INTEGER)) {
+          errors.push({ field: 'investmentTrades', id: trade.id, message: 'إجمالي الاستثمار تجاوز حد الدقة المسموح.' })
         }
       }
+      if (trade.type === INVESTMENT_TRADE_TYPES.SELL) {
+        if (quantity > availableUnits) {
+          errors.push({ field: 'investmentTrades', id: trade.id, message: 'لا يمكن بيع كمية أكبر من الكمية الموجودة.' })
+        } else {
+          availableUnits -= quantity
+        }
+      }
+    }
+  }
+  for (const platform of platforms) {
+    let freeCashUsdMicros = 0n
+    for (const movement of movements) {
+      if (movement?.investmentPlatformId === platform.id) freeCashUsdMicros += BigInt(investmentMovementCashMicros(movement))
+    }
+    for (const trade of trades) {
+      if (trade?.platformId !== platform.id || trade.status === INVESTMENT_RECORD_STATUSES.VOIDED) continue
+      const value = BigInt(investmentTradeValueMicros(trade))
+      const fee = BigInt(Math.max(0, safeInteger(trade.feeUsdMicros)))
+      if (trade.type === INVESTMENT_TRADE_TYPES.BUY) freeCashUsdMicros -= value + fee
+      if (trade.type === INVESTMENT_TRADE_TYPES.SELL) freeCashUsdMicros += value - fee
+    }
+    if (freeCashUsdMicros < 0n) errors.push({ field: 'investmentTrades', id: platform.id, message: 'النقد الحر في منصة الاستثمار لا يمكن أن يصبح سالبًا.' })
+    if (freeCashUsdMicros > BigInt(Number.MAX_SAFE_INTEGER) || freeCashUsdMicros < BigInt(Number.MIN_SAFE_INTEGER)) {
+      errors.push({ field: 'investmentTrades', id: platform.id, message: 'إجمالي نقد الاستثمار تجاوز حد الدقة المسموح.' })
     }
   }
   for (const movement of movements) {
     if (![MOVEMENT_TYPES.INVESTMENT_DEPOSIT, MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL].includes(movement?.type)) continue
     if (!platformById.has(movement.investmentPlatformId)) errors.push({ field: 'investmentPlatformId', id: movement.id, message: 'منصة حركة الاستثمار غير موجودة.' })
+    if (movement?.status === MOVEMENT_STATUSES.POSTED && !investmentMovementCashMicros(movement)) {
+      errors.push({ field: 'amount', id: movement.id, message: `قيمة حركة الاستثمار يجب ألا تتجاوز ${MAX_INVESTMENT_USD.toLocaleString('en-US')} USD.` })
+    }
   }
   const summary = summarizeInvestmentPortfolio({ platforms, holdings, trades, movements })
-  for (const row of summary.platforms) {
-    if (row.freeCashUsdMicros < 0) errors.push({ field: 'investmentTrades', id: row.platform.id, message: 'النقد الحر في منصة الاستثمار لا يمكن أن يصبح سالبًا.' })
-    if (row.holdings.some((holding) => holding.quantityUnits < 0)) errors.push({ field: 'investmentTrades', id: row.platform.id, message: 'كمية الاستثمار لا يمكن أن تصبح سالبة.' })
+  for (const value of [summary.freeCashUsdMicros, summary.marketValueUsdMicros, summary.totalValueUsdMicros, summary.costBasisUsdMicros, summary.realizedProfitUsdMicros, summary.unrealizedProfitUsdMicros, summary.totalProfitUsdMicros]) {
+    if (!Number.isSafeInteger(value)) {
+      errors.push({ field: 'investmentTrades', message: 'إجمالي المحفظة تجاوز حد الدقة المسموح.' })
+      break
+    }
   }
   return { ok: errors.length === 0, errors, summary }
 }

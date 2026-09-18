@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clientIp,
   createAdreemApiHandler,
@@ -29,6 +29,7 @@ function tempRegistry(users) {
 afterEach(() => {
   if (tempDir) rmSync(tempDir, { recursive: true, force: true })
   tempDir = null
+  vi.unstubAllGlobals()
 })
 
 function createMockResponse() {
@@ -98,6 +99,63 @@ async function loginForToken(api, email, password) {
 }
 
 describe('ADREEM web API auth helpers', () => {
+  it('searches the provider and refreshes only a holding from the authenticated ledger', async () => {
+    const providerFetch = vi.fn(async (url) => {
+      const endpoint = new URL(url)
+      if (endpoint.pathname.endsWith('/symbol_search')) {
+        return {
+          ok: true,
+          json: async () => ({
+            status: 'ok',
+            data: [{ symbol: 'AAPL', instrument_name: 'Apple Inc.', exchange: 'NASDAQ', mic_code: 'XNAS', instrument_type: 'Common Stock', country: 'United States', currency: 'USD' }],
+          }),
+        }
+      }
+      expect(endpoint.searchParams.get('symbol')).toBe('AAPL:XNAS')
+      return { ok: true, json: async () => ({ price: '190' }) }
+    })
+    vi.stubGlobal('fetch', providerFetch)
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'owner-main', displayName: 'Owner', email: 'owner@example.com', password: 'owner-pass-123', ledgerId: 'owner-main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_USERS_FILE: file,
+      TWELVE_DATA_API_KEY: 'private-key',
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
+    api.__setRepositoryForTest?.({
+      async load() {
+        return {
+          state: {
+            investmentHoldings: [{ id: 'holding-1', providerSymbol: 'AAPL:XNAS', quoteCurrency: 'USD', status: 'active' }],
+          },
+        }
+      },
+    })
+
+    const searchRequest = createJsonRequest({ query: 'Apple', quoteCurrency: 'USD' }, { method: 'POST', url: '/api/investments/search', token })
+    const searchResponse = createMockResponse()
+    const searchPending = api(searchRequest, searchResponse)
+    searchRequest.emitBody()
+    await searchPending
+
+    const priceRequest = createJsonRequest({ ids: ['holding-1'], items: [{ id: 'holding-1', providerSymbol: 'ATTACKER' }] }, { method: 'POST', url: '/api/investments/prices', token })
+    const priceResponse = createMockResponse()
+    const pricePending = api(priceRequest, priceResponse)
+    priceRequest.emitBody()
+    await pricePending
+
+    expect(searchResponse.statusCode).toBe(200)
+    expect(JSON.parse(searchResponse.body).results[0]).toMatchObject({ symbol: 'AAPL', providerSymbol: 'AAPL:XNAS' })
+    expect(priceResponse.statusCode).toBe(200)
+    expect(JSON.parse(priceResponse.body).prices[0]).toMatchObject({ id: 'holding-1', priceUsdMicros: 190_000_000 })
+    expect(providerFetch).toHaveBeenCalledTimes(2)
+  })
+
   it('parses private web tokens into isolated ledger ids', () => {
     const map = parseLedgerTokenMap('rabee-secret=main, saeed-secret=saeed-book')
 

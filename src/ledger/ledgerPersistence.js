@@ -260,11 +260,19 @@ export async function adreemApiJson(path, options = {}, allowRefresh = true) {
   }
 }
 
-export async function refreshAdreemInvestmentPrices(items = []) {
+export async function refreshAdreemInvestmentPrices(ids = []) {
   return adreemApiJson('/api/investments/prices', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ ids }),
+  })
+}
+
+export async function searchAdreemInvestmentAssets(query, quoteCurrency = 'USD') {
+  return adreemApiJson('/api/investments/search', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ query, quoteCurrency }),
   })
 }
 

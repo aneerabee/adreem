@@ -7,6 +7,7 @@ import {
   INVESTMENT_ASSET_TYPES,
   INVESTMENT_TRADE_TYPES,
   microsToUsd,
+  parseInvestmentDecimal,
   unitsToQuantity,
 } from './investmentCore.js'
 import { preserveUiData } from './uiTranslation.js'
@@ -32,6 +33,19 @@ function decimal(value, digits = 6) {
 function usdMicros(value, sign = false) {
   const number = microsToUsd(value)
   return `${sign && number > 0 ? '+' : ''}${decimal(number, 2)} USD`
+}
+
+function usdUnitMicros(value) {
+  return `${decimal(microsToUsd(value), 6)} USD`
+}
+
+function assetTypeForMarketResult(result = {}) {
+  const type = String(result.instrumentType || '').toLocaleLowerCase('en')
+  if (type.includes('crypto')) return INVESTMENT_ASSET_TYPES.CRYPTO
+  if (type.includes('metal') || type.includes('commodity')) return INVESTMENT_ASSET_TYPES.METAL
+  if (type.includes('fund') || type.includes('etf')) return INVESTMENT_ASSET_TYPES.FUND
+  if (type.includes('stock') || type.includes('equity') || type.includes('share')) return INVESTMENT_ASSET_TYPES.STOCK
+  return INVESTMENT_ASSET_TYPES.OTHER
 }
 
 function holdingTypeLabel(value) {
@@ -78,6 +92,7 @@ export default function InvestmentsPanel({
   onAddTrade,
   onManualPrice,
   onRefreshPrices,
+  onSearchAssets,
 }) {
   const [dialog, setDialog] = useState('')
   const [platformDraft, setPlatformDraft] = useState(blankPlatform)
@@ -86,7 +101,12 @@ export default function InvestmentsPanel({
   const [manualHoldingId, setManualHoldingId] = useState('')
   const [manualPrice, setManualPrice] = useState('')
   const [query, setQuery] = useState('')
+  const [assetQuery, setAssetQuery] = useState('')
+  const [assetResults, setAssetResults] = useState([])
+  const [assetSearchStatus, setAssetSearchStatus] = useState('idle')
+  const [assetSearchError, setAssetSearchError] = useState('')
   const submissionRef = useRef(false)
+  const assetSearchSequenceRef = useRef(0)
   const activePlatforms = platforms.filter((platform) => platform.status !== 'inactive')
   const activeHoldings = holdings.filter((holding) => holding.status !== 'inactive')
   const holdingById = useMemo(() => new Map(activeHoldings.map((holding) => [holding.id, holding])), [activeHoldings])
@@ -97,6 +117,27 @@ export default function InvestmentsPanel({
   })).filter((row) => !normalizedQuery || row.holdings.length || `${row.platform.name} ${row.platform.location}`.toLocaleLowerCase('ar').includes(normalizedQuery))
   const latestPriceAt = activeHoldings.map((holding) => new Date(holding.lastPriceAt || 0).getTime()).filter(Number.isFinite).sort((a, b) => b - a)[0] || 0
 
+  useEffect(() => {
+    if (dialog !== 'holding' || holdingDraft.providerSymbol || assetQuery.trim().length < 2 || typeof onSearchAssets !== 'function') {
+      return undefined
+    }
+    const sequence = ++assetSearchSequenceRef.current
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await onSearchAssets(assetQuery.trim(), holdingDraft.quoteCurrency)
+        if (assetSearchSequenceRef.current !== sequence) return
+        setAssetResults(Array.isArray(result?.results) ? result.results : [])
+        setAssetSearchStatus('ready')
+      } catch (error) {
+        if (assetSearchSequenceRef.current !== sequence) return
+        setAssetResults([])
+        setAssetSearchError(error?.message || 'تعذر البحث في السوق الآن.')
+        setAssetSearchStatus('error')
+      }
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [assetQuery, dialog, holdingDraft.providerSymbol, holdingDraft.quoteCurrency, onSearchAssets])
+
   function openPlatform() {
     submissionRef.current = false
     setPlatformDraft(blankPlatform)
@@ -106,7 +147,26 @@ export default function InvestmentsPanel({
   function openHolding() {
     submissionRef.current = false
     setHoldingDraft({ ...blankHolding, platformId: activePlatforms[0]?.id || '' })
+    setAssetQuery('')
+    setAssetResults([])
+    setAssetSearchStatus('idle')
+    setAssetSearchError('')
     setDialog('holding')
+  }
+
+  function selectMarketAsset(result) {
+    setHoldingDraft((current) => ({
+      ...current,
+      name: result.name,
+      symbol: result.symbol,
+      providerSymbol: result.providerSymbol,
+      exchange: result.exchange || result.micCode || '',
+      quoteCurrency: result.quoteCurrency,
+      assetType: assetTypeForMarketResult(result),
+    }))
+    setAssetQuery(`${result.name} · ${result.symbol}`)
+    setAssetResults([])
+    setAssetSearchStatus('selected')
   }
 
   function openTrade(type, holdingId = '') {
@@ -141,7 +201,7 @@ export default function InvestmentsPanel({
 
   function submitTrade(event) {
     event.preventDefault()
-    if (!tradeDraft.holdingId || Number(tradeDraft.quantity) <= 0 || Number(tradeDraft.priceUsd) <= 0 || submissionRef.current) return
+    if (!tradeDraft.holdingId || parseInvestmentDecimal(tradeDraft.quantity) <= 0 || parseInvestmentDecimal(tradeDraft.priceUsd) <= 0 || submissionRef.current) return
     submissionRef.current = true
     if (onAddTrade(tradeDraft) === false) {
       submissionRef.current = false
@@ -160,7 +220,7 @@ export default function InvestmentsPanel({
 
   function submitManualPrice(event) {
     event.preventDefault()
-    if (!manualHoldingId || Number(manualPrice) <= 0 || submissionRef.current) return
+    if (!manualHoldingId || parseInvestmentDecimal(manualPrice) <= 0 || submissionRef.current) return
     submissionRef.current = true
     if (onManualPrice(manualHoldingId, manualPrice) === false) {
       submissionRef.current = false
@@ -227,8 +287,8 @@ export default function InvestmentsPanel({
                     <section className="adreem-investment-holding" key={row.holding.id}>
                       <div className="adreem-investment-symbol"><b>{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
                       <div className="adreem-investment-name"><strong>{preserveUiData(row.holding.name)}</strong><small>{decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة</small></div>
-                      <div><small>متوسط الشراء</small><strong>{usdMicros(row.averageCostUsdMicros)}</strong></div>
-                      <button type="button" className="adreem-investment-price" onClick={() => openManualPrice(row.holding)}><small>سعر السوق</small><strong>{row.holding.lastPriceUsdMicros ? usdMicros(row.holding.lastPriceUsdMicros) : 'أدخل السعر'}</strong></button>
+                      <div><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></div>
+                      <button type="button" className="adreem-investment-price" onClick={() => openManualPrice(row.holding)}><small>سعر السوق</small><strong>{row.holding.lastPriceUsdMicros ? usdUnitMicros(row.holding.lastPriceUsdMicros) : 'أدخل السعر'}</strong></button>
                       <div><small>القيمة</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
                       <div className={holdingProfitTone}><small>النتيجة</small><strong>{usdMicros(holdingProfitUsdMicros, true)}</strong></div>
                       <div className="adreem-investment-row-actions">
@@ -253,16 +313,20 @@ export default function InvestmentsPanel({
           </InvestmentDialog>
         ) : null}
         {dialog === 'holding' ? (
-          <InvestmentDialog title="استثمار جديد" subtitle="يمكن إدخال الرصيد الموجود مرة واحدة" onClose={() => setDialog('')} onSubmit={submitHolding} canSubmit={Boolean(holdingDraft.platformId && holdingDraft.name.trim() && holdingDraft.symbol.trim())}>
+          <InvestmentDialog title="استثمار جديد" subtitle="ابحث ثم اختر الأصل الصحيح" onClose={() => setDialog('')} onSubmit={submitHolding} canSubmit={Boolean(holdingDraft.platformId && holdingDraft.name.trim() && holdingDraft.symbol.trim() && holdingDraft.providerSymbol.trim())}>
             <label><span>المنصة</span><select value={holdingDraft.platformId} onChange={(event) => setHoldingDraft((current) => ({ ...current, platformId: event.target.value }))}>{activePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}</select></label>
-            <div className="is-paired"><label><span>الاسم</span><input value={holdingDraft.name} onChange={(event) => setHoldingDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Apple" /></label><label><span>الرمز</span><input dir="ltr" value={holdingDraft.symbol} onChange={(event) => setHoldingDraft((current) => ({ ...current, symbol: event.target.value.toUpperCase() }))} placeholder="AAPL" /></label></div>
-            <div className="is-paired"><label><span>النوع</span><select value={holdingDraft.assetType} onChange={(event) => setHoldingDraft((current) => ({ ...current, assetType: event.target.value }))}>{ASSET_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label><span>عملة السوق</span><select value={holdingDraft.quoteCurrency} onChange={(event) => setHoldingDraft((current) => ({ ...current, quoteCurrency: event.target.value }))}><option value="USD">USD</option><option value="TRY">TRY</option><option value="EUR">EUR</option></select></label></div>
-            <div className="is-paired"><label><span>رمز مزود السعر</span><input dir="ltr" value={holdingDraft.providerSymbol} onChange={(event) => setHoldingDraft((current) => ({ ...current, providerSymbol: event.target.value.toUpperCase() }))} placeholder="AAPL أو THYAO:XIST" /></label><label><span>السوق</span><input dir="ltr" value={holdingDraft.exchange} onChange={(event) => setHoldingDraft((current) => ({ ...current, exchange: event.target.value.toUpperCase() }))} placeholder="NASDAQ" /></label></div>
+            <label><span>عملة السوق</span><select value={holdingDraft.quoteCurrency} onChange={(event) => { setHoldingDraft((current) => ({ ...blankHolding, platformId: current.platformId, quoteCurrency: event.target.value })); setAssetQuery(''); setAssetResults([]) }}><option value="USD">USD</option><option value="TRY">TRY</option><option value="EUR">EUR</option></select></label>
+            <label className="adreem-investment-market-search"><span>ابحث عن الاستثمار</span><div><Search aria-hidden="true" size={16} /><input autoFocus value={assetQuery} onChange={(event) => { const value = event.target.value; setAssetQuery(value); setAssetResults([]); setAssetSearchStatus(value.trim().length >= 2 ? 'loading' : 'idle'); setAssetSearchError(''); setHoldingDraft((current) => ({ ...current, name: '', symbol: '', providerSymbol: '', exchange: '' })) }} placeholder="الاسم أو الرمز" /></div></label>
+            {assetSearchStatus === 'loading' ? <p className="adreem-investment-search-note">جاري البحث...</p> : null}
+            {assetSearchError ? <p className="adreem-investment-search-note is-error">{assetSearchError}</p> : null}
+            {assetSearchStatus === 'ready' && !assetResults.length ? <p className="adreem-investment-search-note">لا توجد نتيجة بهذه العملة.</p> : null}
+            {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([result.exchange, result.country].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
+            {holdingDraft.providerSymbol ? <div className="adreem-investment-selected-asset"><Check aria-hidden="true" size={16} /><span><strong>{preserveUiData(holdingDraft.name)}</strong><small>{preserveUiData(`${holdingDraft.symbol} · ${holdingDraft.exchange || holdingDraft.quoteCurrency}`)}</small></span><b>{holdingTypeLabel(holdingDraft.assetType)}</b></div> : null}
             <div className="is-paired"><label><span>كمية سابقة</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialQuantity} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialQuantity: event.target.value }))} placeholder="0" /></label><label><span>متوسطها USD</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialPriceUsd} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialPriceUsd: event.target.value }))} placeholder="0" /></label></div>
           </InvestmentDialog>
         ) : null}
         {dialog === 'trade' ? (
-          <InvestmentDialog title={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'شراء استثمار' : 'بيع استثمار'} subtitle="العملية داخل محفظتي" onClose={() => setDialog('')} onSubmit={submitTrade} canSubmit={Boolean(tradeDraft.holdingId && Number(tradeDraft.quantity) > 0 && Number(tradeDraft.priceUsd) > 0)} submitLabel={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'تأكيد الشراء' : 'تأكيد البيع'}>
+          <InvestmentDialog title={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'شراء استثمار' : 'بيع استثمار'} subtitle="العملية داخل محفظتي" onClose={() => setDialog('')} onSubmit={submitTrade} canSubmit={Boolean(tradeDraft.holdingId && parseInvestmentDecimal(tradeDraft.quantity) > 0 && parseInvestmentDecimal(tradeDraft.priceUsd) > 0)} submitLabel={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'تأكيد الشراء' : 'تأكيد البيع'}>
             <label><span>الاستثمار</span><select value={tradeDraft.holdingId} onChange={(event) => setTradeDraft((current) => ({ ...current, holdingId: event.target.value }))}>{activeHoldings.map((holding) => <option key={holding.id} value={holding.id}>{preserveUiData(`${holding.symbol} · ${holding.name}`)}</option>)}</select></label>
             <div className="adreem-investment-trade-toggle"><button type="button" className={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'is-active' : ''} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.BUY }))}>شراء</button><button type="button" className={tradeDraft.type === INVESTMENT_TRADE_TYPES.SELL ? 'is-active' : ''} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.SELL }))}>بيع</button></div>
             <div className="is-paired"><label><span>الكمية</span><input dir="ltr" inputMode="decimal" value={tradeDraft.quantity} onChange={(event) => setTradeDraft((current) => ({ ...current, quantity: event.target.value }))} placeholder="0" /></label><label><span>سعر الوحدة USD</span><input dir="ltr" inputMode="decimal" value={tradeDraft.priceUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, priceUsd: event.target.value }))} placeholder="0" /></label></div>
@@ -272,7 +336,7 @@ export default function InvestmentsPanel({
           </InvestmentDialog>
         ) : null}
         {dialog === 'price' ? (
-          <InvestmentDialog title="سعر يدوي" subtitle="يبقى حتى التحديث القادم" onClose={() => setDialog('')} onSubmit={submitManualPrice} canSubmit={Number(manualPrice) > 0} submitLabel="حفظ السعر">
+          <InvestmentDialog title="سعر يدوي" subtitle="يبقى حتى التحديث القادم" onClose={() => setDialog('')} onSubmit={submitManualPrice} canSubmit={parseInvestmentDecimal(manualPrice) > 0} submitLabel="حفظ السعر">
             <label><span>السعر الحالي USD</span><input autoFocus dir="ltr" inputMode="decimal" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} placeholder="0" /></label>
           </InvestmentDialog>
         ) : null}

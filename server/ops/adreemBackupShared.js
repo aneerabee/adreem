@@ -139,7 +139,7 @@ export const ADREEM_CRITICAL_FUNCTION_PRIVILEGES = Object.freeze([
   Object.freeze({ function: 'adreem_private.handle_new_auth_user', executeGrantedTo: Object.freeze([]) }),
   Object.freeze({
     function: 'public.adreem_apply_ledger_delta',
-    executeGrantedTo: Object.freeze(['authenticated', 'service_role']),
+    executeGrantedTo: Object.freeze(['service_role']),
   }),
   Object.freeze({
     function: 'public.adreem_apply_ledger_delta_v2',

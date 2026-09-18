@@ -61,7 +61,10 @@ const SOURCE_REQUIRED_TYPES = new Set([
   MOVEMENT_TYPES.TRUCK_EXPENSE,
   MOVEMENT_TYPES.USD_SALE,
   MOVEMENT_TYPES.USD_PURCHASE,
+  MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
 ])
+
+const MAX_INVESTMENT_MOVEMENT_AMOUNT = Math.floor(Number.MAX_SAFE_INTEGER / 1_000_000)
 
 const DESTINATION_REQUIRED_TYPES = new Set([
   MOVEMENT_TYPES.OPENING_BALANCE,
@@ -268,6 +271,9 @@ export function validateMovement(movement, accounts = [], movements = [], option
     const platform = platforms.find((item) => item?.id === investmentPlatformId && item?.status !== ACCOUNT_STATUSES.INACTIVE)
     if (!investmentPlatformId || !platform) {
       errors.push({ field: 'investmentPlatformId', message: 'اختر منصة استثمار نشطة.' })
+    }
+    if (Number.isFinite(amount) && Math.abs(amount) > MAX_INVESTMENT_MOVEMENT_AMOUNT) {
+      errors.push({ field: 'amount', message: `قيمة حركة الاستثمار يجب ألا تتجاوز ${MAX_INVESTMENT_MOVEMENT_AMOUNT.toLocaleString('en-US')} USD.` })
     }
     if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && sourceId && sourceAccount && ![VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(sourceAccount.valueKind)) {
       errors.push({ field: 'sourceAccountId', message: 'إيداع الاستثمار يخرج من كاش أو مصرف تملكه.' })

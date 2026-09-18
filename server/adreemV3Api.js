@@ -5,7 +5,7 @@ import { createSupabaseAuthService } from './ledger/supabaseAuth.js'
 import { attachmentContentMatchesMime, decodeCanonicalBase64 } from './ledger/attachmentValidation.js'
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ATTACHMENT_MAX_SIZE_BYTES } from '../src/ledger/ledgerOperations.js'
 import { ConcurrentLedgerUpdateError } from './ledger/ledgerRepository.js'
-import { createMarketPriceService, MarketPriceError } from './investments/marketPrices.js'
+import { createMarketPriceService, marketPriceItemsForHoldings, MarketPriceError } from './investments/marketPrices.js'
 
 const DEFAULT_BODY_LIMIT = 1_000_000
 const ATTACHMENT_BODY_LIMIT = 15_000_000
@@ -823,11 +823,15 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
       const { context } = authenticated
       const repository = repositoryFactory(context)
 
-      if (url.pathname === '/api/investments/prices') {
+      if (url.pathname === '/api/investments/search' || url.pathname === '/api/investments/prices') {
         if (req.method !== 'POST') throw new V3ApiError('Method not allowed.', 405)
         if (!rateLimit(`market-price:${context.profile.id}`, 12)) throw new V3ApiError('Too many requests. Try again later.', 429)
         try {
-          return reply(200, await marketPriceService.refresh(await readJson(req)))
+          const body = await readJson(req)
+          if (url.pathname === '/api/investments/search') return reply(200, await marketPriceService.search(body))
+          const loaded = await repository.load()
+          const trustedItems = marketPriceItemsForHoldings(body, loaded.state || loaded)
+          return reply(200, await marketPriceService.refresh({ items: trustedItems }))
         } catch (error) {
           if (!(error instanceof MarketPriceError)) throw error
           const mapped = new V3ApiError(error.message, error.statusCode)

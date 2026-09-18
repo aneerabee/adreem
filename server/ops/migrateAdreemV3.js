@@ -343,7 +343,7 @@ export function verifyTargetSecurityManifest(manifest) {
     !applyFunction.securityDefiner ||
     applyFunction.identityArguments !== 'p_ledger_id uuid, p_expected_revision bigint, p_delta jsonb, p_owner_id uuid' ||
     applyFunction.anonExecute || applyFunction.publicExecute ||
-    !applyFunction.authenticatedExecute || !applyFunction.serviceRoleExecute
+    applyFunction.authenticatedExecute || !applyFunction.serviceRoleExecute
   ) errors.push('invalid adreem_apply_ledger_delta security or grants')
 
   const applyFunctionV2 = manifest?.applyFunctionV2

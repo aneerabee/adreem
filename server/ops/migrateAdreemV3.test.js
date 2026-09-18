@@ -88,7 +88,7 @@ function securityManifest() {
       securityDefiner: true,
       identityArguments: 'p_ledger_id uuid, p_expected_revision bigint, p_delta jsonb, p_owner_id uuid',
       anonExecute: false,
-      authenticatedExecute: true,
+      authenticatedExecute: false,
       serviceRoleExecute: true,
       publicExecute: false,
     },
@@ -460,6 +460,9 @@ describe('ADREEM v3 migration safety', () => {
     const weakGrant = securityManifest()
     weakGrant.applyFunction.publicExecute = true
     expect(() => verifyTargetSecurityManifest(weakGrant)).toThrow('apply_ledger_delta security or grants')
+    const legacyAuthenticatedGrant = securityManifest()
+    legacyAuthenticatedGrant.applyFunction.authenticatedExecute = true
+    expect(() => verifyTargetSecurityManifest(legacyAuthenticatedGrant)).toThrow('apply_ledger_delta security or grants')
     const weakDeleteGrant = securityManifest()
     weakDeleteGrant.deleteAccountFunction.anonExecute = true
     expect(() => verifyTargetSecurityManifest(weakDeleteGrant)).toThrow('delete_unused_account security or grants')

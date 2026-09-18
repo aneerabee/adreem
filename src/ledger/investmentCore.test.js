@@ -7,6 +7,7 @@ import {
   createInvestmentPlatform,
   createInvestmentTrade,
   microsToUsd,
+  parseInvestmentDecimal,
   quantityToUnits,
   summarizeInvestmentPortfolio,
   usdToMicros,
@@ -39,6 +40,42 @@ describe('investment portfolio core', () => {
     expect(quantityToUnits(0.12345678)).toBe(12_345_678)
     expect(usdToMicros(12.345678)).toBe(12_345_678)
     expect(microsToUsd(12_345_678)).toBe(12.345678)
+  })
+
+  it('accepts localized decimal input without losing investment precision', () => {
+    expect(parseInvestmentDecimal('١٢٫٣٤٥٦٧٨')).toBe(12.345678)
+    expect(parseInvestmentDecimal('1,5')).toBe(1.5)
+    expect(quantityToUnits('٠٫١٢٣٤٥٦٧٨')).toBe(12_345_678)
+    expect(usdToMicros('١٢٫٣٤٥٦٧٨')).toBe(12_345_678)
+  })
+
+  it('rejects investment values that exceed exact safe integer storage', () => {
+    const { platform, holding, deposit } = fixture()
+    const oversized = createInvestmentTrade({
+      id: 'trade-oversized', platformId: platform.id, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(100_000), priceUsdMicros: usdToMicros(100_000),
+    })
+    const result = validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [oversized], movements: [deposit] })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContainEqual(expect.objectContaining({ id: oversized.id }))
+  })
+
+  it('rejects a cumulative portfolio total that exceeds exact safe storage', () => {
+    const { platform, holding } = fixture()
+    const first = createInvestmentTrade({
+      id: 'opening-1', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(6_000_000_000),
+    })
+    const second = createInvestmentTrade({
+      id: 'opening-2', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(6_000_000_000),
+    })
+
+    const result = validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [first, second], movements: [] })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContainEqual(expect.objectContaining({ message: expect.stringContaining('حد الدقة') }))
   })
 
   it('separates platform cash from market value and calculates profit', () => {

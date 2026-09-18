@@ -19,7 +19,7 @@ import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, ac
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
 import { formatZonedDate, formatZonedDateTime, formatZonedTime, isZonedToday, isZonedYesterday, zonedDayKey, zonedDayRange } from './dateRange'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, createOpeningMovements, markOptimisticMovementChange, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, validateMovementBalanceTransition, voidMovement } from './ledgerCore'
-import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUnusedAccount, deleteAdreemUploadedAttachment, getLedgerPersistenceMode, loadAdreemMovementPage, loadPersistedLedgerState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, refreshAdreemInvestmentPrices, resolveAdreemAttachmentUrl, savePersistedLedgerState, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './ledgerPersistence'
+import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUnusedAccount, deleteAdreemUploadedAttachment, getLedgerPersistenceMode, loadAdreemMovementPage, loadPersistedLedgerState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, refreshAdreemInvestmentPrices, resolveAdreemAttachmentUrl, savePersistedLedgerState, searchAdreemInvestmentAssets, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './ledgerPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeLedgerAccounts, sameRecordVersions, sameSerializableContent } from './ledgerState'
 import { buildNetPosition, convertNetPosition, filterNetContributions, isAccountIncludedInNet } from './ledgerScope'
@@ -30,7 +30,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -5339,6 +5339,17 @@ export default function LedgerApp() {
       || null
   }
 
+  function validateInvestmentMovementCandidate(candidateMovements, ...changedMovements) {
+    const touchesInvestments = changedMovements.some((movement) => [MOVEMENT_TYPES.INVESTMENT_DEPOSIT, MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL].includes(movement?.type))
+    if (!touchesInvestments) return { ok: true, errors: [] }
+    return validateInvestmentState({
+      platforms: ledgerExtras.investmentPlatforms || [],
+      holdings: ledgerExtras.investmentHoldings || [],
+      trades: ledgerExtras.investmentTrades || [],
+      movements: candidateMovements,
+    })
+  }
+
   async function saveMovement(event) {
     event.preventDefault()
     if (movementSaveLockRef.current) return
@@ -5371,6 +5382,14 @@ export default function LedgerApp() {
       )
       if (!canCommitMovementEdit(originalMovement, movement)) {
         setFeedback(`لم يتم حفظ التعديل. أصلح الحركة أولًا حتى لا يتغير الرصيد: ${movement.validation.errors.map((error) => error.message).join(' ')}`)
+        return
+      }
+      const candidateMovements = originalMovement
+        ? movements.map((item) => (item.id === originalMovement.id ? movement : item))
+        : [...movements, movement]
+      const investmentValidation = validateInvestmentMovementCandidate(candidateMovements, originalMovement, movement)
+      if (!investmentValidation.ok) {
+        setFeedback(investmentValidation.errors[0]?.message || 'هذه الحركة تجعل نقد الاستثمار غير صالح.')
         return
       }
       if (originalMovement) markOptimisticMovementChange(movement, originalMovement)
@@ -5503,9 +5522,19 @@ export default function LedgerApp() {
           status: target.status,
           voidReason: undefined,
           voidedAt: undefined,
-        }, accounts, movements.filter((movement) => movement.id !== target.id), { originalMovement: target })
+        }, accounts, movements.filter((movement) => movement.id !== target.id), {
+          originalMovement: target,
+          investmentPlatforms: ledgerExtras.investmentPlatforms,
+          investmentAvailableCashUsdMicros,
+        })
         if (!canCommitMovementEdit(target, restoredMovement) || !restoredMovement.validation.ok) {
           setFeedback(restoredMovement.validation.errors[0]?.message || 'تعذر الرجوع لأن الأرصدة الحالية لا تسمح بالنسخة السابقة.')
+          return
+        }
+        const restoredMovements = movements.map((movement) => (movement.id === target.id ? restoredMovement : movement))
+        const investmentValidation = validateInvestmentMovementCandidate(restoredMovements, target, restoredMovement)
+        if (!investmentValidation.ok) {
+          setFeedback(investmentValidation.errors[0]?.message || 'تعذر الرجوع لأن نقد الاستثمار لا يسمح بذلك.')
           return
         }
         markOptimisticMovementChange(restoredMovement, target)
@@ -5542,6 +5571,12 @@ export default function LedgerApp() {
       const balanceValidation = validateMovementBalanceTransition(target, voidedMovement, accounts, movements)
       if (!balanceValidation.ok) {
         setFeedback(balanceValidation.errors[0]?.message || 'لا يمكن أن يصبح حساب فلوسك أو الأصل بالسالب. الرصيد المتاح أقل من قيمة الحركة.')
+        return
+      }
+      const voidedMovements = movements.map((movement) => (movement.id === target.id ? voidedMovement : movement))
+      const investmentValidation = validateInvestmentMovementCandidate(voidedMovements, target, voidedMovement)
+      if (!investmentValidation.ok) {
+        setFeedback(investmentValidation.errors[0]?.message || 'لا يمكن الإلغاء لأن نقد الاستثمار سيصبح سالبًا.')
         return
       }
       markOptimisticMovementChange(voidedMovement, target)
@@ -6139,6 +6174,12 @@ export default function LedgerApp() {
       movements.filter((item) => item.id !== movement.id),
       { originalMovement: movement, investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros },
     )
+    const candidateMovements = movements.map((item) => (item.id === movement.id ? candidate : item))
+    const investmentValidation = validateInvestmentMovementCandidate(candidateMovements, movement, candidate)
+    if (!investmentValidation.ok) {
+      setFeedback(investmentValidation.errors[0]?.message || 'تعذر إصلاح الحركة لأن نقد الاستثمار لا يسمح بذلك.')
+      return
+    }
     markOptimisticMovementChange(candidate, movement)
     setMovements((current) => current.map((item) => (item.id === movement.id ? candidate : item)))
     setLedgerExtras((current) => ({
@@ -6175,8 +6216,8 @@ export default function LedgerApp() {
   }
 
   function addInvestmentHolding(draft) {
-    const initialQuantity = Number(draft?.initialQuantity || 0)
-    const initialPriceUsd = Number(draft?.initialPriceUsd || 0)
+    const initialQuantity = parseInvestmentDecimal(draft?.initialQuantity)
+    const initialPriceUsd = parseInvestmentDecimal(draft?.initialPriceUsd)
     if ((initialQuantity > 0) !== (initialPriceUsd > 0)) {
       setFeedback('الرصيد السابق يحتاج الكمية ومتوسط الشراء معًا.')
       return false
@@ -6278,13 +6319,13 @@ export default function LedgerApp() {
   }
 
   async function refreshInvestmentPrices() {
-    const items = (ledgerExtras.investmentHoldings || [])
+    const ids = (ledgerExtras.investmentHoldings || [])
       .filter((holding) => holding.status !== INVESTMENT_RECORD_STATUSES.INACTIVE && holding.providerSymbol)
-      .map((holding) => ({ id: holding.id, providerSymbol: holding.providerSymbol, quoteCurrency: holding.quoteCurrency || CURRENCIES.USD }))
-    if (!items.length || isRefreshingInvestmentPrices) return
+      .map((holding) => holding.id)
+    if (!ids.length || isRefreshingInvestmentPrices) return
     setIsRefreshingInvestmentPrices(true)
     try {
-      const result = await refreshAdreemInvestmentPrices(items)
+      const result = await refreshAdreemInvestmentPrices(ids)
       const prices = new Map((result.prices || []).filter((price) => price?.ok).map((price) => [price.id, price]))
       if (!prices.size) {
         setFeedback('لم يصل سعر مؤكد. بقيت الأسعار السابقة كما هي.')
@@ -6306,7 +6347,7 @@ export default function LedgerApp() {
         }),
         auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.prices.refreshed', { holdingIds: updatedIds })],
       }))
-      const missing = items.length - prices.size
+      const missing = ids.length - prices.size
       setFeedback(missing ? `تحدثت ${formatCount(prices.size)} أسعار. بقي ${formatCount(missing)} على سعره السابق.` : 'تم تحديث الأسعار.')
     } catch (error) {
       setFeedback(error?.message || 'تعذر تحديث الأسعار. بقيت الأسعار السابقة محفوظة.')
@@ -6516,6 +6557,7 @@ export default function LedgerApp() {
         onAddTrade={addInvestmentTrade}
         onManualPrice={updateInvestmentManualPrice}
         onRefreshPrices={refreshInvestmentPrices}
+        onSearchAssets={searchAdreemInvestmentAssets}
       />
     )
     if (activeSection === 'review') {

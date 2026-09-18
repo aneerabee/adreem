@@ -73,6 +73,10 @@ describe('ADREEM backup safety primitives', () => {
       function: 'public.adreem_delete_unused_account',
       executeGrantedTo: ['authenticated', 'service_role'],
     })
+    expect(ADREEM_CRITICAL_FUNCTION_PRIVILEGES).toContainEqual({
+      function: 'public.adreem_apply_ledger_delta',
+      executeGrantedTo: ['service_role'],
+    })
     expect(() => validateCriticalFunctionPrivileges(ADREEM_CRITICAL_FUNCTION_PRIVILEGES.map((entry) => (
       entry.function === 'public.adreem_current_owner_is_active'
         ? { ...entry, executeGrantedTo: ['PUBLIC', 'authenticated'] }

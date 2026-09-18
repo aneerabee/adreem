@@ -215,11 +215,53 @@ function fixture(overrides = {}) {
     now: () => Date.parse('2026-08-20T12:00:00.000Z'),
     ...(attachmentUsage ? { attachmentUsage } : {}),
     attachmentReference,
+    ...(overrides.marketPriceService ? { marketPriceService: overrides.marketPriceService } : {}),
   })
   return { attachmentReference, attachmentUsage, authService, context, handler, repository, storage }
 }
 
 describe('ADREEM v3 API', () => {
+  it('searches the market only after authentication', async () => {
+    const marketPriceService = { search: vi.fn(async () => ({ results: [{ symbol: 'AAPL' }] })), refresh: vi.fn() }
+    const { handler } = fixture({ marketPriceService })
+    const req = request({ method: 'POST', url: '/api/investments/search', body: { query: 'Apple', quoteCurrency: 'USD' } })
+    const res = response()
+
+    const pending = handler(req, res)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    req.emitBody()
+    await pending
+
+    expect(res.statusCode).toBe(200)
+    expect(marketPriceService.search).toHaveBeenCalledWith({ query: 'Apple', quoteCurrency: 'USD' })
+  })
+
+  it('refreshes only holdings loaded from the authenticated ledger', async () => {
+    const marketPriceService = { search: vi.fn(), refresh: vi.fn(async () => ({ prices: [] })) }
+    const { handler, repository } = fixture({ marketPriceService })
+    repository.load.mockResolvedValueOnce({
+      state: {
+        investmentHoldings: [{ id: 'holding-a', providerSymbol: 'AAPL:XNAS', quoteCurrency: 'USD', status: 'active' }],
+      },
+    })
+    const req = request({
+      method: 'POST',
+      url: '/api/investments/prices',
+      body: { ids: ['holding-a'], items: [{ id: 'holding-a', providerSymbol: 'ATTACKER' }] },
+    })
+    const res = response()
+
+    const pending = handler(req, res)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    req.emitBody()
+    await pending
+
+    expect(res.statusCode).toBe(200)
+    expect(marketPriceService.refresh).toHaveBeenCalledWith({
+      items: [{ id: 'holding-a', symbol: 'AAPL:XNAS', quoteCurrency: 'USD' }],
+    })
+  })
+
   it('returns a bounded bootstrap state with its database revision', async () => {
     const { handler } = fixture()
     const req = request()

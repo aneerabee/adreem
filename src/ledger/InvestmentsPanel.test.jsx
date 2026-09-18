@@ -23,6 +23,7 @@ function callbacks() {
     onAddTrade: vi.fn(),
     onManualPrice: vi.fn(),
     onRefreshPrices: vi.fn(),
+    onSearchAssets: vi.fn(),
   }
 }
 
@@ -73,5 +74,14 @@ describe('investments panel', () => {
     expect(html).toContain('My portfolio')
     expect(html).toContain('منصتي')
     expect(html).toContain('Available cash')
+  })
+
+  it('does not expose the provider symbol as a manual field', () => {
+    const html = renderToStaticMarkup(<InvestmentsPanel
+      summary={{ platforms: [], totalValueUsdMicros: 0, costBasisUsdMicros: 0, unrealizedProfitUsdMicros: 0, freeCashUsdMicros: 0 }}
+      {...callbacks()}
+    />)
+
+    expect(html).not.toContain('رمز مزود السعر')
   })
 })
