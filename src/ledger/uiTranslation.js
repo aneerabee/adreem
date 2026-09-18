@@ -751,6 +751,7 @@ const ENGLISH_TEXT = Object.freeze({
   'نوع الإضافة': 'Add type',
   'بيانات الحساب ثابتة بعد أول حركة. الرصيد يتغير بالحركات فقط.': 'Account details are locked after the first movement. The balance changes through entries only.',
   'النوع وطريقة التعامل والعملة ثابتة بعد استعمال الحساب. الاسم فقط قابل للتعديل.': 'The type, balance method, and currency are fixed after use. Only the name can be edited.',
+  'الاسم قابل للتعديل. النوع والعملة ثابتان لحماية الحركات السابقة.': 'The name can be edited. The type and currency stay fixed to protect earlier entries.',
   'هذا الحساب ثابت بعد أول حركة.': 'This account is locked after its first movement.',
   'بياناته لا تتغير. مطابقة الرصيد تبقى عملية مستقلة ومسجلة.': 'Its details cannot change. Balance reconciliation remains separate and recorded.',
   'مطابقة الرصيد': 'Reconcile balance',

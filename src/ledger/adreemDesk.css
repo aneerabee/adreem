@@ -1323,8 +1323,8 @@
 .ml3-profile-editor > button:disabled { opacity: 0.45; cursor: not-allowed; }
 .ml3-profile-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ml3-profile-section-head > span { color: var(--green); font-size: 0.68rem; font-weight: 700; }
-.ml3-account-edit-history > article { display: grid; gap: 6px; padding: 7px 0; border-top: 1px solid #e7ece9; }
-.ml3-account-edit-history > article:first-of-type { border-top: 0; }
+.ml3-account-edit-history > .ml3-profile-disclosure-body > article { display: grid; gap: 6px; padding: 7px; border: 1px solid #e7ece9; border-radius: 6px; background: #fbfcfc; }
+.ml3-account-edit-history > .ml3-profile-disclosure-body > article + article { margin-top: 4px; }
 .ml3-account-edit-history time { color: var(--muted); font-size: 0.62rem; }
 .ml3-account-edit-history article > div { min-width: 0; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 7px; align-items: center; }
 .ml3-account-edit-history article > div > strong { color: var(--muted); font-size: 0.65rem; }
@@ -1332,7 +1332,7 @@
 .ml3-account-edit-values > span { min-width: 0; display: grid; gap: 1px; }
 .ml3-account-edit-values small { color: var(--muted); font-size: 0.58rem; }
 .ml3-account-edit-history b,
-.ml3-account-edit-history em { min-width: 0; overflow: hidden; font-size: 0.68rem; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-account-edit-history em { min-width: 0; overflow-wrap: anywhere; font-size: 0.68rem; font-style: normal; line-height: 1.35; }
 .ml3-account-edit-history b { color: var(--muted); font-weight: 500; }
 .ml3-account-edit-history em { color: var(--green); font-weight: 700; }
 .ml3-profile-movement { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 50px; padding: 6px 0; border-top: 1px solid #e7ece9; }

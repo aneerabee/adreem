@@ -1008,7 +1008,7 @@ describe('LedgerApp account review', () => {
     expect(markup).toContain(`value="${ACCOUNT_CURRENCY_KINDS.USD}"`)
   })
 
-  it('shows every used account field as fixed', () => {
+  it('keeps only the account name editable after the first movement', () => {
     const account = createAccount({
       id: 'used-person',
       ownerName: 'سيف',
@@ -1020,8 +1020,9 @@ describe('LedgerApp account review', () => {
 
     const markup = renderToStaticMarkup(<AccountClassificationEditorFields account={account} structureLocked accountLocked />)
 
-    expect(markup).toContain('بيانات الحساب ثابتة بعد أول حركة')
-    expect(markup.match(/disabled=""/g)).toHaveLength(4)
+    expect(markup).toContain('الاسم قابل للتعديل')
+    expect(markup.match(/disabled=""/g)).toHaveLength(3)
+    expect(markup).toContain('placeholder="مثال: سعيد، المقر، شركة"')
     expect(markup).toContain('name="classification"')
     expect(markup).toContain('name="currencyKind"')
   })
@@ -1873,8 +1874,52 @@ describe('LedgerApp history filtering', () => {
     expect(markup).not.toContain('الرصيد الفعلي')
     expect(markup).not.toContain('إنشاء تصحيح')
     expect(markup).not.toContain('داخل الصافي')
-    expect(markup).not.toContain('>حفظ التعديل</button>')
+    expect(markup).toContain('>حفظ التعديل</button>')
     expect(markup).not.toContain('حذف الحساب')
+  })
+
+  it('shows the previous and current account names with the edit date', () => {
+    const account = {
+      id: 'renamed-cash',
+      ownerName: 'أنا',
+      subAccountName: 'الخزنة الجديدة',
+      type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH,
+      currencyKind: CURRENCIES.DINAR,
+      status: ACCOUNT_STATUSES.ACTIVE,
+      updatedAt: '2026-08-20T12:00:00.000Z',
+    }
+    const markup = renderToStaticMarkup(
+      <AccountProfile
+        bucket={{ account, dinar: 0, usd: 0, postedCount: 1 }}
+        movements={[]}
+        accounts={[account]}
+        auditEvents={[{
+          id: 'rename-history',
+          action: 'account.updated',
+          createdAt: '2026-08-20T12:00:00.000Z',
+          details: {
+            accountId: account.id,
+            accountIds: [account.id],
+            before: { ...account, subAccountName: 'الخزنة القديمة' },
+            after: account,
+          },
+        }]}
+        onClose={() => {}}
+        onEditMovement={() => {}}
+        onUpdateAccount={() => {}}
+        onAddAttachment={() => {}}
+        onDeleteAttachment={() => {}}
+        onLoadMoreMovements={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('سجل التعديلات')
+    expect(markup).toContain('الخزنة القديمة')
+    expect(markup).toContain('الخزنة الجديدة')
+    expect(markup).toContain('20 أغسطس')
+    expect(markup).toContain('كان')
+    expect(markup).toContain('أصبح')
   })
 
   it.each([

@@ -120,6 +120,23 @@ describe('shared movement account choices', () => {
     }).map((item) => item.id)).not.toEqual(expect.arrayContaining(['person-cash-lyd', 'person-cheque-lyd']))
   })
 
+  it('shows a USD bank destination when receiving USD from a person', () => {
+    const accounts = [
+      account('person-usd', VALUE_KINDS.RECEIVABLE, { ownerName: 'سعيد', subAccountName: 'دولار بيننا', counterpartyKind: 'cash-usd', currencyKind: CURRENCIES.USD }),
+      account('qnb-usd', VALUE_KINDS.BANK, { ownerName: 'أنا', subAccountName: 'QNB', currencyKind: CURRENCIES.USD }),
+      account('qnb-lyd', VALUE_KINDS.BANK, { ownerName: 'أنا', subAccountName: 'QNB', currencyKind: CURRENCIES.DINAR }),
+      account('cash-usd', VALUE_KINDS.CASH, { ownerName: 'أنا', subAccountName: 'خزنة USD', currencyKind: CURRENCIES.USD }),
+    ]
+
+    const destinations = getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.TRANSFER, 'destination', {
+      currency: CURRENCIES.USD,
+      sourceAccountId: 'person-usd',
+    }).map((item) => item.id)
+
+    expect(destinations).toEqual(expect.arrayContaining(['qnb-usd', 'cash-usd']))
+    expect(destinations).not.toContain('qnb-lyd')
+  })
+
   it('offers only cash-to-bank for deposits and bank-to-cash for withdrawals', () => {
     const accounts = [
       account('cash', VALUE_KINDS.CASH),

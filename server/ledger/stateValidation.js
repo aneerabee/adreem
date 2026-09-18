@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from '../../src/ledger/accountCatalog.js'
 import { accountStructureLockErrors } from '../../src/ledger/accountEditing.js'
-import { counterpartyAccountChannels } from '../../src/ledger/accountConfig.js'
+import { accountPrimaryName, counterpartyAccountChannels } from '../../src/ledger/accountConfig.js'
 import {
   CURRENCIES,
   MOVEMENT_STATUSES,
@@ -124,6 +124,20 @@ function changedRecordIds(nextRecords = [], currentRecords = []) {
 function changedAccountClassification(account, previousById) {
   const previous = previousById.get(account?.id)
   return Boolean(previous) && ACCOUNT_CLASSIFICATION_FIELDS.some((field) => account?.[field] !== previous?.[field])
+}
+
+function matchingAccountNameHistory(account, previousAccount, auditEvents = [], previousAuditEventIds = new Set()) {
+  const beforeName = accountPrimaryName(previousAccount)
+  const afterName = accountPrimaryName(account)
+  if (beforeName === afterName) return true
+  return auditEvents.some((event) => {
+    if (!event?.id || previousAuditEventIds.has(cleanId(event.id)) || event.action !== 'account.updated' || !validTimestamp(event.createdAt)) return false
+    const details = event.details && typeof event.details === 'object' ? event.details : {}
+    const accountIds = new Set([details.accountId, ...(Array.isArray(details.accountIds) ? details.accountIds : [])].map(cleanId).filter(Boolean))
+    return accountIds.has(cleanId(account.id))
+      && accountPrimaryName(details.before) === beforeName
+      && accountPrimaryName(details.after) === afterName
+  })
 }
 
 function validateCounterpartyGroups(accounts = [], errors = []) {
@@ -526,11 +540,13 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   const dimensions = Array.isArray(nextState.dimensions) ? nextState.dimensions : []
   const reconciliations = Array.isArray(nextState.reconciliations) ? nextState.reconciliations : []
   const recurringRules = Array.isArray(nextState.recurringRules) ? nextState.recurringRules : []
+  const auditEvents = Array.isArray(nextState.auditEvents) ? nextState.auditEvents : []
   const previousAccounts = recordsById(currentState.accounts)
   const previousMovements = recordsById(currentState.movements)
   const previousDimensions = recordsById(currentState.dimensions)
   const previousReconciliations = recordsById(currentState.reconciliations)
   const previousRecurringRules = recordsById(currentState.recurringRules)
+  const previousAuditEventIds = new Set(recordsById(currentState.auditEvents).keys())
   const accountById = recordsById(accounts)
   const allowedDeletedAccounts = new Set((Array.isArray(allowedDeletedAccountIds) ? allowedDeletedAccountIds : [])
     .map(cleanId)
@@ -579,6 +595,14 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
     if (!changedRecord(account, previousAccounts)) continue
     const previousAccount = previousAccounts.get(cleanId(account.id))
     if (previousAccount) {
+      if (!matchingAccountNameHistory(account, previousAccount, auditEvents, previousAuditEventIds)) {
+        errors.push({
+          code: 'account-name-history-missing',
+          id: account.id,
+          field: 'name',
+          message: 'تعديل اسم الحساب يحتاج سجلًا يحفظ الاسم السابق والجديد والتاريخ.',
+        })
+      }
       for (const field of ['openingDinar', 'openingUsd', 'openingTry', 'openingEur']) {
         if (Number(account?.[field] || 0) === Number(previousAccount?.[field] || 0)) continue
         errors.push({

@@ -50,4 +50,17 @@ describe('adreem account compatibility', () => {
     expect(sameLogicalAccount(legacy, next)).toBe(true)
     expect(areTransferAccountsCompatible(legacy, next, CURRENCIES.DINAR)).toBe(true)
   })
+
+  it('allows a foreign-currency person balance to move to cash or bank in the same currency', () => {
+    const personUsd = { id: 'person-usd', ownerName: 'سعيد', subAccountName: 'دولار بيننا', valueKind: VALUE_KINDS.RECEIVABLE, currencyKind: CURRENCIES.USD }
+    const cashUsd = { id: 'cash-usd', ownerName: 'أنا', subAccountName: 'خزنة USD', valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.USD }
+    const qnbUsd = { id: 'qnb-usd', ownerName: 'أنا', subAccountName: 'QNB', valueKind: VALUE_KINDS.BANK, currencyKind: CURRENCIES.USD }
+    const qnbDinar = { id: 'qnb-lyd', ownerName: 'أنا', subAccountName: 'QNB', valueKind: VALUE_KINDS.BANK, currencyKind: CURRENCIES.DINAR }
+
+    expect(areTransferAccountsCompatible(personUsd, cashUsd, CURRENCIES.USD)).toBe(true)
+    expect(areTransferAccountsCompatible(personUsd, qnbUsd, CURRENCIES.USD)).toBe(true)
+    expect(areTransferAccountsCompatible(qnbUsd, personUsd, CURRENCIES.USD)).toBe(true)
+    expect(areTransferAccountsCompatible(personUsd, qnbDinar, CURRENCIES.USD)).toBe(false)
+    expect(areTransferAccountsCompatible(cashUsd, qnbUsd, CURRENCIES.USD)).toBe(false)
+  })
 })

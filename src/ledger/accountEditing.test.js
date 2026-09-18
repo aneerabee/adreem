@@ -236,7 +236,7 @@ describe('account editing', () => {
     expect(result).toMatchObject({ ok: false, reason: 'account-structure-locked' })
   })
 
-  it('rejects renaming a used account after its first posted movement', () => {
+  it('allows renaming a used account without changing its identity or movement history', () => {
     const account = createAccount({
       id: 'used-person',
       ownerName: 'سيف',
@@ -255,9 +255,15 @@ describe('account editing', () => {
     })
 
     expect(result).toMatchObject({
-      ok: false,
-      reason: 'account-structure-locked',
-      errors: [expect.objectContaining({ field: 'ownerName' })],
+      ok: true,
+      account: {
+        id: account.id,
+        ownerName: 'شركة سيف',
+        type: account.type,
+        valueKind: account.valueKind,
+        currencyKind: account.currencyKind,
+      },
+      changes: [expect.objectContaining({ key: 'name', before: 'سيف', after: 'شركة سيف' })],
     })
   })
 
@@ -335,7 +341,38 @@ describe('account editing', () => {
     expect(new Set(result.accounts.map((account) => account.ownerName))).toEqual(new Set(['شركة سعيد']))
   })
 
-  it('keeps linked person channel types immutable and freezes the whole person after any channel moves', () => {
+  it('renames every currency channel of one cash location atomically', () => {
+    const accounts = [ACCOUNT_CURRENCY_KINDS.DINAR, ACCOUNT_CURRENCY_KINDS.USD, ACCOUNT_CURRENCY_KINDS.TRY, ACCOUNT_CURRENCY_KINDS.EUR]
+      .map((currencyKind) => createAccount({
+        id: `safe-${currencyKind}`,
+        ownerName: 'أنا',
+        subAccountName: 'الخزنة القديمة',
+        type: ACCOUNT_TYPES.CASH,
+        valueKind: VALUE_KINDS.CASH,
+        currencyKind,
+      }))
+    const result = prepareAccountUpdate({
+      accounts,
+      movements: [{
+        id: 'posted',
+        type: MOVEMENT_TYPES.EXTERNAL_INCOME,
+        status: MOVEMENT_STATUSES.POSTED,
+        amount: 100,
+        currency: CURRENCIES.USD,
+        destinationAccountId: accounts[1].id,
+      }],
+      accountId: accounts[0].id,
+      draft: { ...accounts[0], subAccountName: 'الخزنة الرئيسية' },
+      updatedAt: '2026-08-21T12:00:00.000Z',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.accountIds).toEqual(expect.arrayContaining(accounts.map((account) => account.id)))
+    expect(new Set(result.accounts.map((account) => account.subAccountName))).toEqual(new Set(['الخزنة الرئيسية']))
+    expect(new Set(result.accounts.map((account) => account.id))).toEqual(new Set(accounts.map((account) => account.id)))
+  })
+
+  it('keeps linked person channel types immutable but renames every channel after movements', () => {
     const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
     const structuralEdit = prepareAccountUpdate({
       accounts,
@@ -345,7 +382,10 @@ describe('account editing', () => {
     })
     const movement = {
       id: 'person-first-movement',
+      type: MOVEMENT_TYPES.EXTERNAL_INCOME,
       status: MOVEMENT_STATUSES.POSTED,
+      amount: 100,
+      currency: CURRENCIES.DINAR,
       destinationAccountId: accounts[1].id,
     }
     const renameAfterMovement = prepareAccountUpdate({
@@ -356,7 +396,11 @@ describe('account editing', () => {
     })
 
     expect(structuralEdit).toMatchObject({ ok: false, reason: 'account-structure-locked' })
-    expect(renameAfterMovement).toMatchObject({ ok: false, reason: 'account-structure-locked' })
+    expect(renameAfterMovement).toMatchObject({
+      ok: true,
+      accountIds: expect.arrayContaining(accounts.map((account) => account.id)),
+    })
+    expect(new Set(renameAfterMovement.accounts.map((account) => account.ownerName))).toEqual(new Set(['اسم جديد']))
     expect(accountStructureUsage(accounts[0], { accounts, movements: [movement] })).toMatchObject({
       movement: true,
       linkedBundle: true,

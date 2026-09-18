@@ -3005,7 +3005,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
       <input type="hidden" name="subAccountName" value={draft.subAccountName || ''} />
       {structureLocked ? <input type="hidden" name="classification" value={classification} /> : null}
       {structureLocked && accountNeedsCurrency(parsedClassification) ? <input type="hidden" name="currencyKind" value={currencyFieldValue} /> : null}
-      {accountLocked ? <p className="ml3-profile-lock-note">بيانات الحساب ثابتة بعد أول حركة. الرصيد يتغير بالحركات فقط.</p> : structureLocked ? <p className="ml3-profile-lock-note">النوع وطريقة التعامل والعملة ثابتة بعد استعمال الحساب. الاسم فقط قابل للتعديل.</p> : null}
+      {accountLocked ? <p className="ml3-profile-lock-note">الاسم قابل للتعديل. النوع والعملة ثابتان لحماية الحركات السابقة.</p> : structureLocked ? <p className="ml3-profile-lock-note">النوع وطريقة التعامل والعملة ثابتة بعد استعمال الحساب. الاسم فقط قابل للتعديل.</p> : null}
       <label>
         هذا الحساب هو
         <select
@@ -3026,7 +3026,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
       </label>
       <label>
         {preset.nameLabel || 'اسم الحساب'}
-        <input value={accountNameValue(draft)} disabled={accountLocked} onChange={(event) => setDraft((current) => applyAccountName(current, event.target.value))} placeholder={preset.namePlaceholder || 'اكتب الاسم'} />
+        <input value={accountNameValue(draft)} onChange={(event) => setDraft((current) => applyAccountName(current, event.target.value))} placeholder={preset.namePlaceholder || 'اكتب الاسم'} />
       </label>
       {showDetail ? (
         <label>
@@ -3231,7 +3231,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
               </summary>
               <form className={`ml3-profile-editor ml3-profile-disclosure-body${accountLocked ? ' is-locked' : ''}`} onSubmit={(event) => onUpdateAccount(event, account.id)}>
                 <AccountClassificationEditorFields account={account} structureLocked={structureLocked} accountLocked={accountLocked} />
-                {accountLocked ? null : <button type="submit">حفظ التعديل</button>}
+                <button type="submit">حفظ التعديل</button>
               </form>
             </details>
 
@@ -5597,6 +5597,7 @@ export default function LedgerApp() {
   function resolveReviewAccount(event, accountId) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
+    const currentAccount = accounts.find((account) => account.id === accountId)
     const selection = accountReviewSelection(formData.get('classification'), formData.get('currencyKind'))
     const reviewedAt = new Date().toISOString()
     const nextAccount = {
@@ -5632,6 +5633,22 @@ export default function LedgerApp() {
       return
     }
     setAccounts(candidateAccounts)
+    const reviewChanges = accountEditChanges(currentAccount, candidate)
+    if (reviewChanges.length) {
+      setLedgerExtras((current) => ({
+        ...current,
+        auditEvents: [
+          ...(current.auditEvents || []),
+          createAuditEvent('account.updated', {
+            accountId,
+            accountIds: [accountId],
+            before: accountEditSnapshot(currentAccount),
+            after: accountEditSnapshot(candidate),
+            source: 'review',
+          }),
+        ],
+      }))
+    }
     setFeedback('تم حل الحساب واعتماده.')
   }
 
@@ -5676,7 +5693,7 @@ export default function LedgerApp() {
       ],
     }))
     setAccountQuery('')
-    setFeedback('تم تعديل الحساب.')
+    setFeedback('تم تعديل الحساب وحفظ السجل.')
   }
 
   async function addAccountAttachment(event, accountId) {

@@ -1,4 +1,5 @@
 import { ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog.js'
+import { normalizeAccountText } from './accountCompatibility.js'
 import { accountDetailDisplayName, accountDetailName, accountNeedsCurrency, accountPresetFor, accountPrimaryName } from './accountConfig.js'
 import { MOVEMENT_STATUSES, validateAccount, validateMovement } from './ledgerCore.js'
 
@@ -230,30 +231,22 @@ export function accountStructureChanges(before = {}, after = {}) {
   return changes
 }
 
-function accountFrozenChanges(before = {}, after = {}) {
-  const changes = []
-  if (before.ownerName !== after.ownerName) changes.push('ownerName')
-  if (before.subAccountName !== after.subAccountName) changes.push('subAccountName')
-  if (before.type !== after.type) changes.push('type')
-  if (before.valueKind !== after.valueKind) changes.push('valueKind')
-  if (before.currencyKind !== after.currencyKind) changes.push('currencyKind')
-  if (String(before.notes || '') !== String(after.notes || '')) changes.push('notes')
-  return changes
-}
-
 export function accountStructureLockErrors(currentAccount, nextAccount, context = {}) {
   const usage = accountStructureUsage(currentAccount, context)
   if (!usage.locked) return []
-  const fields = usage.movement
-    ? accountFrozenChanges(currentAccount, nextAccount)
-    : accountStructureChanges(currentAccount, nextAccount)
+  const fields = accountStructureChanges(currentAccount, nextAccount)
   if (!fields.length) return []
   return [{
     field: fields[0],
-    message: usage.movement
-      ? 'بيانات الحساب ثابتة بعد أول حركة ولا يمكن تعديلها. الرصيد يتغير بالحركات فقط.'
-      : 'لا يمكن تغيير نوع الحساب أو طريقة التعامل أو العملة بعد استعماله. يمكنك تعديل الاسم والملاحظات فقط.',
+    message: 'لا يمكن تغيير نوع الحساب أو طريقة التعامل أو العملة بعد استعماله. يمكنك تعديل الاسم فقط.',
   }]
+}
+
+function sameFinancialLocation(left = {}, right = {}) {
+  if (![VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(left.valueKind)) return false
+  return left.valueKind === right.valueKind
+    && normalizeAccountText(left.ownerName) === normalizeAccountText(right.ownerName)
+    && normalizeAccountText(left.subAccountName) === normalizeAccountText(right.subAccountName)
 }
 
 export function prepareAccountUpdate({
@@ -283,14 +276,23 @@ export function prepareAccountUpdate({
     notes: draft.notes === undefined ? currentAccount.notes : String(draft.notes || '').trim(),
     updatedAt,
   }
-  const linkedAccountIds = new Set(currentAccount.counterpartyId
-    ? accounts.filter((account) => account.counterpartyId === currentAccount.counterpartyId).map((account) => account.id)
-    : [accountId])
-  const renameLinkedAccounts = linkedAccountIds.size > 1 && currentAccount.ownerName !== nextAccount.ownerName
+  const linkedAccounts = currentAccount.counterpartyId
+    ? accounts.filter((account) => account.counterpartyId === currentAccount.counterpartyId)
+    : [VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(currentAccount.valueKind)
+      ? accounts.filter((account) => sameFinancialLocation(account, currentAccount))
+      : [currentAccount]
+  const linkedAccountIds = new Set(linkedAccounts.map((account) => account.id))
+  const counterpartyRename = Boolean(currentAccount.counterpartyId)
+  const renameLinkedAccounts = linkedAccountIds.size > 1 && accountPrimaryName(currentAccount) !== accountPrimaryName(nextAccount)
   const candidateAccounts = accounts.map((account) => {
     if (account.id === accountId) return nextAccount
     if (renameLinkedAccounts && linkedAccountIds.has(account.id)) {
-      return { ...account, ownerName: nextAccount.ownerName, updatedAt }
+      return {
+        ...account,
+        ownerName: nextAccount.ownerName,
+        subAccountName: counterpartyRename ? account.subAccountName : nextAccount.subAccountName,
+        updatedAt,
+      }
     }
     return account
   })

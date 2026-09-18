@@ -73,9 +73,20 @@ export function accountSupportsTransferCurrency(account, currency = '', bucket =
   return kind === MULTI || kind === currency
 }
 
+function isForeignPersonMoneyRoute(sourceAccount, destinationAccount, currency) {
+  if (![USD, TRY, EUR].includes(currency)) return false
+  const sourceIsPerson = sourceAccount?.valueKind === VALUE_KINDS.RECEIVABLE
+  const destinationIsPerson = destinationAccount?.valueKind === VALUE_KINDS.RECEIVABLE
+  if (sourceIsPerson === destinationIsPerson) return false
+  const moneyAccount = sourceIsPerson ? destinationAccount : sourceAccount
+  return moneyAccount?.valueKind === VALUE_KINDS.CASH || moneyAccount?.valueKind === VALUE_KINDS.BANK
+}
+
 export function areTransferAccountsCompatible(sourceAccount, destinationAccount, currency = '', sourceBucket = null, destinationBucket = null) {
   if (!sourceAccount || !destinationAccount) return false
-  return transferAccountKind(sourceAccount) === transferAccountKind(destinationAccount) &&
+  const routeMatches = transferAccountKind(sourceAccount) === transferAccountKind(destinationAccount)
+    || isForeignPersonMoneyRoute(sourceAccount, destinationAccount, currency)
+  return routeMatches &&
     accountSupportsTransferCurrency(sourceAccount, currency, sourceBucket) &&
     accountSupportsTransferCurrency(destinationAccount, currency, destinationBucket)
 }

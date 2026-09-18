@@ -114,7 +114,7 @@ describe('server ledger state validation', () => {
     expect(mismatchedName.errors).toContainEqual(expect.objectContaining({ code: 'invalid-counterparty-bundle', field: 'ownerName' }))
   })
 
-  it('freezes every linked person channel after any one of them has a movement', () => {
+  it('allows a recorded rename for every linked person channel after movements', () => {
     const accounts = buildCounterpartyAccountBundle({ ...emptyAccountDraft(), ownerName: 'سعيد' })
     const movement = {
       id: 'linked-person-movement',
@@ -129,9 +129,55 @@ describe('server ledger state validation', () => {
     }
     const current = { ...createEmptyAdreemState(at), accounts, movements: [movement] }
     const renamed = accounts.map((account) => ({ ...account, ownerName: 'شركة سعيد', updatedAt: validationNow }))
-    const result = validateLedgerStateTransition({ ...current, accounts: renamed }, current)
+    const auditEvent = {
+      id: 'audit-account-rename',
+      action: 'account.updated',
+      createdAt: validationNow,
+      details: {
+        accountId: accounts[0].id,
+        accountIds: accounts.map((account) => account.id),
+        before: {
+          ownerName: 'سعيد',
+          subAccountName: accounts[0].subAccountName,
+          type: accounts[0].type,
+          valueKind: accounts[0].valueKind,
+          currencyKind: accounts[0].currencyKind,
+        },
+        after: {
+          ownerName: 'شركة سعيد',
+          subAccountName: accounts[0].subAccountName,
+          type: accounts[0].type,
+          valueKind: accounts[0].valueKind,
+          currencyKind: accounts[0].currencyKind,
+        },
+      },
+    }
+    const result = validateLedgerStateTransition({
+      ...current,
+      accounts: renamed,
+      auditEvents: [auditEvent],
+    }, current)
 
-    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'account-structure-locked', field: 'ownerName' }))
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects renaming an account without a matching name-history event', () => {
+    const account = cashAccount({
+      id: 'cash-to-rename',
+      ownerName: 'أنا',
+      subAccountName: 'الخزنة القديمة',
+      currencyKind: CURRENCIES.DINAR,
+    })
+    const current = { ...createEmptyAdreemState(at), accounts: [account] }
+    const renamed = { ...account, subAccountName: 'الخزنة الجديدة', updatedAt: validationNow }
+
+    const result = validateLedgerStateTransition({ ...current, accounts: [renamed] }, current)
+
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: 'account-name-history-missing',
+      id: account.id,
+      field: 'name',
+    }))
   })
 
   it('rejects silently deleting one linked channel or the complete person bundle', () => {
@@ -311,15 +357,8 @@ describe('server ledger state validation', () => {
     }))
   })
 
-  it('rejects renaming or changing the currency of a used account', () => {
+  it('rejects changing the currency of a used account', () => {
     const current = { ...createEmptyAdreemState(at), accounts: [cashAccount()], movements: [opening()] }
-    const renamed = cashAccount({ subAccountName: 'خزنة البيت', updatedAt: validationNow })
-    expect(validateLedgerStateTransition({ ...current, accounts: [renamed] }, current).errors).toContainEqual(expect.objectContaining({
-      code: 'account-structure-locked',
-      id: 'cash-main',
-      field: 'subAccountName',
-    }))
-
     const changedCurrency = cashAccount({ currencyKind: CURRENCIES.USD, updatedAt: validationNow })
     const result = validateLedgerStateTransition({ ...current, accounts: [changedCurrency] }, current)
     expect(result.errors).toContainEqual(expect.objectContaining({
