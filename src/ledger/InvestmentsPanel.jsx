@@ -118,10 +118,10 @@ export default function InvestmentsPanel({
   const latestPriceAt = activeHoldings.map((holding) => new Date(holding.lastPriceAt || 0).getTime()).filter(Number.isFinite).sort((a, b) => b - a)[0] || 0
 
   useEffect(() => {
+    const sequence = ++assetSearchSequenceRef.current
     if (dialog !== 'holding' || holdingDraft.providerSymbol || assetQuery.trim().length < 2 || typeof onSearchAssets !== 'function') {
       return undefined
     }
-    const sequence = ++assetSearchSequenceRef.current
     const timer = window.setTimeout(async () => {
       try {
         const result = await onSearchAssets(assetQuery.trim(), holdingDraft.quoteCurrency)
@@ -315,7 +315,7 @@ export default function InvestmentsPanel({
         {dialog === 'holding' ? (
           <InvestmentDialog title="استثمار جديد" subtitle="ابحث ثم اختر الأصل الصحيح" onClose={() => setDialog('')} onSubmit={submitHolding} canSubmit={Boolean(holdingDraft.platformId && holdingDraft.name.trim() && holdingDraft.symbol.trim() && holdingDraft.providerSymbol.trim())}>
             <label><span>المنصة</span><select value={holdingDraft.platformId} onChange={(event) => setHoldingDraft((current) => ({ ...current, platformId: event.target.value }))}>{activePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}</select></label>
-            <label><span>عملة السوق</span><select value={holdingDraft.quoteCurrency} onChange={(event) => { setHoldingDraft((current) => ({ ...blankHolding, platformId: current.platformId, quoteCurrency: event.target.value })); setAssetQuery(''); setAssetResults([]) }}><option value="USD">USD</option><option value="TRY">TRY</option><option value="EUR">EUR</option></select></label>
+            <label><span>عملة السوق</span><select value={holdingDraft.quoteCurrency} onChange={(event) => { setHoldingDraft((current) => ({ ...blankHolding, platformId: current.platformId, quoteCurrency: event.target.value })); setAssetQuery(''); setAssetResults([]); setAssetSearchStatus('idle'); setAssetSearchError('') }}><option value="USD">USD</option><option value="TRY">TRY</option><option value="EUR">EUR</option></select></label>
             <label className="adreem-investment-market-search"><span>ابحث عن الاستثمار</span><div><Search aria-hidden="true" size={16} /><input autoFocus value={assetQuery} onChange={(event) => { const value = event.target.value; setAssetQuery(value); setAssetResults([]); setAssetSearchStatus(value.trim().length >= 2 ? 'loading' : 'idle'); setAssetSearchError(''); setHoldingDraft((current) => ({ ...current, name: '', symbol: '', providerSymbol: '', exchange: '' })) }} placeholder="الاسم أو الرمز" /></div></label>
             {assetSearchStatus === 'loading' ? <p className="adreem-investment-search-note">جاري البحث...</p> : null}
             {assetSearchError ? <p className="adreem-investment-search-note is-error">{assetSearchError}</p> : null}
