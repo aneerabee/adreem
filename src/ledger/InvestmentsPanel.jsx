@@ -13,8 +13,8 @@ import {
 import { preserveUiData } from './uiTranslation.js'
 
 const ASSET_OPTIONS = [
-  { value: INVESTMENT_ASSET_TYPES.STOCK, label: 'سهم' },
-  { value: INVESTMENT_ASSET_TYPES.CRYPTO, label: 'كريبتو' },
+  { value: INVESTMENT_ASSET_TYPES.STOCK, label: 'سهم مباشر' },
+  { value: INVESTMENT_ASSET_TYPES.CRYPTO, label: 'عملة رقمية' },
   { value: INVESTMENT_ASSET_TYPES.METAL, label: 'معدن' },
   { value: INVESTMENT_ASSET_TYPES.FUND, label: 'صندوق' },
   { value: INVESTMENT_ASSET_TYPES.OTHER, label: 'أخرى' },
@@ -124,7 +124,7 @@ export default function InvestmentsPanel({
     }
     const timer = window.setTimeout(async () => {
       try {
-        const result = await onSearchAssets(assetQuery.trim(), holdingDraft.quoteCurrency)
+        const result = await onSearchAssets(assetQuery.trim(), holdingDraft.quoteCurrency, holdingDraft.assetType)
         if (assetSearchSequenceRef.current !== sequence) return
         setAssetResults(Array.isArray(result?.results) ? result.results : [])
         setAssetSearchStatus('ready')
@@ -136,7 +136,7 @@ export default function InvestmentsPanel({
       }
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [assetQuery, dialog, holdingDraft.providerSymbol, holdingDraft.quoteCurrency, onSearchAssets])
+  }, [assetQuery, dialog, holdingDraft.assetType, holdingDraft.providerSymbol, holdingDraft.quoteCurrency, onSearchAssets])
 
   function openPlatform() {
     submissionRef.current = false
@@ -162,7 +162,7 @@ export default function InvestmentsPanel({
       providerSymbol: result.providerSymbol,
       exchange: result.exchange || result.micCode || '',
       quoteCurrency: result.quoteCurrency,
-      assetType: assetTypeForMarketResult(result),
+      assetType: result.assetType || assetTypeForMarketResult(result) || current.assetType,
     }))
     setAssetQuery(`${result.name} · ${result.symbol}`)
     setAssetResults([])
@@ -315,12 +315,15 @@ export default function InvestmentsPanel({
         {dialog === 'holding' ? (
           <InvestmentDialog title="استثمار جديد" subtitle="ابحث ثم اختر الأصل الصحيح" onClose={() => setDialog('')} onSubmit={submitHolding} canSubmit={Boolean(holdingDraft.platformId && holdingDraft.name.trim() && holdingDraft.symbol.trim() && holdingDraft.providerSymbol.trim())}>
             <label><span>المنصة</span><select value={holdingDraft.platformId} onChange={(event) => setHoldingDraft((current) => ({ ...current, platformId: event.target.value }))}>{activePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}</select></label>
-            <label><span>عملة السوق</span><select value={holdingDraft.quoteCurrency} onChange={(event) => { setHoldingDraft((current) => ({ ...blankHolding, platformId: current.platformId, quoteCurrency: event.target.value })); setAssetQuery(''); setAssetResults([]); setAssetSearchStatus('idle'); setAssetSearchError('') }}><option value="USD">USD</option><option value="TRY">TRY</option><option value="EUR">EUR</option></select></label>
+            <div className="is-paired">
+              <label><span>النوع</span><select value={holdingDraft.assetType} onChange={(event) => { setHoldingDraft((current) => ({ ...blankHolding, platformId: current.platformId, quoteCurrency: current.quoteCurrency, assetType: event.target.value })); setAssetQuery(''); setAssetResults([]); setAssetSearchStatus('idle'); setAssetSearchError('') }}>{ASSET_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+              <label><span>عملة السوق</span><select value={holdingDraft.quoteCurrency} onChange={(event) => { setHoldingDraft((current) => ({ ...blankHolding, platformId: current.platformId, assetType: current.assetType, quoteCurrency: event.target.value })); setAssetQuery(''); setAssetResults([]); setAssetSearchStatus('idle'); setAssetSearchError('') }}><option value="USD">USD</option><option value="TRY">TRY</option><option value="EUR">EUR</option></select></label>
+            </div>
             <label className="adreem-investment-market-search"><span>ابحث عن الاستثمار</span><div><Search aria-hidden="true" size={16} /><input autoFocus value={assetQuery} onChange={(event) => { const value = event.target.value; setAssetQuery(value); setAssetResults([]); setAssetSearchStatus(value.trim().length >= 2 ? 'loading' : 'idle'); setAssetSearchError(''); setHoldingDraft((current) => ({ ...current, name: '', symbol: '', providerSymbol: '', exchange: '' })) }} placeholder="الاسم أو الرمز" /></div></label>
             {assetSearchStatus === 'loading' ? <p className="adreem-investment-search-note">جاري البحث...</p> : null}
             {assetSearchError ? <p className="adreem-investment-search-note is-error">{assetSearchError}</p> : null}
             {assetSearchStatus === 'ready' && !assetResults.length ? <p className="adreem-investment-search-note">لا توجد نتيجة بهذه العملة.</p> : null}
-            {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([result.exchange, result.country].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
+            {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([holdingTypeLabel(result.assetType), result.exchange, result.country].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
             {holdingDraft.providerSymbol ? <div className="adreem-investment-selected-asset"><Check aria-hidden="true" size={16} /><span><strong>{preserveUiData(holdingDraft.name)}</strong><small>{preserveUiData(`${holdingDraft.symbol} · ${holdingDraft.exchange || holdingDraft.quoteCurrency}`)}</small></span><b>{holdingTypeLabel(holdingDraft.assetType)}</b></div> : null}
             <div className="is-paired"><label><span>كمية سابقة</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialQuantity} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialQuantity: event.target.value }))} placeholder="0" /></label><label><span>متوسطها USD</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialPriceUsd} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialPriceUsd: event.target.value }))} placeholder="0" /></label></div>
           </InvestmentDialog>

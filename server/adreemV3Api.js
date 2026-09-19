@@ -825,7 +825,10 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
 
       if (url.pathname === '/api/investments/search' || url.pathname === '/api/investments/prices') {
         if (req.method !== 'POST') throw new V3ApiError('Method not allowed.', 405)
-        if (!rateLimit(`market-price:${context.profile.id}`, 12)) throw new V3ApiError('Too many requests. Try again later.', 429)
+        const isMarketSearch = url.pathname === '/api/investments/search'
+        const rateScope = isMarketSearch ? 'market-search' : 'market-price'
+        const rateLimitPerMinute = isMarketSearch ? 30 : 12
+        if (!rateLimit(`${rateScope}:${context.profile.id}`, rateLimitPerMinute)) throw new V3ApiError('طلبات كثيرة. حاول بعد قليل.', 429)
         try {
           const body = await readJson(req)
           if (url.pathname === '/api/investments/search') return reply(200, await marketPriceService.search(body))

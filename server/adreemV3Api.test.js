@@ -262,6 +262,39 @@ describe('ADREEM v3 API', () => {
     })
   })
 
+  it('keeps market search traffic separate from live price refresh limits', async () => {
+    const marketPriceService = {
+      search: vi.fn(async () => ({ results: [] })),
+      refresh: vi.fn(async () => ({ prices: [] })),
+    }
+    const { handler, repository } = fixture({ marketPriceService })
+    repository.load.mockResolvedValue({
+      state: {
+        investmentHoldings: [{ id: 'holding-a', providerSymbol: 'AAPL:NASDAQ', quoteCurrency: 'USD', status: 'active' }],
+      },
+    })
+
+    async function post(url, body) {
+      const req = request({ method: 'POST', url, body })
+      const res = response()
+      const pending = handler(req, res)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      req.emitBody()
+      await pending
+      return res
+    }
+
+    for (let index = 0; index < 13; index += 1) {
+      expect((await post('/api/investments/search', { query: 'Apple', quoteCurrency: 'USD', assetType: 'stock' })).statusCode).toBe(200)
+    }
+    for (let index = 0; index < 12; index += 1) {
+      expect((await post('/api/investments/prices', { ids: ['holding-a'] })).statusCode).toBe(200)
+    }
+    const limited = await post('/api/investments/prices', { ids: ['holding-a'] })
+    expect(limited.statusCode).toBe(429)
+    expect(JSON.parse(limited.body).error).toBe('طلبات كثيرة. حاول بعد قليل.')
+  })
+
   it('returns a bounded bootstrap state with its database revision', async () => {
     const { handler } = fixture()
     const req = request()

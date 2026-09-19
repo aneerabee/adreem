@@ -24,6 +24,7 @@ import { INVESTMENT_RECORD_STATUSES, validateInvestmentState } from '../../src/l
 const OWN_VALUE_KINDS = new Set([VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET])
 const RECORD_LISTS = ['accounts', 'movements', 'dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'auditEvents']
 const ACCOUNT_CLASSIFICATION_FIELDS = ['type', 'valueKind', 'currencyKind']
+const INVESTMENT_HOLDING_IDENTITY_FIELDS = ['platformId', 'symbol', 'providerSymbol', 'assetType', 'exchange', 'quoteCurrency']
 const ACTIVE_STATUS = 'active'
 const INACTIVE_STATUS = 'inactive'
 const RECORD_STATUSES = new Set([ACTIVE_STATUS, INACTIVE_STATUS])
@@ -838,6 +839,23 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   for (const previousHolding of currentState.investmentHoldings || []) {
     if (investmentHoldings.some((holding) => holding.id === previousHolding.id)) continue
     errors.push({ code: 'investment-holding-deletion-not-allowed', recordType: 'investmentHoldings', id: previousHolding.id, message: 'أوقف الاستثمار بدل حذفه من مسار الحفظ.' })
+  }
+  for (const holding of investmentHoldings) {
+    const previousHolding = (currentState.investmentHoldings || []).find((item) => item.id === holding.id)
+    if (!previousHolding) continue
+    const hasSavedTrade = investmentTrades.some((trade) => trade.holdingId === holding.id)
+      || (currentState.investmentTrades || []).some((trade) => trade.holdingId === holding.id)
+    if (!hasSavedTrade) continue
+    for (const field of INVESTMENT_HOLDING_IDENTITY_FIELDS) {
+      if (previousHolding[field] === holding[field]) continue
+      errors.push({
+        code: 'investment-holding-identity-immutable',
+        recordType: 'investmentHoldings',
+        id: holding.id,
+        field,
+        message: 'لا يمكن تغيير هوية الاستثمار بعد أول عملية.',
+      })
+    }
   }
   for (const previousTrade of currentState.investmentTrades || []) {
     if (investmentTrades.some((trade) => trade.id === previousTrade.id)) continue

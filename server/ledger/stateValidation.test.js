@@ -5,6 +5,7 @@ import { DIMENSION_TYPES, RECURRING_FREQUENCIES } from '../../src/ledger/ledgerO
 import { createEmptyAdreemState } from '../../src/ledger/ledgerState.js'
 import { buildCounterpartyAccountBundle } from '../../src/ledger/counterpartyAccounts.js'
 import { emptyAccountDraft } from '../../src/ledger/accountConfig.js'
+import { INVESTMENT_ASSET_TYPES, INVESTMENT_TRADE_TYPES, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, quantityToUnits, usdToMicros } from '../../src/ledger/investmentCore.js'
 import { validateLedgerStateTransition } from './stateValidation.js'
 
 const at = '2026-08-19T12:00:00.000Z'
@@ -650,6 +651,49 @@ describe('server ledger state validation', () => {
 
     expect(result.errors).not.toContainEqual(expect.objectContaining({ code: 'movement-type-immutable' }))
     expect(result.errors).not.toContainEqual(expect.objectContaining({ code: 'movement-currency-immutable' }))
+  })
+
+  it('freezes investment identity after the first saved trade while allowing price updates', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'IBKR' }, at)
+    const holding = createInvestmentHolding({
+      id: 'holding-1',
+      platformId: platform.id,
+      name: 'Apple',
+      symbol: 'AAPL',
+      providerSymbol: 'AAPL:NASDAQ',
+      exchange: 'NASDAQ',
+      quoteCurrency: CURRENCIES.USD,
+      assetType: INVESTMENT_ASSET_TYPES.STOCK,
+    }, at)
+    const trade = createInvestmentTrade({
+      id: 'trade-1',
+      platformId: platform.id,
+      holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(1),
+      priceUsdMicros: usdToMicros(100),
+    }, at)
+    const current = {
+      ...createEmptyAdreemState(at),
+      investmentPlatforms: [platform],
+      investmentHoldings: [holding],
+      investmentTrades: [trade],
+    }
+    const changedIdentity = {
+      ...current,
+      investmentHoldings: [{ ...holding, providerSymbol: 'MSFT:NASDAQ', updatedAt: validationNow }],
+    }
+    const updatedPrice = {
+      ...current,
+      investmentHoldings: [{ ...holding, lastPriceUsdMicros: usdToMicros(105), lastPriceAt: validationNow, updatedAt: validationNow }],
+    }
+
+    expect(validateLedgerStateTransition(changedIdentity, current, { now: validationNow }).errors).toContainEqual(expect.objectContaining({
+      code: 'investment-holding-identity-immutable',
+      id: holding.id,
+      field: 'providerSymbol',
+    }))
+    expect(validateLedgerStateTransition(updatedPrice, current, { now: validationNow }).ok).toBe(true)
   })
 
   it('rejects invalid dimension records and missing linked project accounts', () => {

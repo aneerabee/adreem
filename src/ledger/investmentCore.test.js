@@ -3,6 +3,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
   INVESTMENT_ASSET_TYPES,
   INVESTMENT_TRADE_TYPES,
+  applyInvestmentTradePriceFallback,
   createInvestmentHolding,
   createInvestmentPlatform,
   createInvestmentTrade,
@@ -125,6 +126,42 @@ describe('investment portfolio core', () => {
     expect(microsToUsd(summary.costBasisUsdMicros)).toBe(180)
   })
 
+  it('uses the opening USD cost as the first visible market value', () => {
+    const holding = createInvestmentHolding({
+      platformId: 'platform-1',
+      name: 'Turkish Airlines',
+      symbol: 'THYAO',
+      providerSymbol: 'THYAO:BIST',
+      quoteCurrency: CURRENCIES.TRY,
+      initialPriceUsd: '9.25',
+    }, '2026-01-01T00:00:00.000Z')
+
+    expect(holding.lastPriceUsdMicros).toBe(9_250_000)
+    expect(holding.lastPriceNativeMicros).toBe(0)
+    expect(holding.lastPriceSource).toBe('opening')
+    expect(holding.lastPriceAt).toBe('2026-01-01T00:00:00.000Z')
+  })
+
+  it('uses the first buy price until a confirmed market price exists', () => {
+    const { holding } = fixture()
+    const emptyHolding = { ...holding, lastPriceUsdMicros: 0, lastPriceNativeMicros: 0, lastPriceAt: null }
+    const buy = createInvestmentTrade({
+      platformId: holding.platformId,
+      holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.BUY,
+      quantityUnits: quantityToUnits(2),
+      priceUsdMicros: usdToMicros(105),
+    }, '2026-01-02T00:00:00.000Z')
+
+    expect(applyInvestmentTradePriceFallback(emptyHolding, buy)).toEqual(expect.objectContaining({
+      lastPriceUsdMicros: usdToMicros(105),
+      lastPriceNativeMicros: usdToMicros(105),
+      lastPriceAt: '2026-01-02T00:00:00.000Z',
+      lastPriceSource: 'trade',
+    }))
+    expect(applyInvestmentTradePriceFallback(holding, buy)).toBe(holding)
+  })
+
   it('keeps a new empty holding visible until its first trade', () => {
     const { platform, holding } = fixture()
     const summary = summarizeInvestmentPortfolio({ platforms: [platform], holdings: [holding], trades: [], movements: [] })
@@ -180,5 +217,50 @@ describe('investment portfolio core', () => {
     expect(result.ok).toBe(false)
     expect(result.errors.some((error) => error.message.includes('مكرر'))).toBe(true)
     expect(result.errors).toContainEqual(expect.objectContaining({ id: invalidTrade.id }))
+  })
+
+  it('rejects invalid provider symbols and retiring linked investment records', () => {
+    const { platform, holding, deposit } = fixture()
+    const opening = createInvestmentTrade({
+      id: 'trade-opening', platformId: platform.id, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.OPENING, quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(100),
+    })
+    const invalidProvider = validateInvestmentState({
+      platforms: [platform],
+      holdings: [{ ...holding, providerSymbol: '<bad>' }],
+      trades: [],
+      movements: [],
+    })
+    const inactiveHolding = validateInvestmentState({
+      platforms: [platform],
+      holdings: [{ ...holding, status: 'inactive' }],
+      trades: [opening],
+      movements: [],
+    })
+    const inactivePlatform = validateInvestmentState({
+      platforms: [{ ...platform, status: 'inactive' }],
+      holdings: [holding],
+      trades: [],
+      movements: [deposit],
+    })
+
+    expect(invalidProvider.errors).toContainEqual(expect.objectContaining({ id: holding.id, message: expect.stringContaining('مصدر السعر') }))
+    expect(inactiveHolding.errors).toContainEqual(expect.objectContaining({ id: holding.id, message: expect.stringContaining('له عمليات') }))
+    expect(inactivePlatform.errors).toContainEqual(expect.objectContaining({ id: platform.id, message: expect.stringContaining('مرتبطة') }))
+  })
+
+  it('rejects malformed saved prices and trade dates', () => {
+    const { platform, holding, deposit } = fixture()
+    const malformedHolding = { ...holding, lastPriceUsdMicros: -1, lastPriceAt: 'not-a-date' }
+    const malformedTrade = createInvestmentTrade({
+      id: 'trade-invalid-date', platformId: platform.id, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(100),
+      occurredAt: 'not-a-date',
+    })
+    const result = validateInvestmentState({ platforms: [platform], holdings: [malformedHolding], trades: [malformedTrade], movements: [deposit] })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContainEqual(expect.objectContaining({ id: holding.id, message: expect.stringContaining('السعر المحفوظ') }))
+    expect(result.errors).toContainEqual(expect.objectContaining({ id: malformedTrade.id, message: expect.stringContaining('تاريخ') }))
   })
 })

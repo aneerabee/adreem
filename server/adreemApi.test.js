@@ -150,7 +150,7 @@ describe('ADREEM web API auth helpers', () => {
     await pricePending
 
     expect(searchResponse.statusCode).toBe(200)
-    expect(JSON.parse(searchResponse.body).results[0]).toMatchObject({ symbol: 'AAPL', providerSymbol: 'AAPL:XNAS' })
+    expect(JSON.parse(searchResponse.body).results[0]).toMatchObject({ symbol: 'AAPL', providerSymbol: 'AAPL:NASDAQ', assetType: 'stock' })
     expect(priceResponse.statusCode).toBe(200)
     expect(JSON.parse(priceResponse.body).prices[0]).toMatchObject({ id: 'holding-1', priceUsdMicros: 190_000_000 })
     expect(providerFetch).toHaveBeenCalledTimes(2)

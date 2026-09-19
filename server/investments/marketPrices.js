@@ -3,7 +3,29 @@ const DEFAULT_CACHE_MS = 5 * 60 * 1000
 const MAX_PRICE_ITEMS = 40
 const MAX_CACHE_ENTRIES = 500
 const MAX_SEARCH_RESULTS = 15
+const MAX_SEARCH_CANDIDATES = 120
 const SUPPORTED_MARKET_CURRENCIES = new Set(['USD', 'TRY', 'EUR'])
+const SUPPORTED_ASSET_TYPES = new Set(['stock', 'crypto', 'metal', 'fund', 'other'])
+const PROVIDER_SYMBOL_PATTERN = /^[A-Z0-9./_-]+(?::[A-Z0-9._ -]+)?$/
+const DIRECT_STOCK_TYPES = new Set(['COMMON STOCK', 'PREFERRED STOCK'])
+const FUND_TYPES = new Set(['ETF', 'MUTUAL FUND', 'BOND FUND', 'CLOSED-END FUND'])
+const TRUSTED_CRYPTO_EXCHANGES = ['BINANCE', 'COINBASE', 'COINBASE PRO', 'KRAKEN', 'OKX', 'BYBIT', 'BITSTAMP', 'GEMINI']
+const CRYPTO_SEARCH_ALIASES = new Map([
+  ['bitcoin', 'BTC'], ['بيتكوين', 'BTC'],
+  ['ethereum', 'ETH'], ['ether', 'ETH'], ['إيثيريوم', 'ETH'], ['ايثيريوم', 'ETH'],
+  ['tether', 'USDT'], ['تيثر', 'USDT'],
+  ['binance coin', 'BNB'], ['bnb', 'BNB'],
+  ['solana', 'SOL'], ['سولانا', 'SOL'],
+  ['xrp', 'XRP'], ['ripple', 'XRP'], ['ريبل', 'XRP'],
+  ['usd coin', 'USDC'], ['usdc', 'USDC'],
+  ['dogecoin', 'DOGE'], ['دوجكوين', 'DOGE'],
+  ['cardano', 'ADA'], ['كاردانو', 'ADA'],
+  ['avalanche', 'AVAX'], ['أفالانش', 'AVAX'], ['افالانش', 'AVAX'],
+  ['chainlink', 'LINK'], ['تشين لينك', 'LINK'],
+  ['polkadot', 'DOT'], ['بولكادوت', 'DOT'],
+  ['litecoin', 'LTC'], ['لايتكوين', 'LTC'],
+  ['tron', 'TRX'], ['ترون', 'TRX'],
+])
 
 export class MarketPriceError extends Error {
   constructor(message, statusCode = 502, code = 'market-price-failed') {
@@ -14,7 +36,7 @@ export class MarketPriceError extends Error {
   }
 }
 function cleanSymbol(value) {
-  return String(value || '').trim().toUpperCase().slice(0, 80)
+  return String(value || '').trim().replace(/\s+/g, ' ').toUpperCase().slice(0, 80)
 }
 
 function cleanCurrency(value) {
@@ -22,8 +44,52 @@ function cleanCurrency(value) {
   return SUPPORTED_MARKET_CURRENCIES.has(currency) ? currency : ''
 }
 
+function marketResultCurrency(item = {}) {
+  const symbolParts = cleanSymbol(item.symbol).split('/')
+  if (symbolParts.length === 2) return cleanCurrency(symbolParts[1])
+  return cleanCurrency(item.currency)
+}
+
 function cleanSearchText(value) {
   return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 80)
+}
+
+function providerSymbolForHolding(holding = {}) {
+  const symbol = cleanSymbol(holding.symbol)
+  const exchange = cleanSymbol(holding.exchange)
+  if (symbol && exchange && !symbol.includes(':')) return `${symbol}:${exchange}`
+  return cleanSymbol(holding.providerSymbol || symbol)
+}
+
+function cleanAssetType(value) {
+  const assetType = String(value || '').trim().toLocaleLowerCase('en')
+  return SUPPORTED_ASSET_TYPES.has(assetType) ? assetType : ''
+}
+
+function marketResultAssetType(item = {}) {
+  const instrumentType = cleanSearchText(item.instrument_type).toUpperCase()
+  const symbol = cleanSymbol(item.symbol)
+  if (instrumentType === 'DIGITAL CURRENCY') return 'crypto'
+  if (['PHYSICAL CURRENCY', 'PRECIOUS METAL'].includes(instrumentType) && /^(XAU|XAG|XPT|XPD)\//.test(symbol)) return 'metal'
+  if (DIRECT_STOCK_TYPES.has(instrumentType)) return 'stock'
+  if (FUND_TYPES.has(instrumentType)) return 'fund'
+  return 'other'
+}
+
+function resultMatchesAssetType(item, assetType) {
+  if (assetType === 'other') return true
+  return marketResultAssetType(item) === assetType
+}
+
+function cryptoExchangeRank(exchange) {
+  const normalized = cleanSymbol(exchange)
+  const rank = TRUSTED_CRYPTO_EXCHANGES.indexOf(normalized)
+  return rank === -1 ? Number.MAX_SAFE_INTEGER : rank
+}
+
+function providerSearchQuery(request) {
+  if (request.assetType !== 'crypto') return request.query
+  return CRYPTO_SEARCH_ALIASES.get(request.query.toLocaleLowerCase('en')) || request.query
 }
 
 function cacheSet(cache, key, value, limit = MAX_CACHE_ENTRIES) {
@@ -60,7 +126,7 @@ export function normalizeMarketPriceRequest(body = {}) {
     const symbol = cleanSymbol(item?.providerSymbol || item?.symbol)
     const quoteCurrency = cleanCurrency(item?.quoteCurrency || 'USD')
     if (!id || ids.has(id)) throw new MarketPriceError('معرف الاستثمار ناقص أو مكرر.', 400, 'invalid-price-item')
-    if (!symbol || !/^[A-Z0-9./:_-]+$/.test(symbol)) throw new MarketPriceError('رمز السعر غير صالح.', 400, 'invalid-price-symbol')
+    if (!symbol || !PROVIDER_SYMBOL_PATTERN.test(symbol)) throw new MarketPriceError('رمز السعر غير صالح.', 400, 'invalid-price-symbol')
     if (!quoteCurrency) throw new MarketPriceError('عملة السوق غير مدعومة.', 400, 'invalid-market-currency')
     ids.add(id)
     return { id, symbol, quoteCurrency }
@@ -78,8 +144,9 @@ export function marketPriceItemsForHoldings(body = {}, state = {}) {
     .map((holding) => [String(holding.id), holding]))
   const items = ids.map((id) => {
     const holding = holdings.get(id)
-    if (!holding?.providerSymbol) throw new MarketPriceError('أحد الاستثمارات غير موجود أو لا يملك مصدر سعر.', 400, 'unknown-price-item')
-    return { id, providerSymbol: holding.providerSymbol, quoteCurrency: holding.quoteCurrency }
+    const providerSymbol = providerSymbolForHolding(holding)
+    if (!holding || !providerSymbol) throw new MarketPriceError('أحد الاستثمارات غير موجود أو لا يملك مصدر سعر.', 400, 'unknown-price-item')
+    return { id, providerSymbol, quoteCurrency: holding.quoteCurrency }
   })
   return normalizeMarketPriceRequest({ items })
 }
@@ -87,9 +154,11 @@ export function marketPriceItemsForHoldings(body = {}, state = {}) {
 export function normalizeMarketSearchRequest(body = {}) {
   const query = cleanSearchText(body.query)
   const quoteCurrency = cleanCurrency(body.quoteCurrency || 'USD')
+  const assetType = cleanAssetType(body.assetType || 'stock')
   if (query.length < 2) throw new MarketPriceError('اكتب حرفين على الأقل للبحث.', 400, 'market-search-too-short')
   if (!quoteCurrency) throw new MarketPriceError('عملة السوق غير مدعومة.', 400, 'invalid-market-currency')
-  return { query, quoteCurrency }
+  if (!assetType) throw new MarketPriceError('نوع الاستثمار غير مدعوم.', 400, 'invalid-market-asset-type')
+  return { query, quoteCurrency, assetType }
 }
 
 export function createMarketPriceService(env = process.env, options = {}) {
@@ -155,8 +224,8 @@ export function createMarketPriceService(env = process.env, options = {}) {
     const apiKey = String(env.TWELVE_DATA_API_KEY || 'demo').trim()
     if (typeof fetchImpl !== 'function') throw new MarketPriceError('بحث السوق غير متاح.', 503, 'market-search-unavailable')
     const endpoint = new URL('/symbol_search', String(env.TWELVE_DATA_API_URL || DEFAULT_TWELVE_DATA_URL).replace(/\/+$/, ''))
-    endpoint.searchParams.set('symbol', request.query)
-    endpoint.searchParams.set('outputsize', String(MAX_SEARCH_RESULTS * 3))
+    endpoint.searchParams.set('symbol', providerSearchQuery(request))
+    endpoint.searchParams.set('outputsize', String(MAX_SEARCH_CANDIDATES))
     let response
     try {
       response = await fetchImpl(endpoint, { headers: providerHeaders(apiKey), signal: AbortSignal.timeout(8_000) })
@@ -167,17 +236,31 @@ export function createMarketPriceService(env = process.env, options = {}) {
     if (!response.ok || payload?.status === 'error') {
       throw new MarketPriceError('لم يرجع مزود السوق نتائج مؤكدة.', response.status || 502, 'market-search-provider')
     }
+    const rawResults = (Array.isArray(payload?.data) ? payload.data : [])
+      .filter((item) => resultMatchesAssetType(item, request.assetType))
+    const preferredResults = request.assetType === 'crypto'
+      ? rawResults.filter((item) => cryptoExchangeRank(item?.exchange) !== Number.MAX_SAFE_INTEGER)
+      : rawResults
+    const searchedSymbol = providerSearchQuery(request).toUpperCase()
+    const exactCryptoResults = request.assetType === 'crypto'
+      ? preferredResults.filter((item) => (
+        cleanSymbol(item?.symbol).split('/')[0] === searchedSymbol
+        && marketResultCurrency(item) === request.quoteCurrency
+      ))
+      : []
+    const candidates = exactCryptoResults.length ? exactCryptoResults : preferredResults
     const seen = new Set()
-    return (Array.isArray(payload?.data) ? payload.data : []).flatMap((item) => {
+    return candidates.flatMap((item) => {
       const symbol = cleanSymbol(item?.symbol)
       const exchange = cleanSymbol(item?.exchange)
       const micCode = cleanSymbol(item?.mic_code)
-      const currency = cleanCurrency(item?.currency)
+      const currency = marketResultCurrency(item)
       const name = cleanSearchText(item?.instrument_name)
       const instrumentType = cleanSearchText(item?.instrument_type)
       if (!symbol || !name || currency !== request.quoteCurrency) return []
-      const marketCode = micCode || exchange
-      const providerSymbol = symbol.includes('/') || symbol.includes(':') || !marketCode ? symbol : `${symbol}:${marketCode}`
+      const marketCode = exchange
+      const providerSymbol = symbol.includes(':') || !marketCode ? symbol : `${symbol}:${marketCode}`
+      if (!PROVIDER_SYMBOL_PATTERN.test(providerSymbol)) return []
       const key = `${providerSymbol}:${currency}`
       if (seen.has(key)) return []
       seen.add(key)
@@ -189,10 +272,15 @@ export function createMarketPriceService(env = process.env, options = {}) {
         exchange,
         micCode,
         instrumentType,
+        assetType: marketResultAssetType(item),
         country: cleanSearchText(item?.country),
         quoteCurrency: currency,
       }]
-    }).slice(0, MAX_SEARCH_RESULTS)
+    }).sort((left, right) => (
+      request.assetType === 'crypto'
+        ? cryptoExchangeRank(left.exchange) - cryptoExchangeRank(right.exchange)
+        : 0
+    )).slice(0, MAX_SEARCH_RESULTS)
   }
 
   return {
@@ -219,7 +307,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
       const request = normalizeMarketSearchRequest(body)
       const currentTime = now()
       pruneExpired(searchCache, currentTime)
-      const key = `${request.quoteCurrency}:${request.query.toLocaleLowerCase('en')}`
+      const key = `${request.assetType}:${request.quoteCurrency}:${request.query.toLocaleLowerCase('en')}`
       const cached = searchCache.get(key)
       if (cached) return { ...cached.result, cached: true }
       const result = {

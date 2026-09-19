@@ -268,11 +268,11 @@ export async function refreshAdreemInvestmentPrices(ids = []) {
   })
 }
 
-export async function searchAdreemInvestmentAssets(query, quoteCurrency = 'USD') {
+export async function searchAdreemInvestmentAssets(query, quoteCurrency = 'USD', assetType = 'stock') {
   return adreemApiJson('/api/investments/search', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ query, quoteCurrency }),
+    body: JSON.stringify({ query, quoteCurrency, assetType }),
   })
 }
 

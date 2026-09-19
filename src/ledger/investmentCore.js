@@ -23,6 +23,7 @@ export const INVESTMENT_ASSET_TYPES = Object.freeze({
 })
 const INVESTMENT_PLATFORM_KINDS = new Set(['platform', 'bank', 'wallet', 'broker'])
 const INVESTMENT_QUOTE_CURRENCIES = new Set([CURRENCIES.USD, CURRENCIES.TRY, CURRENCIES.EUR])
+const INVESTMENT_PROVIDER_SYMBOL_PATTERN = /^[A-Z0-9./_-]+(?::[A-Z0-9._ -]+)?$/
 
 function cleanText(value, maximum = 120) {
   return String(value || '').trim().replace(/\s+/g, ' ').slice(0, maximum)
@@ -75,6 +76,10 @@ function createdTime(record) {
   return Number.isFinite(value) ? value : 0
 }
 
+function isValidDateValue(value) {
+  return typeof value === 'string' && value.trim() !== '' && Number.isFinite(new Date(value).getTime())
+}
+
 export function quantityToUnits(value) {
   const number = parseInvestmentDecimal(value)
   if (!Number.isFinite(number) || number <= 0) return 0
@@ -124,6 +129,9 @@ export function createInvestmentHolding(draft = {}, createdAt = new Date().toISO
     ? draft.assetType
     : INVESTMENT_ASSET_TYPES.OTHER
   const quoteCurrency = cleanText(draft.quoteCurrency, 12).toUpperCase()
+  const normalizedQuoteCurrency = INVESTMENT_QUOTE_CURRENCIES.has(quoteCurrency) ? quoteCurrency : CURRENCIES.USD
+  const openingPriceUsdMicros = usdToMicros(draft.initialPriceUsd)
+  const lastPriceUsdMicros = safePositiveInteger(draft.lastPriceUsdMicros) || openingPriceUsdMicros
   return {
     id,
     platformId: cleanText(draft.platformId, 160),
@@ -132,11 +140,12 @@ export function createInvestmentHolding(draft = {}, createdAt = new Date().toISO
     providerSymbol: cleanText(draft.providerSymbol || draft.symbol, 80).toUpperCase(),
     assetType,
     exchange: cleanText(draft.exchange, 40).toUpperCase(),
-    quoteCurrency: INVESTMENT_QUOTE_CURRENCIES.has(quoteCurrency) ? quoteCurrency : CURRENCIES.USD,
-    lastPriceUsdMicros: safePositiveInteger(draft.lastPriceUsdMicros),
-    lastPriceNativeMicros: safePositiveInteger(draft.lastPriceNativeMicros),
-    lastPriceAt: draft.lastPriceAt || null,
-    lastPriceSource: cleanText(draft.lastPriceSource, 40) || 'manual',
+    quoteCurrency: normalizedQuoteCurrency,
+    lastPriceUsdMicros,
+    lastPriceNativeMicros: safePositiveInteger(draft.lastPriceNativeMicros)
+      || (normalizedQuoteCurrency === CURRENCIES.USD ? lastPriceUsdMicros : 0),
+    lastPriceAt: draft.lastPriceAt || (openingPriceUsdMicros ? createdAt : null),
+    lastPriceSource: cleanText(draft.lastPriceSource, 40) || (openingPriceUsdMicros ? 'opening' : 'manual'),
     status: INVESTMENT_RECORD_STATUSES.ACTIVE,
     createdAt,
     updatedAt: createdAt,
@@ -162,6 +171,24 @@ export function createInvestmentTrade(draft = {}, createdAt = new Date().toISOSt
       : INVESTMENT_RECORD_STATUSES.ACTIVE,
     createdAt,
     updatedAt: createdAt,
+  }
+}
+
+export function applyInvestmentTradePriceFallback(holding = {}, trade = {}) {
+  const priceUsdMicros = safePositiveInteger(trade.priceUsdMicros)
+  if (
+    safePositiveInteger(holding.lastPriceUsdMicros)
+    || trade.type === INVESTMENT_TRADE_TYPES.SELL
+    || !priceUsdMicros
+  ) return holding
+  const updatedAt = trade.occurredAt || trade.createdAt || holding.updatedAt || holding.createdAt || null
+  return {
+    ...holding,
+    lastPriceUsdMicros: priceUsdMicros,
+    lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : 0,
+    lastPriceAt: updatedAt,
+    lastPriceSource: 'trade',
+    updatedAt: updatedAt || holding.updatedAt,
   }
 }
 
@@ -289,14 +316,30 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
     if (!holding?.id || holdingById.has(holding.id)) errors.push({ field: 'investmentHoldings', message: 'الاستثمار ناقص أو مكرر.' })
     else holdingById.set(holding.id, holding)
     if (!platformById.has(holding?.platformId)) errors.push({ field: 'investmentHoldings', id: holding?.id, message: 'منصة الاستثمار غير موجودة.' })
+    const providerSymbol = cleanText(holding?.providerSymbol, 80).toUpperCase()
     if (!cleanText(holding?.name) || !cleanText(holding?.symbol)) errors.push({ field: 'investmentHoldings', id: holding?.id, message: 'اسم الاستثمار ورمزه مطلوبان.' })
+    if (!providerSymbol || !INVESTMENT_PROVIDER_SYMBOL_PATTERN.test(providerSymbol)) {
+      errors.push({ field: 'investmentHoldings', id: holding?.id, message: 'رمز مصدر السعر غير صالح.' })
+    }
     if (!Object.values(INVESTMENT_ASSET_TYPES).includes(holding?.assetType) || !INVESTMENT_QUOTE_CURRENCIES.has(holding?.quoteCurrency)) {
       errors.push({ field: 'investmentHoldings', id: holding?.id, message: 'نوع الاستثمار أو عملة السوق غير صالحة.' })
     }
     if (![INVESTMENT_RECORD_STATUSES.ACTIVE, INVESTMENT_RECORD_STATUSES.INACTIVE].includes(holding?.status)) {
       errors.push({ field: 'investmentHoldings', id: holding?.id, message: 'حالة الاستثمار غير صالحة.' })
     }
+    if (
+      !Number.isSafeInteger(Number(holding?.lastPriceUsdMicros || 0))
+      || Number(holding?.lastPriceUsdMicros || 0) < 0
+      || !Number.isSafeInteger(Number(holding?.lastPriceNativeMicros || 0))
+      || Number(holding?.lastPriceNativeMicros || 0) < 0
+      || (holding?.lastPriceAt && !isValidDateValue(holding.lastPriceAt))
+    ) {
+      errors.push({ field: 'investmentHoldings', id: holding?.id, message: 'السعر المحفوظ للاستثمار غير صالح.' })
+    }
     if (holding?.status !== INVESTMENT_RECORD_STATUSES.INACTIVE) {
+      if (platformById.get(holding?.platformId)?.status === INVESTMENT_RECORD_STATUSES.INACTIVE) {
+        errors.push({ field: 'investmentHoldings', id: holding?.id, message: 'لا يمكن إبقاء استثمار نشط داخل منصة متوقفة.' })
+      }
       const symbolKey = `${holding?.platformId || ''}:${cleanText(holding?.symbol, 32).toUpperCase()}`
       if (activeSymbols.has(symbolKey)) errors.push({ field: 'investmentHoldings', id: holding?.id, message: 'رمز الاستثمار مكرر في المنصة نفسها.' })
       activeSymbols.add(symbolKey)
@@ -311,6 +354,9 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
     if (!Object.values(INVESTMENT_TRADE_TYPES).includes(trade.type) || !safePositiveInteger(trade.quantityUnits) || !safePositiveInteger(trade.priceUsdMicros) || !investmentTradeValueMicros(trade) || ![INVESTMENT_RECORD_STATUSES.ACTIVE, INVESTMENT_RECORD_STATUSES.VOIDED].includes(trade.status) || safeInteger(trade.feeUsdMicros, -1) < 0) {
       errors.push({ field: 'investmentTrades', id: trade.id, message: 'كمية أو سعر عملية الاستثمار غير صالح.' })
     }
+    if (!isValidDateValue(trade.occurredAt || trade.createdAt)) {
+      errors.push({ field: 'investmentTrades', id: trade.id, message: 'تاريخ عملية الاستثمار غير صالح.' })
+    }
   }
   for (const holding of holdings) {
     let availableUnits = 0n
@@ -318,6 +364,9 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
     const holdingTrades = trades
       .filter((trade) => trade?.holdingId === holding.id && trade.status !== INVESTMENT_RECORD_STATUSES.VOIDED)
       .sort((left, right) => createdTime(left) - createdTime(right) || String(left.id).localeCompare(String(right.id)))
+    if (holding.status === INVESTMENT_RECORD_STATUSES.INACTIVE && holdingTrades.length) {
+      errors.push({ field: 'investmentHoldings', id: holding.id, message: 'لا يمكن إيقاف استثمار له عمليات محفوظة.' })
+    }
     for (const trade of holdingTrades) {
       const quantityUnits = safePositiveInteger(trade.quantityUnits)
       const quantity = BigInt(quantityUnits)
@@ -338,6 +387,13 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
     }
   }
   for (const platform of platforms) {
+    if (platform.status === INVESTMENT_RECORD_STATUSES.INACTIVE && (
+      holdings.some((holding) => holding.platformId === platform.id)
+      || trades.some((trade) => trade.platformId === platform.id)
+      || movements.some((movement) => movement.investmentPlatformId === platform.id)
+    )) {
+      errors.push({ field: 'investmentPlatforms', id: platform.id, message: 'لا يمكن إيقاف منصة مرتبطة ببيانات محفوظة.' })
+    }
     let freeCashUsdMicros = 0n
     for (const movement of movements) {
       if (movement?.investmentPlatformId === platform.id) freeCashUsdMicros += BigInt(investmentMovementCashMicros(movement))

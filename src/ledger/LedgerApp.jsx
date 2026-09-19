@@ -30,7 +30,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradePriceFallback, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -6288,6 +6288,9 @@ export default function LedgerApp() {
     }
     setLedgerExtras((current) => ({
       ...current,
+      investmentHoldings: (current.investmentHoldings || []).map((item) => (
+        item.id === holding.id ? applyInvestmentTradePriceFallback(item, trade) : item
+      )),
       investmentTrades: [...(current.investmentTrades || []), trade],
       auditEvents: [...(current.auditEvents || []), createAuditEvent(`investment.trade.${trade.type}`, { tradeId: trade.id, holdingId: holding.id, platformId: holding.platformId })],
     }))
@@ -6307,7 +6310,7 @@ export default function LedgerApp() {
       investmentHoldings: (current.investmentHoldings || []).map((holding) => holding.id === holdingId ? {
         ...holding,
         lastPriceUsdMicros: priceUsdMicros,
-        lastPriceNativeMicros: priceUsdMicros,
+        lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : 0,
         lastPriceAt: updatedAt,
         lastPriceSource: 'manual',
         updatedAt,

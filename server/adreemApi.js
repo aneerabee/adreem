@@ -31,6 +31,7 @@ const RATE_LIMITS = {
   ledgerRead: { limit: 240, windowMs: 60 * 1000 },
   ledgerWrite: { limit: 80, windowMs: 60 * 1000 },
   attachment: { limit: 30, windowMs: 60 * 1000 },
+  marketSearch: { limit: 30, windowMs: 60 * 1000 },
   marketPrice: { limit: 12, windowMs: 60 * 1000 },
 }
 const MOVEMENT_AUDIT_FIELDS = [
@@ -609,7 +610,11 @@ export function createAdreemApiHandler(env = process.env) {
       }
     }
     if (url.pathname === '/api/investments/search' || url.pathname === '/api/investments/prices') {
-      const priceLimit = rateLimiter.check(rateKey(req, 'market-price'), RATE_LIMITS.marketPrice)
+      const isMarketSearch = url.pathname === '/api/investments/search'
+      const priceLimit = rateLimiter.check(
+        rateKey(req, isMarketSearch ? 'market-search' : 'market-price'),
+        isMarketSearch ? RATE_LIMITS.marketSearch : RATE_LIMITS.marketPrice,
+      )
       if (!priceLimit.ok) return rejectRateLimited(res, allowedOrigin, priceLimit)
       const token = tokenFromAuthHeader(req.headers.authorization)
       const ledgerId = ledgerIdForToken(token)

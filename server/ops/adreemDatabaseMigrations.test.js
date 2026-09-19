@@ -12,6 +12,7 @@ const tryCurrencySql = readFileSync(new URL('../../supabase/migrations/202608231
 const botRemovalSql = readFileSync(new URL('../../supabase/migrations/20260823190000_remove_telegram_bot.sql', import.meta.url), 'utf8')
 const investmentsSql = readFileSync(new URL('../../supabase/migrations/20260918213000_add_adreem_investments.sql', import.meta.url), 'utf8')
 const investmentHardeningSql = readFileSync(new URL('../../supabase/migrations/20260918220000_harden_adreem_investments.sql', import.meta.url), 'utf8')
+const investmentHoldingHardeningSql = readFileSync(new URL('../../supabase/migrations/20260919001000_harden_adreem_investment_holdings.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -84,6 +85,15 @@ describe('ADREEM v3 database migration invariants', () => {
     expect(investmentHardeningSql).toContain('adreem_investment_trades_active_position_idx')
     expect(investmentHardeningSql).toContain('adreem_movements_investment_platform_idx')
     expect(investmentHardeningSql).toContain('ADREEM_INVESTMENT_PLATFORM_IN_USE')
+    expect(investmentHoldingHardeningSql).toContain('ADREEM_ACTIVE_INVESTMENT_PLATFORM_REQUIRED')
+    expect(investmentHoldingHardeningSql).toContain('ADREEM_INVALID_INVESTMENT_PROVIDER_SYMBOL')
+    expect(investmentHoldingHardeningSql).toContain('ADREEM_INVESTMENT_HOLDING_IDENTITY_IMMUTABLE')
+    expect(investmentHoldingHardeningSql).toContain('ADREEM_INVESTMENT_HOLDING_IN_USE')
+    expect(investmentHoldingHardeningSql).toContain('before insert or update on public.adreem_investment_holdings')
+    expect(investmentHoldingHardeningSql).toContain('ADREEM_ACTIVE_INVESTMENT_HOLDING_REQUIRED')
+    expect(investmentHoldingHardeningSql).toContain('before insert on public.adreem_investment_trades')
+    expect(investmentHoldingHardeningSql).toContain('ADREEM_INVESTMENT_PLATFORM_IN_USE')
+    expect(investmentHoldingHardeningSql).toContain('before update on public.adreem_investment_platforms')
   })
 
   it('removes the legacy blob tables only from an empty v3 target', () => {
