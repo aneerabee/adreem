@@ -22,13 +22,17 @@ import {
 } from './ledgerCore'
 
 describe('adreem ledger core', () => {
-  it('posts investment deposits and withdrawals only against owned USD money', () => {
+  it('posts investment deposits from owned money or a USD person balance', () => {
     const cash = createAccount({
       id: 'own-usd', ownerName: 'أنا', subAccountName: 'USD', type: ACCOUNT_TYPES.CASH,
       valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.USD, openingUsd: 500,
     })
     const existingMovements = createOpeningMovements([cash])
     const platform = { id: 'platform-1', name: 'IBKR', status: 'active' }
+    const person = createAccount({
+      id: 'person-usd', ownerName: 'سيف', subAccountName: 'USD', type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE, currencyKind: CURRENCIES.USD,
+    })
     const options = {
       investmentPlatforms: [platform],
       investmentAvailableCashUsdMicros: new Map([[platform.id, 500_000_000]]),
@@ -52,6 +56,25 @@ describe('adreem ledger core', () => {
     expect(withdrawal.validation.ok).toBe(true)
     expect(buildPostingEntries(deposit)).toEqual([{ accountId: cash.id, currency: CURRENCIES.USD, delta: -200 }])
     expect(buildPostingEntries(withdrawal)).toEqual([{ accountId: cash.id, currency: CURRENCIES.USD, delta: 150 }])
+    const directFromPerson = postMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
+      amount: 75,
+      currency: CURRENCIES.USD,
+      sourceAccountId: person.id,
+      investmentPlatformId: platform.id,
+    }, [cash, person], existingMovements, options)
+    expect(directFromPerson.validation.ok).toBe(true)
+    expect(buildPostingEntries(directFromPerson)).toEqual([{ accountId: person.id, currency: CURRENCIES.USD, delta: -75 }])
+
+    const overdrawnFunding = postMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
+      amount: 501,
+      currency: CURRENCIES.USD,
+      sourceAccountId: cash.id,
+      investmentPlatformId: platform.id,
+    }, [cash], existingMovements, options)
+    expect(overdrawnFunding.validation.ok).toBe(false)
+    expect(overdrawnFunding.validation.errors).toContainEqual(expect.objectContaining({ field: 'sourceAccountId' }))
   })
 
   it('rejects an investment movement with the wrong currency, platform, account, or free cash', () => {

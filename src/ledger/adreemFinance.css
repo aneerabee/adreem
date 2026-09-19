@@ -2586,8 +2586,10 @@
 .adreem-investment-platform > header span { min-width: 0; display: grid; gap: 1px; }
 .adreem-investment-platform > header strong { overflow-wrap: anywhere; font-size: 0.8rem; }
 .adreem-investment-platform > header small { color: #7b766e; font-size: 0.6rem; }
-.adreem-investment-platform > header > b { display: grid; gap: 1px; color: #252a2d; direction: ltr; font-size: 0.8rem; text-align: end; white-space: nowrap; }
-.adreem-investment-platform > header > b small { direction: rtl; }
+.adreem-investment-platform-cash { flex: 0 0 auto; justify-content: flex-end; gap: 7px !important; }
+.adreem-investment-platform-cash > b { display: grid; gap: 1px; color: #252a2d; direction: ltr; font-size: 0.8rem; text-align: end; white-space: nowrap; }
+.adreem-investment-platform-cash > b small { direction: rtl; }
+.adreem-investment-platform-cash > button { min-height: 30px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid #d5b66f; border-radius: 6px; background: #fff8e7; color: #735313; font-size: 0.62rem; font-weight: 850; }
 .adreem-investment-holdings { display: grid; }
 .adreem-investment-holding {
   min-width: 0;
@@ -2612,6 +2614,7 @@
 .adreem-investment-row-actions button { min-height: 30px; padding: 0 7px; font-size: 0.62rem; }
 .adreem-investment-row-actions .is-buy { border-color: #b7ddcf; color: #087757; }
 .adreem-investment-row-actions .is-sell { border-color: #efc4c4; color: #b72525; }
+.adreem-investment-row-actions .is-remove { border-color: #d4d0c8; color: #555b5e; }
 .adreem-investment-platform-empty { margin: 0; padding: 16px; color: #7b766e; font-size: 0.7rem; text-align: center; }
 .adreem-investment-dialog-layer {
   position: fixed;
@@ -2665,7 +2668,16 @@
 .adreem-investment-trade-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 4px; border-radius: 7px; background: #f0eee8; }
 .adreem-investment-trade-toggle button { min-height: 34px; border: 0; border-radius: 5px; background: transparent; color: #6b6760; font-weight: 850; }
 .adreem-investment-trade-toggle button.is-active { background: #fff; color: #77520f; box-shadow: 0 2px 8px rgba(35, 38, 39, 0.09); }
-.adreem-investment-trade-context { display: flex; align-items: center; gap: 6px; margin: 0; padding: 7px 8px; border-radius: 6px; background: var(--investment-gold-soft); color: #735313; font-size: 0.65rem; font-weight: 800; }
+.adreem-investment-trade-context { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 0; padding: 8px; border-radius: 6px; background: var(--investment-gold-soft); color: #735313; font-size: 0.65rem; font-weight: 800; }
+.adreem-investment-trade-context > span { min-width: 0; display: grid; flex: 1; gap: 2px; }
+.adreem-investment-trade-context small { color: #7b6942; font-size: 0.59rem; }
+.adreem-investment-trade-context > button { min-height: 30px; padding: 0 8px; border: 1px solid #c9942f; border-radius: 6px; background: #fff; color: #735313; font: inherit; white-space: nowrap; }
+.adreem-investment-trade-context.is-error { background: #fff0f0; color: #a62929; }
+.adreem-investment-trade-context.is-error small { color: #a62929; }
+.adreem-investment-close-summary { display: grid; gap: 8px; padding: 11px; border: 1px solid #e0d6bd; border-radius: 7px; background: #fffaf0; }
+.adreem-investment-close-summary strong { overflow-wrap: anywhere; font-size: 0.8rem; }
+.adreem-investment-close-summary b { color: #8f2525; direction: ltr; font-size: 1.05rem; }
+.adreem-investment-close-summary p { margin: 0; color: #6d685f; font-size: 0.68rem; line-height: 1.65; }
 .adreem-investment-platform-picker { display: grid; gap: 6px; }
 .adreem-investment-platform-picker > button { min-width: 0; min-height: 50px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 8px; border: 1px solid #dcd7cc; border-radius: 7px; background: #fff; color: #303538; text-align: start; }
 .adreem-investment-platform-picker > button.is-active { border-color: #9a6b18; background: #fff7e4; box-shadow: inset 3px 0 #c9942f; }
@@ -2707,7 +2719,7 @@
   .adreem-investments { gap: 9px; }
   .adreem-investment-hero { align-items: stretch; flex-direction: column; padding: 9px; }
   .adreem-investment-actions { display: grid; grid-template-columns: 1.35fr 0.85fr 0.85fr; }
-  .adreem-investment-actions button { min-width: 0; padding: 0 6px; font-size: 0.64rem; }
+  .adreem-investment-actions button { min-width: 0; min-height: 44px; padding: 0 6px; font-size: 0.64rem; }
   .adreem-investment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adreem-investment-summary article { min-height: 62px; padding: 7px 8px; }
   .adreem-investment-summary strong { font-size: 0.84rem; }
@@ -2728,12 +2740,21 @@
   .adreem-investment-price { grid-area: price; }
   .adreem-investment-holding > div:nth-of-type(4) { grid-area: value; display: grid; text-align: end; }
   .adreem-investment-holding > div:nth-of-type(5) { grid-area: profit; display: grid; text-align: end; }
-  .adreem-investment-row-actions { grid-area: actions; display: grid !important; grid-template-columns: 1fr 1fr; }
+  .adreem-investment-row-actions { grid-area: actions; display: grid !important; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }
+  .adreem-investment-platform > header { align-items: flex-start; }
+  .adreem-investment-platform-cash { align-items: flex-end !important; flex-direction: column; gap: 4px !important; }
+  .adreem-investment-platform-cash > button,
+  .adreem-investment-row-actions button,
+  .adreem-investment-dialog > footer button,
+  .adreem-investment-trade-toggle button,
+  .adreem-investment-trade-context > button { min-height: 44px; }
+  .adreem-investment-dialog > header > button { width: 44px; height: 44px; }
   .adreem-investment-dialog-layer { align-items: end; padding: 0; }
   .adreem-investment-dialog { width: 100%; max-height: min(88dvh, 760px); border-radius: 10px 10px 0 0; }
   .adreem-investment-dialog-body .is-paired { grid-template-columns: 1fr; }
   .adreem-investment-dialog-body input,
   .adreem-investment-dialog-body select { min-height: 42px; font-size: 16px; }
+  .adreem-investment-trade-context > button { flex: 1 0 100%; }
   .adreem-investment-dialog > footer { padding-bottom: max(9px, env(safe-area-inset-bottom)); }
 }
 

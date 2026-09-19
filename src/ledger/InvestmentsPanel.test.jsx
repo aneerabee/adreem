@@ -22,6 +22,8 @@ function callbacks() {
     onAddHolding: vi.fn(),
     onAddTrade: vi.fn(),
     onManualPrice: vi.fn(),
+    onCloseSmallHolding: vi.fn(),
+    onOpenFunding: vi.fn(),
     onRefreshPrices: vi.fn(),
     onSearchAssets: vi.fn(),
   }
@@ -60,6 +62,31 @@ describe('investments panel', () => {
     expect(html).toContain('600 USD')
     expect(html).toContain('+100 USD')
     expect(html).toContain('is-positive')
+  })
+
+  it('shows funding context and removal only for confirmed investments below 5 USD', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'IBKR' })
+    const tiny = createInvestmentHolding({ id: 'tiny', platformId: platform.id, name: 'Tiny', symbol: 'TNY', lastPriceUsdMicros: usdToMicros(2) })
+    const large = createInvestmentHolding({ id: 'large', platformId: platform.id, name: 'Large', symbol: 'LRG', lastPriceUsdMicros: usdToMicros(10) })
+    const summary = {
+      platforms: [{
+        platform,
+        freeCashUsdMicros: usdToMicros(20),
+        holdings: [
+          { holding: tiny, quantityUnits: 100_000_000, averageCostUsdMicros: usdToMicros(2), marketValueUsdMicros: usdToMicros(2), unrealizedProfitUsdMicros: 0 },
+          { holding: large, quantityUnits: 100_000_000, averageCostUsdMicros: usdToMicros(10), marketValueUsdMicros: usdToMicros(10), unrealizedProfitUsdMicros: 0 },
+        ],
+      }],
+      totalValueUsdMicros: usdToMicros(32),
+      costBasisUsdMicros: usdToMicros(12),
+      unrealizedProfitUsdMicros: 0,
+      freeCashUsdMicros: usdToMicros(20),
+    }
+
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[tiny, large]} {...callbacks()} />)
+
+    expect(html).toContain('تمويل')
+    expect((html.match(/إزالة/g) || [])).toHaveLength(1)
   })
 
   it('translates system copy while preserving investment names', () => {

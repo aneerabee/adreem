@@ -1,14 +1,18 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Landmark, Plus, RefreshCw, Search, WalletCards, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Landmark, Plus, RefreshCw, Search, Trash2, WalletCards, X } from 'lucide-react'
 import { AnimatePresence, motion as Motion } from 'motion/react'
 import {
   INVESTMENT_ASSET_TYPES,
+  SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS,
   INVESTMENT_TRADE_TYPES,
+  investmentTradeValueMicros,
   microsToUsd,
   parseInvestmentDecimal,
+  quantityToUnits,
   unitsToQuantity,
+  usdToMicros,
 } from './investmentCore.js'
 import { preserveUiData } from './uiTranslation.js'
 
@@ -91,6 +95,8 @@ export default function InvestmentsPanel({
   onAddHolding,
   onAddTrade,
   onManualPrice,
+  onCloseSmallHolding,
+  onOpenFunding,
   onRefreshPrices,
   onSearchAssets,
 }) {
@@ -100,6 +106,7 @@ export default function InvestmentsPanel({
   const [tradeDraft, setTradeDraft] = useState(blankTrade)
   const [manualHoldingId, setManualHoldingId] = useState('')
   const [manualPrice, setManualPrice] = useState('')
+  const [closingRow, setClosingRow] = useState(null)
   const [query, setQuery] = useState('')
   const [assetQuery, setAssetQuery] = useState('')
   const [assetResults, setAssetResults] = useState([])
@@ -175,6 +182,12 @@ export default function InvestmentsPanel({
     setDialog('trade')
   }
 
+  function openSmallClosure(row) {
+    submissionRef.current = false
+    setClosingRow(row)
+    setDialog('close')
+  }
+
   function submitPlatform(event) {
     event.preventDefault()
     if (!platformDraft.name.trim() || submissionRef.current) return
@@ -229,6 +242,32 @@ export default function InvestmentsPanel({
     setDialog('')
   }
 
+  function submitSmallClosure(event) {
+    event.preventDefault()
+    if (!closingRow?.holding?.id || submissionRef.current) return
+    submissionRef.current = true
+    if (onCloseSmallHolding(closingRow.holding.id) === false) {
+      submissionRef.current = false
+      return
+    }
+    setClosingRow(null)
+    setDialog('')
+  }
+
+  const selectedTradeHolding = holdingById.get(tradeDraft.holdingId)
+  const selectedTradePlatform = summary.platforms.find((row) => row.platform.id === selectedTradeHolding?.platformId)
+  const selectedTradeRow = selectedTradePlatform?.holdings.find((row) => row.holding.id === selectedTradeHolding?.id)
+  const tradeValueUsdMicros = investmentTradeValueMicros({
+    quantityUnits: quantityToUnits(tradeDraft.quantity),
+    priceUsdMicros: usdToMicros(tradeDraft.priceUsd),
+  })
+  const tradeFeeUsdMicros = usdToMicros(tradeDraft.feeUsd || 0)
+  const tradeDebitUsdMicros = tradeValueUsdMicros + tradeFeeUsdMicros
+  const tradeHasValidInput = Boolean(tradeDraft.holdingId && tradeValueUsdMicros > 0)
+  const tradeHasEnoughCash = tradeDraft.type !== INVESTMENT_TRADE_TYPES.BUY || tradeDebitUsdMicros <= Number(selectedTradePlatform?.freeCashUsdMicros || 0)
+  const tradeHasEnoughUnits = tradeDraft.type !== INVESTMENT_TRADE_TYPES.SELL || quantityToUnits(tradeDraft.quantity) <= Number(selectedTradeRow?.quantityUnits || 0)
+  const canSubmitTrade = tradeHasValidInput && tradeHasEnoughCash && tradeHasEnoughUnits
+
   const portfolioProfitUsdMicros = Number.isSafeInteger(summary.totalProfitUsdMicros)
     ? summary.totalProfitUsdMicros
     : summary.unrealizedProfitUsdMicros || 0
@@ -243,7 +282,7 @@ export default function InvestmentsPanel({
         <div className="adreem-investment-actions">
           <button type="button" className="is-refresh" disabled={isRefreshing || !activeHoldings.length} onClick={onRefreshPrices}>
             <RefreshCw aria-hidden="true" size={16} className={isRefreshing ? 'is-spinning' : ''} />
-            {isRefreshing ? 'جاري التحديث' : 'تحديث الأسعار'}
+            {isRefreshing ? 'جاري تحديث الكل' : 'تحديث الكل'}
           </button>
           <button type="button" onClick={openPlatform}><Landmark aria-hidden="true" size={16} /> منصة</button>
           <button type="button" disabled={!activePlatforms.length} onClick={openHolding}><Plus aria-hidden="true" size={16} /> استثمار</button>
@@ -275,7 +314,10 @@ export default function InvestmentsPanel({
             <article className="adreem-investment-platform" key={platformRow.platform.id}>
               <header>
                 <div><i><Landmark aria-hidden="true" size={17} /></i><span><strong>{preserveUiData(platformRow.platform.name)}</strong><small>{preserveUiData(platformRow.platform.location || 'بدون موقع')}</small></span></div>
-                <b>{usdMicros(platformRow.freeCashUsdMicros)}<small>نقد حر</small></b>
+                <div className="adreem-investment-platform-cash">
+                  <b>{usdMicros(platformRow.freeCashUsdMicros)}<small>نقد حر</small></b>
+                  <button type="button" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /> تمويل</button>
+                </div>
               </header>
               <div className="adreem-investment-holdings">
                 {platformRow.holdings.length ? platformRow.holdings.map((row) => {
@@ -294,6 +336,7 @@ export default function InvestmentsPanel({
                       <div className="adreem-investment-row-actions">
                         <button type="button" className="is-buy" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.BUY, row.holding.id)}><ArrowDownToLine aria-hidden="true" size={14} /> شراء</button>
                         <button type="button" className="is-sell" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.SELL, row.holding.id)}><ArrowUpFromLine aria-hidden="true" size={14} /> بيع</button>
+                        {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
                       </div>
                     </section>
                   )
@@ -329,18 +372,27 @@ export default function InvestmentsPanel({
           </InvestmentDialog>
         ) : null}
         {dialog === 'trade' ? (
-          <InvestmentDialog title={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'شراء استثمار' : 'بيع استثمار'} subtitle="العملية داخل محفظتي" onClose={() => setDialog('')} onSubmit={submitTrade} canSubmit={Boolean(tradeDraft.holdingId && parseInvestmentDecimal(tradeDraft.quantity) > 0 && parseInvestmentDecimal(tradeDraft.priceUsd) > 0)} submitLabel={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'تأكيد الشراء' : 'تأكيد البيع'}>
+          <InvestmentDialog title={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'شراء استثمار' : 'بيع استثمار'} subtitle={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'الشراء يخصم من نقد المنصة' : 'البيع يضيف إلى نقد المنصة'} onClose={() => setDialog('')} onSubmit={submitTrade} canSubmit={canSubmitTrade} submitLabel={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'تأكيد الشراء' : 'تأكيد البيع'}>
             <label><span>الاستثمار</span><select value={tradeDraft.holdingId} onChange={(event) => setTradeDraft((current) => ({ ...current, holdingId: event.target.value }))}>{activeHoldings.map((holding) => <option key={holding.id} value={holding.id}>{preserveUiData(`${holding.symbol} · ${holding.name}`)}</option>)}</select></label>
             <div className="adreem-investment-trade-toggle"><button type="button" className={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'is-active' : ''} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.BUY }))}>شراء</button><button type="button" className={tradeDraft.type === INVESTMENT_TRADE_TYPES.SELL ? 'is-active' : ''} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.SELL }))}>بيع</button></div>
             <div className="is-paired"><label><span>الكمية</span><input dir="ltr" inputMode="decimal" value={tradeDraft.quantity} onChange={(event) => setTradeDraft((current) => ({ ...current, quantity: event.target.value }))} placeholder="0" /></label><label><span>سعر الوحدة USD</span><input dir="ltr" inputMode="decimal" value={tradeDraft.priceUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, priceUsd: event.target.value }))} placeholder="0" /></label></div>
             <label><span>الرسوم USD</span><input dir="ltr" inputMode="decimal" value={tradeDraft.feeUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, feeUsd: event.target.value }))} placeholder="0" /></label>
             <label><span>ملاحظة</span><input value={tradeDraft.note} onChange={(event) => setTradeDraft((current) => ({ ...current, note: event.target.value }))} placeholder="اختياري" /></label>
-            {holdingById.get(tradeDraft.holdingId) ? <p className="adreem-investment-trade-context"><CircleDollarSign aria-hidden="true" size={15} />{preserveUiData(holdingById.get(tradeDraft.holdingId).symbol)} · USD</p> : null}
+            {selectedTradeHolding ? <div className={`adreem-investment-trade-context ${!tradeHasEnoughCash || !tradeHasEnoughUnits ? 'is-error' : ''}`}><CircleDollarSign aria-hidden="true" size={15} /><span><strong>{preserveUiData(selectedTradePlatform?.platform.name || selectedTradeHolding.symbol)}</strong><small>{tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? `المتاح ${usdMicros(selectedTradePlatform?.freeCashUsdMicros || 0)} · المطلوب ${usdMicros(tradeDebitUsdMicros)}` : `الموجود ${decimal(unitsToQuantity(selectedTradeRow?.quantityUnits || 0), 8)} وحدة`}</small></span>{!tradeHasEnoughCash && typeof onOpenFunding === 'function' ? <button type="button" onClick={() => { setDialog(''); onOpenFunding(selectedTradeHolding.platformId) }}>حوّل USD أولًا</button> : null}</div> : null}
           </InvestmentDialog>
         ) : null}
         {dialog === 'price' ? (
           <InvestmentDialog title="سعر يدوي" subtitle="يبقى حتى التحديث القادم" onClose={() => setDialog('')} onSubmit={submitManualPrice} canSubmit={parseInvestmentDecimal(manualPrice) > 0} submitLabel="حفظ السعر">
             <label><span>السعر الحالي USD</span><input autoFocus dir="ltr" inputMode="decimal" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} placeholder="0" /></label>
+          </InvestmentDialog>
+        ) : null}
+        {dialog === 'close' && closingRow ? (
+          <InvestmentDialog title="إزالة استثمار صغير" subtitle="يحفظ السجل ولا يمحو المال" onClose={() => { setClosingRow(null); setDialog('') }} onSubmit={submitSmallClosure} submitLabel="تأكيد الإزالة">
+            <div className="adreem-investment-close-summary">
+              <strong>{preserveUiData(`${closingRow.holding.symbol} · ${closingRow.holding.name}`)}</strong>
+              <b>{usdMicros(closingRow.marketValueUsdMicros)}</b>
+              <p>{closingRow.quantityUnits > 0 ? 'ستباع الكمية كاملة بالسعر الحالي، وتنتقل قيمتها إلى نقد المنصة.' : 'الاستثمار فارغ وسيختفي من القائمة.'}</p>
+            </div>
           </InvestmentDialog>
         ) : null}
       </AnimatePresence>

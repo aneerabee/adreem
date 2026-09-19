@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import { COUNTERPARTY_ACCOUNT_KINDS } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement } from './ledgerCore.js'
+import { MOVEMENT_ENTRY_STEPS } from './movementConfig.js'
 import {
   AccountProfile,
   AccountStatement,
@@ -64,6 +65,7 @@ import {
   previewMovementEdit,
   movementChangedWhileOpen,
   movementEditChanges,
+  movementRouteSteps,
   movementRecordVersion,
   normalizeLocalizedNumericInput,
   parseMoneyAmount,
@@ -668,6 +670,13 @@ describe('LedgerApp compact history rows', () => {
 })
 
 describe('LedgerApp movement editing', () => {
+  it('keeps investment funding source before platform in the flow and receipt', () => {
+    expect(movementRouteSteps({ platformAfterSource: true, needsInvestmentPlatform: true }, true)).toEqual([
+      MOVEMENT_ENTRY_STEPS.SOURCE,
+      MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM,
+    ])
+  })
+
   it('previews the exact balance difference when replacing a local or cloud movement', () => {
     const accounts = [
       createAccount({

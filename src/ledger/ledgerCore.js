@@ -275,8 +275,8 @@ export function validateMovement(movement, accounts = [], movements = [], option
     if (Number.isFinite(amount) && Math.abs(amount) > MAX_INVESTMENT_MOVEMENT_AMOUNT) {
       errors.push({ field: 'amount', message: `قيمة حركة الاستثمار يجب ألا تتجاوز ${MAX_INVESTMENT_MOVEMENT_AMOUNT.toLocaleString('en-US')} USD.` })
     }
-    if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && sourceId && sourceAccount && ![VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(sourceAccount.valueKind)) {
-      errors.push({ field: 'sourceAccountId', message: 'إيداع الاستثمار يخرج من كاش أو مصرف تملكه.' })
+    if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && sourceId && sourceAccount && ![VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.RECEIVABLE].includes(sourceAccount.valueKind)) {
+      errors.push({ field: 'sourceAccountId', message: 'تمويل الاستثمار يخرج من حساب USD أو من شخص.' })
     }
     if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && sourceAccount && !accountSupportsTransferCurrency(sourceAccount, CURRENCIES.USD)) {
       errors.push({ field: 'sourceAccountId', message: 'حساب المصدر لا يدعم USD.' })

@@ -261,11 +261,22 @@ export async function adreemApiJson(path, options = {}, allowRefresh = true) {
 }
 
 export async function refreshAdreemInvestmentPrices(ids = []) {
-  return adreemApiJson('/api/investments/prices', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ ids }),
-  })
+  const uniqueIds = Array.from(new Set((Array.isArray(ids) ? ids : []).map((id) => String(id || '').trim()).filter(Boolean)))
+  const prices = []
+  for (let offset = 0; offset < uniqueIds.length; offset += 40) {
+    try {
+      const result = await adreemApiJson('/api/investments/prices', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids: uniqueIds.slice(offset, offset + 40) }),
+      })
+      prices.push(...(Array.isArray(result?.prices) ? result.prices : []))
+    } catch (error) {
+      if (!prices.length) throw error
+      break
+    }
+  }
+  return { prices }
 }
 
 export async function searchAdreemInvestmentAssets(query, quoteCurrency = 'USD', assetType = 'stock') {

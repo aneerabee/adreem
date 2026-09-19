@@ -170,6 +170,14 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('.ml3-action-choice:last-child:nth-child(odd) { grid-column: auto; }')
   })
 
+  it('keeps investment dialogs and actions usable on narrow touch screens', () => {
+    expect(financeStylesheet).toContain('.adreem-investment-row-actions { grid-area: actions; display: grid !important; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }')
+    expect(financeStylesheet).toContain('.adreem-investment-dialog-body select { min-height: 42px; font-size: 16px; }')
+    expect(financeStylesheet).toContain('.adreem-investment-row-actions button,')
+    expect(financeStylesheet).toContain('.adreem-investment-trade-context > button { min-height: 44px; }')
+    expect(financeStylesheet).toContain('.adreem-investment-dialog > header > button { width: 44px; height: 44px; }')
+  })
+
   it('uses a dedicated natural red palette for every debt state', () => {
     expect(financeStylesheet).toContain('--finance-debt: #dc2626;')
     expect(financeStylesheet).toContain('--finance-debt-dark: #b91c1c;')

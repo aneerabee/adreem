@@ -16,7 +16,7 @@ function account(id, valueKind, overrides = {}) {
 }
 
 describe('shared movement account choices', () => {
-  it('offers only owned USD cash and bank accounts for portfolio money', () => {
+  it('offers USD cash, bank, and people as portfolio funding sources', () => {
     const accounts = [
       account('cash-usd', VALUE_KINDS.CASH, { currencyKind: CURRENCIES.USD }),
       account('bank-multi', VALUE_KINDS.BANK, { currencyKind: 'multi' }),
@@ -24,7 +24,7 @@ describe('shared movement account choices', () => {
       account('person-usd', VALUE_KINDS.RECEIVABLE, { currencyKind: CURRENCIES.USD }),
     ]
 
-    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.INVESTMENT_DEPOSIT, 'source', { currency: CURRENCIES.USD }).map((item) => item.id)).toEqual(['cash-usd', 'bank-multi'])
+    expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.INVESTMENT_DEPOSIT, 'source', { currency: CURRENCIES.USD }).map((item) => item.id)).toEqual(['cash-usd', 'bank-multi', 'person-usd'])
     expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL, 'destination', { currency: CURRENCIES.USD }).map((item) => item.id)).toEqual(['cash-usd', 'bank-multi'])
   })
 

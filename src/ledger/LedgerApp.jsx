@@ -30,7 +30,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradePriceFallback, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradePriceFallback, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -131,7 +131,7 @@ const movementOptionGroups = [
     key: 'daily',
     title: 'اليومي',
     hint: 'الأكثر استعمالًا',
-    types: [MOVEMENT_TYPES.TRANSFER, MOVEMENT_TYPES.EXPENSE, MOVEMENT_TYPES.EXTERNAL_INCOME],
+    types: [MOVEMENT_TYPES.TRANSFER, MOVEMENT_TYPES.EXPENSE, MOVEMENT_TYPES.EXTERNAL_INCOME, MOVEMENT_TYPES.INVESTMENT_DEPOSIT],
   },
   {
     key: 'banking',
@@ -148,8 +148,8 @@ const movementOptionGroups = [
   {
     key: 'investment',
     title: 'محفظتي',
-    hint: 'إيداع أو سحب USD',
-    types: [MOVEMENT_TYPES.INVESTMENT_DEPOSIT, MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL],
+    hint: 'سحب USD',
+    types: [MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL],
   },
 ]
 
@@ -698,8 +698,16 @@ function openAdminUsersPage() {
   window.location.assign(`${url.pathname}${url.search}`)
 }
 
+export function movementRouteSteps(config = {}, needsSource = false) {
+  return (config.platformAfterSource
+    ? [needsSource ? MOVEMENT_ENTRY_STEPS.SOURCE : null, config.needsInvestmentPlatform ? MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM : null, config.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : null]
+    : [config.needsInvestmentPlatform ? MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM : null, needsSource ? MOVEMENT_ENTRY_STEPS.SOURCE : null, config.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : null])
+    .filter(Boolean)
+}
+
 function movementVisibleSteps(config, needsSource) {
-  return [MOVEMENT_ENTRY_STEPS.TYPE, MOVEMENT_ENTRY_STEPS.AMOUNT, config.currencyLocked ? null : MOVEMENT_ENTRY_STEPS.CURRENCY, config.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : null, config.needsInvestmentPlatform ? MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM : null, needsSource ? MOVEMENT_ENTRY_STEPS.SOURCE : null, config.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : null, MOVEMENT_ENTRY_STEPS.NOTE, MOVEMENT_ENTRY_STEPS.REVIEW].filter(Boolean)
+  const routeSteps = movementRouteSteps(config, needsSource)
+  return [MOVEMENT_ENTRY_STEPS.TYPE, MOVEMENT_ENTRY_STEPS.AMOUNT, config.currencyLocked ? null : MOVEMENT_ENTRY_STEPS.CURRENCY, config.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : null, ...routeSteps, MOVEMENT_ENTRY_STEPS.NOTE, MOVEMENT_ENTRY_STEPS.REVIEW].filter(Boolean)
 }
 
 function movementStepCopy(step, config = {}) {
@@ -4861,16 +4869,9 @@ export default function LedgerApp() {
   }
 
   function nextMovementStep(step = movementStep) {
-    const firstAccountStep = movementConfig.needsInvestmentPlatform ? MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM : movementSourceRequired ? MOVEMENT_ENTRY_STEPS.SOURCE : movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : MOVEMENT_ENTRY_STEPS.NOTE
-    if (step === MOVEMENT_ENTRY_STEPS.TYPE) return MOVEMENT_ENTRY_STEPS.AMOUNT
-    if (step === MOVEMENT_ENTRY_STEPS.AMOUNT) return movementConfig.currencyLocked ? (movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : firstAccountStep) : MOVEMENT_ENTRY_STEPS.CURRENCY
-    if (step === MOVEMENT_ENTRY_STEPS.CURRENCY) return movementConfig.needsRate ? MOVEMENT_ENTRY_STEPS.RATE : firstAccountStep
-    if (step === MOVEMENT_ENTRY_STEPS.RATE) return firstAccountStep
-    if (step === MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM) return movementSourceRequired ? MOVEMENT_ENTRY_STEPS.SOURCE : movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : MOVEMENT_ENTRY_STEPS.NOTE
-    if (step === MOVEMENT_ENTRY_STEPS.SOURCE) return movementConfig.needsDestination ? MOVEMENT_ENTRY_STEPS.DESTINATION : MOVEMENT_ENTRY_STEPS.NOTE
-    if (step === MOVEMENT_ENTRY_STEPS.DESTINATION) return MOVEMENT_ENTRY_STEPS.NOTE
-    if (step === MOVEMENT_ENTRY_STEPS.NOTE) return MOVEMENT_ENTRY_STEPS.REVIEW
-    return MOVEMENT_ENTRY_STEPS.REVIEW
+    const steps = movementVisibleSteps(movementConfig, movementSourceRequired)
+    const index = steps.indexOf(step)
+    return index >= 0 && index < steps.length - 1 ? steps[index + 1] : MOVEMENT_ENTRY_STEPS.REVIEW
   }
 
   function advanceMovementStep() {
@@ -6298,6 +6299,91 @@ export default function LedgerApp() {
     return true
   }
 
+  function closeSmallInvestment(holdingId) {
+    const row = investmentSummary.platforms
+      .flatMap((platformRow) => platformRow.holdings)
+      .find((holdingRow) => holdingRow.holding.id === holdingId)
+    const closure = buildSmallInvestmentClosure(row)
+    if (!closure.ok) {
+      setFeedback(closure.message || 'لم تتم إزالة الاستثمار.')
+      return false
+    }
+
+    if (closure.kind === 'deactivate') {
+      const hasTrades = (ledgerExtras.investmentTrades || []).some((trade) => trade.holdingId === holdingId)
+      if (hasTrades) {
+        setFeedback('هذا الاستثمار له سجل محفوظ ولا يمكن حذفه مباشرة.')
+        return false
+      }
+      const updatedAt = new Date().toISOString()
+      const nextHoldings = (ledgerExtras.investmentHoldings || []).map((holding) => holding.id === holdingId ? {
+        ...holding,
+        status: INVESTMENT_RECORD_STATUSES.INACTIVE,
+        updatedAt,
+      } : holding)
+      const validation = validateInvestmentState({
+        platforms: ledgerExtras.investmentPlatforms || [],
+        holdings: nextHoldings,
+        trades: ledgerExtras.investmentTrades || [],
+        movements,
+      })
+      if (!validation.ok) {
+        setFeedback(validation.errors[0]?.message || 'لم تتم إزالة الاستثمار.')
+        return false
+      }
+      setLedgerExtras((current) => ({
+        ...current,
+        investmentHoldings: (current.investmentHoldings || []).map((holding) => holding.id === holdingId ? {
+          ...holding,
+          status: INVESTMENT_RECORD_STATUSES.INACTIVE,
+          updatedAt,
+        } : holding),
+        auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.holding.deactivated', { holdingId })],
+      }))
+      setFeedback('تمت إزالة الاستثمار الفارغ.')
+      return true
+    }
+
+    const nextTrades = [...(ledgerExtras.investmentTrades || []), closure.trade]
+    const validation = validateInvestmentState({
+      platforms: ledgerExtras.investmentPlatforms || [],
+      holdings: ledgerExtras.investmentHoldings || [],
+      trades: nextTrades,
+      movements,
+    })
+    if (!validation.ok) {
+      setFeedback(validation.errors[0]?.message || 'لم يتم إغلاق الاستثمار.')
+      return false
+    }
+    setLedgerExtras((current) => ({
+      ...current,
+      investmentTrades: [...(current.investmentTrades || []), closure.trade],
+      auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.holding.closed_small', {
+        holdingId,
+        platformId: closure.holding.platformId,
+        tradeId: closure.trade.id,
+        proceedsUsdMicros: closure.marketValueUsdMicros,
+      })],
+    }))
+    setFeedback('تم إغلاق الاستثمار ونقل قيمته إلى نقد المنصة.')
+    return true
+  }
+
+  function openInvestmentFunding(platformId = '') {
+    const type = MOVEMENT_TYPES.INVESTMENT_DEPOSIT
+    activeEntryModeRef.current = 'movement'
+    setActiveEntryMode('movement')
+    setEditingMovementId('')
+    setEditingMovementBaseline(null)
+    setMovementDraft({
+      ...emptyMovementDraft(type),
+      currency: CURRENCIES.USD,
+      investmentPlatformId: platformId,
+    })
+    setMovementStep(MOVEMENT_ENTRY_STEPS.AMOUNT)
+    switchSection('entry')
+  }
+
   function updateInvestmentManualPrice(holdingId, priceUsd) {
     const priceUsdMicros = usdToMicros(priceUsd)
     if (!priceUsdMicros) {
@@ -6559,6 +6645,8 @@ export default function LedgerApp() {
         onAddHolding={addInvestmentHolding}
         onAddTrade={addInvestmentTrade}
         onManualPrice={updateInvestmentManualPrice}
+        onCloseSmallHolding={closeSmallInvestment}
+        onOpenFunding={openInvestmentFunding}
         onRefreshPrices={refreshInvestmentPrices}
         onSearchAssets={searchAdreemInvestmentAssets}
       />
@@ -6753,6 +6841,36 @@ export default function LedgerApp() {
   const canLogout = storageMode === 'api'
   const canOpenAdmin = storageMode === 'api' && canManageUsers
   const activeSectionTitle = sectionTitles[activeSection] || 'ADREEM'
+  const movementPlatformReceipt = movementConfig.needsInvestmentPlatform
+    ? {
+        key: 'investment-platform',
+        step: MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM,
+        label: 'المنصة',
+        value: investmentPlatformById.get(movementDraft.investmentPlatformId)?.name ? preserveUiData(investmentPlatformById.get(movementDraft.investmentPlatformId).name) : 'اختر',
+      }
+    : null
+  const movementSourceReceipt = movementSourceRequired
+    ? {
+        key: 'source',
+        step: MOVEMENT_ENTRY_STEPS.SOURCE,
+        label: movementConfig.sourceLabel || 'من',
+        value: draftSourceAccount ? protectedAccountLabel(draftSourceAccount) : 'اختر',
+      }
+    : null
+  const movementDestinationReceipt = movementConfig.needsDestination
+    ? {
+        key: 'destination',
+        step: MOVEMENT_ENTRY_STEPS.DESTINATION,
+        label: movementConfig.destinationLabel || 'إلى',
+        value: draftDestinationAccount ? protectedAccountLabel(draftDestinationAccount) : 'اختر',
+      }
+    : null
+  const movementRouteReceiptByStep = new Map([movementPlatformReceipt, movementSourceReceipt, movementDestinationReceipt]
+    .filter(Boolean)
+    .map((item) => [item.step, item]))
+  const movementRouteReceipt = movementRouteSteps(movementConfig, movementSourceRequired)
+    .map((step) => movementRouteReceiptByStep.get(step))
+    .filter(Boolean)
   const movementReceipt = [
     {
       key: 'type',
@@ -6782,30 +6900,7 @@ export default function LedgerApp() {
           value: movementDraft.rate ? formatRate(movementDraft.rate) : 'لم يدخل',
         }
       : null,
-    movementConfig.needsInvestmentPlatform
-      ? {
-          key: 'investment-platform',
-          step: MOVEMENT_ENTRY_STEPS.INVESTMENT_PLATFORM,
-          label: 'المنصة',
-          value: investmentPlatformById.get(movementDraft.investmentPlatformId)?.name ? preserveUiData(investmentPlatformById.get(movementDraft.investmentPlatformId).name) : 'اختر',
-        }
-      : null,
-    movementSourceRequired
-      ? {
-          key: 'source',
-          step: MOVEMENT_ENTRY_STEPS.SOURCE,
-          label: movementConfig.sourceLabel || 'من',
-          value: draftSourceAccount ? protectedAccountLabel(draftSourceAccount) : 'اختر',
-        }
-      : null,
-    movementConfig.needsDestination
-      ? {
-          key: 'destination',
-          step: MOVEMENT_ENTRY_STEPS.DESTINATION,
-          label: movementConfig.destinationLabel || 'إلى',
-          value: draftDestinationAccount ? protectedAccountLabel(draftDestinationAccount) : 'اختر',
-        }
-      : null,
+    ...movementRouteReceipt,
     {
       key: 'note',
       step: MOVEMENT_ENTRY_STEPS.NOTE,

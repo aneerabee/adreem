@@ -39,6 +39,44 @@ afterEach(() => {
 })
 
 describe('ADREEM cloud-only persistence', () => {
+  it('refreshes every investment in guarded batches and combines the results', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const fetchMock = vi.fn(async (_url, options = {}) => {
+      const ids = JSON.parse(options.body).ids
+      return {
+        ok: true,
+        json: async () => ({ prices: ids.map((id) => ({ id, ok: true, priceUsdMicros: 1_000_000 })) }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const ids = Array.from({ length: 81 }, (_, index) => `holding-${index + 1}`)
+
+    const result = await module.refreshAdreemInvestmentPrices(ids)
+
+    expect(result.prices).toHaveLength(81)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).ids).toHaveLength(40)
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).ids).toHaveLength(1)
+  })
+
+  it('keeps confirmed earlier price batches when a later request fails', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    const fetchMock = vi.fn(async (_url, options = {}) => {
+      const ids = JSON.parse(options.body).ids
+      if (fetchMock.mock.calls.length > 1) throw new Error('network lost')
+      return {
+        ok: true,
+        json: async () => ({ prices: ids.map((id) => ({ id, ok: true, priceUsdMicros: 1_000_000 })) }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await module.refreshAdreemInvestmentPrices(Array.from({ length: 81 }, (_, index) => `holding-${index + 1}`))
+
+    expect(result.prices).toHaveLength(40)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('refuses to open a local ledger when the cloud API is not configured', async () => {
     installBrowser({ [LEGACY_STORAGE_KEY]: JSON.stringify({ accounts: [{ id: 'old' }] }) })
     vi.resetModules()

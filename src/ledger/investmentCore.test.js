@@ -4,6 +4,7 @@ import {
   INVESTMENT_ASSET_TYPES,
   INVESTMENT_TRADE_TYPES,
   applyInvestmentTradePriceFallback,
+  buildSmallInvestmentClosure,
   createInvestmentHolding,
   createInvestmentPlatform,
   createInvestmentTrade,
@@ -111,6 +112,20 @@ describe('investment portfolio core', () => {
     expect(result.errors.some((error) => error.message.includes('النقد الحر'))).toBe(true)
   })
 
+  it('refuses cancelling or reducing funding after that cash was spent', () => {
+    const { platform, holding, deposit } = fixture()
+    const buy = createInvestmentTrade({
+      id: 'trade-funded', platformId: platform.id, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(8), priceUsdMicros: usdToMicros(100),
+    })
+    const cancelledFunding = { ...deposit, status: MOVEMENT_STATUSES.VOIDED }
+    const reducedFunding = { ...deposit, amount: 700 }
+
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [buy], movements: [cancelledFunding] })).toMatchObject({ ok: false })
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [buy], movements: [reducedFunding] })).toMatchObject({ ok: false })
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [buy], movements: [deposit] })).toMatchObject({ ok: true })
+  })
+
   it('keeps an opening position outside platform cash', () => {
     const { platform, holding } = fixture()
     const opening = createInvestmentTrade({
@@ -190,6 +205,47 @@ describe('investment portfolio core', () => {
     expect(microsToUsd(summary.realizedProfitUsdMicros)).toBe(100)
     expect(microsToUsd(summary.totalProfitUsdMicros)).toBe(100)
     expect(microsToUsd(summary.totalValueUsdMicros)).toBe(1_100)
+  })
+
+  it('closes a confirmed sub-5 USD position with a full sale and preserves its history', () => {
+    const { platform, holding, deposit } = fixture()
+    const smallHolding = { ...holding, lastPriceUsdMicros: usdToMicros(2) }
+    const buy = createInvestmentTrade({
+      id: 'trade-small-buy', platformId: platform.id, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(2), priceUsdMicros: usdToMicros(2),
+    }, '2026-01-03T00:00:00.000Z')
+    const row = {
+      holding: smallHolding,
+      quantityUnits: quantityToUnits(2),
+      marketValueUsdMicros: usdToMicros(4),
+    }
+
+    const result = buildSmallInvestmentClosure(row, '2026-01-04T00:00:00.000Z')
+
+    expect(result.ok).toBe(true)
+    expect(result.kind).toBe('sell')
+    expect(result.trade).toEqual(expect.objectContaining({
+      type: INVESTMENT_TRADE_TYPES.SELL,
+      holdingId: holding.id,
+      quantityUnits: quantityToUnits(2),
+      priceUsdMicros: usdToMicros(2),
+      note: 'إغلاق استثمار صغير',
+    }))
+
+    const trades = [buy, result.trade]
+    const validation = validateInvestmentState({ platforms: [platform], holdings: [smallHolding], trades, movements: [deposit] })
+    const summary = summarizeInvestmentPortfolio({ platforms: [platform], holdings: [smallHolding], trades, movements: [deposit] })
+    expect(validation.ok).toBe(true)
+    expect(summary.platforms[0].holdings).toHaveLength(0)
+    expect(microsToUsd(summary.freeCashUsdMicros)).toBe(1_000)
+    expect(trades).toHaveLength(2)
+  })
+
+  it('allows hiding an unused empty investment but refuses unknown or 5 USD positions', () => {
+    const { holding } = fixture()
+    expect(buildSmallInvestmentClosure({ holding, quantityUnits: 0, marketValueUsdMicros: 0 })).toMatchObject({ ok: true, kind: 'deactivate' })
+    expect(buildSmallInvestmentClosure({ holding: { ...holding, lastPriceUsdMicros: 0 }, quantityUnits: 1, marketValueUsdMicros: 0 })).toMatchObject({ ok: false })
+    expect(buildSmallInvestmentClosure({ holding, quantityUnits: quantityToUnits(1), marketValueUsdMicros: usdToMicros(5) })).toMatchObject({ ok: false })
   })
 
   it('rejects overselling even when later purchases would cover the total', () => {

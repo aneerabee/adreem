@@ -2,6 +2,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 
 export const INVESTMENT_QUANTITY_SCALE = 100_000_000
 export const INVESTMENT_PRICE_SCALE = 1_000_000
+export const SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS = 5 * INVESTMENT_PRICE_SCALE
 export const MAX_INVESTMENT_USD_MICROS = Number.MAX_SAFE_INTEGER
 export const MAX_INVESTMENT_USD = Math.floor(MAX_INVESTMENT_USD_MICROS / INVESTMENT_PRICE_SCALE)
 export const INVESTMENT_RECORD_STATUSES = Object.freeze({
@@ -171,6 +172,39 @@ export function createInvestmentTrade(draft = {}, createdAt = new Date().toISOSt
       : INVESTMENT_RECORD_STATUSES.ACTIVE,
     createdAt,
     updatedAt: createdAt,
+  }
+}
+
+export function buildSmallInvestmentClosure(row = {}, createdAt = new Date().toISOString()) {
+  const holding = row?.holding
+  const quantityUnits = safePositiveInteger(row?.quantityUnits)
+  if (!holding?.id || !holding?.platformId) {
+    return { ok: false, message: 'الاستثمار غير موجود.' }
+  }
+  if (!quantityUnits) return { ok: true, kind: 'deactivate', holding }
+
+  const priceUsdMicros = safePositiveInteger(holding.lastPriceUsdMicros)
+  const marketValueUsdMicros = safeScaledProduct(quantityUnits, priceUsdMicros, INVESTMENT_QUANTITY_SCALE)
+  if (!priceUsdMicros || !marketValueUsdMicros) {
+    return { ok: false, message: 'حدّث السعر قبل إزالة الاستثمار.' }
+  }
+  if (marketValueUsdMicros >= SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS) {
+    return { ok: false, message: 'الإزالة متاحة فقط لقيمة أقل من 5 USD.' }
+  }
+  return {
+    ok: true,
+    kind: 'sell',
+    holding,
+    marketValueUsdMicros,
+    trade: createInvestmentTrade({
+      platformId: holding.platformId,
+      holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.SELL,
+      quantityUnits,
+      priceUsdMicros,
+      feeUsdMicros: 0,
+      note: 'إغلاق استثمار صغير',
+    }, createdAt),
   }
 }
 

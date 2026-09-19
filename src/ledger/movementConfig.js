@@ -13,7 +13,7 @@ export const movementLabels = {
   [MOVEMENT_TYPES.EXTERNAL_INCOME]: 'دخل',
   [MOVEMENT_TYPES.CORRECTION]: 'تعديل رصيد',
   [MOVEMENT_TYPES.RECORD_ONLY]: 'تسجيل فقط',
-  [MOVEMENT_TYPES.INVESTMENT_DEPOSIT]: 'إيداع استثمار',
+  [MOVEMENT_TYPES.INVESTMENT_DEPOSIT]: 'تمويل استثمار',
   [MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL]: 'سحب استثمار',
 }
 
@@ -68,8 +68,8 @@ export const movementTypeOptions = [
   },
   {
     type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
-    label: 'إيداع استثمار',
-    detail: 'USD من فلوسك إلى محفظتي',
+    label: 'تمويل استثمار',
+    detail: 'USD من حساب أو شخص إلى المنصة',
     tone: 'investment',
   },
   {
@@ -212,18 +212,19 @@ export const movementConfigs = {
     routeTitle: 'تسجيل فقط',
   },
   [MOVEMENT_TYPES.INVESTMENT_DEPOSIT]: {
-    amountLabel: 'كم USD ستودع؟',
+    amountLabel: 'كم USD ستنقل؟',
     currency: CURRENCIES.USD,
     currencyText: 'USD',
     currencyLocked: true,
     needsSource: true,
     needsDestination: false,
     needsInvestmentPlatform: true,
+    platformAfterSource: true,
     needsRate: false,
     sourceLabel: 'يخرج من',
-    sourceQuestion: 'من أي حساب USD يخرج المبلغ؟',
+    sourceQuestion: 'من أين يأتي USD؟',
     platformQuestion: 'إلى أي منصة؟',
-    routeTitle: 'إيداع الاستثمار',
+    routeTitle: 'تمويل الاستثمار',
   },
   [MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL]: {
     amountLabel: 'كم USD ستسحب؟',

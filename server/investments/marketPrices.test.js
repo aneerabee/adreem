@@ -131,8 +131,32 @@ describe('investment market prices', () => {
     expect(metal.results).toEqual([expect.objectContaining({ symbol: 'XAU/USD', quoteCurrency: 'USD', assetType: 'metal' })])
   })
 
-  it('fails closed when no private provider key is configured', async () => {
-    const service = createMarketPriceService({}, { fetchImpl: vi.fn() })
-    await expect(service.refresh({ items: [{ id: 'a', symbol: 'AAPL', quoteCurrency: 'USD' }] })).rejects.toMatchObject({ code: 'market-price-not-configured', statusCode: 503 })
+  it('uses the provider demo access for direct refresh when no private key is configured', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ price: '125.50' }) }))
+    const service = createMarketPriceService({}, { fetchImpl })
+    const result = await service.refresh({ items: [{ id: 'a', symbol: 'AAPL', quoteCurrency: 'USD' }] })
+
+    expect(result.prices[0]).toMatchObject({ ok: true, priceUsdMicros: 125_500_000 })
+    expect(fetchImpl.mock.calls[0][1].headers.authorization).toBe('apikey demo')
+  })
+
+  it('isolates unsupported demo symbols without blocking confirmed prices', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const symbols = new URL(url).searchParams.get('symbol')
+      if (symbols === 'AAPL') return { ok: true, status: 200, json: async () => ({ price: '125.50' }) }
+      return { ok: false, status: 401, json: async () => ({ status: 'error', message: 'not available' }) }
+    })
+    const service = createMarketPriceService({}, { fetchImpl })
+
+    const result = await service.refresh({ items: [
+      { id: 'confirmed', symbol: 'AAPL', quoteCurrency: 'USD' },
+      { id: 'missing', symbol: 'UNKNOWN', quoteCurrency: 'USD' },
+    ] })
+
+    expect(result.prices).toEqual([
+      expect.objectContaining({ id: 'confirmed', ok: true, priceUsdMicros: 125_500_000 }),
+      expect.objectContaining({ id: 'missing', ok: false }),
+    ])
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
   })
 })

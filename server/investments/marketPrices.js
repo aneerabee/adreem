@@ -173,8 +173,9 @@ export function createMarketPriceService(env = process.env, options = {}) {
   }
 
   async function fetchPrices(items) {
-    const apiKey = String(env.TWELVE_DATA_API_KEY || '').trim()
-    if (!apiKey) throw new MarketPriceError('تحديث السعر المباشر غير مفعّل. يمكنك إدخال السعر يدويًا.', 503, 'market-price-not-configured')
+    const configuredApiKey = String(env.TWELVE_DATA_API_KEY || '').trim()
+    const apiKey = configuredApiKey || 'demo'
+    const usingDemoAccess = !configuredApiKey
     if (typeof fetchImpl !== 'function') throw new MarketPriceError('خدمة الأسعار غير متاحة.', 503, 'market-price-unavailable')
 
     const currencies = Array.from(new Set(items.map((item) => item.quoteCurrency).filter((currency) => currency !== 'USD')))
@@ -189,6 +190,23 @@ export function createMarketPriceService(env = process.env, options = {}) {
     }
     const payload = await response.json().catch(() => ({}))
     if (!response.ok || payload?.status === 'error') {
+      if (usingDemoAccess && items.length > 1) {
+        const isolatedResults = []
+        for (let offset = 0; offset < items.length; offset += 4) {
+          const group = await Promise.all(items.slice(offset, offset + 4).map(async (item) => {
+            try {
+              return await fetchPrices([item])
+            } catch {
+              return [{ id: item.id, symbol: item.symbol, ok: false, error: 'السعر غير متاح لهذا الرمز.' }]
+            }
+          }))
+          isolatedResults.push(...group.flat())
+        }
+        return isolatedResults
+      }
+      if (usingDemoAccess && items.length === 1) {
+        return [{ id: items[0].id, symbol: items[0].symbol, ok: false, error: 'السعر غير متاح لهذا الرمز.' }]
+      }
       throw new MarketPriceError('مزود الأسعار لم يرجع نتيجة مؤكدة. بقي السعر السابق محفوظًا.', response.status || 502, 'market-price-provider')
     }
     const singleSymbol = symbols.length === 1

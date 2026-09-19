@@ -13,6 +13,7 @@ const botRemovalSql = readFileSync(new URL('../../supabase/migrations/2026082319
 const investmentsSql = readFileSync(new URL('../../supabase/migrations/20260918213000_add_adreem_investments.sql', import.meta.url), 'utf8')
 const investmentHardeningSql = readFileSync(new URL('../../supabase/migrations/20260918220000_harden_adreem_investments.sql', import.meta.url), 'utf8')
 const investmentHoldingHardeningSql = readFileSync(new URL('../../supabase/migrations/20260919001000_harden_adreem_investment_holdings.sql', import.meta.url), 'utf8')
+const investmentFundingSql = readFileSync(new URL('../../supabase/migrations/20260919184500_allow_person_investment_funding.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -94,6 +95,22 @@ describe('ADREEM v3 database migration invariants', () => {
     expect(investmentHoldingHardeningSql).toContain('before insert on public.adreem_investment_trades')
     expect(investmentHoldingHardeningSql).toContain('ADREEM_INVESTMENT_PLATFORM_IN_USE')
     expect(investmentHoldingHardeningSql).toContain('before update on public.adreem_investment_platforms')
+    expect(investmentFundingSql).toContain('create or replace function public.adreem_apply_ledger_delta_v2(')
+    expect(investmentFundingSql).toContain("movement.movement_type = 'investment_deposit' and account.account_type not in ('cash', 'bank', 'person')")
+    expect(investmentFundingSql).toContain("movement.movement_type = 'investment_withdrawal' and account.account_type not in ('cash', 'bank')")
+    expect(investmentFundingSql).not.toContain('pg_get_functiondef')
+    expect(investmentFundingSql).toContain('grant execute on function public.adreem_apply_ledger_delta_v2(uuid, bigint, jsonb, uuid) to authenticated, service_role')
+    const baselineFunction = investmentsSql.slice(investmentsSql.indexOf('create or replace function public.adreem_apply_ledger_delta_v2('))
+    const previousRule = "      and (platform.record_id is null or movement.currency <> 'USD' or account.record_id is null or account.owner_id <> v_owner_id or account.account_type not in ('cash', 'bank'))"
+    const fundingRule = `      and (
+        platform.record_id is null
+        or movement.currency <> 'USD'
+        or account.record_id is null
+        or account.owner_id <> v_owner_id
+        or (movement.movement_type = 'investment_deposit' and account.account_type not in ('cash', 'bank', 'person'))
+        or (movement.movement_type = 'investment_withdrawal' and account.account_type not in ('cash', 'bank'))
+      )`
+    expect(investmentFundingSql.trim()).toBe(baselineFunction.replace(previousRule, fundingRule).trim())
   })
 
   it('removes the legacy blob tables only from an empty v3 target', () => {

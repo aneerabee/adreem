@@ -47,6 +47,7 @@ describe('ADREEM UI translation', () => {
     expect(translateUiText('أدخل سعري LYD وTRY مقابل USD.')).toBe('Enter the LYD and TRY rates against USD.')
     expect(translateUiText('أدخل سعر LYD مقابل USD.')).toBe('Enter the LYD rate against USD.')
     expect(translateUiText('أدخل سعر TRY مقابل USD.')).toBe('Enter the TRY rate against USD.')
+    expect(translateUiText('تحدثت 3 أسعار. بقي 2 على سعره السابق.')).toBe('Updated 3 prices. 2 kept their previous price.')
   })
 
   it('translates formatted text without changing its markup', () => {

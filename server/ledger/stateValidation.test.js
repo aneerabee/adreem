@@ -696,6 +696,49 @@ describe('server ledger state validation', () => {
     expect(validateLedgerStateTransition(updatedPrice, current, { now: validationNow }).ok).toBe(true)
   })
 
+  it('allows investment funding from a USD person while refusing withdrawal to that person', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-funding', name: 'IBKR' }, at)
+    const person = cashAccount({
+      id: 'person-usd',
+      ownerName: 'سيف',
+      subAccountName: 'USD',
+      type: ACCOUNT_TYPES.PERSON,
+      valueKind: VALUE_KINDS.RECEIVABLE,
+      currencyKind: CURRENCIES.USD,
+    })
+    const current = {
+      ...createEmptyAdreemState(at),
+      accounts: [person],
+      investmentPlatforms: [platform],
+    }
+    const funding = {
+      id: 'person-investment-funding',
+      type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
+      status: MOVEMENT_STATUSES.POSTED,
+      amount: 75,
+      currency: CURRENCIES.USD,
+      sourceAccountId: person.id,
+      destinationAccountId: null,
+      investmentPlatformId: platform.id,
+      createdAt: validationNow,
+      updatedAt: validationNow,
+    }
+    const invalidWithdrawal = {
+      ...funding,
+      id: 'person-investment-withdrawal',
+      type: MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL,
+      sourceAccountId: null,
+      destinationAccountId: person.id,
+    }
+
+    expect(validateLedgerStateTransition({ ...current, movements: [funding] }, current, { now: validationNow }).ok).toBe(true)
+    expect(validateLedgerStateTransition({ ...current, movements: [invalidWithdrawal] }, current, { now: validationNow }).errors).toContainEqual(expect.objectContaining({
+      code: 'invalid-posted-movement',
+      id: invalidWithdrawal.id,
+      field: 'destinationAccountId',
+    }))
+  })
+
   it('rejects invalid dimension records and missing linked project accounts', () => {
     const current = { ...createEmptyAdreemState(at), accounts: [projectAccount()] }
     const invalidDimension = {
