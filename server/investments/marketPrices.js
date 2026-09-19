@@ -1,4 +1,5 @@
 const DEFAULT_TWELVE_DATA_URL = 'https://api.twelvedata.com'
+const DEFAULT_BINANCE_DATA_URL = 'https://api.binance.com'
 const DEFAULT_CACHE_MS = 5 * 60 * 1000
 const MAX_PRICE_ITEMS = 40
 const MAX_CACHE_ENTRIES = 500
@@ -172,6 +173,50 @@ export function createMarketPriceService(env = process.env, options = {}) {
     return { accept: 'application/json', authorization: `apikey ${apiKey}` }
   }
 
+  function binanceTickerSymbol(item = {}) {
+    const [marketSymbol, exchange = ''] = cleanSymbol(item.symbol).split(':')
+    if (exchange !== 'BINANCE' || item.quoteCurrency !== 'USD') return ''
+    const [base, quote] = marketSymbol.split('/')
+    if (!base || quote !== 'USD' || !/^[A-Z0-9]+$/.test(base)) return ''
+    return `${base}USDT`
+  }
+
+  async function fetchBinancePrice(item) {
+    const tickerSymbol = binanceTickerSymbol(item)
+    if (!tickerSymbol) return null
+    const endpoint = new URL('/api/v3/ticker/price', String(env.ADREEM_BINANCE_API_URL || DEFAULT_BINANCE_DATA_URL).replace(/\/+$/, ''))
+    endpoint.searchParams.set('symbol', tickerSymbol)
+    let response
+    try {
+      response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
+    } catch {
+      return null
+    }
+    const payload = await response.json().catch(() => ({}))
+    const price = Number(payload?.price)
+    if (!response.ok || !Number.isFinite(price) || price <= 0) return null
+    const priceUsdMicros = usdMicros(price)
+    if (!priceUsdMicros) return null
+    const refreshedAt = new Date(now()).toISOString()
+    const result = {
+      id: item.id,
+      symbol: item.symbol,
+      quoteCurrency: item.quoteCurrency,
+      nativePriceMicros: priceUsdMicros,
+      priceUsdMicros,
+      refreshedAt,
+      source: 'binance-usdt',
+      cached: false,
+      ok: true,
+    }
+    cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
+    return result
+  }
+
+  async function withCryptoFallback(item, failedResult) {
+    return await fetchBinancePrice(item) || failedResult
+  }
+
   async function fetchPrices(items) {
     const configuredApiKey = String(env.TWELVE_DATA_API_KEY || '').trim()
     const apiKey = configuredApiKey || 'demo'
@@ -205,19 +250,20 @@ export function createMarketPriceService(env = process.env, options = {}) {
         return isolatedResults
       }
       if (usingDemoAccess && items.length === 1) {
-        return [{ id: items[0].id, symbol: items[0].symbol, ok: false, error: 'السعر غير متاح لهذا الرمز.' }]
+        const failedResult = { id: items[0].id, symbol: items[0].symbol, ok: false, error: 'السعر غير متاح لهذا الرمز.' }
+        return [await withCryptoFallback(items[0], failedResult)]
       }
       throw new MarketPriceError('مزود الأسعار لم يرجع نتيجة مؤكدة. بقي السعر السابق محفوظًا.', response.status || 502, 'market-price-provider')
     }
     const singleSymbol = symbols.length === 1
     const refreshedAt = new Date(now()).toISOString()
-    return items.map((item) => {
+    return Promise.all(items.map(async (item) => {
       const nativePrice = priceFromPayload(payload, item.symbol, singleSymbol)
       const fxPrice = item.quoteCurrency === 'USD'
         ? 1
         : priceFromPayload(payload, `${item.quoteCurrency}/USD`, false)
       if (!nativePrice || !fxPrice) {
-        return { id: item.id, symbol: item.symbol, ok: false, error: 'السعر غير متاح لهذا الرمز.' }
+        return withCryptoFallback(item, { id: item.id, symbol: item.symbol, ok: false, error: 'السعر غير متاح لهذا الرمز.' })
       }
       const nativeMicros = usdMicros(nativePrice)
       const priceUsdMicros = usdMicros(nativePrice * fxPrice)
@@ -235,7 +281,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
       }
       cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
       return result
-    })
+    }))
   }
 
   async function searchProvider(request) {

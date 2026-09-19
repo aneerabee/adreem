@@ -159,4 +159,48 @@ describe('investment market prices', () => {
     ])
     expect(fetchImpl).toHaveBeenCalledTimes(3)
   })
+
+  it('refreshes Binance crypto prices when the primary demo feed has no quote', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const endpoint = new URL(url)
+      if (endpoint.hostname === 'api.binance.com') {
+        expect(endpoint.pathname).toBe('/api/v3/ticker/price')
+        expect(endpoint.searchParams.get('symbol')).toBe('FETUSDT')
+        return { ok: true, status: 200, json: async () => ({ symbol: 'FETUSDT', price: '0.17480000' }) }
+      }
+      return { ok: false, status: 401, json: async () => ({ status: 'error', message: 'not available' }) }
+    })
+    const service = createMarketPriceService({}, { fetchImpl, now: () => 1_800_000_000_000 })
+
+    const first = await service.refresh({ items: [{ id: 'fet', symbol: 'FET/USD:BINANCE', quoteCurrency: 'USD' }] })
+    const second = await service.refresh({ items: [{ id: 'fet', symbol: 'FET/USD:BINANCE', quoteCurrency: 'USD' }] })
+
+    expect(first.prices[0]).toMatchObject({
+      id: 'fet',
+      ok: true,
+      priceUsdMicros: 174_800,
+      nativePriceMicros: 174_800,
+      source: 'binance-usdt',
+      cached: false,
+    })
+    expect(second.prices[0]).toMatchObject({ ok: true, cached: true })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not treat a non-Binance or malformed crypto venue as a Binance ticker', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({ status: 'error' }) }))
+    const service = createMarketPriceService({}, { fetchImpl })
+
+    const result = await service.refresh({ items: [
+      { id: 'coinbase', symbol: 'FET/USD:COINBASE', quoteCurrency: 'USD' },
+      { id: 'invalid-base', symbol: 'FET-BAD/USD:BINANCE', quoteCurrency: 'USD' },
+    ] })
+
+    expect(result.prices).toEqual([
+      expect.objectContaining({ id: 'coinbase', ok: false }),
+      expect.objectContaining({ id: 'invalid-base', ok: false }),
+    ])
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl.mock.calls.every(([url]) => new URL(url).hostname === 'api.twelvedata.com')).toBe(true)
+  })
 })

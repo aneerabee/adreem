@@ -631,7 +631,8 @@ export function createAdreemApiHandler(env = process.env) {
         const loaded = await repository.load()
         const trustedItems = marketPriceItemsForHoldings(body, loaded.state || loaded)
         const result = await marketPriceService.refresh({ items: trustedItems })
-        audit(env, { action: 'investment.prices.refreshed', ledgerId, count: result.prices.length })
+        const confirmedCount = result.prices.filter((price) => price?.ok).length
+        audit(env, { action: 'investment.prices.refreshed', ledgerId, count: confirmedCount, failedCount: result.prices.length - confirmedCount })
         return sendJson(res, 200, result, allowedOrigin)
       } catch (error) {
         const status = error instanceof MarketPriceError ? error.statusCode : 500
