@@ -48,7 +48,7 @@ describe('investments panel', () => {
       platforms: [{
         platform,
         freeCashUsdMicros: usdToMicros(500),
-        holdings: [{ holding, quantityUnits: 500_000_000, averageCostUsdMicros: usdToMicros(100), marketValueUsdMicros: usdToMicros(600), unrealizedProfitUsdMicros: usdToMicros(100) }],
+        holdings: [{ holding, quantityUnits: 500_000_000, averageCostUsdMicros: usdToMicros(100), costBasisUsdMicros: usdToMicros(500), marketValueUsdMicros: usdToMicros(600), unrealizedProfitUsdMicros: usdToMicros(100) }],
       }],
       totalValueUsdMicros: usdToMicros(1_100),
       costBasisUsdMicros: usdToMicros(500),
@@ -59,9 +59,29 @@ describe('investments panel', () => {
 
     expect(html).toContain('IBKR')
     expect(html).toContain('AAPL')
+    expect(html).toContain('الكمية')
+    expect(html).toContain('سعر الشراء')
+    expect(html).toContain('القيمة عند الشراء')
+    expect(html).toContain('سعر السوق')
+    expect(html).toContain('القيمة الآن')
+    expect(html).toContain('المكسب / الخسارة')
+    expect(html).toContain('500 USD')
     expect(html).toContain('600 USD')
     expect(html).toContain('+100 USD')
     expect(html).toContain('is-positive')
+  })
+
+  it('uses the official visual identity for a known platform alias', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'Exidus', location: 'iPhone' })
+    const html = renderToStaticMarkup(<InvestmentsPanel
+      summary={{ platforms: [{ platform, freeCashUsdMicros: 0, holdings: [] }], totalValueUsdMicros: 0, costBasisUsdMicros: 0, unrealizedProfitUsdMicros: 0, freeCashUsdMicros: 0 }}
+      platforms={[platform]}
+      {...callbacks()}
+    />)
+
+    expect(html).toContain('is-brand-exodus')
+    expect(html).toContain('platforms/exodus.svg')
+    expect(html).toContain('Exodus')
   })
 
   it('shows funding context and removal only for confirmed investments below 5 USD', () => {

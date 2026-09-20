@@ -171,7 +171,8 @@ describe('mobile form sizing', () => {
   })
 
   it('keeps investment dialogs and actions usable on narrow touch screens', () => {
-    expect(financeStylesheet).toContain('.adreem-investment-row-actions { grid-area: actions; display: grid !important; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }')
+    expect(financeStylesheet).toContain('.adreem-investment-row-actions { grid-column: auto; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }')
+    expect(financeStylesheet).toContain('.adreem-investment-flow { grid-template-columns: minmax(0, 1fr); gap: 5px; }')
     expect(financeStylesheet).toContain('.adreem-investment-dialog-body select { min-height: 42px; font-size: 16px; }')
     expect(financeStylesheet).toContain('.adreem-investment-row-actions button,')
     expect(financeStylesheet).toContain('.adreem-investment-trade-context > button { min-height: 44px; }')

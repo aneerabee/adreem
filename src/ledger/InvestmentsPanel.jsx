@@ -1,8 +1,8 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Landmark, Plus, RefreshCw, Search, Trash2, WalletCards, X } from 'lucide-react'
-import { AnimatePresence, motion as Motion } from 'motion/react'
+import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Landmark, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, TrendingDown, TrendingUp, Trash2, WalletCards, X } from 'lucide-react'
+import { AnimatePresence, motion as Motion, useReducedMotion } from 'motion/react'
 import {
   INVESTMENT_ASSET_TYPES,
   SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS,
@@ -14,6 +14,7 @@ import {
   unitsToQuantity,
   usdToMicros,
 } from './investmentCore.js'
+import { investmentPlatformBrandStyle, resolveInvestmentPlatformBrand } from './investmentPlatformBrands.js'
 import { preserveUiData } from './uiTranslation.js'
 
 const ASSET_OPTIONS = [
@@ -54,6 +55,15 @@ function assetTypeForMarketResult(result = {}) {
 
 function holdingTypeLabel(value) {
   return ASSET_OPTIONS.find((option) => option.value === value)?.label || 'أخرى'
+}
+
+function profitPercent(profitUsdMicros, costBasisUsdMicros) {
+  if (!costBasisUsdMicros) return ''
+  return `${profitUsdMicros > 0 ? '+' : ''}${decimal((profitUsdMicros / costBasisUsdMicros) * 100, 2)}%`
+}
+
+function platformLogoUrl(brand) {
+  return brand.logo ? `${import.meta.env.BASE_URL}${brand.logo}` : ''
 }
 
 function InvestmentDialog({ title, subtitle, onClose, children, onSubmit, canSubmit = true, submitLabel = 'حفظ' }) {
@@ -112,6 +122,7 @@ export default function InvestmentsPanel({
   const [assetResults, setAssetResults] = useState([])
   const [assetSearchStatus, setAssetSearchStatus] = useState('idle')
   const [assetSearchError, setAssetSearchError] = useState('')
+  const prefersReducedMotion = useReducedMotion()
   const submissionRef = useRef(false)
   const assetSearchSequenceRef = useRef(0)
   const activePlatforms = platforms.filter((platform) => platform.status !== 'inactive')
@@ -310,40 +321,88 @@ export default function InvestmentsPanel({
         </div>
       ) : (
         <div className="adreem-investment-platforms">
-          {visiblePlatforms.map((platformRow) => (
-            <article className="adreem-investment-platform" key={platformRow.platform.id}>
-              <header>
-                <div><i><Landmark aria-hidden="true" size={17} /></i><span><strong>{preserveUiData(platformRow.platform.name)}</strong><small>{preserveUiData(platformRow.platform.location || 'بدون موقع')}</small></span></div>
-                <div className="adreem-investment-platform-cash">
-                  <b>{usdMicros(platformRow.freeCashUsdMicros)}<small>نقد حر</small></b>
-                  <button type="button" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /> تمويل</button>
+          {visiblePlatforms.map((platformRow, platformIndex) => {
+            const brand = resolveInvestmentPlatformBrand(platformRow.platform.name)
+            const logoUrl = platformLogoUrl(brand)
+            return (
+              <Motion.article
+                className={`adreem-investment-platform is-brand-${brand.key}`}
+                key={platformRow.platform.id}
+                style={investmentPlatformBrandStyle(brand)}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, delay: Math.min(platformIndex * 0.035, 0.18), ease: [0.22, 1, 0.36, 1] }}
+              >
+                <header>
+                  <div className="adreem-investment-platform-identity">
+                    <i className="adreem-investment-platform-logo">
+                      {logoUrl ? <img src={logoUrl} alt="" /> : <Landmark aria-hidden="true" size={18} />}
+                    </i>
+                    <span>
+                      <strong>{preserveUiData(brand.displayName || platformRow.platform.name)}</strong>
+                      <small>{preserveUiData(platformRow.platform.location || 'بدون موقع')}</small>
+                    </span>
+                  </div>
+                  <div className="adreem-investment-platform-cash">
+                    <b>{usdMicros(platformRow.freeCashUsdMicros)}<small>نقد حر</small></b>
+                    <button type="button" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /> تمويل</button>
+                  </div>
+                </header>
+                <div className="adreem-investment-holdings">
+                  {platformRow.holdings.length ? platformRow.holdings.map((row) => {
+                    const holdingProfitUsdMicros = row.unrealizedProfitUsdMicros || 0
+                    const holdingProfitTone = holdingProfitUsdMicros > 0 ? 'is-positive' : holdingProfitUsdMicros < 0 ? 'is-negative' : 'is-neutral'
+                    const HoldingTrendIcon = holdingProfitUsdMicros > 0 ? TrendingUp : holdingProfitUsdMicros < 0 ? TrendingDown : Minus
+                    return (
+                      <Motion.section
+                        className="adreem-investment-holding"
+                        key={row.holding.id}
+                        initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <div className="adreem-investment-holding-identity">
+                          <div className="adreem-investment-symbol"><b>{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
+                          <div className="adreem-investment-name"><strong>{preserveUiData(row.holding.name)}</strong><small>{preserveUiData(row.holding.exchange || brand.displayName || platformRow.platform.name)}</small></div>
+                        </div>
+                        <div className="adreem-investment-flow">
+                          <section className="adreem-investment-phase is-purchase" aria-label="وقت الشراء">
+                            <header><PackageCheck aria-hidden="true" size={15} /><span>وقت الشراء</span></header>
+                            <div className="adreem-investment-metrics">
+                              <div><small>الكمية</small><strong>{decimal(unitsToQuantity(row.quantityUnits), 8)}</strong><em>وحدة</em></div>
+                              <div><small>سعر الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></div>
+                              <div className="is-emphasis"><small>القيمة عند الشراء</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></div>
+                            </div>
+                          </section>
+                          <div className="adreem-investment-flow-bridge" aria-hidden="true"><span /><i><ArrowLeft size={16} /></i></div>
+                          <section className="adreem-investment-phase is-current" aria-label="السوق الآن">
+                            <header><ChartCandlestick aria-hidden="true" size={15} /><span>السوق الآن</span></header>
+                            <div className="adreem-investment-metrics">
+                              <button type="button" className="adreem-investment-price" onClick={() => openManualPrice(row.holding)}>
+                                <small>سعر السوق <PencilLine aria-hidden="true" size={12} /></small>
+                                <strong>{row.holding.lastPriceUsdMicros ? usdUnitMicros(row.holding.lastPriceUsdMicros) : 'أدخل السعر'}</strong>
+                              </button>
+                              <div className="is-emphasis"><small>القيمة الآن</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
+                            </div>
+                          </section>
+                          <div className={`adreem-investment-result ${holdingProfitTone}`}>
+                            <span><HoldingTrendIcon aria-hidden="true" size={16} /><small>المكسب / الخسارة</small></span>
+                            <strong>{usdMicros(holdingProfitUsdMicros, true)}</strong>
+                            {row.costBasisUsdMicros ? <em>{profitPercent(holdingProfitUsdMicros, row.costBasisUsdMicros)}</em> : null}
+                          </div>
+                        </div>
+                        <div className="adreem-investment-row-actions">
+                          <button type="button" className="is-buy" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.BUY, row.holding.id)}><ArrowDownToLine aria-hidden="true" size={14} /> شراء</button>
+                          <button type="button" className="is-sell" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.SELL, row.holding.id)}><ArrowUpFromLine aria-hidden="true" size={14} /> بيع</button>
+                          {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
+                        </div>
+                      </Motion.section>
+                    )
+                  }) : <p className="adreem-investment-platform-empty">لا توجد استثمارات هنا.</p>}
                 </div>
-              </header>
-              <div className="adreem-investment-holdings">
-                {platformRow.holdings.length ? platformRow.holdings.map((row) => {
-                  const holdingProfitUsdMicros = Number.isSafeInteger(row.totalProfitUsdMicros)
-                    ? row.totalProfitUsdMicros
-                    : row.unrealizedProfitUsdMicros || 0
-                  const holdingProfitTone = holdingProfitUsdMicros > 0 ? 'is-positive' : holdingProfitUsdMicros < 0 ? 'is-negative' : 'is-neutral'
-                  return (
-                    <section className="adreem-investment-holding" key={row.holding.id}>
-                      <div className="adreem-investment-symbol"><b>{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
-                      <div className="adreem-investment-name"><strong>{preserveUiData(row.holding.name)}</strong><small>{decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة</small></div>
-                      <div><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></div>
-                      <button type="button" className="adreem-investment-price" onClick={() => openManualPrice(row.holding)}><small>سعر السوق</small><strong>{row.holding.lastPriceUsdMicros ? usdUnitMicros(row.holding.lastPriceUsdMicros) : 'أدخل السعر'}</strong></button>
-                      <div><small>القيمة</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
-                      <div className={holdingProfitTone}><small>النتيجة</small><strong>{usdMicros(holdingProfitUsdMicros, true)}</strong></div>
-                      <div className="adreem-investment-row-actions">
-                        <button type="button" className="is-buy" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.BUY, row.holding.id)}><ArrowDownToLine aria-hidden="true" size={14} /> شراء</button>
-                        <button type="button" className="is-sell" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.SELL, row.holding.id)}><ArrowUpFromLine aria-hidden="true" size={14} /> بيع</button>
-                        {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
-                      </div>
-                    </section>
-                  )
-                }) : <p className="adreem-investment-platform-empty">لا توجد استثمارات هنا.</p>}
-              </div>
-            </article>
-          ))}
+              </Motion.article>
+            )
+          })}
         </div>
       )}
 
