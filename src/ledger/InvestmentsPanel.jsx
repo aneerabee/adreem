@@ -1,12 +1,15 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Landmark, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, TrendingDown, TrendingUp, Trash2, WalletCards, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Clock3, History, Landmark, LockKeyhole, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, ShieldCheck, TrendingDown, TrendingUp, Trash2, WalletCards, X } from 'lucide-react'
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'motion/react'
+import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
   INVESTMENT_ASSET_TYPES,
   SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS,
   INVESTMENT_TRADE_TYPES,
+  investmentDecimalInputIsValid,
+  investmentOpeningTradeIsLocked,
   investmentTradeValueMicros,
   microsToUsd,
   parseInvestmentDecimal,
@@ -14,8 +17,9 @@ import {
   unitsToQuantity,
   usdToMicros,
 } from './investmentCore.js'
+import { buildInvestmentPlatformActivity } from './investmentActivity.js'
 import { investmentPlatformBrandStyle, resolveInvestmentPlatformBrand } from './investmentPlatformBrands.js'
-import { preserveUiData } from './uiTranslation.js'
+import { getActiveUiLanguage, preserveUiData } from './uiTranslation.js'
 
 const ASSET_OPTIONS = [
   { value: INVESTMENT_ASSET_TYPES.STOCK, label: 'سهم مباشر' },
@@ -28,6 +32,7 @@ const ASSET_OPTIONS = [
 const blankPlatform = { name: '', kind: 'platform', location: '' }
 const blankHolding = { platformId: '', name: '', symbol: '', providerSymbol: '', assetType: INVESTMENT_ASSET_TYPES.STOCK, exchange: '', quoteCurrency: 'USD', initialQuantity: '', initialPriceUsd: '' }
 const blankTrade = { holdingId: '', type: INVESTMENT_TRADE_TYPES.BUY, quantity: '', priceUsd: '', feeUsd: '', note: '' }
+const blankTradeEdit = { quantity: '', priceUsd: '', feeUsd: '', note: '' }
 
 function decimal(value, digits = 6) {
   const number = Number(value || 0)
@@ -66,7 +71,40 @@ function platformLogoUrl(brand) {
   return brand.logo ? `${import.meta.env.BASE_URL}${brand.logo}` : ''
 }
 
-function InvestmentDialog({ title, subtitle, onClose, children, onSubmit, canSubmit = true, submitLabel = 'حفظ' }) {
+function activityActionLabel(row) {
+  if (row.action === INVESTMENT_TRADE_TYPES.OPENING) return 'رصيد افتتاحي'
+  if (row.action === INVESTMENT_TRADE_TYPES.BUY) return 'شراء'
+  if (row.action === INVESTMENT_TRADE_TYPES.SELL) return 'بيع'
+  if (row.action === MOVEMENT_TYPES.INVESTMENT_DEPOSIT) return 'إيداع'
+  if (row.action === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL) return 'سحب'
+  return 'عملية'
+}
+
+function activityDate(value) {
+  const date = new Date(value || 0)
+  if (!Number.isFinite(date.getTime())) return 'بدون تاريخ'
+  return date.toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function accountLabel(account) {
+  if (!account) return ''
+  return [account.ownerName, account.subAccountName].filter(Boolean).join(' · ')
+}
+
+function tradeReviewImpact(trade = {}) {
+  if (!trade) return { label: 'أثر النقد', valueUsdMicros: 0 }
+  const valueUsdMicros = investmentTradeValueMicros(trade)
+  const feeUsdMicros = Math.max(0, Number(trade.feeUsdMicros || 0))
+  if (trade.type === INVESTMENT_TRADE_TYPES.OPENING) {
+    return { label: 'التكلفة', valueUsdMicros: valueUsdMicros + feeUsdMicros }
+  }
+  if (trade.type === INVESTMENT_TRADE_TYPES.BUY) {
+    return { label: 'أثر النقد', valueUsdMicros: -(valueUsdMicros + feeUsdMicros) }
+  }
+  return { label: 'أثر النقد', valueUsdMicros: valueUsdMicros - feeUsdMicros }
+}
+
+function InvestmentDialog({ title, subtitle, onClose, onSecondary = onClose, children, onSubmit, canSubmit = true, submitLabel = 'حفظ', secondaryLabel = 'رجوع', hideSubmit = false, className = '' }) {
   useEffect(() => {
     const root = document.documentElement
     const close = (event) => event.key === 'Escape' && onClose()
@@ -80,7 +118,7 @@ function InvestmentDialog({ title, subtitle, onClose, children, onSubmit, canSub
 
   return (
     <Motion.div className="adreem-investment-dialog-layer" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <Motion.form className="adreem-investment-dialog" role="dialog" aria-modal="true" aria-label={title} onSubmit={onSubmit} initial={{ opacity: 0, y: 14, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }}>
+      <Motion.form className={`adreem-investment-dialog ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title} onSubmit={onSubmit} initial={{ opacity: 0, y: 14, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }}>
         <header>
           <span><ChartCandlestick aria-hidden="true" size={19} /></span>
           <div><h2>{title}</h2>{subtitle ? <small>{subtitle}</small> : null}</div>
@@ -88,8 +126,8 @@ function InvestmentDialog({ title, subtitle, onClose, children, onSubmit, canSub
         </header>
         <div className="adreem-investment-dialog-body">{children}</div>
         <footer>
-          <button type="button" className="is-secondary" onClick={onClose}>رجوع</button>
-          <button type="submit" className="is-primary" disabled={!canSubmit}><Check aria-hidden="true" size={16} />{submitLabel}</button>
+          <button type="button" className="is-secondary" onClick={onSecondary}>{hideSubmit ? 'إغلاق' : secondaryLabel}</button>
+          {!hideSubmit ? <button type="submit" className="is-primary" disabled={!canSubmit}><Check aria-hidden="true" size={16} />{submitLabel}</button> : null}
         </footer>
       </Motion.form>
     </Motion.div>
@@ -100,10 +138,15 @@ export default function InvestmentsPanel({
   summary,
   platforms = [],
   holdings = [],
+  trades = [],
+  movements = [],
+  accounts = [],
   isRefreshing = false,
   onAddPlatform,
   onAddHolding,
   onAddTrade,
+  onEditTrade,
+  onEditMovement,
   onManualPrice,
   onCloseSmallHolding,
   onOpenFunding,
@@ -117,6 +160,10 @@ export default function InvestmentsPanel({
   const [manualHoldingId, setManualHoldingId] = useState('')
   const [manualPrice, setManualPrice] = useState('')
   const [closingRow, setClosingRow] = useState(null)
+  const [historyPlatformId, setHistoryPlatformId] = useState('')
+  const [editingTradeBaseline, setEditingTradeBaseline] = useState(null)
+  const [tradeEditDraft, setTradeEditDraft] = useState(blankTradeEdit)
+  const [tradeEditStage, setTradeEditStage] = useState('fields')
   const [query, setQuery] = useState('')
   const [assetQuery, setAssetQuery] = useState('')
   const [assetResults, setAssetResults] = useState([])
@@ -134,6 +181,15 @@ export default function InvestmentsPanel({
     holdings: platformRow.holdings.filter((row) => !normalizedQuery || `${row.holding.name} ${row.holding.symbol} ${row.holding.exchange}`.toLocaleLowerCase('ar').includes(normalizedQuery)),
   })).filter((row) => !normalizedQuery || row.holdings.length || `${row.platform.name} ${row.platform.location}`.toLocaleLowerCase('ar').includes(normalizedQuery))
   const latestPriceAt = activeHoldings.map((holding) => new Date(holding.lastPriceAt || 0).getTime()).filter(Number.isFinite).sort((a, b) => b - a)[0] || 0
+  const historyPlatform = activePlatforms.find((platform) => platform.id === historyPlatformId) || null
+  const historyPlatformSummary = summary.platforms.find((row) => row.platform.id === historyPlatformId) || null
+  const historyRows = useMemo(() => buildInvestmentPlatformActivity({
+    platformId: historyPlatformId,
+    trades,
+    movements,
+    holdings,
+    accounts,
+  }), [accounts, historyPlatformId, holdings, movements, trades])
 
   useEffect(() => {
     const sequence = ++assetSearchSequenceRef.current
@@ -199,6 +255,32 @@ export default function InvestmentsPanel({
     setDialog('close')
   }
 
+  function openPlatformHistory(platformId) {
+    setHistoryPlatformId(platformId)
+    setEditingTradeBaseline(null)
+    setTradeEditStage('fields')
+    setDialog('history')
+  }
+
+  function openTradeEdit(trade) {
+    setEditingTradeBaseline({ ...trade })
+    setTradeEditDraft({
+      quantity: String(unitsToQuantity(trade.quantityUnits)),
+      priceUsd: String(microsToUsd(trade.priceUsdMicros)),
+      feeUsd: String(microsToUsd(trade.feeUsdMicros || 0)),
+      note: trade.note || '',
+    })
+    setTradeEditStage('fields')
+    setDialog('trade-edit')
+  }
+
+  function returnToHistory() {
+    setEditingTradeBaseline(null)
+    setTradeEditDraft(blankTradeEdit)
+    setTradeEditStage('fields')
+    setDialog('history')
+  }
+
   function submitPlatform(event) {
     event.preventDefault()
     if (!platformDraft.name.trim() || submissionRef.current) return
@@ -225,7 +307,7 @@ export default function InvestmentsPanel({
 
   function submitTrade(event) {
     event.preventDefault()
-    if (!tradeDraft.holdingId || parseInvestmentDecimal(tradeDraft.quantity) <= 0 || parseInvestmentDecimal(tradeDraft.priceUsd) <= 0 || submissionRef.current) return
+    if (!canSubmitTrade || submissionRef.current) return
     submissionRef.current = true
     if (onAddTrade(tradeDraft) === false) {
       submissionRef.current = false
@@ -265,6 +347,27 @@ export default function InvestmentsPanel({
     setDialog('')
   }
 
+  function submitTradeEdit(event) {
+    event.preventDefault()
+    if (!editingTradeBaseline || !tradeEditHasChanges || !tradeEditHasValidInput || submissionRef.current) return
+    if (tradeEditStage === 'fields') {
+      setTradeEditStage('review')
+      return
+    }
+    submissionRef.current = true
+    if (onEditTrade?.(editingTradeBaseline, tradeEditDraft) === false) {
+      submissionRef.current = false
+      return
+    }
+    submissionRef.current = false
+    returnToHistory()
+  }
+
+  function editFundingMovement(movement) {
+    setDialog('')
+    onEditMovement?.(movement)
+  }
+
   const selectedTradeHolding = holdingById.get(tradeDraft.holdingId)
   const selectedTradePlatform = summary.platforms.find((row) => row.platform.id === selectedTradeHolding?.platformId)
   const selectedTradeRow = selectedTradePlatform?.holdings.find((row) => row.holding.id === selectedTradeHolding?.id)
@@ -274,10 +377,49 @@ export default function InvestmentsPanel({
   })
   const tradeFeeUsdMicros = usdToMicros(tradeDraft.feeUsd || 0)
   const tradeDebitUsdMicros = tradeValueUsdMicros + tradeFeeUsdMicros
-  const tradeHasValidInput = Boolean(tradeDraft.holdingId && tradeValueUsdMicros > 0)
+  const tradeFeeInputValid = investmentDecimalInputIsValid(tradeDraft.feeUsd || 0)
+  const tradeHasValidInput = Boolean(
+    tradeDraft.holdingId
+    && investmentDecimalInputIsValid(tradeDraft.quantity, { allowZero: false })
+    && investmentDecimalInputIsValid(tradeDraft.priceUsd, { allowZero: false })
+    && tradeFeeInputValid
+    && tradeValueUsdMicros > 0
+  )
   const tradeHasEnoughCash = tradeDraft.type !== INVESTMENT_TRADE_TYPES.BUY || tradeDebitUsdMicros <= Number(selectedTradePlatform?.freeCashUsdMicros || 0)
   const tradeHasEnoughUnits = tradeDraft.type !== INVESTMENT_TRADE_TYPES.SELL || quantityToUnits(tradeDraft.quantity) <= Number(selectedTradeRow?.quantityUnits || 0)
   const canSubmitTrade = tradeHasValidInput && tradeHasEnoughCash && tradeHasEnoughUnits
+  const openingTradeLocked = investmentOpeningTradeIsLocked(editingTradeBaseline, trades)
+  const editedQuantityUnits = quantityToUnits(tradeEditDraft.quantity)
+  const editedPriceUsdMicros = usdToMicros(tradeEditDraft.priceUsd)
+  const editedFeeUsdMicros = usdToMicros(tradeEditDraft.feeUsd || 0)
+  const tradeEditFeeInputValid = investmentDecimalInputIsValid(tradeEditDraft.feeUsd || 0)
+  const tradeEditHasValidInput = Boolean(
+    editingTradeBaseline
+    && investmentDecimalInputIsValid(tradeEditDraft.quantity, { allowZero: false })
+    && investmentDecimalInputIsValid(tradeEditDraft.priceUsd, { allowZero: false })
+    && tradeEditFeeInputValid
+    && editedQuantityUnits > 0
+    && editedPriceUsdMicros > 0
+  )
+  const tradeEditHasFinancialChanges = Boolean(editingTradeBaseline && (
+    editedQuantityUnits !== editingTradeBaseline.quantityUnits
+    || editedPriceUsdMicros !== editingTradeBaseline.priceUsdMicros
+    || editedFeeUsdMicros !== Number(editingTradeBaseline.feeUsdMicros || 0)
+  ))
+  const tradeEditHasChanges = Boolean(editingTradeBaseline && (
+    tradeEditHasFinancialChanges || tradeEditDraft.note.trim() !== String(editingTradeBaseline.note || '').trim()
+  ))
+  const tradeEditNoteChanged = Boolean(editingTradeBaseline && (
+    tradeEditDraft.note.trim() !== String(editingTradeBaseline.note || '').trim()
+  ))
+  const editedTradePreview = editingTradeBaseline ? {
+    ...editingTradeBaseline,
+    quantityUnits: editedQuantityUnits,
+    priceUsdMicros: editedPriceUsdMicros,
+    feeUsdMicros: editedFeeUsdMicros,
+  } : null
+  const tradeEditBeforeImpact = tradeReviewImpact(editingTradeBaseline)
+  const tradeEditAfterImpact = tradeReviewImpact(editedTradePreview)
 
   const portfolioProfitUsdMicros = Number.isSafeInteger(summary.totalProfitUsdMicros)
     ? summary.totalProfitUsdMicros
@@ -340,12 +482,15 @@ export default function InvestmentsPanel({
                     </i>
                     <span>
                       <strong>{preserveUiData(brand.displayName || platformRow.platform.name)}</strong>
-                      <small>{preserveUiData(platformRow.platform.location || 'بدون موقع')}</small>
+                      <small>{platformRow.platform.location ? preserveUiData(platformRow.platform.location) : 'بدون موقع'}</small>
                     </span>
                   </div>
                   <div className="adreem-investment-platform-cash">
                     <b>{usdMicros(platformRow.freeCashUsdMicros)}<small>نقد حر</small></b>
-                    <button type="button" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /> تمويل</button>
+                    <div className="adreem-investment-platform-actions">
+                      <button type="button" className="is-history" onClick={() => openPlatformHistory(platformRow.platform.id)}><History aria-hidden="true" size={14} /> السجل</button>
+                      <button type="button" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /> تمويل</button>
+                    </div>
                   </div>
                 </header>
                 <div className="adreem-investment-holdings">
@@ -436,6 +581,7 @@ export default function InvestmentsPanel({
             <div className="adreem-investment-trade-toggle"><button type="button" className={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'is-active' : ''} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.BUY }))}>شراء</button><button type="button" className={tradeDraft.type === INVESTMENT_TRADE_TYPES.SELL ? 'is-active' : ''} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.SELL }))}>بيع</button></div>
             <div className="is-paired"><label><span>الكمية</span><input dir="ltr" inputMode="decimal" value={tradeDraft.quantity} onChange={(event) => setTradeDraft((current) => ({ ...current, quantity: event.target.value }))} placeholder="0" /></label><label><span>سعر الوحدة USD</span><input dir="ltr" inputMode="decimal" value={tradeDraft.priceUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, priceUsd: event.target.value }))} placeholder="0" /></label></div>
             <label><span>الرسوم USD</span><input dir="ltr" inputMode="decimal" value={tradeDraft.feeUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, feeUsd: event.target.value }))} placeholder="0" /></label>
+            {!tradeFeeInputValid ? <p className="adreem-investment-edit-warning">الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.</p> : null}
             <label><span>ملاحظة</span><input value={tradeDraft.note} onChange={(event) => setTradeDraft((current) => ({ ...current, note: event.target.value }))} placeholder="اختياري" /></label>
             {selectedTradeHolding ? <div className={`adreem-investment-trade-context ${!tradeHasEnoughCash || !tradeHasEnoughUnits ? 'is-error' : ''}`}><CircleDollarSign aria-hidden="true" size={15} /><span><strong>{preserveUiData(selectedTradePlatform?.platform.name || selectedTradeHolding.symbol)}</strong><small>{tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? `المتاح ${usdMicros(selectedTradePlatform?.freeCashUsdMicros || 0)} · المطلوب ${usdMicros(tradeDebitUsdMicros)}` : `الموجود ${decimal(unitsToQuantity(selectedTradeRow?.quantityUnits || 0), 8)} وحدة`}</small></span>{!tradeHasEnoughCash && typeof onOpenFunding === 'function' ? <button type="button" onClick={() => { setDialog(''); onOpenFunding(selectedTradeHolding.platformId) }}>حوّل USD أولًا</button> : null}</div> : null}
           </InvestmentDialog>
@@ -452,6 +598,87 @@ export default function InvestmentsPanel({
               <b>{usdMicros(closingRow.marketValueUsdMicros)}</b>
               <p>{closingRow.quantityUnits > 0 ? 'ستباع الكمية كاملة بالسعر الحالي، وتنتقل قيمتها إلى نقد المنصة.' : 'الاستثمار فارغ وسيختفي من القائمة.'}</p>
             </div>
+          </InvestmentDialog>
+        ) : null}
+        {dialog === 'history' && historyPlatform ? (() => {
+          const brand = resolveInvestmentPlatformBrand(historyPlatform.name)
+          const logoUrl = platformLogoUrl(brand)
+          return (
+            <InvestmentDialog title="سجل المحفظة" subtitle={brand.displayName || historyPlatform.name} onClose={() => setDialog('')} hideSubmit className="is-history">
+              <div className={`adreem-investment-history-head is-brand-${brand.key}`} style={investmentPlatformBrandStyle(brand)}>
+                <i className="adreem-investment-history-logo">{logoUrl ? <img src={logoUrl} alt="" /> : <Landmark aria-hidden="true" size={20} />}</i>
+                <span><strong>{preserveUiData(brand.displayName || historyPlatform.name)}</strong><small>{decimal(historyRows.length, 0)} {historyRows.length === 1 ? 'عملية محفوظة' : 'عمليات محفوظة'}</small></span>
+                <b>{usdMicros(historyPlatformSummary?.freeCashUsdMicros || 0)}<small>نقد حر</small></b>
+              </div>
+              {historyRows.length ? (
+                <div className="adreem-investment-history-list">
+                  {historyRows.map((row) => {
+                    const isTrade = row.kind === 'trade'
+                    const isVoided = row.status === MOVEMENT_STATUSES.VOIDED || row.status === 'voided'
+                    const routeLabel = row.action === MOVEMENT_TYPES.INVESTMENT_DEPOSIT
+                      ? accountLabel(row.sourceAccount)
+                      : row.action === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL
+                        ? accountLabel(row.destinationAccount)
+                        : ''
+                    return (
+                      <article className={`adreem-investment-history-row is-${row.action} ${isVoided ? 'is-voided' : ''}`} key={`${row.kind}-${row.id}`}>
+                        <i>{row.action === INVESTMENT_TRADE_TYPES.BUY || row.action === MOVEMENT_TYPES.INVESTMENT_DEPOSIT ? <ArrowDownToLine aria-hidden="true" size={17} /> : row.action === INVESTMENT_TRADE_TYPES.SELL || row.action === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL ? <ArrowUpFromLine aria-hidden="true" size={17} /> : <PackageCheck aria-hidden="true" size={17} />}</i>
+                        <div className="adreem-investment-history-main">
+                          <header><strong>{activityActionLabel(row)}</strong>{isVoided ? <em>ملغاة</em> : null}<time><Clock3 aria-hidden="true" size={12} />{activityDate(row.occurredAt)}</time></header>
+                          <span>{isTrade ? preserveUiData(`${row.holding?.symbol || ''} · ${row.holding?.name || ''}`) : routeLabel ? preserveUiData(routeLabel) : 'تمويل المحفظة'}</span>
+                          {row.note ? <small>{preserveUiData(row.note)}</small> : null}
+                        </div>
+                        <div className="adreem-investment-history-values">
+                          {isTrade ? <small>{decimal(unitsToQuantity(row.trade.quantityUnits), 8)} × {usdUnitMicros(row.trade.priceUsdMicros)}</small> : null}
+                          <strong>{usdMicros(row.amountUsdMicros)}</strong>
+                          {isTrade && row.trade.feeUsdMicros > 0 ? <em><span>رسوم</span> {usdMicros(row.trade.feeUsdMicros)}</em> : null}
+                        </div>
+                        {!isVoided ? <button type="button" className="adreem-investment-history-edit" onClick={() => isTrade ? openTradeEdit(row.trade) : editFundingMovement(row.movement)}><PencilLine aria-hidden="true" size={14} /> تعديل</button> : null}
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : <div className="adreem-investment-history-empty"><History aria-hidden="true" size={24} /><strong>لا توجد عمليات بعد</strong></div>}
+            </InvestmentDialog>
+          )
+        })() : null}
+        {dialog === 'trade-edit' && editingTradeBaseline ? (
+          <InvestmentDialog
+            title={tradeEditStage === 'review' ? 'راجع التعديل' : 'تعديل عملية استثمار'}
+            subtitle="النوع والتاريخ والمنصة ثابتة"
+            onClose={returnToHistory}
+            onSecondary={tradeEditStage === 'review' ? () => setTradeEditStage('fields') : returnToHistory}
+            secondaryLabel={tradeEditStage === 'review' ? 'تعديل البيانات' : 'رجوع للسجل'}
+            onSubmit={submitTradeEdit}
+            canSubmit={tradeEditHasValidInput && tradeEditHasChanges && (!openingTradeLocked || !tradeEditHasFinancialChanges)}
+            submitLabel={tradeEditStage === 'review' ? 'تأكيد وحفظ' : 'مراجعة التغيير'}
+            className="is-trade-edit"
+          >
+            <div className="adreem-investment-edit-locks"><LockKeyhole aria-hidden="true" size={16} /><span><strong>{activityActionLabel({ action: editingTradeBaseline.type })}</strong><small>{activityDate(editingTradeBaseline.occurredAt || editingTradeBaseline.createdAt)}</small></span></div>
+            {tradeEditStage === 'fields' ? (
+              <>
+                <div className="is-paired"><label><span>الكمية</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked} value={tradeEditDraft.quantity} onChange={(event) => setTradeEditDraft((current) => ({ ...current, quantity: event.target.value }))} /></label><label><span>سعر الوحدة USD</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked} value={tradeEditDraft.priceUsd} onChange={(event) => setTradeEditDraft((current) => ({ ...current, priceUsd: event.target.value }))} /></label></div>
+                <label><span>الرسوم USD</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked || editingTradeBaseline.type === INVESTMENT_TRADE_TYPES.OPENING} value={tradeEditDraft.feeUsd} onChange={(event) => setTradeEditDraft((current) => ({ ...current, feeUsd: event.target.value }))} /></label>
+                {!tradeEditFeeInputValid ? <p className="adreem-investment-edit-warning">الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.</p> : null}
+                <label><span>ملاحظة</span><input value={tradeEditDraft.note} onChange={(event) => setTradeEditDraft((current) => ({ ...current, note: event.target.value }))} placeholder="اختياري" /></label>
+                {openingTradeLocked ? <p className="adreem-investment-edit-warning"><ShieldCheck aria-hidden="true" size={16} />القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة. يمكنك تعديل الملاحظة فقط.</p> : null}
+              </>
+            ) : (
+              <div className="adreem-investment-edit-review">
+                <div><small>قبل</small><strong>{decimal(unitsToQuantity(editingTradeBaseline.quantityUnits), 8)} وحدة</strong><b>{usdUnitMicros(editingTradeBaseline.priceUsdMicros)}</b><em>{usdMicros(investmentTradeValueMicros(editingTradeBaseline))}</em><span className="is-review-detail"><small>الرسوم</small><b>{usdMicros(editingTradeBaseline.feeUsdMicros || 0)}</b></span><span className="is-review-detail"><small>{tradeEditBeforeImpact.label}</small><b>{usdMicros(tradeEditBeforeImpact.valueUsdMicros, true)}</b></span></div>
+                <ArrowLeft aria-hidden="true" size={18} />
+                <div><small>بعد</small><strong>{decimal(unitsToQuantity(editedQuantityUnits), 8)} وحدة</strong><b>{usdUnitMicros(editedPriceUsdMicros)}</b><em>{usdMicros(investmentTradeValueMicros(editedTradePreview))}</em><span className="is-review-detail"><small>الرسوم</small><b>{usdMicros(editedFeeUsdMicros)}</b></span><span className="is-review-detail"><small>{tradeEditAfterImpact.label}</small><b>{usdMicros(tradeEditAfterImpact.valueUsdMicros, true)}</b></span></div>
+                {tradeEditNoteChanged ? (
+                  <section className="adreem-investment-edit-note-review">
+                    <small>الملاحظة</small>
+                    <span>{editingTradeBaseline.note ? preserveUiData(editingTradeBaseline.note) : 'بدون ملاحظة'}</span>
+                    <ArrowLeft aria-hidden="true" size={15} />
+                    <strong>{tradeEditDraft.note.trim() ? preserveUiData(tradeEditDraft.note.trim()) : 'بدون ملاحظة'}</strong>
+                  </section>
+                ) : null}
+                <p><ShieldCheck aria-hidden="true" size={16} />لن يُحفظ التعديل إذا كسر الكمية أو جعل نقد المنصة سالبًا.</p>
+              </div>
+            )}
           </InvestmentDialog>
         ) : null}
       </AnimatePresence>

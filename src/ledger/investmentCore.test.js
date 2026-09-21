@@ -3,11 +3,15 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
   INVESTMENT_ASSET_TYPES,
   INVESTMENT_TRADE_TYPES,
+  applyInvestmentTradeEditPriceFallback,
   applyInvestmentTradePriceFallback,
   buildSmallInvestmentClosure,
+  buildInvestmentTradeEdit,
   createInvestmentHolding,
   createInvestmentPlatform,
   createInvestmentTrade,
+  investmentOpeningTradeIsLocked,
+  investmentTradeMatchesBaseline,
   microsToUsd,
   parseInvestmentDecimal,
   quantityToUnits,
@@ -177,6 +181,31 @@ describe('investment portfolio core', () => {
     expect(applyInvestmentTradePriceFallback(holding, buy)).toBe(holding)
   })
 
+  it('updates only a market-price fallback that still belongs to the edited trade', () => {
+    const { holding } = fixture()
+    const original = createInvestmentTrade({
+      id: 'fallback-trade', platformId: holding.platformId, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(100),
+    }, '2026-01-02T00:00:00.000Z')
+    const edited = { ...original, priceUsdMicros: usdToMicros(125), updatedAt: '2026-01-03T00:00:00.000Z' }
+    const fallbackHolding = applyInvestmentTradePriceFallback({ ...holding, lastPriceUsdMicros: 0, lastPriceAt: null }, original)
+
+    expect(applyInvestmentTradeEditPriceFallback(fallbackHolding, original, edited)).toEqual(expect.objectContaining({
+      lastPriceUsdMicros: usdToMicros(125),
+      lastPriceNativeMicros: usdToMicros(125),
+      lastPriceSource: 'trade',
+      lastPriceAt: original.occurredAt,
+      updatedAt: edited.updatedAt,
+    }))
+    expect(applyInvestmentTradeEditPriceFallback({ ...fallbackHolding, lastPriceSource: 'market' }, original, edited)).toEqual(expect.objectContaining({
+      lastPriceUsdMicros: usdToMicros(100),
+      lastPriceSource: 'market',
+    }))
+    expect(applyInvestmentTradeEditPriceFallback({ ...fallbackHolding, lastPriceUsdMicros: usdToMicros(110) }, original, edited)).toEqual(expect.objectContaining({
+      lastPriceUsdMicros: usdToMicros(110),
+    }))
+  })
+
   it('keeps a new empty holding visible until its first trade', () => {
     const { platform, holding } = fixture()
     const summary = summarizeInvestmentPortfolio({ platforms: [platform], holdings: [holding], trades: [], movements: [] })
@@ -318,5 +347,137 @@ describe('investment portfolio core', () => {
     expect(result.ok).toBe(false)
     expect(result.errors).toContainEqual(expect.objectContaining({ id: holding.id, message: expect.stringContaining('السعر المحفوظ') }))
     expect(result.errors).toContainEqual(expect.objectContaining({ id: malformedTrade.id, message: expect.stringContaining('تاريخ') }))
+  })
+
+  it('builds an immutable investment trade edit without changing its identity', () => {
+    const { platform, holding } = fixture()
+    const original = createInvestmentTrade({
+      id: 'trade-edit', platformId: platform.id, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(2), priceUsdMicros: usdToMicros(10), feeUsdMicros: usdToMicros(1), note: 'old',
+    }, '2026-01-02T00:00:00.000Z')
+
+    const result = buildInvestmentTradeEdit(original, {
+      quantity: '3.5', priceUsd: '12.25', feeUsd: '0.5', note: 'updated',
+    }, '2026-01-04T00:00:00.000Z')
+
+    expect(result.ok).toBe(true)
+    expect(result.trade).toEqual(expect.objectContaining({
+      id: original.id,
+      platformId: original.platformId,
+      holdingId: original.holdingId,
+      type: original.type,
+      quantityUnits: quantityToUnits(3.5),
+      priceUsdMicros: usdToMicros(12.25),
+      feeUsdMicros: usdToMicros(0.5),
+      note: 'updated',
+      occurredAt: original.occurredAt,
+      createdAt: original.createdAt,
+      updatedAt: '2026-01-04T00:00:00.000Z',
+    }))
+    expect(original).toEqual(expect.objectContaining({
+      quantityUnits: quantityToUnits(2), priceUsdMicros: usdToMicros(10), note: 'old',
+    }))
+  })
+
+  it('rejects invalid trade edit numbers before changing stored data', () => {
+    const { platform, holding } = fixture()
+    const original = createInvestmentTrade({
+      platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.BUY,
+      quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(10),
+    })
+
+    expect(buildInvestmentTradeEdit(original, { quantity: '0', priceUsd: '10', feeUsd: '0', note: '' })).toMatchObject({ ok: false })
+    expect(buildInvestmentTradeEdit(original, { quantity: '1', priceUsd: 'bad', feeUsd: '0', note: '' })).toMatchObject({ ok: false })
+    expect(buildInvestmentTradeEdit(original, { quantity: '1', priceUsd: '10', feeUsd: 'bad', note: '' })).toMatchObject({ ok: false, message: expect.stringContaining('الرسوم') })
+  })
+
+  it('keeps opening trades fee-free in edits and validation', () => {
+    const { platform, holding } = fixture()
+    const opening = createInvestmentTrade({
+      platformId: platform.id,
+      holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(1),
+      priceUsdMicros: usdToMicros(10),
+    })
+    const invalidOpening = { ...opening, feeUsdMicros: usdToMicros(1) }
+
+    expect(buildInvestmentTradeEdit(opening, { quantity: '1', priceUsd: '10', feeUsd: '1', note: '' })).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('الافتتاحي'),
+    })
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [invalidOpening], movements: [] })).toMatchObject({ ok: false })
+  })
+
+  it('locks financial opening values after a later active trade', () => {
+    const { platform, holding } = fixture()
+    const opening = createInvestmentTrade({
+      id: 'opening', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(10),
+    }, '2026-01-01T00:00:00.000Z')
+    const laterBuy = createInvestmentTrade({
+      id: 'later', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.BUY,
+      quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(12),
+    }, '2026-01-02T00:00:00.000Z')
+
+    expect(investmentOpeningTradeIsLocked(opening, [opening, laterBuy])).toBe(true)
+    expect(investmentOpeningTradeIsLocked(opening, [opening, { ...laterBuy, status: 'voided' }])).toBe(false)
+    expect(investmentOpeningTradeIsLocked(laterBuy, [opening, laterBuy])).toBe(false)
+  })
+
+  it('updates a trade-linked fallback price across a small timestamp difference', () => {
+    const { platform } = fixture()
+    const holding = createInvestmentHolding({
+      id: 'holding-opening-price',
+      platformId: platform.id,
+      name: 'Opening asset',
+      symbol: 'OPEN',
+      initialPriceUsd: 10,
+    }, '2026-01-01T00:00:00.000Z')
+    const opening = createInvestmentTrade({
+      id: 'opening-price',
+      platformId: platform.id,
+      holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(1),
+      priceUsdMicros: usdToMicros(10),
+    }, '2026-01-01T00:00:00.250Z')
+    const edited = { ...opening, priceUsdMicros: usdToMicros(12), updatedAt: '2026-01-02T00:00:00.000Z' }
+
+    expect(applyInvestmentTradeEditPriceFallback(holding, opening, edited)).toEqual(expect.objectContaining({
+      lastPriceUsdMicros: usdToMicros(12),
+      lastPriceTradeId: opening.id,
+    }))
+  })
+
+  it('rejects edited trades that oversell or make platform cash negative', () => {
+    const { platform, holding, deposit } = fixture()
+    const buy = createInvestmentTrade({
+      id: 'buy', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.BUY,
+      quantityUnits: quantityToUnits(5), priceUsdMicros: usdToMicros(100),
+    }, '2026-01-02T00:00:00.000Z')
+    const sell = createInvestmentTrade({
+      id: 'sell', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.SELL,
+      quantityUnits: quantityToUnits(2), priceUsdMicros: usdToMicros(120),
+    }, '2026-01-03T00:00:00.000Z')
+    const oversold = buildInvestmentTradeEdit(sell, { quantity: '6', priceUsd: '120', feeUsd: '0', note: '' }).trade
+    const overfunded = buildInvestmentTradeEdit(buy, { quantity: '11', priceUsd: '100', feeUsd: '0', note: '' }).trade
+
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [buy, oversold], movements: [deposit] })).toMatchObject({ ok: false })
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [overfunded], movements: [deposit] })).toMatchObject({ ok: false })
+  })
+
+  it('detects a trade that changed after the edit screen opened', () => {
+    const { platform, holding } = fixture()
+    const baseline = createInvestmentTrade({
+      id: 'trade-baseline', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.BUY,
+      quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(10), note: 'original',
+    })
+
+    expect(investmentTradeMatchesBaseline(baseline, { ...baseline })).toBe(true)
+    expect(investmentTradeMatchesBaseline({ ...baseline, note: 'changed elsewhere' }, baseline)).toBe(false)
+    expect(investmentTradeMatchesBaseline({ ...baseline, updatedAt: '2026-01-05T00:00:00.000Z' }, baseline)).toBe(false)
+    expect(investmentTradeMatchesBaseline({ ...baseline, type: INVESTMENT_TRADE_TYPES.SELL }, baseline)).toBe(false)
+    expect(investmentTradeMatchesBaseline({ ...baseline, holdingId: 'another-holding' }, baseline)).toBe(false)
   })
 })

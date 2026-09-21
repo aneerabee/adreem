@@ -55,7 +55,7 @@ function localizedDigits(value) {
     .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
 }
 
-export function parseInvestmentDecimal(value) {
+function normalizeInvestmentDecimalText(value) {
   let text = localizedDigits(value)
     .trim()
     .replace(/[\s'\u066c]/g, '')
@@ -67,6 +67,18 @@ export function parseInvestmentDecimal(value) {
   } else {
     text = text.replace(',', '.')
   }
+  return text
+}
+
+export function investmentDecimalInputIsValid(value, { allowZero = true } = {}) {
+  const text = normalizeInvestmentDecimalText(value)
+  if (!/^\+?\d*(?:\.\d*)?$/.test(text) || !/\d/.test(text)) return false
+  const number = Number(text)
+  return Number.isFinite(number) && (allowZero ? number >= 0 : number > 0)
+}
+
+export function parseInvestmentDecimal(value) {
+  const text = normalizeInvestmentDecimalText(value)
   if (!/^\+?\d*(?:\.\d*)?$/.test(text)) return 0
   const number = Number(text)
   return Number.isFinite(number) && number >= 0 ? number : 0
@@ -175,6 +187,62 @@ export function createInvestmentTrade(draft = {}, createdAt = new Date().toISOSt
   }
 }
 
+export function buildInvestmentTradeEdit(trade = {}, draft = {}, updatedAt = new Date().toISOString()) {
+  if (!trade?.id || trade.status === INVESTMENT_RECORD_STATUSES.VOIDED) {
+    return { ok: false, message: 'عملية الاستثمار غير متاحة للتعديل.' }
+  }
+  if (
+    !investmentDecimalInputIsValid(draft.quantity, { allowZero: false })
+    || !investmentDecimalInputIsValid(draft.priceUsd, { allowZero: false })
+  ) {
+    return { ok: false, message: 'الكمية والسعر يجب أن يكونا أكبر من صفر.' }
+  }
+  if (!investmentDecimalInputIsValid(draft.feeUsd || 0)) {
+    return { ok: false, message: 'الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.' }
+  }
+  const quantityUnits = quantityToUnits(draft.quantity)
+  const priceUsdMicros = usdToMicros(draft.priceUsd)
+  const feeUsdMicros = usdToMicros(draft.feeUsd || 0)
+  if (trade.type === INVESTMENT_TRADE_TYPES.OPENING && feeUsdMicros !== 0) {
+    return { ok: false, message: 'الرصيد الافتتاحي لا يقبل رسومًا.' }
+  }
+  if (!quantityUnits || !priceUsdMicros) {
+    return { ok: false, message: 'الكمية والسعر يجب أن يكونا أكبر من صفر.' }
+  }
+  const nextTrade = {
+    ...trade,
+    quantityUnits,
+    priceUsdMicros,
+    feeUsdMicros,
+    note: cleanText(draft.note, 300),
+    updatedAt,
+  }
+  if (!investmentTradeValueMicros(nextTrade) || !isValidDateValue(updatedAt)) {
+    return { ok: false, message: 'قيمة عملية الاستثمار غير صالحة.' }
+  }
+  return { ok: true, trade: nextTrade }
+}
+
+export function investmentOpeningTradeIsLocked(trade = {}, trades = []) {
+  if (!trade || trade.type !== INVESTMENT_TRADE_TYPES.OPENING || !trade.id || !trade.holdingId) return false
+  const tradeTime = createdTime(trade)
+  return trades.some((candidate) => (
+    candidate?.id !== trade.id
+    && candidate?.holdingId === trade.holdingId
+    && candidate?.status !== INVESTMENT_RECORD_STATUSES.VOIDED
+    && (
+      createdTime(candidate) > tradeTime
+      || (createdTime(candidate) === tradeTime && String(candidate.id).localeCompare(String(trade.id)) > 0)
+    )
+  ))
+}
+
+export function investmentTradeMatchesBaseline(currentTrade = {}, baselineTrade = {}) {
+  if (!currentTrade?.id || currentTrade.id !== baselineTrade?.id) return false
+  return ['platformId', 'holdingId', 'type', 'occurredAt', 'createdAt', 'updatedAt', 'quantityUnits', 'priceUsdMicros', 'feeUsdMicros', 'note', 'status']
+    .every((field) => String(currentTrade[field] ?? '') === String(baselineTrade[field] ?? ''))
+}
+
 export function buildSmallInvestmentClosure(row = {}, createdAt = new Date().toISOString()) {
   const holding = row?.holding
   const quantityUnits = safePositiveInteger(row?.quantityUnits)
@@ -222,7 +290,35 @@ export function applyInvestmentTradePriceFallback(holding = {}, trade = {}) {
     lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : 0,
     lastPriceAt: updatedAt,
     lastPriceSource: 'trade',
+    lastPriceTradeId: trade.id || '',
     updatedAt: updatedAt || holding.updatedAt,
+  }
+}
+
+export function applyInvestmentTradeEditPriceFallback(holding = {}, previousTrade = {}, nextTrade = {}) {
+  const sourceTracksTrade = holding.lastPriceSource === 'trade' || holding.lastPriceSource === 'opening'
+  const previousPrice = safePositiveInteger(previousTrade.priceUsdMicros)
+  const nextPrice = safePositiveInteger(nextTrade.priceUsdMicros)
+  const previousAt = previousTrade.occurredAt || previousTrade.createdAt || null
+  const holdingPriceTime = new Date(holding.lastPriceAt || 0).getTime()
+  const previousTradeTime = new Date(previousAt || 0).getTime()
+  const linkedById = Boolean(holding.lastPriceTradeId && holding.lastPriceTradeId === previousTrade.id)
+  const linkedByTime = Number.isFinite(holdingPriceTime)
+    && Number.isFinite(previousTradeTime)
+    && Math.abs(holdingPriceTime - previousTradeTime) <= 1_000
+  if (
+    !sourceTracksTrade
+    || !previousPrice
+    || !nextPrice
+    || safePositiveInteger(holding.lastPriceUsdMicros) !== previousPrice
+    || (!linkedById && !linkedByTime)
+  ) return holding
+  return {
+    ...holding,
+    lastPriceUsdMicros: nextPrice,
+    lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? nextPrice : 0,
+    lastPriceTradeId: nextTrade.id || previousTrade.id || holding.lastPriceTradeId || '',
+    updatedAt: nextTrade.updatedAt || holding.updatedAt,
   }
 }
 
@@ -385,7 +481,7 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
       continue
     }
     if (holdingById.get(trade.holdingId)?.platformId !== trade.platformId) errors.push({ field: 'investmentTrades', id: trade.id, message: 'الاستثمار لا يتبع المنصة المختارة.' })
-    if (!Object.values(INVESTMENT_TRADE_TYPES).includes(trade.type) || !safePositiveInteger(trade.quantityUnits) || !safePositiveInteger(trade.priceUsdMicros) || !investmentTradeValueMicros(trade) || ![INVESTMENT_RECORD_STATUSES.ACTIVE, INVESTMENT_RECORD_STATUSES.VOIDED].includes(trade.status) || safeInteger(trade.feeUsdMicros, -1) < 0) {
+    if (!Object.values(INVESTMENT_TRADE_TYPES).includes(trade.type) || !safePositiveInteger(trade.quantityUnits) || !safePositiveInteger(trade.priceUsdMicros) || !investmentTradeValueMicros(trade) || ![INVESTMENT_RECORD_STATUSES.ACTIVE, INVESTMENT_RECORD_STATUSES.VOIDED].includes(trade.status) || safeInteger(trade.feeUsdMicros, -1) < 0 || (trade.type === INVESTMENT_TRADE_TYPES.OPENING && safeInteger(trade.feeUsdMicros) !== 0)) {
       errors.push({ field: 'investmentTrades', id: trade.id, message: 'كمية أو سعر عملية الاستثمار غير صالح.' })
     }
     if (!isValidDateValue(trade.occurredAt || trade.createdAt)) {

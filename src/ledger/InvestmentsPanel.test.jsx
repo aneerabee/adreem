@@ -82,6 +82,22 @@ describe('investments panel', () => {
     expect(html).toContain('is-brand-exodus')
     expect(html).toContain('platforms/exodus.svg')
     expect(html).toContain('Exodus')
+    expect(html).toContain('السجل')
+  })
+
+  it('visually separates Midas Kripto from regular Midas', () => {
+    const crypto = createInvestmentPlatform({ id: 'platform-crypto', name: 'Midas kripto' })
+    const regular = createInvestmentPlatform({ id: 'platform-regular', name: 'Midas' })
+    const html = renderToStaticMarkup(<InvestmentsPanel
+      summary={{ platforms: [{ platform: crypto, freeCashUsdMicros: 0, holdings: [] }, { platform: regular, freeCashUsdMicros: 0, holdings: [] }], totalValueUsdMicros: 0, costBasisUsdMicros: 0, unrealizedProfitUsdMicros: 0, freeCashUsdMicros: 0 }}
+      platforms={[crypto, regular]}
+      {...callbacks()}
+    />)
+
+    expect(html).toContain('is-brand-midas-kripto')
+    expect(html).toContain('is-brand-midas')
+    expect(html).toContain('--platform-accent:#4c5cf0')
+    expect(html).toContain('--platform-accent:#111111')
   })
 
   it('shows funding context and removal only for confirmed investments below 5 USD', () => {

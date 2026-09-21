@@ -14,6 +14,7 @@ const investmentsSql = readFileSync(new URL('../../supabase/migrations/202609182
 const investmentHardeningSql = readFileSync(new URL('../../supabase/migrations/20260918220000_harden_adreem_investments.sql', import.meta.url), 'utf8')
 const investmentHoldingHardeningSql = readFileSync(new URL('../../supabase/migrations/20260919001000_harden_adreem_investment_holdings.sql', import.meta.url), 'utf8')
 const investmentFundingSql = readFileSync(new URL('../../supabase/migrations/20260919184500_allow_person_investment_funding.sql', import.meta.url), 'utf8')
+const investmentTradeEditingSql = readFileSync(new URL('../../supabase/migrations/20260920214500_allow_audited_investment_trade_edits.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
   it('keeps financial numbers inside the exact application range', () => {
@@ -77,7 +78,7 @@ describe('ADREEM v3 database migration invariants', () => {
     expect(botRemovalSql).not.toMatch(/delete from public\.adreem_(accounts|movements|movement_entries)/)
   })
 
-  it('keeps investment writes isolated, append-only, and unavailable through the legacy delta function', () => {
+  it('keeps investment writes isolated, identity-locked, and unavailable through the legacy delta function', () => {
     expect(investmentsSql).toContain('function public.adreem_apply_ledger_delta_v2')
     expect(investmentsSql).toContain('ADREEM_INVESTMENT_CASH_NEGATIVE')
     expect(investmentsSql).toContain('ADREEM_INVESTMENT_POSITION_NEGATIVE')
@@ -100,6 +101,23 @@ describe('ADREEM v3 database migration invariants', () => {
     expect(investmentFundingSql).toContain("movement.movement_type = 'investment_withdrawal' and account.account_type not in ('cash', 'bank')")
     expect(investmentFundingSql).not.toContain('pg_get_functiondef')
     expect(investmentFundingSql).toContain('grant execute on function public.adreem_apply_ledger_delta_v2(uuid, bigint, jsonb, uuid) to authenticated, service_role')
+    expect(investmentTradeEditingSql).toContain('ADREEM_VOIDED_INVESTMENT_TRADE_IMMUTABLE')
+    expect(investmentTradeEditingSql).toContain('ADREEM_INVESTMENT_TRADE_IDENTITY_IMMUTABLE')
+    expect(investmentTradeEditingSql).toContain('ADREEM_INVALID_INVESTMENT_TRADE_EDIT')
+    expect(investmentTradeEditingSql).toContain("old.payload - array['quantityUnits', 'priceUsdMicros', 'feeUsdMicros', 'note', 'updatedAt']")
+    expect(investmentTradeEditingSql).toContain('ADREEM_INVESTMENT_TRADE_PAYLOAD_IMMUTABLE')
+    expect(investmentTradeEditingSql).toContain('rename to adreem_apply_ledger_delta_v2_internal')
+    expect(investmentTradeEditingSql).toContain('ADREEM_INVESTMENT_TRADE_AUDIT_REQUIRED')
+    expect(investmentTradeEditingSql).toContain('ADREEM_DUPLICATE_AUDIT_ID')
+    expect(investmentTradeEditingSql).toContain('ADREEM_INVESTMENT_OPENING_TRADE_LOCKED')
+    expect(investmentTradeEditingSql).toContain('v_quantity > 9007199254740991')
+    expect(investmentTradeEditingSql).toContain('v_trade_value > 9007199254740991')
+    expect(investmentTradeEditingSql).toContain('ADREEM_INVESTMENT_TOTAL_OUT_OF_RANGE')
+    expect(investmentTradeEditingSql).toContain('ADREEM_INVESTMENT_CASH_OUT_OF_RANGE')
+    expect(investmentTradeEditingSql).toContain("jsonb_array_elements(coalesce(p_delta -> 'investmentTrades', '[]'::jsonb)) as batch_trade(value)")
+    expect(investmentTradeEditingSql).toContain("event.value ->> 'action' = 'investment.trade.updated'")
+    expect(investmentTradeEditingSql).toContain('not exists (\n          select 1\n          from public.adreem_audit_events as existing_audit')
+    expect(investmentTradeEditingSql).toContain('revoke all on function public.adreem_apply_ledger_delta_v2_internal')
     const baselineFunction = investmentsSql.slice(investmentsSql.indexOf('create or replace function public.adreem_apply_ledger_delta_v2('))
     const previousRule = "      and (platform.record_id is null or movement.currency <> 'USD' or account.record_id is null or account.owner_id <> v_owner_id or account.account_type not in ('cash', 'bank'))"
     const fundingRule = `      and (

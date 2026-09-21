@@ -19,12 +19,14 @@ import {
   normalizeRecurringDateKey,
   validateAttachmentDraft,
 } from '../../src/ledger/ledgerOperations.js'
-import { INVESTMENT_RECORD_STATUSES, validateInvestmentState } from '../../src/ledger/investmentCore.js'
+import { INVESTMENT_RECORD_STATUSES, investmentOpeningTradeIsLocked, validateInvestmentState } from '../../src/ledger/investmentCore.js'
 
 const OWN_VALUE_KINDS = new Set([VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET])
 const RECORD_LISTS = ['accounts', 'movements', 'dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'auditEvents']
 const ACCOUNT_CLASSIFICATION_FIELDS = ['type', 'valueKind', 'currencyKind']
 const INVESTMENT_HOLDING_IDENTITY_FIELDS = ['platformId', 'symbol', 'providerSymbol', 'assetType', 'exchange', 'quoteCurrency']
+const INVESTMENT_TRADE_EDITABLE_FIELDS = ['quantityUnits', 'priceUsdMicros', 'feeUsdMicros', 'note']
+const INVESTMENT_TRADE_UPDATE_FIELDS = new Set([...INVESTMENT_TRADE_EDITABLE_FIELDS, 'updatedAt'])
 const ACTIVE_STATUS = 'active'
 const INACTIVE_STATUS = 'inactive'
 const RECORD_STATUSES = new Set([ACTIVE_STATUS, INACTIVE_STATUS])
@@ -142,6 +144,33 @@ function matchingAccountNameHistory(account, previousAccount, auditEvents = [], 
     return accountIds.has(cleanId(account.id))
       && accountPrimaryName(details.before) === beforeName
       && accountPrimaryName(details.after) === afterName
+  })
+}
+
+function investmentTradeEditValues(trade = {}) {
+  return {
+    quantityUnits: trade.quantityUnits,
+    priceUsdMicros: trade.priceUsdMicros,
+    feeUsdMicros: trade.feeUsdMicros,
+    note: trade.note || '',
+  }
+}
+
+function investmentTradeIdentity(trade = {}) {
+  return Object.fromEntries(Object.entries(trade).filter(([field]) => !INVESTMENT_TRADE_UPDATE_FIELDS.has(field)))
+}
+
+function matchingInvestmentTradeHistory(trade, previousTrade, auditEvents = [], previousAuditEventIds = new Set()) {
+  const before = investmentTradeEditValues(previousTrade)
+  const after = investmentTradeEditValues(trade)
+  return auditEvents.some((event) => {
+    if (!event?.id || previousAuditEventIds.has(cleanId(event.id)) || event.action !== 'investment.trade.updated' || !validTimestamp(event.createdAt)) return false
+    const details = event.details && typeof event.details === 'object' ? event.details : {}
+    return cleanId(details.tradeId) === cleanId(trade.id)
+      && cleanId(details.holdingId) === cleanId(trade.holdingId)
+      && cleanId(details.platformId) === cleanId(trade.platformId)
+      && isDeepStrictEqual(details.before, before)
+      && isDeepStrictEqual(details.after, after)
   })
 }
 
@@ -863,8 +892,27 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   }
   for (const trade of investmentTrades) {
     const previousTrade = (currentState.investmentTrades || []).find((item) => item.id === trade.id)
-    if (previousTrade && !isDeepStrictEqual(previousTrade, trade)) {
-      errors.push({ code: 'investment-trade-immutable', recordType: 'investmentTrades', id: trade.id, message: 'عملية الاستثمار المثبتة لا تعدل؛ سجّل عملية تصحيح جديدة.' })
+    if (!previousTrade || isDeepStrictEqual(previousTrade, trade)) continue
+    if (
+      previousTrade.status === INVESTMENT_RECORD_STATUSES.VOIDED
+      || !isDeepStrictEqual(investmentTradeIdentity(previousTrade), investmentTradeIdentity(trade))
+    ) {
+      errors.push({ code: 'investment-trade-identity-immutable', recordType: 'investmentTrades', id: trade.id, message: 'هوية عملية الاستثمار وتاريخها وحالتها ثابتة.' })
+      continue
+    }
+    const valuesChanged = INVESTMENT_TRADE_EDITABLE_FIELDS.some((field) => !isDeepStrictEqual(previousTrade[field], trade[field]))
+    if (!valuesChanged || !validTimestamp(trade.updatedAt)) {
+      errors.push({ code: 'invalid-investment-trade-edit', recordType: 'investmentTrades', id: trade.id, message: 'تعديل عملية الاستثمار غير مكتمل.' })
+      continue
+    }
+    const financialChanged = ['quantityUnits', 'priceUsdMicros', 'feeUsdMicros']
+      .some((field) => !isDeepStrictEqual(previousTrade[field], trade[field]))
+    if (financialChanged && investmentOpeningTradeIsLocked(previousTrade, investmentTrades)) {
+      errors.push({ code: 'investment-opening-trade-locked', recordType: 'investmentTrades', id: trade.id, message: 'القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة.' })
+      continue
+    }
+    if (!matchingInvestmentTradeHistory(trade, previousTrade, auditEvents, previousAuditEventIds)) {
+      errors.push({ code: 'investment-trade-audit-required', recordType: 'investmentTrades', id: trade.id, message: 'تعديل عملية الاستثمار يحتاج سجلًا مطابقًا قبل الحفظ.' })
     }
   }
 

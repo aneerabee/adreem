@@ -22,4 +22,9 @@ describe('investment platform brands', () => {
       logo: '',
     })
   })
+
+  it('keeps Midas Kripto blue and regular Midas black', () => {
+    expect(resolveInvestmentPlatformBrand('Midas kripto')).toMatchObject({ key: 'midas-kripto', accent: '#4c5cf0' })
+    expect(resolveInvestmentPlatformBrand('Midas')).toMatchObject({ key: 'midas', accent: '#111111' })
+  })
 })

@@ -30,7 +30,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradePriceFallback, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -6231,15 +6231,17 @@ export default function LedgerApp() {
       setFeedback('هذا الرمز موجود في المنصة نفسها.')
       return false
     }
-    const holding = createInvestmentHolding(draft)
+    const createdAt = new Date().toISOString()
+    const initialHolding = createInvestmentHolding(draft, createdAt)
     const openingTrade = initialQuantity > 0 ? createInvestmentTrade({
-      platformId: holding.platformId,
-      holdingId: holding.id,
+      platformId: initialHolding.platformId,
+      holdingId: initialHolding.id,
       type: INVESTMENT_TRADE_TYPES.OPENING,
       quantityUnits: quantityToUnits(initialQuantity),
       priceUsdMicros: usdToMicros(initialPriceUsd),
       note: 'رصيد استثمار عند البداية',
-    }) : null
+    }, createdAt) : null
+    const holding = openingTrade ? applyInvestmentTradePriceFallback(initialHolding, openingTrade) : initialHolding
     const candidate = {
       platforms: ledgerExtras.investmentPlatforms || [],
       holdings: [...(ledgerExtras.investmentHoldings || []), holding],
@@ -6296,6 +6298,73 @@ export default function LedgerApp() {
       auditEvents: [...(current.auditEvents || []), createAuditEvent(`investment.trade.${trade.type}`, { tradeId: trade.id, holdingId: holding.id, platformId: holding.platformId })],
     }))
     setFeedback(trade.type === INVESTMENT_TRADE_TYPES.BUY ? 'تم تسجيل الشراء.' : 'تم تسجيل البيع.')
+    return true
+  }
+
+  function editInvestmentTrade(originalTrade, draft) {
+    const currentTrade = (ledgerExtras.investmentTrades || []).find((trade) => trade.id === originalTrade?.id)
+    if (!currentTrade || currentTrade.status === INVESTMENT_RECORD_STATUSES.VOIDED) {
+      setFeedback('عملية الاستثمار لم تعد متاحة. لم نغيّر أي رقم.')
+      return false
+    }
+    if (!investmentTradeMatchesBaseline(currentTrade, originalTrade)) {
+      setFeedback('تغيّرت العملية من مكان آخر. افتح السجل من جديد قبل التعديل.')
+      return false
+    }
+    const edit = buildInvestmentTradeEdit(currentTrade, draft)
+    if (!edit.ok) {
+      setFeedback(edit.message || 'لم يتم تعديل عملية الاستثمار.')
+      return false
+    }
+    const financialFields = ['quantityUnits', 'priceUsdMicros', 'feeUsdMicros']
+    const financialChanged = financialFields.some((field) => Number(edit.trade[field] || 0) !== Number(currentTrade[field] || 0))
+    if (financialChanged && investmentOpeningTradeIsLocked(currentTrade, ledgerExtras.investmentTrades || [])) {
+      setFeedback('القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة. يمكنك تعديل الملاحظة فقط.')
+      return false
+    }
+    const nextTrades = (ledgerExtras.investmentTrades || []).map((trade) => trade.id === currentTrade.id ? edit.trade : trade)
+    const nextHoldings = (ledgerExtras.investmentHoldings || []).map((holding) => (
+      holding.id === currentTrade.holdingId
+        ? applyInvestmentTradeEditPriceFallback(holding, currentTrade, edit.trade)
+        : holding
+    ))
+    const validation = validateInvestmentState({
+      platforms: ledgerExtras.investmentPlatforms || [],
+      holdings: nextHoldings,
+      trades: nextTrades,
+      movements,
+    })
+    if (!validation.ok) {
+      setFeedback(validation.errors[0]?.message || 'لم يتم التعديل لأن الأرصدة الحالية لا تسمح به.')
+      return false
+    }
+    setLedgerExtras((current) => ({
+      ...current,
+      investmentHoldings: (current.investmentHoldings || []).map((holding) => (
+        holding.id === currentTrade.holdingId
+          ? applyInvestmentTradeEditPriceFallback(holding, currentTrade, edit.trade)
+          : holding
+      )),
+      investmentTrades: (current.investmentTrades || []).map((trade) => trade.id === currentTrade.id ? edit.trade : trade),
+      auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.trade.updated', {
+        tradeId: currentTrade.id,
+        holdingId: currentTrade.holdingId,
+        platformId: currentTrade.platformId,
+        before: {
+          quantityUnits: currentTrade.quantityUnits,
+          priceUsdMicros: currentTrade.priceUsdMicros,
+          feeUsdMicros: currentTrade.feeUsdMicros,
+          note: currentTrade.note || '',
+        },
+        after: {
+          quantityUnits: edit.trade.quantityUnits,
+          priceUsdMicros: edit.trade.priceUsdMicros,
+          feeUsdMicros: edit.trade.feeUsdMicros,
+          note: edit.trade.note || '',
+        },
+      })],
+    }))
+    setFeedback('تم تعديل عملية الاستثمار بعد المراجعة.')
     return true
   }
 
@@ -6640,10 +6709,15 @@ export default function LedgerApp() {
         summary={investmentSummary}
         platforms={ledgerExtras.investmentPlatforms || []}
         holdings={ledgerExtras.investmentHoldings || []}
+        trades={ledgerExtras.investmentTrades || []}
+        movements={movements}
+        accounts={accounts}
         isRefreshing={isRefreshingInvestmentPrices}
         onAddPlatform={addInvestmentPlatform}
         onAddHolding={addInvestmentHolding}
         onAddTrade={addInvestmentTrade}
+        onEditTrade={editInvestmentTrade}
+        onEditMovement={editReviewMovement}
         onManualPrice={updateInvestmentManualPrice}
         onCloseSmallHolding={closeSmallInvestment}
         onOpenFunding={openInvestmentFunding}

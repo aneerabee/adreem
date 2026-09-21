@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from '../../src/ledger/accountCatalog.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from '../../src/ledger/ledgerCore.js'
-import { DIMENSION_TYPES, RECURRING_FREQUENCIES } from '../../src/ledger/ledgerOperations.js'
+import { DIMENSION_TYPES, RECURRING_FREQUENCIES, createAuditEvent } from '../../src/ledger/ledgerOperations.js'
 import { createEmptyAdreemState } from '../../src/ledger/ledgerState.js'
 import { buildCounterpartyAccountBundle } from '../../src/ledger/counterpartyAccounts.js'
 import { emptyAccountDraft } from '../../src/ledger/accountConfig.js'
@@ -694,6 +694,74 @@ describe('server ledger state validation', () => {
       field: 'providerSymbol',
     }))
     expect(validateLedgerStateTransition(updatedPrice, current, { now: validationNow }).ok).toBe(true)
+  })
+
+  it('allows only audited investment trade value edits while keeping identity immutable', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-edit', name: 'Exodus' }, at)
+    const holding = createInvestmentHolding({
+      id: 'holding-edit', platformId: platform.id, name: 'Bitcoin', symbol: 'BTC', providerSymbol: 'BTC/USD',
+      quoteCurrency: CURRENCIES.USD, assetType: INVESTMENT_ASSET_TYPES.CRYPTO,
+    }, at)
+    const trade = createInvestmentTrade({
+      id: 'trade-edit', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(100), feeUsdMicros: 0, note: 'قبل',
+    }, at)
+    const current = {
+      ...createEmptyAdreemState(at),
+      investmentPlatforms: [platform],
+      investmentHoldings: [holding],
+      investmentTrades: [trade],
+    }
+    const edited = { ...trade, priceUsdMicros: usdToMicros(125), note: 'بعد', updatedAt: validationNow }
+    const audit = createAuditEvent('investment.trade.updated', {
+      tradeId: trade.id,
+      holdingId: trade.holdingId,
+      platformId: trade.platformId,
+      before: { quantityUnits: trade.quantityUnits, priceUsdMicros: trade.priceUsdMicros, feeUsdMicros: trade.feeUsdMicros, note: trade.note },
+      after: { quantityUnits: edited.quantityUnits, priceUsdMicros: edited.priceUsdMicros, feeUsdMicros: edited.feeUsdMicros, note: edited.note },
+    })
+
+    const accepted = validateLedgerStateTransition({ ...current, investmentTrades: [edited], auditEvents: [audit] }, current, { now: validationNow })
+    const missingAudit = validateLedgerStateTransition({ ...current, investmentTrades: [edited] }, current, { now: validationNow })
+    const changedIdentity = validateLedgerStateTransition({ ...current, investmentTrades: [{ ...edited, type: INVESTMENT_TRADE_TYPES.SELL }], auditEvents: [audit] }, current, { now: validationNow })
+
+    expect(accepted.ok).toBe(true)
+    expect(missingAudit.errors).toContainEqual(expect.objectContaining({ code: 'investment-trade-audit-required', id: trade.id }))
+    expect(changedIdentity.errors).toContainEqual(expect.objectContaining({ code: 'investment-trade-identity-immutable', id: trade.id }))
+  })
+
+  it('locks audited opening-value edits after a later investment trade', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-opening-lock', name: 'Midas' }, at)
+    const holding = createInvestmentHolding({
+      id: 'holding-opening-lock', platformId: platform.id, name: 'Apple', symbol: 'AAPL', providerSymbol: 'AAPL',
+      quoteCurrency: CURRENCIES.USD, assetType: INVESTMENT_ASSET_TYPES.STOCK,
+    }, at)
+    const opening = createInvestmentTrade({
+      id: 'opening-lock', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(100), feeUsdMicros: 0,
+    }, at)
+    const later = createInvestmentTrade({
+      id: 'later-buy', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.BUY,
+      quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(110), feeUsdMicros: 0,
+    }, '2026-08-20T01:00:00.000Z')
+    const edited = { ...opening, priceUsdMicros: usdToMicros(125), updatedAt: validationNow }
+    const audit = createAuditEvent('investment.trade.updated', {
+      tradeId: opening.id,
+      holdingId: opening.holdingId,
+      platformId: opening.platformId,
+      before: { quantityUnits: opening.quantityUnits, priceUsdMicros: opening.priceUsdMicros, feeUsdMicros: 0, note: '' },
+      after: { quantityUnits: edited.quantityUnits, priceUsdMicros: edited.priceUsdMicros, feeUsdMicros: 0, note: '' },
+    })
+    const current = {
+      ...createEmptyAdreemState(at),
+      investmentPlatforms: [platform],
+      investmentHoldings: [holding],
+      investmentTrades: [opening, later],
+    }
+
+    const result = validateLedgerStateTransition({ ...current, investmentTrades: [edited, later], auditEvents: [audit] }, current, { now: validationNow })
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'investment-opening-trade-locked', id: opening.id }))
   })
 
   it('allows investment funding from a USD person while refusing withdrawal to that person', () => {
