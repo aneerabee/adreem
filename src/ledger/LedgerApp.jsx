@@ -30,7 +30,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -3790,6 +3790,8 @@ export default function LedgerApp() {
   const reviewRequestSequenceRef = useRef(0)
   const separateRequestSequenceRef = useRef(0)
   const reviewLoadInProgressRef = useRef(false)
+  const automaticInvestmentPriceAttemptRef = useRef(0)
+  const investmentPriceRefreshRef = useRef({ isRefreshing: false, refresh: null })
   const normalizedUiLanguage = normalizeUiLanguage(uiLanguage)
   const uiDirection = uiLanguageDirection(normalizedUiLanguage)
   setActiveUiLanguage(normalizedUiLanguage)
@@ -4107,6 +4109,11 @@ export default function LedgerApp() {
     trades: ledgerExtras.investmentTrades || [],
     movements,
   }), [ledgerExtras.investmentHoldings, ledgerExtras.investmentPlatforms, ledgerExtras.investmentTrades, movements])
+  const investmentPriceRefreshSignature = useMemo(() => (ledgerExtras.investmentHoldings || [])
+    .filter((holding) => holding.status !== INVESTMENT_RECORD_STATUSES.INACTIVE && holding.providerSymbol)
+    .map((holding) => `${holding.id}:${holding.lastPriceAt || ''}`)
+    .sort()
+    .join('|'), [ledgerExtras.investmentHoldings])
   const investmentAvailableCashUsdMicros = useMemo(() => new Map(
     investmentSummary.platforms.map((row) => [row.platform.id, row.freeCashUsdMicros]),
   ), [investmentSummary])
@@ -6464,6 +6471,8 @@ export default function LedgerApp() {
       ...current,
       investmentHoldings: (current.investmentHoldings || []).map((holding) => holding.id === holdingId ? {
         ...holding,
+        previousPriceUsdMicros: Number(holding.lastPriceUsdMicros || 0),
+        previousPriceAt: holding.lastPriceAt || null,
         lastPriceUsdMicros: priceUsdMicros,
         lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : 0,
         lastPriceAt: updatedAt,
@@ -6496,6 +6505,8 @@ export default function LedgerApp() {
           const price = prices.get(holding.id)
           return price ? {
             ...holding,
+            previousPriceUsdMicros: Number(holding.lastPriceUsdMicros || 0),
+            previousPriceAt: holding.lastPriceAt || null,
             lastPriceUsdMicros: price.priceUsdMicros,
             lastPriceNativeMicros: price.nativePriceMicros,
             lastPriceAt: price.refreshedAt,
@@ -6513,6 +6524,33 @@ export default function LedgerApp() {
       setIsRefreshingInvestmentPrices(false)
     }
   }
+
+  useEffect(() => {
+    investmentPriceRefreshRef.current = {
+      isRefreshing: isRefreshingInvestmentPrices,
+      refresh: refreshInvestmentPrices,
+    }
+  })
+
+  useEffect(() => {
+    if (!investmentPriceRefreshSignature) return undefined
+    const firstDelay = investmentPriceRefreshDelay(ledgerExtras.investmentHoldings || [])
+    if (firstDelay === null) return undefined
+    const refreshAllPrices = () => {
+      const now = Date.now()
+      if (now - automaticInvestmentPriceAttemptRef.current < INVESTMENT_PRICE_REFRESH_INTERVAL_MS) return
+      const refreshState = investmentPriceRefreshRef.current
+      if (refreshState.isRefreshing || typeof refreshState.refresh !== 'function') return
+      automaticInvestmentPriceAttemptRef.current = now
+      refreshState.refresh()
+    }
+    const firstTimer = window.setTimeout(refreshAllPrices, firstDelay)
+    const interval = window.setInterval(refreshAllPrices, INVESTMENT_PRICE_REFRESH_INTERVAL_MS)
+    return () => {
+      window.clearTimeout(firstTimer)
+      window.clearInterval(interval)
+    }
+  }, [investmentPriceRefreshSignature, ledgerExtras.investmentHoldings])
 
   function renderAccountsSection() {
     const activeGroup = accountGroupTabs.find((group) => group.key === activeAccountGroup) || accountGroupTabs[0]

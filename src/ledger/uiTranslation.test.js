@@ -48,6 +48,9 @@ describe('ADREEM UI translation', () => {
     expect(translateUiText('أدخل سعر LYD مقابل USD.')).toBe('Enter the LYD rate against USD.')
     expect(translateUiText('أدخل سعر TRY مقابل USD.')).toBe('Enter the TRY rate against USD.')
     expect(translateUiText('تحدثت 3 أسعار. بقي 2 على سعره السابق.')).toBe('Updated 3 prices. 2 kept their previous price.')
+    expect(translateUiText('تلقائي كل ساعتين · آخر سعر 22/09/2026, 18:30')).toBe('Automatic every two hours · Last price 22/09/2026, 18:30')
+    expect(translateUiText('تلقائي كل ساعتين · ويمكن إدخال السعر يدويًا')).toBe('Automatic every two hours · Manual price is also available')
+    expect(translateUiText('السعر الحالي 120 USD')).toBe('Current price 120 USD')
   })
 
   it('translates formatted text without changing its markup', () => {

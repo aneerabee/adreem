@@ -6,6 +6,8 @@ export const MIN_VISIBLE_INVESTMENT_USD_MICROS = INVESTMENT_PRICE_SCALE
 export const SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS = 5 * INVESTMENT_PRICE_SCALE
 export const MAX_INVESTMENT_USD_MICROS = Number.MAX_SAFE_INTEGER
 export const MAX_INVESTMENT_USD = Math.floor(MAX_INVESTMENT_USD_MICROS / INVESTMENT_PRICE_SCALE)
+export const INVESTMENT_PRICE_REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000
+export const INVESTMENT_PRICE_REFRESH_START_DELAY_MS = 1_200
 export const INVESTMENT_RECORD_STATUSES = Object.freeze({
   ACTIVE: 'active',
   INACTIVE: 'inactive',
@@ -121,6 +123,22 @@ export function investmentHoldingIsLiquidity(holding = {}) {
   return symbol.split(':')[0].split('/')[0] === 'USDT'
 }
 
+export function investmentPriceDirection(holding = {}) {
+  const current = safePositiveInteger(holding.lastPriceUsdMicros)
+  const previous = safePositiveInteger(holding.previousPriceUsdMicros)
+  if (!current || !previous || current === previous) return 'neutral'
+  return current > previous ? 'up' : 'down'
+}
+
+export function investmentPriceRefreshDelay(holdings = [], now = Date.now()) {
+  const refreshable = holdings.filter((holding) => holding?.status !== INVESTMENT_RECORD_STATUSES.INACTIVE && cleanText(holding?.providerSymbol, 80))
+  if (!refreshable.length) return null
+  const timestamps = refreshable.map((holding) => new Date(holding.lastPriceAt || 0).getTime())
+  if (timestamps.some((timestamp) => !Number.isFinite(timestamp) || timestamp <= 0)) return INVESTMENT_PRICE_REFRESH_START_DELAY_MS
+  const dueAt = Math.min(...timestamps) + INVESTMENT_PRICE_REFRESH_INTERVAL_MS
+  return Math.max(INVESTMENT_PRICE_REFRESH_START_DELAY_MS, Math.min(INVESTMENT_PRICE_REFRESH_INTERVAL_MS, dueAt - now))
+}
+
 export function investmentTradeValueMicros(trade = {}) {
   const quantityUnits = safePositiveInteger(trade.quantityUnits)
   const priceUsdMicros = safePositiveInteger(trade.priceUsdMicros)
@@ -165,6 +183,8 @@ export function createInvestmentHolding(draft = {}, createdAt = new Date().toISO
       || (normalizedQuoteCurrency === CURRENCIES.USD ? lastPriceUsdMicros : 0),
     lastPriceAt: draft.lastPriceAt || (openingPriceUsdMicros ? createdAt : null),
     lastPriceSource: cleanText(draft.lastPriceSource, 40) || (openingPriceUsdMicros ? 'opening' : 'manual'),
+    previousPriceUsdMicros: safePositiveInteger(draft.previousPriceUsdMicros),
+    previousPriceAt: draft.previousPriceAt || null,
     status: INVESTMENT_RECORD_STATUSES.ACTIVE,
     createdAt,
     updatedAt: createdAt,
@@ -321,6 +341,8 @@ export function applyInvestmentTradeEditPriceFallback(holding = {}, previousTrad
   ) return holding
   return {
     ...holding,
+    previousPriceUsdMicros: safePositiveInteger(holding.lastPriceUsdMicros),
+    previousPriceAt: holding.lastPriceAt || null,
     lastPriceUsdMicros: nextPrice,
     lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? nextPrice : 0,
     lastPriceTradeId: nextTrade.id || previousTrade.id || holding.lastPriceTradeId || '',
@@ -491,7 +513,10 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
       || Number(holding?.lastPriceUsdMicros || 0) < 0
       || !Number.isSafeInteger(Number(holding?.lastPriceNativeMicros || 0))
       || Number(holding?.lastPriceNativeMicros || 0) < 0
+      || !Number.isSafeInteger(Number(holding?.previousPriceUsdMicros || 0))
+      || Number(holding?.previousPriceUsdMicros || 0) < 0
       || (holding?.lastPriceAt && !isValidDateValue(holding.lastPriceAt))
+      || (holding?.previousPriceAt && !isValidDateValue(holding.previousPriceAt))
     ) {
       errors.push({ field: 'investmentHoldings', id: holding?.id, message: 'السعر المحفوظ للاستثمار غير صالح.' })
     }

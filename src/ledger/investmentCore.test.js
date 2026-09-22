@@ -11,6 +11,8 @@ import {
   createInvestmentPlatform,
   createInvestmentTrade,
   investmentOpeningTradeIsLocked,
+  investmentPriceDirection,
+  investmentPriceRefreshDelay,
   investmentTradeMatchesBaseline,
   microsToUsd,
   parseInvestmentDecimal,
@@ -228,6 +230,8 @@ describe('investment portfolio core', () => {
     const fallbackHolding = applyInvestmentTradePriceFallback({ ...holding, lastPriceUsdMicros: 0, lastPriceAt: null }, original)
 
     expect(applyInvestmentTradeEditPriceFallback(fallbackHolding, original, edited)).toEqual(expect.objectContaining({
+      previousPriceUsdMicros: usdToMicros(100),
+      previousPriceAt: original.occurredAt,
       lastPriceUsdMicros: usdToMicros(125),
       lastPriceNativeMicros: usdToMicros(125),
       lastPriceSource: 'trade',
@@ -516,5 +520,24 @@ describe('investment portfolio core', () => {
     expect(investmentTradeMatchesBaseline({ ...baseline, updatedAt: '2026-01-05T00:00:00.000Z' }, baseline)).toBe(false)
     expect(investmentTradeMatchesBaseline({ ...baseline, type: INVESTMENT_TRADE_TYPES.SELL }, baseline)).toBe(false)
     expect(investmentTradeMatchesBaseline({ ...baseline, holdingId: 'another-holding' }, baseline)).toBe(false)
+  })
+
+  it('derives the visible market direction only from two confirmed prices', () => {
+    expect(investmentPriceDirection({ lastPriceUsdMicros: usdToMicros(110), previousPriceUsdMicros: usdToMicros(100) })).toBe('up')
+    expect(investmentPriceDirection({ lastPriceUsdMicros: usdToMicros(90), previousPriceUsdMicros: usdToMicros(100) })).toBe('down')
+    expect(investmentPriceDirection({ lastPriceUsdMicros: usdToMicros(100), previousPriceUsdMicros: usdToMicros(100) })).toBe('neutral')
+    expect(investmentPriceDirection({ lastPriceUsdMicros: usdToMicros(100) })).toBe('neutral')
+  })
+
+  it('schedules the complete portfolio refresh from the oldest confirmed price', () => {
+    const now = new Date('2026-01-01T12:00:00.000Z').getTime()
+    const active = { id: 'active', status: 'active', providerSymbol: 'AAPL', lastPriceAt: '2026-01-01T11:00:00.000Z' }
+    const older = { id: 'older', status: 'active', providerSymbol: 'BTC/USD', lastPriceAt: '2026-01-01T09:30:00.000Z' }
+    const inactive = { id: 'inactive', status: 'inactive', providerSymbol: 'MSFT', lastPriceAt: null }
+
+    expect(investmentPriceRefreshDelay([active, older, inactive], now)).toBe(1_200)
+    expect(investmentPriceRefreshDelay([active], now)).toBe(60 * 60 * 1000)
+    expect(investmentPriceRefreshDelay([{ ...active, lastPriceAt: null }], now)).toBe(1_200)
+    expect(investmentPriceRefreshDelay([inactive], now)).toBeNull()
   })
 })

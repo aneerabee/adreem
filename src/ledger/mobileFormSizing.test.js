@@ -181,6 +181,9 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('.adreem-investment-row-actions button,')
     expect(financeStylesheet).toContain('.adreem-investment-trade-context > button { min-height: 44px; }')
     expect(financeStylesheet).toContain('.adreem-investment-dialog > header > button { width: 44px; height: 44px; }')
+    expect(financeStylesheet).toContain('.adreem-investment-dialog-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain;')
+    expect(financeStylesheet).toContain('.adreem-investment-dialog > footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));')
+    expect(financeStylesheet).toContain('.adreem-investment-search-results { max-height: none; overflow: visible; }')
   })
 
   it('uses a dedicated natural red palette for every debt state', () => {

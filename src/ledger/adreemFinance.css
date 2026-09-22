@@ -2721,8 +2721,15 @@
 .adreem-investment-phase-values > :first-child { border-inline-start: 0; }
 .adreem-investment-phase-values .is-current-value strong { color: #202628; font-weight: 900; }
 .adreem-investment-price { width: 100%; cursor: pointer; transition: background-color 180ms cubic-bezier(0.22, 1, 0.36, 1), color 180ms cubic-bezier(0.22, 1, 0.36, 1); }
-.adreem-investment-price small { display: flex; align-items: center; gap: 3px; }
-.adreem-investment-price strong { color: #315e50; font-weight: 900; }
+.adreem-investment-price small { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.adreem-investment-price small > span,
+.adreem-investment-price small > em { min-width: 0; display: inline-flex; align-items: center; gap: 2px; }
+.adreem-investment-price small > em { direction: ltr; color: inherit; font-size: 0.48rem; font-style: normal; font-weight: 900; white-space: nowrap; }
+.adreem-investment-price strong { color: #596366; font-weight: 900; }
+.adreem-investment-price.is-up strong,
+.adreem-investment-price.is-up small > em { color: var(--investment-positive); }
+.adreem-investment-price.is-down strong,
+.adreem-investment-price.is-down small > em { color: var(--investment-negative); }
 .adreem-investment-price.is-unpriced strong { color: #8a6219; }
 .adreem-investment-market-dot {
   width: 6px;
@@ -2735,6 +2742,10 @@
   animation: adreem-investment-market-pulse 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 .adreem-investment-phase.is-unpriced .adreem-investment-market-dot { background: #a98a45; animation: none; }
+.adreem-investment-phase.is-price-up .adreem-investment-market-dot { background: var(--investment-positive); }
+.adreem-investment-phase.is-price-down .adreem-investment-market-dot { background: var(--investment-negative); box-shadow: 0 0 0 0 rgba(183, 37, 37, 0.24); }
+.adreem-investment-phase.is-price-up .adreem-investment-phase-title { color: var(--investment-positive); }
+.adreem-investment-phase.is-price-down .adreem-investment-phase-title { color: var(--investment-negative); }
 .adreem-investment-price:focus-visible strong { color: #725112; }
 .adreem-investment-price:focus-visible { outline: 2px solid var(--investment-gold); outline-offset: 2px; border-radius: 4px; }
 .adreem-investment-result { background: #f6f7f7 !important; color: #636b6e; }
@@ -2779,14 +2790,26 @@
   backdrop-filter: blur(5px);
 }
 .adreem-investment-dialog {
+  --dialog-accent: #343b3e;
+  --dialog-accent-soft: #eef1f2;
   width: min(100%, 560px);
   max-height: min(760px, calc(100dvh - 28px));
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border: 1px solid #575041;
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 26px 70px rgba(18, 20, 21, 0.32);
 }
+.adreem-investment-dialog.is-tone-platform { --dialog-accent: #343b3e; --dialog-accent-soft: #eef1f2; }
+.adreem-investment-dialog.is-tone-market { --dialog-accent: #896012; --dialog-accent-soft: #fff7e3; }
+.adreem-investment-dialog.is-tone-buy { --dialog-accent: #087757; --dialog-accent-soft: #eaf7f2; }
+.adreem-investment-dialog.is-tone-sell,
+.adreem-investment-dialog.is-tone-danger { --dialog-accent: #b72525; --dialog-accent-soft: #fff0f0; }
+.adreem-investment-dialog.is-tone-history { --dialog-accent: #3c464a; --dialog-accent-soft: #eef1f2; }
+.adreem-investment-dialog.is-tone-edit { --dialog-accent: #315e50; --dialog-accent-soft: #edf7f3; }
 .adreem-investment-dialog.is-history { width: min(100%, 920px); }
 .adreem-investment-dialog.is-history .adreem-investment-dialog-body { gap: 10px; background: #f6f7f7; }
 .adreem-investment-history-head {
@@ -2866,13 +2889,14 @@
 .adreem-investment-edit-review > p { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 9px; border-radius: 6px; background: #edf7f3; color: #17664e; font-size: 0.62rem; }
 [dir='ltr'] .adreem-investment-edit-review > svg,
 [dir='ltr'] .adreem-investment-edit-note-review > svg { transform: rotate(180deg); }
-.adreem-investment-dialog > header { position: sticky; top: 0; z-index: 2; min-height: 58px; gap: 9px; padding: 9px 11px; border-bottom: 1px solid #e4dfd5; background: #fffdf8; }
-.adreem-investment-dialog > header > span { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 6px; background: var(--investment-graphite); color: #f6d886; }
+.adreem-investment-dialog > header { position: relative; z-index: 2; min-height: 58px; flex: 0 0 auto; gap: 9px; padding: 9px 11px; border-bottom: 1px solid #dfe3e4; background: #fff; }
+.adreem-investment-dialog > header::after { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; width: 3px; background: var(--dialog-accent); }
+.adreem-investment-dialog > header > span { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 6px; background: var(--dialog-accent-soft); color: var(--dialog-accent); }
 .adreem-investment-dialog > header > div { min-width: 0; flex: 1; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; }
 .adreem-investment-dialog h2 { margin: 0; font-size: 0.88rem; }
 .adreem-investment-dialog header small { color: #777168; font-size: 0.6rem; }
-.adreem-investment-dialog header > button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 6px; background: #eeeae2; color: #303538; }
-.adreem-investment-dialog-body { display: grid; gap: 9px; padding: 12px; }
+.adreem-investment-dialog header > button { width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 auto; border: 0; border-radius: 6px; background: #eef1f2; color: #303538; }
+.adreem-investment-dialog-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; display: grid; gap: 9px; padding: 12px; }
 .adreem-investment-dialog-body label { min-width: 0; display: grid; gap: 4px; color: #5e5b55; font-size: 0.62rem; font-weight: 800; }
 .adreem-investment-dialog-body input,
 .adreem-investment-dialog-body select,
@@ -2890,21 +2914,28 @@
   font-size: 0.78rem;
 }
 .adreem-investment-dialog-body input:focus,
-.adreem-investment-dialog-body select:focus { border-color: var(--investment-gold); box-shadow: 0 0 0 3px rgba(201, 148, 47, 0.13); }
+.adreem-investment-dialog-body select:focus { border-color: var(--dialog-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--dialog-accent) 14%, transparent); }
 .adreem-investment-dialog-body .is-paired { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.adreem-investment-dialog > footer { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 7px; padding: 9px 11px; border-top: 1px solid #e4dfd5; background: #fff; }
+.adreem-investment-dialog > footer { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 7px; padding: 9px 11px; border-top: 1px solid #dfe3e4; background: #fff; }
 .adreem-investment-dialog > footer button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid #d7d2c8; border-radius: 6px; background: #fff; color: #303538; font-weight: 800; }
-.adreem-investment-dialog > footer .is-primary { border-color: var(--investment-graphite); background: var(--investment-graphite); color: #fff; }
+.adreem-investment-dialog > footer .is-primary { border-color: var(--dialog-accent); background: var(--dialog-accent); color: #fff; }
+.adreem-investment-dialog > footer.is-single .is-secondary { min-width: 96px; }
 .adreem-investment-dialog > footer button:disabled { opacity: 0.42; }
 .adreem-investment-trade-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 4px; border-radius: 7px; background: #f0eee8; }
-.adreem-investment-trade-toggle button { min-height: 34px; border: 0; border-radius: 5px; background: transparent; color: #6b6760; font-weight: 850; }
-.adreem-investment-trade-toggle button.is-active { background: #fff; color: #77520f; box-shadow: 0 2px 8px rgba(35, 38, 39, 0.09); }
+.adreem-investment-trade-toggle button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: #6b6760; font-weight: 850; }
+.adreem-investment-trade-toggle button.is-buy.is-active { border-color: #a8d8c7; background: #fff; color: #087757; box-shadow: 0 2px 8px rgba(8, 119, 87, 0.1); }
+.adreem-investment-trade-toggle button.is-sell.is-active { border-color: #efc4c4; background: #fff; color: #b72525; box-shadow: 0 2px 8px rgba(183, 37, 37, 0.1); }
 .adreem-investment-trade-context { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 0; padding: 8px; border-radius: 6px; background: var(--investment-gold-soft); color: #735313; font-size: 0.65rem; font-weight: 800; }
 .adreem-investment-trade-context > span { min-width: 0; display: grid; flex: 1; gap: 2px; }
 .adreem-investment-trade-context small { color: #7b6942; font-size: 0.59rem; }
 .adreem-investment-trade-context > button { min-height: 30px; padding: 0 8px; border: 1px solid #c9942f; border-radius: 6px; background: #fff; color: #735313; font: inherit; white-space: nowrap; }
 .adreem-investment-trade-context.is-error { background: #fff0f0; color: #a62929; }
 .adreem-investment-trade-context.is-error small { color: #a62929; }
+.adreem-investment-dialog-context { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid #d7dcde; border-inline-start: 3px solid var(--dialog-accent); border-radius: 7px; background: #f7f8f8; }
+.adreem-investment-dialog-context > span { min-width: 0; display: grid; gap: 2px; }
+.adreem-investment-dialog-context strong { overflow-wrap: anywhere; color: #262d30; font-size: 0.72rem; }
+.adreem-investment-dialog-context small { overflow-wrap: anywhere; color: #737a7d; font-size: 0.57rem; }
+.adreem-investment-dialog-context > b { flex: 0 0 auto; direction: ltr; color: var(--dialog-accent); font-size: 0.72rem; white-space: nowrap; }
 .adreem-investment-close-summary { display: grid; gap: 8px; padding: 11px; border: 1px solid #e0d6bd; border-radius: 7px; background: #fffaf0; }
 .adreem-investment-close-summary strong { overflow-wrap: anywhere; font-size: 0.8rem; }
 .adreem-investment-close-summary b { color: #8f2525; direction: ltr; font-size: 1.05rem; }
@@ -2943,7 +2974,9 @@
 .adreem-investment-selected-asset span { min-width: 0; display: grid; gap: 1px; }
 .adreem-investment-selected-asset strong { overflow-wrap: anywhere; font-size: 0.73rem; }
 .adreem-investment-selected-asset small { color: #766d5e; font-size: 0.59rem; }
+.adreem-investment-selected-asset > div { display: grid; justify-items: end; gap: 3px; }
 .adreem-investment-selected-asset b { color: #795715; font-size: 0.62rem; white-space: nowrap; }
+.adreem-investment-selected-asset button { min-height: 26px; display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; border: 1px solid #d4b66f; border-radius: 5px; background: #fff; color: #725112; font: inherit; font-size: 0.55rem; font-weight: 850; }
 .is-spinning { animation: adreem-investment-spin 800ms linear infinite; }
 @keyframes adreem-investment-spin { to { transform: rotate(360deg); } }
 @keyframes adreem-investment-market-pulse {
@@ -3000,20 +3033,28 @@
   .adreem-investment-trade-context > button { min-height: 44px; }
   .adreem-investment-dialog > header > button { width: 44px; height: 44px; }
   .adreem-investment-dialog-layer { align-items: end; padding: 0; }
-  .adreem-investment-dialog { width: 100%; max-height: min(88dvh, 760px); border-radius: 10px 10px 0 0; }
+  .adreem-investment-dialog { width: 100%; max-height: min(92dvh, 760px); border-width: 1px 0 0; border-radius: 12px 12px 0 0; }
+  .adreem-investment-dialog > header { min-height: 64px; padding-top: 14px; }
+  .adreem-investment-dialog > header::before { content: ''; position: absolute; top: 5px; left: 50%; width: 34px; height: 3px; border-radius: 999px; background: #c9ced0; transform: translateX(-50%); }
   .adreem-investment-dialog.is-history { max-height: 92dvh; }
   .adreem-investment-dialog-body .is-paired { grid-template-columns: 1fr; }
+  .adreem-investment-dialog-body .is-paired.is-investment-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .adreem-investment-dialog-body input,
   .adreem-investment-dialog-body select { min-height: 42px; font-size: 16px; }
+  .adreem-investment-dialog-body { scrollbar-gutter: auto; padding: 10px; }
   .adreem-investment-trade-context > button { flex: 1 0 100%; }
-  .adreem-investment-dialog > footer { padding-bottom: max(9px, env(safe-area-inset-bottom)); }
+  .adreem-investment-dialog > footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px 10px max(8px, env(safe-area-inset-bottom)); }
+  .adreem-investment-dialog > footer.is-single { grid-template-columns: minmax(0, 1fr); }
+  .adreem-investment-dialog > footer button { width: 100%; }
+  .adreem-investment-search-results { max-height: none; overflow: visible; }
   .adreem-investment-history-head { grid-template-columns: auto minmax(0, 1fr); }
   .adreem-investment-history-logo { width: 92px; height: 40px; }
   .adreem-investment-history-head > b { grid-column: 1 / -1; width: 100%; display: flex; align-items: center; justify-content: space-between; padding-top: 5px; border-top: 1px solid #dfe3e4; }
   .adreem-investment-history-row { grid-template-columns: 32px minmax(0, 1fr) auto; align-items: start; }
   .adreem-investment-history-main time { width: 100%; margin-inline-start: 0; }
-  .adreem-investment-history-values { grid-column: 2 / -1; justify-items: start; text-align: start; }
-  .adreem-investment-history-edit { grid-column: 2 / -1; width: 100%; min-height: 42px; justify-content: center; }
+  .adreem-investment-history-values { grid-column: 2 / 4; grid-row: 2; justify-items: start; text-align: start; }
+  .adreem-investment-history-edit { grid-column: 3; grid-row: 1; width: 44px; min-height: 42px; justify-content: center; padding: 0; }
+  .adreem-investment-history-edit > span { display: none; }
   .adreem-investment-edit-review { grid-template-columns: minmax(0, 1fr); }
   .adreem-investment-edit-review > svg { justify-self: center; transform: rotate(-90deg); }
   .adreem-investment-edit-note-review { grid-template-columns: minmax(0, 1fr); }
@@ -3036,12 +3077,17 @@
   .adreem-investment-platform-actions > button { width: 44px; min-width: 44px; padding: 0; }
   .adreem-investment-platform-actions > button > span,
   .adreem-investment-row-actions button > span { display: none; }
+  .adreem-investment-selected-asset { grid-template-columns: 28px minmax(0, 1fr); }
+  .adreem-investment-selected-asset > div { grid-column: 2; grid-row: 2; display: flex; align-items: center; justify-content: space-between; }
+  .adreem-investment-dialog-context { align-items: flex-start; flex-direction: column; gap: 5px; }
 }
 
 @media (max-width: 340px) {
   .adreem-investment-phase-values > span,
   .adreem-investment-phase-values > button { padding-inline: 4px; }
   .adreem-investment-metrics-strip strong { font-size: 0.6rem; }
+  .adreem-investment-dialog-body { padding-inline: 8px; }
+  .adreem-investment-dialog-body .is-paired.is-investment-numbers { gap: 5px; }
 }
 
 @media (hover: hover) and (pointer: fine) {

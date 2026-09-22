@@ -43,7 +43,7 @@ describe('investments panel', () => {
 
   it('keeps platform, holding, value, and profit visually distinct', () => {
     const platform = createInvestmentPlatform({ id: 'platform-1', name: 'IBKR', location: 'Turkey' })
-    const holding = createInvestmentHolding({ id: 'holding-1', platformId: platform.id, name: 'Apple', symbol: 'AAPL', lastPriceUsdMicros: usdToMicros(120) })
+    const holding = createInvestmentHolding({ id: 'holding-1', platformId: platform.id, name: 'Apple', symbol: 'AAPL', lastPriceUsdMicros: usdToMicros(120), previousPriceUsdMicros: usdToMicros(110), previousPriceAt: '2026-01-01T10:00:00.000Z' })
     const summary = {
       platforms: [{
         platform,
@@ -67,10 +67,13 @@ describe('investments panel', () => {
     expect(html).toContain('adreem-investment-phase is-entry')
     expect(html).toContain('adreem-investment-phase is-live')
     expect(html).toContain('adreem-investment-market-dot')
+    expect(html).toContain('is-price-up')
+    expect(html).toContain('is-market-price has-price is-up')
     expect(html).toContain('500 USD')
     expect(html).toContain('600 USD')
     expect(html).toContain('+100 USD')
     expect(html).toContain('is-profit-positive')
+    expect(html).toContain('تلقائي كل ساعتين')
   })
 
   it('uses the official visual identity for a known platform alias', () => {
