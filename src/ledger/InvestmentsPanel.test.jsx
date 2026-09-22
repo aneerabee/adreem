@@ -69,7 +69,7 @@ describe('investments panel', () => {
     expect(html).toContain('500 USD')
     expect(html).toContain('600 USD')
     expect(html).toContain('+100 USD')
-    expect(html).toContain('is-positive')
+    expect(html).toContain('is-profit-positive')
   })
 
   it('uses the official visual identity for a known platform alias', () => {
@@ -101,21 +101,21 @@ describe('investments panel', () => {
     expect(html).toContain('--platform-accent:#111111')
   })
 
-  it('shows funding context and removal only for confirmed investments below 5 USD', () => {
+  it('hides sub-1 USD positions by default without deleting them from the platform', () => {
     const platform = createInvestmentPlatform({ id: 'platform-1', name: 'IBKR' })
-    const tiny = createInvestmentHolding({ id: 'tiny', platformId: platform.id, name: 'Tiny', symbol: 'TNY', lastPriceUsdMicros: usdToMicros(2) })
+    const tiny = createInvestmentHolding({ id: 'tiny', platformId: platform.id, name: 'Dust', symbol: 'DST', lastPriceUsdMicros: usdToMicros(0.5) })
     const large = createInvestmentHolding({ id: 'large', platformId: platform.id, name: 'Large', symbol: 'LRG', lastPriceUsdMicros: usdToMicros(10) })
     const summary = {
       platforms: [{
         platform,
         freeCashUsdMicros: usdToMicros(20),
         holdings: [
-          { holding: tiny, quantityUnits: 100_000_000, averageCostUsdMicros: usdToMicros(2), marketValueUsdMicros: usdToMicros(2), unrealizedProfitUsdMicros: 0 },
+          { holding: tiny, quantityUnits: 100_000_000, averageCostUsdMicros: usdToMicros(0.5), marketValueUsdMicros: usdToMicros(0.5), unrealizedProfitUsdMicros: 0 },
           { holding: large, quantityUnits: 100_000_000, averageCostUsdMicros: usdToMicros(10), marketValueUsdMicros: usdToMicros(10), unrealizedProfitUsdMicros: 0 },
         ],
       }],
-      totalValueUsdMicros: usdToMicros(32),
-      costBasisUsdMicros: usdToMicros(12),
+      totalValueUsdMicros: usdToMicros(30.5),
+      costBasisUsdMicros: usdToMicros(10.5),
       unrealizedProfitUsdMicros: 0,
       freeCashUsdMicros: usdToMicros(20),
     }
@@ -123,7 +123,26 @@ describe('investments panel', () => {
     const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[tiny, large]} {...callbacks()} />)
 
     expect(html).toContain('تمويل')
-    expect((html.match(/class="is-remove"/g) || [])).toHaveLength(1)
+    expect(html).toContain('أرصدة صغيرة')
+    expect(html).toContain('Large')
+    expect(html).not.toContain('Dust')
+  })
+
+  it('keeps an unpriced non-empty position visible so its price can be completed', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'IBKR' })
+    const holding = createInvestmentHolding({ id: 'unpriced', platformId: platform.id, name: 'Needs price', symbol: 'WAIT', lastPriceUsdMicros: 0 })
+    const summary = {
+      platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 100_000_000, averageCostUsdMicros: usdToMicros(3), costBasisUsdMicros: usdToMicros(3), marketValueUsdMicros: 0, unrealizedProfitUsdMicros: -usdToMicros(3) }] }],
+      totalValueUsdMicros: 0,
+      costBasisUsdMicros: usdToMicros(3),
+      unrealizedProfitUsdMicros: -usdToMicros(3),
+      freeCashUsdMicros: 0,
+    }
+
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
+
+    expect(html).toContain('Needs price')
+    expect(html).toContain('أدخل السعر')
   })
 
   it('translates system copy while preserving investment names', () => {
@@ -137,7 +156,8 @@ describe('investments panel', () => {
 
     expect(html).toContain('My portfolio')
     expect(html).toContain('منصتي')
-    expect(html).toContain('Available cash')
+    expect(html).toContain('Platform balance')
+    expect(html).toContain('Liquidity')
   })
 
   it('does not expose the provider symbol as a manual field', () => {

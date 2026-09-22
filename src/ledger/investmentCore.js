@@ -2,6 +2,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 
 export const INVESTMENT_QUANTITY_SCALE = 100_000_000
 export const INVESTMENT_PRICE_SCALE = 1_000_000
+export const MIN_VISIBLE_INVESTMENT_USD_MICROS = INVESTMENT_PRICE_SCALE
 export const SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS = 5 * INVESTMENT_PRICE_SCALE
 export const MAX_INVESTMENT_USD_MICROS = Number.MAX_SAFE_INTEGER
 export const MAX_INVESTMENT_USD = Math.floor(MAX_INVESTMENT_USD_MICROS / INVESTMENT_PRICE_SCALE)
@@ -113,6 +114,11 @@ export function usdToMicros(value) {
 
 export function microsToUsd(value) {
   return safeInteger(value) / INVESTMENT_PRICE_SCALE
+}
+
+export function investmentHoldingIsLiquidity(holding = {}) {
+  const symbol = cleanText(holding.symbol || holding.providerSymbol, 80).toUpperCase()
+  return symbol.split(':')[0].split('/')[0] === 'USDT'
 }
 
 export function investmentTradeValueMicros(trade = {}) {
@@ -402,29 +408,52 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
       row.quantityUnits > 0
       || !platformTrades.some((trade) => trade.holdingId === row.holding.id)
     ))
+    const stablecoinUsdMicros = holdingRows
+      .filter((row) => investmentHoldingIsLiquidity(row.holding))
+      .reduce((sum, row) => sum + row.marketValueUsdMicros, 0)
+    const investedMarketValueUsdMicros = holdingRows
+      .filter((row) => !investmentHoldingIsLiquidity(row.holding))
+      .reduce((sum, row) => sum + row.marketValueUsdMicros, 0)
+    const freeCashUsdMicros = cashFromLedgerUsdMicros + tradeCashUsdMicros
+    const marketValueUsdMicros = stablecoinUsdMicros + investedMarketValueUsdMicros
     return {
       platform,
-      freeCashUsdMicros: cashFromLedgerUsdMicros + tradeCashUsdMicros,
+      freeCashUsdMicros,
+      stablecoinUsdMicros,
+      liquidBalanceUsdMicros: freeCashUsdMicros + stablecoinUsdMicros,
       holdings: holdingRows,
-      marketValueUsdMicros: holdingRows.reduce((sum, row) => sum + row.marketValueUsdMicros, 0),
+      marketValueUsdMicros,
+      investedMarketValueUsdMicros,
+      totalValueUsdMicros: freeCashUsdMicros + marketValueUsdMicros,
       costBasisUsdMicros: holdingRows.reduce((sum, row) => sum + row.costBasisUsdMicros, 0),
       realizedProfitUsdMicros: allHoldingRows.reduce((sum, row) => sum + row.realizedProfitUsdMicros, 0),
+      investmentProfitUsdMicros: allHoldingRows
+        .filter((row) => !investmentHoldingIsLiquidity(row.holding))
+        .reduce((sum, row) => sum + row.totalProfitUsdMicros, 0),
     }
   })
 
   const freeCashUsdMicros = platformRows.reduce((sum, row) => sum + row.freeCashUsdMicros, 0)
+  const stablecoinUsdMicros = platformRows.reduce((sum, row) => sum + row.stablecoinUsdMicros, 0)
+  const liquidBalanceUsdMicros = freeCashUsdMicros + stablecoinUsdMicros
   const marketValueUsdMicros = platformRows.reduce((sum, row) => sum + row.marketValueUsdMicros, 0)
+  const investedMarketValueUsdMicros = platformRows.reduce((sum, row) => sum + row.investedMarketValueUsdMicros, 0)
   const costBasisUsdMicros = platformRows.reduce((sum, row) => sum + row.costBasisUsdMicros, 0)
   const realizedProfitUsdMicros = platformRows.reduce((sum, row) => sum + row.realizedProfitUsdMicros, 0)
+  const investmentProfitUsdMicros = platformRows.reduce((sum, row) => sum + row.investmentProfitUsdMicros, 0)
   const unrealizedProfitUsdMicros = marketValueUsdMicros - costBasisUsdMicros
   return {
     platforms: platformRows,
     freeCashUsdMicros,
+    stablecoinUsdMicros,
+    liquidBalanceUsdMicros,
     marketValueUsdMicros,
+    investedMarketValueUsdMicros,
     totalValueUsdMicros: freeCashUsdMicros + marketValueUsdMicros,
     costBasisUsdMicros,
     unrealizedProfitUsdMicros,
     realizedProfitUsdMicros,
+    investmentProfitUsdMicros,
     totalProfitUsdMicros: unrealizedProfitUsdMicros + realizedProfitUsdMicros,
   }
 }
@@ -548,7 +577,7 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
     }
   }
   const summary = summarizeInvestmentPortfolio({ platforms, holdings, trades, movements })
-  for (const value of [summary.freeCashUsdMicros, summary.marketValueUsdMicros, summary.totalValueUsdMicros, summary.costBasisUsdMicros, summary.realizedProfitUsdMicros, summary.unrealizedProfitUsdMicros, summary.totalProfitUsdMicros]) {
+  for (const value of [summary.freeCashUsdMicros, summary.stablecoinUsdMicros, summary.liquidBalanceUsdMicros, summary.marketValueUsdMicros, summary.investedMarketValueUsdMicros, summary.totalValueUsdMicros, summary.costBasisUsdMicros, summary.realizedProfitUsdMicros, summary.unrealizedProfitUsdMicros, summary.investmentProfitUsdMicros, summary.totalProfitUsdMicros]) {
     if (!Number.isSafeInteger(value)) {
       errors.push({ field: 'investmentTrades', message: 'إجمالي المحفظة تجاوز حد الدقة المسموح.' })
       break

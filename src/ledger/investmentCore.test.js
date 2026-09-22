@@ -101,6 +101,43 @@ describe('investment portfolio core', () => {
     expect(microsToUsd(summary.totalValueUsdMicros)).toBe(1_100)
   })
 
+  it('treats USDT as available liquidity without counting it twice', () => {
+    const { platform, holding, deposit } = fixture()
+    const usdt = createInvestmentHolding({
+      id: 'holding-usdt',
+      platformId: platform.id,
+      name: 'Tether',
+      symbol: 'USDT/USD',
+      providerSymbol: 'USDT/USD:BINANCE',
+      assetType: INVESTMENT_ASSET_TYPES.CRYPTO,
+      lastPriceUsdMicros: usdToMicros(1),
+    })
+    const stockBuy = createInvestmentTrade({
+      id: 'trade-stock', platformId: platform.id, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(5), priceUsdMicros: usdToMicros(100),
+    })
+    const usdtBuy = createInvestmentTrade({
+      id: 'trade-usdt', platformId: platform.id, holdingId: usdt.id,
+      type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(250), priceUsdMicros: usdToMicros(1),
+    })
+
+    const summary = summarizeInvestmentPortfolio({
+      platforms: [platform],
+      holdings: [holding, usdt],
+      trades: [stockBuy, usdtBuy],
+      movements: [deposit],
+    })
+
+    expect(microsToUsd(summary.freeCashUsdMicros)).toBe(250)
+    expect(microsToUsd(summary.stablecoinUsdMicros)).toBe(250)
+    expect(microsToUsd(summary.liquidBalanceUsdMicros)).toBe(500)
+    expect(microsToUsd(summary.investedMarketValueUsdMicros)).toBe(600)
+    expect(microsToUsd(summary.investmentProfitUsdMicros)).toBe(100)
+    expect(microsToUsd(summary.totalValueUsdMicros)).toBe(1_100)
+    expect(microsToUsd(summary.platforms[0].totalValueUsdMicros)).toBe(1_100)
+    expect(microsToUsd(summary.platforms[0].liquidBalanceUsdMicros)).toBe(500)
+  })
+
   it('rejects a portfolio with negative platform cash', () => {
     const { platform, holding, deposit } = fixture()
     const buy = createInvestmentTrade({

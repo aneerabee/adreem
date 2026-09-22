@@ -1,11 +1,12 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Clock3, History, Landmark, LockKeyhole, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, ShieldCheck, TrendingDown, TrendingUp, Trash2, WalletCards, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Clock3, Eye, EyeOff, History, Landmark, LockKeyhole, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, ShieldCheck, TrendingDown, TrendingUp, Trash2, WalletCards, X } from 'lucide-react'
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'motion/react'
 import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
   INVESTMENT_ASSET_TYPES,
+  MIN_VISIBLE_INVESTMENT_USD_MICROS,
   SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS,
   INVESTMENT_TRADE_TYPES,
   investmentDecimalInputIsValid,
@@ -71,6 +72,12 @@ function holdingTypeLabel(value) {
 function profitPercent(profitUsdMicros, costBasisUsdMicros) {
   if (!costBasisUsdMicros) return ''
   return `${profitUsdMicros > 0 ? '+' : ''}${decimal((profitUsdMicros / costBasisUsdMicros) * 100, 2)}%`
+}
+
+function holdingIsSmall(row = {}) {
+  if (!Number(row.quantityUnits || 0)) return true
+  return Number(row.holding?.lastPriceUsdMicros || 0) > 0
+    && Number(row.marketValueUsdMicros || 0) < MIN_VISIBLE_INVESTMENT_USD_MICROS
 }
 
 function platformLogoUrl(brand) {
@@ -175,6 +182,7 @@ export default function InvestmentsPanel({
   const [assetResults, setAssetResults] = useState([])
   const [assetSearchStatus, setAssetSearchStatus] = useState('idle')
   const [assetSearchError, setAssetSearchError] = useState('')
+  const [expandedSmallPlatforms, setExpandedSmallPlatforms] = useState({})
   const prefersReducedMotion = useReducedMotion()
   const submissionRef = useRef(false)
   const assetSearchSequenceRef = useRef(0)
@@ -271,6 +279,13 @@ export default function InvestmentsPanel({
       quoteCurrency,
     }))
     resetAssetDiscovery()
+  }
+
+  function toggleSmallPlatform(platformId) {
+    setExpandedSmallPlatforms((current) => ({
+      ...current,
+      [platformId]: !current[platformId],
+    }))
   }
 
   function selectMarketAsset(result) {
@@ -466,9 +481,17 @@ export default function InvestmentsPanel({
   const tradeEditBeforeImpact = tradeReviewImpact(editingTradeBaseline)
   const tradeEditAfterImpact = tradeReviewImpact(editedTradePreview)
 
-  const portfolioProfitUsdMicros = Number.isSafeInteger(summary.totalProfitUsdMicros)
-    ? summary.totalProfitUsdMicros
-    : summary.unrealizedProfitUsdMicros || 0
+  const portfolioLiquidityUsdMicros = Number.isSafeInteger(summary.liquidBalanceUsdMicros)
+    ? summary.liquidBalanceUsdMicros
+    : summary.freeCashUsdMicros || 0
+  const portfolioInvestmentsUsdMicros = Number.isSafeInteger(summary.investedMarketValueUsdMicros)
+    ? summary.investedMarketValueUsdMicros
+    : summary.marketValueUsdMicros || 0
+  const portfolioProfitUsdMicros = Number.isSafeInteger(summary.investmentProfitUsdMicros)
+    ? summary.investmentProfitUsdMicros
+    : Number.isSafeInteger(summary.totalProfitUsdMicros)
+      ? summary.totalProfitUsdMicros
+      : summary.unrealizedProfitUsdMicros || 0
   const profitTone = portfolioProfitUsdMicros > 0 ? 'is-positive' : portfolioProfitUsdMicros < 0 ? 'is-negative' : 'is-neutral'
   return (
     <section className="adreem-investments" aria-label="محفظتي">
@@ -488,10 +511,10 @@ export default function InvestmentsPanel({
       </div>
 
       <div className="adreem-investment-summary">
-        <article className="is-total"><small>قيمة المحفظة</small><strong>{usdMicros(summary.totalValueUsdMicros)}</strong></article>
-        <article><small>المستثمر</small><strong>{usdMicros(summary.costBasisUsdMicros)}</strong></article>
+        <article className="is-total"><small>إجمالي المحفظة</small><strong>{usdMicros(summary.totalValueUsdMicros)}</strong></article>
+        <article><small>الاستثمارات</small><strong>{usdMicros(portfolioInvestmentsUsdMicros)}</strong></article>
+        <article><small>السيولة</small><strong>{usdMicros(portfolioLiquidityUsdMicros)}</strong></article>
         <article className={profitTone}><small>الربح والخسارة</small><strong>{usdMicros(portfolioProfitUsdMicros, true)}</strong></article>
-        <article><small>نقد حر</small><strong>{usdMicros(summary.freeCashUsdMicros)}</strong></article>
       </div>
 
       <div className="adreem-investment-toolbar">
@@ -511,6 +534,16 @@ export default function InvestmentsPanel({
           {visiblePlatforms.map((platformRow, platformIndex) => {
             const brand = resolveInvestmentPlatformBrand(platformRow.platform.name)
             const logoUrl = platformLogoUrl(brand)
+            const smallRows = platformRow.holdings.filter(holdingIsSmall)
+            const regularRows = platformRow.holdings.filter((row) => !holdingIsSmall(row))
+            const showSmallRows = Boolean(normalizedQuery || expandedSmallPlatforms[platformRow.platform.id])
+            const displayedRows = showSmallRows ? [...regularRows, ...smallRows] : regularRows
+            const platformTotalUsdMicros = Number.isSafeInteger(platformRow.totalValueUsdMicros)
+              ? platformRow.totalValueUsdMicros
+              : Number(platformRow.freeCashUsdMicros || 0) + Number(platformRow.marketValueUsdMicros || 0)
+            const platformLiquidityUsdMicros = Number.isSafeInteger(platformRow.liquidBalanceUsdMicros)
+              ? platformRow.liquidBalanceUsdMicros
+              : platformRow.freeCashUsdMicros || 0
             return (
               <Motion.article
                 className={`adreem-investment-platform is-brand-${brand.key}`}
@@ -531,7 +564,10 @@ export default function InvestmentsPanel({
                     </span>
                   </div>
                   <div className="adreem-investment-platform-cash">
-                    <b>{usdMicros(platformRow.freeCashUsdMicros)}<small>نقد حر</small></b>
+                    <div className="adreem-investment-platform-balances">
+                      <b><small>رصيد المنصة</small>{usdMicros(platformTotalUsdMicros)}</b>
+                      <b><small>السيولة</small>{usdMicros(platformLiquidityUsdMicros)}</b>
+                    </div>
                     <div className="adreem-investment-platform-actions">
                       <button type="button" className="is-history" onClick={() => openPlatformHistory(platformRow.platform.id)}><History aria-hidden="true" size={14} /> السجل</button>
                       <button type="button" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /> تمويل</button>
@@ -539,13 +575,13 @@ export default function InvestmentsPanel({
                   </div>
                 </header>
                 <div className="adreem-investment-holdings">
-                  {platformRow.holdings.length ? platformRow.holdings.map((row) => {
+                  {displayedRows.length ? displayedRows.map((row) => {
                     const holdingProfitUsdMicros = row.unrealizedProfitUsdMicros || 0
-                    const holdingProfitTone = holdingProfitUsdMicros > 0 ? 'is-positive' : holdingProfitUsdMicros < 0 ? 'is-negative' : 'is-neutral'
+                    const holdingProfitTone = holdingProfitUsdMicros > 0 ? 'positive' : holdingProfitUsdMicros < 0 ? 'negative' : 'neutral'
                     const HoldingTrendIcon = holdingProfitUsdMicros > 0 ? TrendingUp : holdingProfitUsdMicros < 0 ? TrendingDown : Minus
                     return (
                       <Motion.section
-                        className="adreem-investment-holding"
+                        className={`adreem-investment-holding is-profit-${holdingProfitTone} ${holdingIsSmall(row) ? 'is-small' : ''}`.trim()}
                         key={row.holding.id}
                         initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -564,7 +600,7 @@ export default function InvestmentsPanel({
                             <strong>{row.holding.lastPriceUsdMicros ? usdUnitMicros(row.holding.lastPriceUsdMicros) : 'أدخل السعر'}</strong>
                           </button>
                           <div className="is-emphasis"><small>القيمة الآن</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
-                          <div className={`adreem-investment-result ${holdingProfitTone}`}>
+                          <div className={`adreem-investment-result is-${holdingProfitTone}`}>
                             <span><HoldingTrendIcon aria-hidden="true" size={14} /><small>المكسب / الخسارة</small></span>
                             <strong>{usdMicros(holdingProfitUsdMicros, true)}</strong>
                             {row.costBasisUsdMicros ? <em>{profitPercent(holdingProfitUsdMicros, row.costBasisUsdMicros)}</em> : null}
@@ -577,7 +613,15 @@ export default function InvestmentsPanel({
                         </div>
                       </Motion.section>
                     )
-                  }) : <p className="adreem-investment-platform-empty">لا توجد استثمارات هنا.</p>}
+                  }) : !smallRows.length ? <p className="adreem-investment-platform-empty">لا توجد استثمارات هنا.</p> : null}
+                  {smallRows.length && !normalizedQuery ? (
+                    <button type="button" className="adreem-investment-small-toggle" aria-expanded={showSmallRows} onClick={() => toggleSmallPlatform(platformRow.platform.id)}>
+                      {showSmallRows ? <EyeOff aria-hidden="true" size={14} /> : <Eye aria-hidden="true" size={14} />}
+                      <span>{showSmallRows ? 'إخفاء الأرصدة الصغيرة' : 'أرصدة صغيرة'}</span>
+                      <b>{smallRows.length}</b>
+                      <small>أقل من 1 USD</small>
+                    </button>
+                  ) : null}
                 </div>
               </Motion.article>
             )
@@ -647,7 +691,7 @@ export default function InvestmentsPanel({
               <div className={`adreem-investment-history-head is-brand-${brand.key}`} style={investmentPlatformBrandStyle(brand)}>
                 <i className="adreem-investment-history-logo">{logoUrl ? <img src={logoUrl} alt="" /> : <Landmark aria-hidden="true" size={20} />}</i>
                 <span><strong>{preserveUiData(brand.displayName || historyPlatform.name)}</strong><small>{decimal(historyRows.length, 0)} {historyRows.length === 1 ? 'عملية محفوظة' : 'عمليات محفوظة'}</small></span>
-                <b>{usdMicros(historyPlatformSummary?.freeCashUsdMicros || 0)}<small>نقد حر</small></b>
+                <b>{usdMicros(historyPlatformSummary?.totalValueUsdMicros ?? ((historyPlatformSummary?.freeCashUsdMicros || 0) + (historyPlatformSummary?.marketValueUsdMicros || 0)))}<small>رصيد المنصة</small></b>
               </div>
               {historyRows.length ? (
                 <div className="adreem-investment-history-list">
