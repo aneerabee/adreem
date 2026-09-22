@@ -123,11 +123,18 @@ export function investmentHoldingIsLiquidity(holding = {}) {
   return symbol.split(':')[0].split('/')[0] === 'USDT'
 }
 
+export function investmentPriceChange(holding = {}) {
+  const nativeCurrent = safePositiveInteger(holding.lastPriceNativeMicros)
+  const nativePrevious = safePositiveInteger(holding.previousPriceNativeMicros)
+  const hasNativeComparison = nativeCurrent > 0 && nativePrevious > 0
+  const current = hasNativeComparison ? nativeCurrent : safePositiveInteger(holding.lastPriceUsdMicros)
+  const previous = hasNativeComparison ? nativePrevious : safePositiveInteger(holding.previousPriceUsdMicros)
+  if (!current || !previous || current === previous) return { direction: 'neutral', percent: 0 }
+  return { direction: current > previous ? 'up' : 'down', percent: ((current - previous) / previous) * 100 }
+}
+
 export function investmentPriceDirection(holding = {}) {
-  const current = safePositiveInteger(holding.lastPriceUsdMicros)
-  const previous = safePositiveInteger(holding.previousPriceUsdMicros)
-  if (!current || !previous || current === previous) return 'neutral'
-  return current > previous ? 'up' : 'down'
+  return investmentPriceChange(holding).direction
 }
 
 export function investmentPriceRefreshDelay(holdings = [], now = Date.now()) {
@@ -184,6 +191,7 @@ export function createInvestmentHolding(draft = {}, createdAt = new Date().toISO
     lastPriceAt: draft.lastPriceAt || (openingPriceUsdMicros ? createdAt : null),
     lastPriceSource: cleanText(draft.lastPriceSource, 40) || (openingPriceUsdMicros ? 'opening' : 'manual'),
     previousPriceUsdMicros: safePositiveInteger(draft.previousPriceUsdMicros),
+    previousPriceNativeMicros: safePositiveInteger(draft.previousPriceNativeMicros),
     previousPriceAt: draft.previousPriceAt || null,
     status: INVESTMENT_RECORD_STATUSES.ACTIVE,
     createdAt,
@@ -342,6 +350,7 @@ export function applyInvestmentTradeEditPriceFallback(holding = {}, previousTrad
   return {
     ...holding,
     previousPriceUsdMicros: safePositiveInteger(holding.lastPriceUsdMicros),
+    previousPriceNativeMicros: safePositiveInteger(holding.lastPriceNativeMicros),
     previousPriceAt: holding.lastPriceAt || null,
     lastPriceUsdMicros: nextPrice,
     lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? nextPrice : 0,
@@ -515,6 +524,8 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
       || Number(holding?.lastPriceNativeMicros || 0) < 0
       || !Number.isSafeInteger(Number(holding?.previousPriceUsdMicros || 0))
       || Number(holding?.previousPriceUsdMicros || 0) < 0
+      || !Number.isSafeInteger(Number(holding?.previousPriceNativeMicros || 0))
+      || Number(holding?.previousPriceNativeMicros || 0) < 0
       || (holding?.lastPriceAt && !isValidDateValue(holding.lastPriceAt))
       || (holding?.previousPriceAt && !isValidDateValue(holding.previousPriceAt))
     ) {

@@ -11,6 +11,7 @@ import {
   createInvestmentPlatform,
   createInvestmentTrade,
   investmentOpeningTradeIsLocked,
+  investmentPriceChange,
   investmentPriceDirection,
   investmentPriceRefreshDelay,
   investmentTradeMatchesBaseline,
@@ -527,6 +528,10 @@ describe('investment portfolio core', () => {
     expect(investmentPriceDirection({ lastPriceUsdMicros: usdToMicros(90), previousPriceUsdMicros: usdToMicros(100) })).toBe('down')
     expect(investmentPriceDirection({ lastPriceUsdMicros: usdToMicros(100), previousPriceUsdMicros: usdToMicros(100) })).toBe('neutral')
     expect(investmentPriceDirection({ lastPriceUsdMicros: usdToMicros(100) })).toBe('neutral')
+    expect(investmentPriceChange({
+      lastPriceNativeMicros: usdToMicros(120), previousPriceNativeMicros: usdToMicros(100),
+      lastPriceUsdMicros: usdToMicros(3), previousPriceUsdMicros: usdToMicros(4),
+    })).toEqual({ direction: 'up', percent: 20 })
   })
 
   it('schedules the complete portfolio refresh from the oldest confirmed price', () => {

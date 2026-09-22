@@ -1,7 +1,7 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Clock3, Eye, EyeOff, History, Landmark, LockKeyhole, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, ShieldCheck, TrendingDown, TrendingUp, Trash2, WalletCards, X } from 'lucide-react'
+import { AlertCircle, ArrowDownToLine, ArrowLeft, ArrowLeftRight, ArrowUpFromLine, ChartCandlestick, Check, ChevronDown, CircleDollarSign, Clock3, Eye, EyeOff, History, Landmark, LockKeyhole, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, ShieldCheck, TrendingDown, TrendingUp, Trash2, WalletCards, X } from 'lucide-react'
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'motion/react'
 import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
@@ -11,7 +11,7 @@ import {
   INVESTMENT_TRADE_TYPES,
   investmentDecimalInputIsValid,
   investmentOpeningTradeIsLocked,
-  investmentPriceDirection,
+  investmentPriceChange,
   investmentTradeValueMicros,
   microsToUsd,
   parseInvestmentDecimal,
@@ -118,36 +118,35 @@ function tradeReviewImpact(trade = {}) {
   return { label: 'أثر النقد', valueUsdMicros: valueUsdMicros - feeUsdMicros }
 }
 
-function InvestmentMarketPrice({ holding, onOpen }) {
-  const priceUsdMicros = Number(holding.lastPriceUsdMicros || 0)
-  const previousPriceUsdMicros = Number(holding.previousPriceUsdMicros || 0)
+function InvestmentMarketPrice({ holding, error, onOpen }) {
+  const nativePriceMicros = Number(holding.lastPriceNativeMicros || 0)
+  const priceMicros = nativePriceMicros || Number(holding.lastPriceUsdMicros || 0)
+  const priceCurrency = nativePriceMicros ? holding.quoteCurrency : 'USD'
   const priceTimestamp = String(holding.lastPriceAt || '')
-  const direction = investmentPriceDirection(holding)
+  const { direction, percent } = error ? { direction: 'neutral', percent: 0 } : investmentPriceChange(holding)
   const DirectionIcon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus
-  const changePercent = previousPriceUsdMicros > 0
-    ? ((priceUsdMicros - previousPriceUsdMicros) / previousPriceUsdMicros) * 100
-    : 0
   const prefersReducedMotion = useReducedMotion()
 
   return (
     <button
       type="button"
-      className={`adreem-investment-price is-market-price ${priceUsdMicros ? 'has-price' : 'is-unpriced'} is-${direction}`.trim()}
+      className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${error ? 'is-stale' : ''}`.trim()}
       onClick={() => onOpen(holding)}
-      aria-label={priceUsdMicros ? `السعر الحالي ${usdUnitMicros(priceUsdMicros)}` : 'إدخال السعر الحالي'}
+      aria-label={priceMicros ? `${error ? 'السعر السابق' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} ${priceCurrency}` : 'إدخال السعر الحالي'}
+      title={error || 'إدخال سعر يدوي'}
     >
       <small>
-        <span>السعر <PencilLine aria-hidden="true" size={11} /></span>
-        {direction !== 'neutral' ? <em><DirectionIcon aria-hidden="true" size={11} />{Math.abs(changePercent).toLocaleString('en-US', { maximumFractionDigits: 2 })}%</em> : null}
+        <span>{error ? 'لم يتحدث' : 'آخر سعر'} {error ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
+        {direction !== 'neutral' ? <em><DirectionIcon aria-hidden="true" size={11} />{Math.abs(percent).toLocaleString('en-US', { maximumFractionDigits: 2 })}%</em> : null}
       </small>
       <strong aria-live="polite">
         <Motion.span
-          key={`${priceTimestamp}-${priceUsdMicros}`}
+          key={`${priceTimestamp}-${priceMicros}`}
           initial={prefersReducedMotion ? false : { opacity: 0.42, y: 3, scale: 0.985 }}
           animate={prefersReducedMotion ? { opacity: 1, y: 0, scale: 1 } : { opacity: [0.45, 1, 0.72, 1], y: 0, scale: [0.985, 1.018, 1] }}
           transition={{ duration: 0.54, ease: [0.22, 1, 0.36, 1] }}
         >
-          {priceUsdMicros ? usdUnitMicros(priceUsdMicros) : 'أدخل السعر'}
+          {priceMicros ? `${decimal(microsToUsd(priceMicros), 6)} ${priceCurrency}` : 'أدخل السعر'}
         </Motion.span>
       </strong>
     </button>
@@ -232,6 +231,7 @@ export default function InvestmentsPanel({
   movements = [],
   accounts = [],
   isRefreshing = false,
+  priceErrors = {},
   onAddPlatform,
   onAddHolding,
   onAddTrade,
@@ -260,6 +260,7 @@ export default function InvestmentsPanel({
   const [assetSearchStatus, setAssetSearchStatus] = useState('idle')
   const [assetSearchError, setAssetSearchError] = useState('')
   const [expandedSmallPlatforms, setExpandedSmallPlatforms] = useState({})
+  const [expandedHoldingIds, setExpandedHoldingIds] = useState({})
   const prefersReducedMotion = useReducedMotion()
   const submissionRef = useRef(false)
   const assetSearchSequenceRef = useRef(0)
@@ -668,7 +669,7 @@ export default function InvestmentsPanel({
                   {displayedRows.length ? displayedRows.map((row) => {
                     const holdingProfitUsdMicros = row.unrealizedProfitUsdMicros || 0
                     const holdingProfitTone = holdingProfitUsdMicros > 0 ? 'positive' : holdingProfitUsdMicros < 0 ? 'negative' : 'neutral'
-                    const priceDirection = investmentPriceDirection(row.holding)
+                    const detailsOpen = Boolean(expandedHoldingIds[row.holding.id])
                     const HoldingTrendIcon = holdingProfitUsdMicros > 0 ? TrendingUp : holdingProfitUsdMicros < 0 ? TrendingDown : Minus
                     return (
                       <Motion.section
@@ -685,22 +686,10 @@ export default function InvestmentsPanel({
                         </div>
                         <div className="adreem-investment-metrics-strip" aria-label="تفاصيل الاستثمار">
                           <div className="is-quantity"><small>الكمية</small><strong>{decimal(unitsToQuantity(row.quantityUnits), 8)} <em>وحدة</em></strong></div>
-                          <div className="adreem-investment-phase is-entry">
-                            <span className="adreem-investment-phase-title"><Clock3 aria-hidden="true" size={11} />وقت الشراء</span>
-                            <div className="adreem-investment-phase-values">
-                              <span><small>السعر</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
-                              <span><small>القيمة</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
-                            </div>
-                          </div>
-                          <div className={`adreem-investment-phase is-live is-price-${priceDirection} ${row.holding.lastPriceUsdMicros ? 'has-price' : 'is-unpriced'}`}>
-                            <span className="adreem-investment-phase-title"><i className="adreem-investment-market-dot" aria-hidden="true" />السوق الآن</span>
-                            <div className="adreem-investment-phase-values">
-                              <InvestmentMarketPrice holding={row.holding} onOpen={openManualPrice} />
-                              <span className="is-current-value"><small>القيمة</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></span>
-                            </div>
-                          </div>
+                          <InvestmentMarketPrice holding={row.holding} error={priceErrors[row.holding.id]} onOpen={openManualPrice} />
+                          <div className="is-current-value"><small>القيمة الآن</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
                           <div className={`adreem-investment-result is-${holdingProfitTone}`}>
-                            <span><HoldingTrendIcon aria-hidden="true" size={14} /><small>المكسب / الخسارة</small></span>
+                            <span><HoldingTrendIcon aria-hidden="true" size={14} /><small>النتيجة</small></span>
                             <div className="adreem-investment-result-value">
                               <strong>{usdMicros(holdingProfitUsdMicros, true)}</strong>
                               {row.costBasisUsdMicros ? <em>{profitPercent(holdingProfitUsdMicros, row.costBasisUsdMicros)}</em> : null}
@@ -708,10 +697,17 @@ export default function InvestmentsPanel({
                           </div>
                         </div>
                         <div className="adreem-investment-row-actions">
-                          <button type="button" className="is-buy" aria-label="شراء" title="شراء" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.BUY, row.holding.id)}><ArrowDownToLine aria-hidden="true" size={14} /><span>شراء</span></button>
-                          <button type="button" className="is-sell" aria-label="بيع" title="بيع" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.SELL, row.holding.id)}><ArrowUpFromLine aria-hidden="true" size={14} /><span>بيع</span></button>
-                          {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" aria-label="إزالة" title="إزالة" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /><span>إزالة</span></button> : null}
+                          <button type="button" className="is-record" title="تسجيل شراء أو بيع" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.BUY, row.holding.id)}><ArrowLeftRight aria-hidden="true" size={14} /><span>تسجيل عملية</span></button>
+                          <button type="button" className="is-details" aria-expanded={detailsOpen} title={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} onClick={() => setExpandedHoldingIds((current) => ({ ...current, [row.holding.id]: !current[row.holding.id] }))}><ChevronDown aria-hidden="true" size={14} /><span>تفاصيل</span></button>
                         </div>
+                        {detailsOpen ? <div className="adreem-investment-holding-details">
+                          <span><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
+                          <span><small>تكلفة المتبقي</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
+                          {row.holding.quoteCurrency !== 'USD' && row.holding.lastPriceUsdMicros ? <span><small>السعر بالدولار</small><strong>{usdUnitMicros(row.holding.lastPriceUsdMicros)}</strong></span> : null}
+                          <span><small>آخر تحديث</small><strong>{row.holding.lastPriceAt ? activityDate(row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
+                          {priceErrors[row.holding.id] ? <p className="is-error"><AlertCircle aria-hidden="true" size={13} />{priceErrors[row.holding.id]}</p> : null}
+                          {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
+                        </div> : null}
                       </Motion.section>
                     )
                   }) : !smallRows.length ? <p className="adreem-investment-platform-empty">لا توجد استثمارات هنا.</p> : null}
@@ -760,9 +756,9 @@ export default function InvestmentsPanel({
           </InvestmentDialog>
         ) : null}
         {dialog === 'trade' ? (
-          <InvestmentDialog title={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'شراء استثمار' : 'بيع استثمار'} subtitle={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'الشراء يخصم من نقد المنصة' : 'البيع يضيف إلى نقد المنصة'} icon={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? ArrowDownToLine : ArrowUpFromLine} tone={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'buy' : 'sell'} onClose={() => setDialog('')} onSubmit={submitTrade} canSubmit={canSubmitTrade} submitLabel={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'تأكيد الشراء' : 'تأكيد البيع'}>
-            <label><span>الاستثمار</span><select value={tradeDraft.holdingId} onChange={(event) => setTradeDraft((current) => ({ ...current, holdingId: event.target.value }))}>{activeHoldings.map((holding) => <option key={holding.id} value={holding.id}>{preserveUiData(`${holding.symbol} · ${holding.name} · ${platformById.get(holding.platformId)?.name || ''}`)}</option>)}</select></label>
+          <InvestmentDialog title="تسجيل عملية" subtitle={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'الشراء يخصم من نقد المنصة' : 'البيع يضيف إلى نقد المنصة'} icon={ArrowLeftRight} tone={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'buy' : 'sell'} onClose={() => setDialog('')} onSubmit={submitTrade} canSubmit={canSubmitTrade} submitLabel={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'حفظ الشراء' : 'حفظ البيع'}>
             <div className="adreem-investment-trade-toggle"><button type="button" aria-pressed={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY} className={`is-buy ${tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'is-active' : ''}`.trim()} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.BUY }))}><ArrowDownToLine aria-hidden="true" size={15} />شراء</button><button type="button" aria-pressed={tradeDraft.type === INVESTMENT_TRADE_TYPES.SELL} className={`is-sell ${tradeDraft.type === INVESTMENT_TRADE_TYPES.SELL ? 'is-active' : ''}`.trim()} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.SELL }))}><ArrowUpFromLine aria-hidden="true" size={15} />بيع</button></div>
+            <label><span>الاستثمار</span><select value={tradeDraft.holdingId} onChange={(event) => setTradeDraft((current) => ({ ...current, holdingId: event.target.value }))}>{activeHoldings.map((holding) => <option key={holding.id} value={holding.id}>{preserveUiData(`${holding.symbol} · ${holding.name} · ${platformById.get(holding.platformId)?.name || ''}`)}</option>)}</select></label>
             <div className="is-paired is-investment-numbers"><label><span>الكمية</span><input dir="ltr" inputMode="decimal" value={tradeDraft.quantity} onChange={(event) => setTradeDraft((current) => ({ ...current, quantity: event.target.value }))} placeholder="0" /></label><label><span>سعر الوحدة USD</span><input dir="ltr" inputMode="decimal" value={tradeDraft.priceUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, priceUsd: event.target.value }))} placeholder="0" /></label></div>
             <label><span>الرسوم USD</span><input dir="ltr" inputMode="decimal" value={tradeDraft.feeUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, feeUsd: event.target.value }))} placeholder="0" /></label>
             {!tradeFeeInputValid ? <p className="adreem-investment-edit-warning">الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.</p> : null}

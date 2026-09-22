@@ -58,6 +58,7 @@ function cleanSearchText(value) {
 function providerSymbolForHolding(holding = {}) {
   const symbol = cleanSymbol(holding.symbol)
   const exchange = cleanSymbol(holding.exchange)
+  if (holding.assetType === 'metal' || ['COMMODITY', 'FOREX', 'FX'].includes(exchange)) return symbol || cleanSymbol(holding.providerSymbol).split(':')[0]
   if (symbol && exchange && !symbol.includes(':')) return `${symbol}:${exchange}`
   return cleanSymbol(holding.providerSymbol || symbol)
 }
@@ -110,6 +111,15 @@ function priceFromPayload(payload, symbol, singleSymbol) {
   const price = Number(candidate?.price)
   if (candidate?.status === 'error' || !Number.isFinite(price) || price <= 0) return null
   return price
+}
+
+function priceFailureMessage(payload, usingDemoAccess) {
+  const code = Number(payload?.code || payload?.statusCode || 0)
+  if (code === 429) return 'بلغ مزود الأسعار حد الطلبات. بقي السعر السابق محفوظًا.'
+  if (code === 401 || code === 403) return usingDemoAccess
+    ? 'سعر هذا السوق يحتاج إلى مفتاح مزود أسعار مفعل.'
+    : 'مفتاح مزود الأسعار غير صالح أو الاشتراك لا يتيح هذا السوق.'
+  return 'السعر غير متاح لهذا الرمز. بقي السعر السابق محفوظًا.'
 }
 
 function usdMicros(value) {
@@ -235,25 +245,25 @@ export function createMarketPriceService(env = process.env, options = {}) {
     }
     const payload = await response.json().catch(() => ({}))
     if (!response.ok || payload?.status === 'error') {
-      if (usingDemoAccess && items.length > 1) {
+      if (items.length > 1 && response.status !== 429) {
         const isolatedResults = []
         for (let offset = 0; offset < items.length; offset += 4) {
           const group = await Promise.all(items.slice(offset, offset + 4).map(async (item) => {
             try {
               return await fetchPrices([item])
-            } catch {
-              return [{ id: item.id, symbol: item.symbol, ok: false, error: 'السعر غير متاح لهذا الرمز.' }]
+            } catch (error) {
+              return [{ id: item.id, symbol: item.symbol, ok: false, error: error?.message || 'السعر غير متاح لهذا الرمز.' }]
             }
           }))
           isolatedResults.push(...group.flat())
         }
         return isolatedResults
       }
-      if (usingDemoAccess && items.length === 1) {
-        const failedResult = { id: items[0].id, symbol: items[0].symbol, ok: false, error: 'السعر غير متاح لهذا الرمز.' }
+      if (items.length === 1) {
+        const failedResult = { id: items[0].id, symbol: items[0].symbol, ok: false, error: priceFailureMessage({ ...payload, code: payload?.code || response.status }, usingDemoAccess) }
         return [await withCryptoFallback(items[0], failedResult)]
       }
-      throw new MarketPriceError('مزود الأسعار لم يرجع نتيجة مؤكدة. بقي السعر السابق محفوظًا.', response.status || 502, 'market-price-provider')
+      return Promise.all(items.map((item) => withCryptoFallback(item, { id: item.id, symbol: item.symbol, ok: false, error: priceFailureMessage({ ...payload, code: payload?.code || response.status }, usingDemoAccess) })))
     }
     const singleSymbol = symbols.length === 1
     const refreshedAt = new Date(now()).toISOString()
@@ -263,7 +273,8 @@ export function createMarketPriceService(env = process.env, options = {}) {
         ? 1
         : priceFromPayload(payload, `${item.quoteCurrency}/USD`, false)
       if (!nativePrice || !fxPrice) {
-        return withCryptoFallback(item, { id: item.id, symbol: item.symbol, ok: false, error: 'السعر غير متاح لهذا الرمز.' })
+        const failedPayload = !nativePrice ? (singleSymbol ? payload : payload?.[item.symbol]) : payload?.[`${item.quoteCurrency}/USD`]
+        return withCryptoFallback(item, { id: item.id, symbol: item.symbol, ok: false, error: priceFailureMessage(failedPayload, usingDemoAccess) })
       }
       const nativeMicros = usdMicros(nativePrice)
       const priceUsdMicros = usdMicros(nativePrice * fxPrice)
@@ -323,7 +334,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
       const instrumentType = cleanSearchText(item?.instrument_type)
       if (!symbol || !name || currency !== request.quoteCurrency) return []
       const marketCode = exchange
-      const providerSymbol = symbol.includes(':') || !marketCode ? symbol : `${symbol}:${marketCode}`
+      const providerSymbol = request.assetType === 'metal' || symbol.includes(':') || !marketCode ? symbol : `${symbol}:${marketCode}`
       if (!PROVIDER_SYMBOL_PATTERN.test(providerSymbol)) return []
       const key = `${providerSymbol}:${currency}`
       if (seen.has(key)) return []

@@ -17,6 +17,11 @@ describe('investment market prices', () => {
     expect(() => marketPriceItemsForHoldings({ ids: ['outside-ledger'] }, state)).toThrow(/غير موجود/)
   })
 
+  it('requests direct metal symbols without a commodity exchange suffix', () => {
+    const state = { investmentHoldings: [{ id: 'gold', symbol: 'XAU/USD', exchange: 'COMMODITY', providerSymbol: 'XAU/USD:COMMODITY', assetType: 'metal', quoteCurrency: 'USD', status: 'active' }] }
+    expect(marketPriceItemsForHoldings({ ids: ['gold'] }, state)).toEqual([{ id: 'gold', symbol: 'XAU/USD', quoteCurrency: 'USD' }])
+  })
+
   it('normalizes market searches with an explicit quote currency', () => {
     expect(normalizeMarketSearchRequest({ query: '  Turkish   Airlines ', quoteCurrency: 'TRY', assetType: 'stock' }))
       .toEqual({ query: 'Turkish Airlines', quoteCurrency: 'TRY', assetType: 'stock' })
@@ -145,7 +150,7 @@ describe('investment market prices', () => {
     const metal = await service.search({ query: 'XAU', quoteCurrency: 'USD', assetType: 'metal' })
 
     expect(crypto.results).toEqual([expect.objectContaining({ symbol: 'BTC/USD', quoteCurrency: 'USD', assetType: 'crypto' })])
-    expect(metal.results).toEqual([expect.objectContaining({ symbol: 'XAU/USD', quoteCurrency: 'USD', assetType: 'metal' })])
+    expect(metal.results).toEqual([expect.objectContaining({ symbol: 'XAU/USD', providerSymbol: 'XAU/USD', quoteCurrency: 'USD', assetType: 'metal' })])
   })
 
   it('uses the provider demo access for direct refresh when no private key is configured', async () => {
@@ -175,6 +180,36 @@ describe('investment market prices', () => {
       expect.objectContaining({ id: 'missing', ok: false }),
     ])
     expect(fetchImpl).toHaveBeenCalledTimes(3)
+  })
+
+  it('reports missing market access without replacing a stored price', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({ status: 'error', code: 401 }) }))
+    const service = createMarketPriceService({}, { fetchImpl })
+    const result = await service.refresh({ items: [{ id: 'turkish-stock', symbol: 'THYAO:BIST', quoteCurrency: 'TRY' }] })
+
+    expect(result.prices[0]).toMatchObject({ id: 'turkish-stock', ok: false, error: expect.stringMatching(/مفتاح/) })
+  })
+
+  it('isolates a restricted market from working stocks and metals with a configured key', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const symbols = new URL(url).searchParams.get('symbol')
+      if (symbols === 'AAPL:NASDAQ') return { ok: true, status: 200, json: async () => ({ price: '210' }) }
+      if (symbols === 'XAU/USD') return { ok: true, status: 200, json: async () => ({ price: '2700' }) }
+      return { ok: false, status: 401, json: async () => ({ status: 'error', code: 401 }) }
+    })
+    const service = createMarketPriceService({ TWELVE_DATA_API_KEY: 'configured-key' }, { fetchImpl })
+    const result = await service.refresh({ items: [
+      { id: 'stock', symbol: 'AAPL:NASDAQ', quoteCurrency: 'USD' },
+      { id: 'turkey', symbol: 'THYAO:BIST', quoteCurrency: 'TRY' },
+      { id: 'metal', symbol: 'XAU/USD', quoteCurrency: 'USD' },
+    ] })
+
+    expect(result.prices).toEqual([
+      expect.objectContaining({ id: 'stock', ok: true, priceUsdMicros: 210_000_000 }),
+      expect.objectContaining({ id: 'turkey', ok: false, error: expect.stringMatching(/الاشتراك/) }),
+      expect.objectContaining({ id: 'metal', ok: true, priceUsdMicros: 2_700_000_000 }),
+    ])
+    expect(fetchImpl).toHaveBeenCalledTimes(4)
   })
 
   it('refreshes Binance crypto prices when the primary demo feed has no quote', async () => {

@@ -3768,6 +3768,7 @@ export default function LedgerApp() {
   const [netTryRate, setNetTryRate] = useState('')
   const [netEurRate, setNetEurRate] = useState('')
   const [isRefreshingInvestmentPrices, setIsRefreshingInvestmentPrices] = useState(false)
+  const [investmentPriceErrors, setInvestmentPriceErrors] = useState({})
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
   const [activeAccountDetail, setActiveAccountDetail] = useState('')
@@ -6472,6 +6473,7 @@ export default function LedgerApp() {
       investmentHoldings: (current.investmentHoldings || []).map((holding) => holding.id === holdingId ? {
         ...holding,
         previousPriceUsdMicros: Number(holding.lastPriceUsdMicros || 0),
+        previousPriceNativeMicros: Number(holding.lastPriceNativeMicros || 0),
         previousPriceAt: holding.lastPriceAt || null,
         lastPriceUsdMicros: priceUsdMicros,
         lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : 0,
@@ -6481,6 +6483,11 @@ export default function LedgerApp() {
       } : holding),
       auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.price.manual', { holdingId })],
     }))
+    setInvestmentPriceErrors((current) => {
+      const next = { ...current }
+      delete next[holdingId]
+      return next
+    })
     setFeedback('تم حفظ السعر اليدوي.')
     return true
   }
@@ -6494,8 +6501,10 @@ export default function LedgerApp() {
     try {
       const result = await refreshAdreemInvestmentPrices(ids)
       const prices = new Map((result.prices || []).filter((price) => price?.ok).map((price) => [price.id, price]))
+      const failed = new Map((result.prices || []).filter((price) => price && !price.ok).map((price) => [price.id, price.error]))
+      setInvestmentPriceErrors(Object.fromEntries(ids.filter((id) => !prices.has(id)).map((id) => [id, failed.get(id) || 'تعذر تحديث السعر. بقي السعر السابق محفوظًا.'])))
       if (!prices.size) {
-        setFeedback('لم يصل سعر مؤكد. بقيت الأسعار السابقة كما هي.')
+        setFeedback(failed.values().next().value || 'لم يصل سعر مؤكد. بقيت الأسعار السابقة كما هي.')
         return
       }
       const updatedIds = Array.from(prices.keys())
@@ -6506,6 +6515,7 @@ export default function LedgerApp() {
           return price ? {
             ...holding,
             previousPriceUsdMicros: Number(holding.lastPriceUsdMicros || 0),
+            previousPriceNativeMicros: Number(holding.lastPriceNativeMicros || 0),
             previousPriceAt: holding.lastPriceAt || null,
             lastPriceUsdMicros: price.priceUsdMicros,
             lastPriceNativeMicros: price.nativePriceMicros,
@@ -6519,7 +6529,9 @@ export default function LedgerApp() {
       const missing = ids.length - prices.size
       setFeedback(missing ? `تحدثت ${formatCount(prices.size)} أسعار. بقي ${formatCount(missing)} على سعره السابق.` : 'تم تحديث الأسعار.')
     } catch (error) {
-      setFeedback(error?.message || 'تعذر تحديث الأسعار. بقيت الأسعار السابقة محفوظة.')
+      const message = error?.message || 'تعذر تحديث الأسعار. بقيت الأسعار السابقة محفوظة.'
+      setInvestmentPriceErrors(Object.fromEntries(ids.map((id) => [id, message])))
+      setFeedback(message)
     } finally {
       setIsRefreshingInvestmentPrices(false)
     }
@@ -6751,6 +6763,7 @@ export default function LedgerApp() {
         movements={movements}
         accounts={accounts}
         isRefreshing={isRefreshingInvestmentPrices}
+        priceErrors={investmentPriceErrors}
         onAddPlatform={addInvestmentPlatform}
         onAddHolding={addInvestmentHolding}
         onAddTrade={addInvestmentTrade}
