@@ -65,6 +65,7 @@ describe('investments panel', () => {
     expect(html).toContain('سعر السوق')
     expect(html).toContain('القيمة الآن')
     expect(html).toContain('المكسب / الخسارة')
+    expect(html).toContain('adreem-investment-metrics-strip')
     expect(html).toContain('500 USD')
     expect(html).toContain('600 USD')
     expect(html).toContain('+100 USD')
@@ -122,7 +123,7 @@ describe('investments panel', () => {
     const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[tiny, large]} {...callbacks()} />)
 
     expect(html).toContain('تمويل')
-    expect((html.match(/إزالة/g) || [])).toHaveLength(1)
+    expect((html.match(/class="is-remove"/g) || [])).toHaveLength(1)
   })
 
   it('translates system copy while preserving investment names', () => {

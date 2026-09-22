@@ -68,6 +68,23 @@ describe('investment market prices', () => {
     expect(fetchImpl.mock.calls[0][1].headers.authorization).toBe('apikey demo')
   })
 
+  it('keeps Turkish BIST stocks and funds selectable in the TRY market', async () => {
+    const providerResults = [
+      { symbol: 'THYAO', instrument_name: 'Turkish Airlines Inc.', exchange: 'BIST', mic_code: 'XIST', instrument_type: 'Common Stock', country: 'Turkey', currency: 'TRY' },
+      { symbol: 'ISMDL', instrument_name: 'İş Portföy BIST 100 Endeksi Model Portföy Hisse Senedi Yoğun Borsa Yatırım Fonu', exchange: 'BIST', mic_code: 'XIST', instrument_type: 'ETF', country: 'Turkey', currency: 'TRY' },
+      { symbol: 'AAPL', instrument_name: 'Apple Inc.', exchange: 'NASDAQ', mic_code: 'XNAS', instrument_type: 'Common Stock', country: 'United States', currency: 'USD' },
+    ]
+    const service = createMarketPriceService({}, {
+      fetchImpl: vi.fn(async () => ({ ok: true, json: async () => ({ status: 'ok', data: providerResults }) })),
+    })
+
+    const stock = await service.search({ query: 'THYAO', quoteCurrency: 'TRY', assetType: 'stock' })
+    const fund = await service.search({ query: 'BIST 100', quoteCurrency: 'TRY', assetType: 'fund' })
+
+    expect(stock.results).toEqual([expect.objectContaining({ providerSymbol: 'THYAO:BIST', assetType: 'stock', quoteCurrency: 'TRY' })])
+    expect(fund.results).toEqual([expect.objectContaining({ providerSymbol: 'ISMDL:BIST', assetType: 'fund', quoteCurrency: 'TRY' })])
+  })
+
   it('keeps direct stocks separate from funds and prefers trusted crypto exchanges', async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,

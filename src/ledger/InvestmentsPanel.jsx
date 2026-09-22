@@ -29,6 +29,12 @@ const ASSET_OPTIONS = [
   { value: INVESTMENT_ASSET_TYPES.OTHER, label: 'أخرى' },
 ]
 
+const MARKET_OPTIONS = [
+  { value: 'USD', label: 'أمريكا' },
+  { value: 'TRY', label: 'تركيا' },
+  { value: 'EUR', label: 'أوروبا' },
+]
+
 const blankPlatform = { name: '', kind: 'platform', location: '' }
 const blankHolding = { platformId: '', name: '', symbol: '', providerSymbol: '', assetType: INVESTMENT_ASSET_TYPES.STOCK, exchange: '', quoteCurrency: 'USD', initialQuantity: '', initialPriceUsd: '' }
 const blankTrade = { holdingId: '', type: INVESTMENT_TRADE_TYPES.BUY, quantity: '', priceUsd: '', feeUsd: '', note: '' }
@@ -190,6 +196,18 @@ export default function InvestmentsPanel({
     holdings,
     accounts,
   }), [accounts, historyPlatformId, holdings, movements, trades])
+  const assetSearchPlaceholder = holdingDraft.assetType === INVESTMENT_ASSET_TYPES.CRYPTO
+    ? 'BTC أو اسم العملة'
+    : holdingDraft.assetType === INVESTMENT_ASSET_TYPES.METAL
+      ? 'XAU أو اسم المعدن'
+      : holdingDraft.quoteCurrency === 'TRY'
+        ? holdingDraft.assetType === INVESTMENT_ASSET_TYPES.FUND ? 'ISMDL أو اسم الصندوق' : 'THYAO أو اسم الشركة'
+        : 'الاسم أو الرمز'
+  const emptyMarketSearchMessage = holdingDraft.quoteCurrency === 'TRY'
+    ? 'لا توجد نتيجة في سوق تركيا.'
+    : holdingDraft.quoteCurrency === 'EUR'
+      ? 'لا توجد نتيجة في سوق أوروبا.'
+      : 'لا توجد نتيجة في سوق أمريكا.'
 
   useEffect(() => {
     const sequence = ++assetSearchSequenceRef.current
@@ -226,6 +244,33 @@ export default function InvestmentsPanel({
     setAssetSearchStatus('idle')
     setAssetSearchError('')
     setDialog('holding')
+  }
+
+  function resetAssetDiscovery() {
+    setAssetQuery('')
+    setAssetResults([])
+    setAssetSearchStatus('idle')
+    setAssetSearchError('')
+  }
+
+  function changeHoldingAssetType(assetType) {
+    setHoldingDraft((current) => ({
+      ...blankHolding,
+      platformId: current.platformId,
+      quoteCurrency: current.quoteCurrency,
+      assetType,
+    }))
+    resetAssetDiscovery()
+  }
+
+  function changeHoldingMarket(quoteCurrency) {
+    setHoldingDraft((current) => ({
+      ...blankHolding,
+      platformId: current.platformId,
+      assetType: current.assetType,
+      quoteCurrency,
+    }))
+    resetAssetDiscovery()
   }
 
   function selectMarketAsset(result) {
@@ -510,36 +555,25 @@ export default function InvestmentsPanel({
                           <div className="adreem-investment-symbol"><b>{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
                           <div className="adreem-investment-name"><strong>{preserveUiData(row.holding.name)}</strong><small>{preserveUiData(row.holding.exchange || brand.displayName || platformRow.platform.name)}</small></div>
                         </div>
-                        <div className="adreem-investment-flow">
-                          <section className="adreem-investment-phase is-purchase" aria-label="وقت الشراء">
-                            <header><PackageCheck aria-hidden="true" size={15} /><span>وقت الشراء</span></header>
-                            <div className="adreem-investment-metrics">
-                              <div><small>الكمية</small><strong>{decimal(unitsToQuantity(row.quantityUnits), 8)}</strong><em>وحدة</em></div>
-                              <div><small>سعر الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></div>
-                              <div className="is-emphasis"><small>القيمة عند الشراء</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></div>
-                            </div>
-                          </section>
-                          <div className="adreem-investment-flow-bridge" aria-hidden="true"><span /><i><ArrowLeft size={16} /></i></div>
-                          <section className="adreem-investment-phase is-current" aria-label="السوق الآن">
-                            <header><ChartCandlestick aria-hidden="true" size={15} /><span>السوق الآن</span></header>
-                            <div className="adreem-investment-metrics">
-                              <button type="button" className="adreem-investment-price" onClick={() => openManualPrice(row.holding)}>
-                                <small>سعر السوق <PencilLine aria-hidden="true" size={12} /></small>
-                                <strong>{row.holding.lastPriceUsdMicros ? usdUnitMicros(row.holding.lastPriceUsdMicros) : 'أدخل السعر'}</strong>
-                              </button>
-                              <div className="is-emphasis"><small>القيمة الآن</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
-                            </div>
-                          </section>
+                        <div className="adreem-investment-metrics-strip" aria-label="تفاصيل الاستثمار">
+                          <div><small>الكمية</small><strong>{decimal(unitsToQuantity(row.quantityUnits), 8)} <em>وحدة</em></strong></div>
+                          <div><small>سعر الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></div>
+                          <div className="is-emphasis"><small>القيمة عند الشراء</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></div>
+                          <button type="button" className="adreem-investment-price" onClick={() => openManualPrice(row.holding)}>
+                            <small>سعر السوق <PencilLine aria-hidden="true" size={12} /></small>
+                            <strong>{row.holding.lastPriceUsdMicros ? usdUnitMicros(row.holding.lastPriceUsdMicros) : 'أدخل السعر'}</strong>
+                          </button>
+                          <div className="is-emphasis"><small>القيمة الآن</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
                           <div className={`adreem-investment-result ${holdingProfitTone}`}>
-                            <span><HoldingTrendIcon aria-hidden="true" size={16} /><small>المكسب / الخسارة</small></span>
+                            <span><HoldingTrendIcon aria-hidden="true" size={14} /><small>المكسب / الخسارة</small></span>
                             <strong>{usdMicros(holdingProfitUsdMicros, true)}</strong>
                             {row.costBasisUsdMicros ? <em>{profitPercent(holdingProfitUsdMicros, row.costBasisUsdMicros)}</em> : null}
                           </div>
                         </div>
                         <div className="adreem-investment-row-actions">
-                          <button type="button" className="is-buy" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.BUY, row.holding.id)}><ArrowDownToLine aria-hidden="true" size={14} /> شراء</button>
-                          <button type="button" className="is-sell" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.SELL, row.holding.id)}><ArrowUpFromLine aria-hidden="true" size={14} /> بيع</button>
-                          {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
+                          <button type="button" className="is-buy" aria-label="شراء" title="شراء" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.BUY, row.holding.id)}><ArrowDownToLine aria-hidden="true" size={14} /><span>شراء</span></button>
+                          <button type="button" className="is-sell" aria-label="بيع" title="بيع" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.SELL, row.holding.id)}><ArrowUpFromLine aria-hidden="true" size={14} /><span>بيع</span></button>
+                          {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" aria-label="إزالة" title="إزالة" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /><span>إزالة</span></button> : null}
                         </div>
                       </Motion.section>
                     )
@@ -563,14 +597,19 @@ export default function InvestmentsPanel({
           <InvestmentDialog title="استثمار جديد" subtitle="ابحث ثم اختر الأصل الصحيح" onClose={() => setDialog('')} onSubmit={submitHolding} canSubmit={Boolean(holdingDraft.platformId && holdingDraft.name.trim() && holdingDraft.symbol.trim() && holdingDraft.providerSymbol.trim())}>
             <label><span>المنصة</span><select value={holdingDraft.platformId} onChange={(event) => setHoldingDraft((current) => ({ ...current, platformId: event.target.value }))}>{activePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}</select></label>
             <div className="is-paired">
-              <label><span>النوع</span><select value={holdingDraft.assetType} onChange={(event) => { setHoldingDraft((current) => ({ ...blankHolding, platformId: current.platformId, quoteCurrency: current.quoteCurrency, assetType: event.target.value })); setAssetQuery(''); setAssetResults([]); setAssetSearchStatus('idle'); setAssetSearchError('') }}>{ASSET_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-              <label><span>عملة السوق</span><select value={holdingDraft.quoteCurrency} onChange={(event) => { setHoldingDraft((current) => ({ ...blankHolding, platformId: current.platformId, assetType: current.assetType, quoteCurrency: event.target.value })); setAssetQuery(''); setAssetResults([]); setAssetSearchStatus('idle'); setAssetSearchError('') }}><option value="USD">USD</option><option value="TRY">TRY</option><option value="EUR">EUR</option></select></label>
+              <label><span>النوع</span><select value={holdingDraft.assetType} onChange={(event) => changeHoldingAssetType(event.target.value)}>{ASSET_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+              <div className="adreem-investment-market-choice">
+                <span>سوق التداول</span>
+                <div role="radiogroup" aria-label="سوق التداول">
+                  {MARKET_OPTIONS.map((market) => <button type="button" role="radio" aria-checked={holdingDraft.quoteCurrency === market.value} className={holdingDraft.quoteCurrency === market.value ? 'is-active' : ''} key={market.value} onClick={() => changeHoldingMarket(market.value)}><strong>{market.label}</strong><small>{market.value}</small></button>)}
+                </div>
+              </div>
             </div>
-            <label className="adreem-investment-market-search"><span>ابحث عن الاستثمار</span><div><Search aria-hidden="true" size={16} /><input autoFocus value={assetQuery} onChange={(event) => { const value = event.target.value; setAssetQuery(value); setAssetResults([]); setAssetSearchStatus(value.trim().length >= 2 ? 'loading' : 'idle'); setAssetSearchError(''); setHoldingDraft((current) => ({ ...current, name: '', symbol: '', providerSymbol: '', exchange: '' })) }} placeholder="الاسم أو الرمز" /></div></label>
+            <label className="adreem-investment-market-search"><span>ابحث عن الاستثمار</span><div><Search aria-hidden="true" size={16} /><input autoFocus value={assetQuery} onChange={(event) => { const value = event.target.value; setAssetQuery(value); setAssetResults([]); setAssetSearchStatus(value.trim().length >= 2 ? 'loading' : 'idle'); setAssetSearchError(''); setHoldingDraft((current) => ({ ...current, name: '', symbol: '', providerSymbol: '', exchange: '' })) }} placeholder={assetSearchPlaceholder} /></div></label>
             {assetSearchStatus === 'loading' ? <p className="adreem-investment-search-note">جاري البحث...</p> : null}
             {assetSearchError ? <p className="adreem-investment-search-note is-error">{assetSearchError}</p> : null}
-            {assetSearchStatus === 'ready' && !assetResults.length ? <p className="adreem-investment-search-note">لا توجد نتيجة بهذه العملة.</p> : null}
-            {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([holdingTypeLabel(result.assetType), result.exchange, result.country].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
+            {assetSearchStatus === 'ready' && !assetResults.length ? <p className="adreem-investment-search-note">{emptyMarketSearchMessage}</p> : null}
+            {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([holdingTypeLabel(result.assetType), result.exchange].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
             {holdingDraft.providerSymbol ? <div className="adreem-investment-selected-asset"><Check aria-hidden="true" size={16} /><span><strong>{preserveUiData(holdingDraft.name)}</strong><small>{preserveUiData(`${holdingDraft.symbol} · ${holdingDraft.exchange || holdingDraft.quoteCurrency}`)}</small></span><b>{holdingTypeLabel(holdingDraft.assetType)}</b></div> : null}
             <div className="is-paired"><label><span>كمية سابقة</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialQuantity} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialQuantity: event.target.value }))} placeholder="0" /></label><label><span>متوسطها USD</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialPriceUsd} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialPriceUsd: event.target.value }))} placeholder="0" /></label></div>
           </InvestmentDialog>
