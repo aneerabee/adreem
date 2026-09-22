@@ -1,6 +1,6 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChartCandlestick, Check, CircleDollarSign, Clock3, Eye, EyeOff, History, Landmark, LockKeyhole, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, ShieldCheck, TrendingDown, TrendingUp, Trash2, WalletCards, X } from 'lucide-react'
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'motion/react'
 import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
@@ -118,23 +118,62 @@ function tradeReviewImpact(trade = {}) {
 }
 
 function InvestmentDialog({ title, subtitle, onClose, onSecondary = onClose, children, onSubmit, canSubmit = true, submitLabel = 'حفظ', secondaryLabel = 'رجوع', hideSubmit = false, className = '' }) {
+  const titleId = useId()
+  const dialogRef = useRef(null)
+  const closeRef = useRef(onClose)
+  const prefersReducedMotion = useReducedMotion()
+
   useEffect(() => {
-    const root = document.documentElement
-    const close = (event) => event.key === 'Escape' && onClose()
-    root.classList.add('adreem-overlay-open')
-    document.addEventListener('keydown', close)
-    return () => {
-      root.classList.remove('adreem-overlay-open')
-      document.removeEventListener('keydown', close)
-    }
+    closeRef.current = onClose
   }, [onClose])
 
+  useEffect(() => {
+    const root = document.documentElement
+    const focusBeforeOpen = document.activeElement
+    const focusTimer = window.requestAnimationFrame(() => {
+      if (dialogRef.current?.contains(document.activeElement)) return
+      const preferredControl = dialogRef.current?.querySelector('[autofocus]')
+      const firstControl = preferredControl || dialogRef.current?.querySelector('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])')
+      ;(firstControl || dialogRef.current)?.focus({ preventScroll: true })
+    })
+    function handleDialogKeys(event) {
+      if (event.key === 'Escape') {
+        closeRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const controls = Array.from(dialogRef.current?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])') || [])
+      if (!controls.length) {
+        event.preventDefault()
+        dialogRef.current?.focus({ preventScroll: true })
+        return
+      }
+      const first = controls[0]
+      const last = controls[controls.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    root.classList.add('adreem-overlay-open')
+    document.addEventListener('keydown', handleDialogKeys)
+    return () => {
+      window.cancelAnimationFrame(focusTimer)
+      root.classList.remove('adreem-overlay-open')
+      document.removeEventListener('keydown', handleDialogKeys)
+      focusBeforeOpen?.focus?.({ preventScroll: true })
+    }
+  }, [])
+
   return (
-    <Motion.div className="adreem-investment-dialog-layer" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <Motion.form className={`adreem-investment-dialog ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title} onSubmit={onSubmit} initial={{ opacity: 0, y: 14, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }}>
+    <Motion.div className="adreem-investment-dialog-layer" role="presentation" initial={prefersReducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={prefersReducedMotion ? undefined : { opacity: 0 }} transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <Motion.form ref={dialogRef} tabIndex={-1} className={`adreem-investment-dialog ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={onSubmit} initial={prefersReducedMotion ? false : { opacity: 0, y: 14, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={prefersReducedMotion ? undefined : { opacity: 0, y: 8, scale: 0.99 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
         <header>
           <span><ChartCandlestick aria-hidden="true" size={19} /></span>
-          <div><h2>{title}</h2>{subtitle ? <small>{subtitle}</small> : null}</div>
+          <div><h2 id={titleId}>{title}</h2>{subtitle ? <small>{subtitle}</small> : null}</div>
           <button type="button" onClick={onClose} aria-label="إغلاق" title="إغلاق"><X aria-hidden="true" size={18} /></button>
         </header>
         <div className="adreem-investment-dialog-body">{children}</div>
@@ -186,15 +225,18 @@ export default function InvestmentsPanel({
   const prefersReducedMotion = useReducedMotion()
   const submissionRef = useRef(false)
   const assetSearchSequenceRef = useRef(0)
-  const activePlatforms = platforms.filter((platform) => platform.status !== 'inactive')
-  const activeHoldings = holdings.filter((holding) => holding.status !== 'inactive')
+  const activePlatforms = useMemo(() => platforms.filter((platform) => platform.status !== 'inactive'), [platforms])
+  const activeHoldings = useMemo(() => holdings.filter((holding) => holding.status !== 'inactive'), [holdings])
   const holdingById = useMemo(() => new Map(activeHoldings.map((holding) => [holding.id, holding])), [activeHoldings])
   const normalizedQuery = query.trim().toLocaleLowerCase('ar')
-  const visiblePlatforms = summary.platforms.map((platformRow) => ({
+  const visiblePlatforms = useMemo(() => summary.platforms.map((platformRow) => ({
     ...platformRow,
     holdings: platformRow.holdings.filter((row) => !normalizedQuery || `${row.holding.name} ${row.holding.symbol} ${row.holding.exchange}`.toLocaleLowerCase('ar').includes(normalizedQuery)),
-  })).filter((row) => !normalizedQuery || row.holdings.length || `${row.platform.name} ${row.platform.location}`.toLocaleLowerCase('ar').includes(normalizedQuery))
-  const latestPriceAt = activeHoldings.map((holding) => new Date(holding.lastPriceAt || 0).getTime()).filter(Number.isFinite).sort((a, b) => b - a)[0] || 0
+  })).filter((row) => !normalizedQuery || row.holdings.length || `${row.platform.name} ${row.platform.location}`.toLocaleLowerCase('ar').includes(normalizedQuery)), [normalizedQuery, summary.platforms])
+  const latestPriceAt = useMemo(() => activeHoldings.reduce((latest, holding) => {
+    const timestamp = new Date(holding.lastPriceAt || 0).getTime()
+    return Number.isFinite(timestamp) && timestamp > latest ? timestamp : latest
+  }, 0), [activeHoldings])
   const historyPlatform = activePlatforms.find((platform) => platform.id === historyPlatformId) || null
   const historyPlatformSummary = summary.platforms.find((row) => row.platform.id === historyPlatformId) || null
   const historyRows = useMemo(() => buildInvestmentPlatformActivity({
@@ -316,6 +358,7 @@ export default function InvestmentsPanel({
   }
 
   function openPlatformHistory(platformId) {
+    submissionRef.current = false
     setHistoryPlatformId(platformId)
     setEditingTradeBaseline(null)
     setTradeEditStage('fields')
@@ -355,7 +398,7 @@ export default function InvestmentsPanel({
 
   function submitHolding(event) {
     event.preventDefault()
-    if (!holdingDraft.platformId || !holdingDraft.name.trim() || !holdingDraft.symbol.trim() || submissionRef.current) return
+    if (!holdingDraft.platformId || !holdingDraft.name.trim() || !holdingDraft.symbol.trim() || !holdingDraft.providerSymbol.trim() || submissionRef.current) return
     submissionRef.current = true
     if (onAddHolding(holdingDraft) === false) {
       submissionRef.current = false
@@ -549,6 +592,7 @@ export default function InvestmentsPanel({
                 className={`adreem-investment-platform is-brand-${brand.key}`}
                 key={platformRow.platform.id}
                 style={investmentPlatformBrandStyle(brand)}
+                layout={prefersReducedMotion ? false : 'position'}
                 initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.28, delay: Math.min(platformIndex * 0.035, 0.18), ease: [0.22, 1, 0.36, 1] }}
@@ -565,8 +609,8 @@ export default function InvestmentsPanel({
                   </div>
                   <div className="adreem-investment-platform-cash">
                     <div className="adreem-investment-platform-balances">
-                      <b><small>رصيد المنصة</small>{usdMicros(platformTotalUsdMicros)}</b>
-                      <b><small>السيولة</small>{usdMicros(platformLiquidityUsdMicros)}</b>
+                      <b><small>رصيد المنصة</small><strong>{usdMicros(platformTotalUsdMicros)}</strong></b>
+                      <b><small>السيولة</small><strong>{usdMicros(platformLiquidityUsdMicros)}</strong></b>
                     </div>
                     <div className="adreem-investment-platform-actions">
                       <button type="button" className="is-history" onClick={() => openPlatformHistory(platformRow.platform.id)}><History aria-hidden="true" size={14} /> السجل</button>
@@ -583,27 +627,30 @@ export default function InvestmentsPanel({
                       <Motion.section
                         className={`adreem-investment-holding is-profit-${holdingProfitTone} ${holdingIsSmall(row) ? 'is-small' : ''}`.trim()}
                         key={row.holding.id}
+                        layout={prefersReducedMotion ? false : 'position'}
                         initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                       >
                         <div className="adreem-investment-holding-identity">
-                          <div className="adreem-investment-symbol"><b>{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
-                          <div className="adreem-investment-name"><strong>{preserveUiData(row.holding.name)}</strong><small>{preserveUiData(row.holding.exchange || brand.displayName || platformRow.platform.name)}</small></div>
+                          <div className="adreem-investment-symbol"><b dir="ltr">{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
+                          <div className="adreem-investment-name"><strong dir="auto">{preserveUiData(row.holding.name)}</strong><small dir="auto">{preserveUiData(row.holding.exchange || brand.displayName || platformRow.platform.name)}</small></div>
                         </div>
                         <div className="adreem-investment-metrics-strip" aria-label="تفاصيل الاستثمار">
-                          <div><small>الكمية</small><strong>{decimal(unitsToQuantity(row.quantityUnits), 8)} <em>وحدة</em></strong></div>
-                          <div><small>سعر الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></div>
-                          <div className="is-emphasis"><small>القيمة عند الشراء</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></div>
-                          <button type="button" className="adreem-investment-price" onClick={() => openManualPrice(row.holding)}>
+                          <div className="is-quantity"><small>الكمية</small><strong>{decimal(unitsToQuantity(row.quantityUnits), 8)} <em>وحدة</em></strong></div>
+                          <div className="is-buy-price"><small>سعر الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></div>
+                          <div className="is-buy-value"><small>القيمة عند الشراء</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></div>
+                          <button type="button" className="adreem-investment-price is-market-price" onClick={() => openManualPrice(row.holding)}>
                             <small>سعر السوق <PencilLine aria-hidden="true" size={12} /></small>
                             <strong>{row.holding.lastPriceUsdMicros ? usdUnitMicros(row.holding.lastPriceUsdMicros) : 'أدخل السعر'}</strong>
                           </button>
-                          <div className="is-emphasis"><small>القيمة الآن</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
+                          <div className="is-current-value"><small>القيمة الآن</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
                           <div className={`adreem-investment-result is-${holdingProfitTone}`}>
                             <span><HoldingTrendIcon aria-hidden="true" size={14} /><small>المكسب / الخسارة</small></span>
-                            <strong>{usdMicros(holdingProfitUsdMicros, true)}</strong>
-                            {row.costBasisUsdMicros ? <em>{profitPercent(holdingProfitUsdMicros, row.costBasisUsdMicros)}</em> : null}
+                            <div className="adreem-investment-result-value">
+                              <strong>{usdMicros(holdingProfitUsdMicros, true)}</strong>
+                              {row.costBasisUsdMicros ? <em>{profitPercent(holdingProfitUsdMicros, row.costBasisUsdMicros)}</em> : null}
+                            </div>
                           </div>
                         </div>
                         <div className="adreem-investment-row-actions">
@@ -629,7 +676,7 @@ export default function InvestmentsPanel({
         </div>
       )}
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {dialog === 'platform' ? (
           <InvestmentDialog title="منصة جديدة" subtitle="مكان وجود الاستثمار" onClose={() => setDialog('')} onSubmit={submitPlatform} canSubmit={Boolean(platformDraft.name.trim())}>
             <label><span>الاسم</span><input autoFocus value={platformDraft.name} onChange={(event) => setPlatformDraft((current) => ({ ...current, name: event.target.value }))} placeholder="مثال: IBKR أو Binance" /></label>
