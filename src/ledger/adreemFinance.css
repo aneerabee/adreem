@@ -2872,6 +2872,21 @@
 .adreem-investment-fx small.is-error { color: #aa3030; }
 .adreem-investment-fx-result { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; margin: 0; padding: 7px 9px; border-inline-start: 3px solid var(--dialog-accent); border-radius: 5px; background: #f4f6f5; color: #52605d; font-size: 0.68rem; }
 .adreem-investment-fx-result strong { direction: ltr; color: #1e2926; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.adreem-investment-transfer-currency { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 4px; border-radius: 6px; background: #eef0f0; }
+.adreem-investment-transfer-currency button { min-height: 36px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: #5d6769; font: inherit; font-weight: 800; }
+.adreem-investment-transfer-currency button.is-active { border-color: #b7c4c5; background: #fff; color: #273537; box-shadow: 0 1px 5px #23373912; }
+.adreem-investment-transfer-route { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 7px; }
+.adreem-investment-transfer-route > svg { margin-bottom: 11px; color: #647578; }
+.adreem-investment-transfer-available { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 7px 9px; border: 1px solid #dce2e3; border-radius: 5px; background: #f7f8f8; color: #5b686b; font-size: 0.68rem; }
+.adreem-investment-transfer-available strong { color: #263436; font-variant-numeric: tabular-nums; }
+.adreem-investment-transfer-review { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.adreem-investment-transfer-review > div { min-width: 0; display: grid; gap: 5px; padding: 10px; border: 1px solid #dce2e3; border-radius: 6px; background: #f7f8f8; }
+.adreem-investment-transfer-review > svg { color: #647578; }
+.adreem-investment-transfer-review small { color: #687477; font-size: 0.62rem; }
+.adreem-investment-transfer-review strong { min-width: 0; overflow-wrap: anywhere; font-size: 0.77rem; }
+.adreem-investment-transfer-review span { color: #273537; font-size: 0.75rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.adreem-investment-transfer-review > p,
+.adreem-investment-transfer-review > small { grid-column: 1 / -1; margin: 0; overflow-wrap: anywhere; }
 .adreem-investment-dialog > footer { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 7px; padding: 9px 11px; border-top: 1px solid #dfe3e4; background: #fff; }
 .adreem-investment-dialog > footer button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid #d7d2c8; border-radius: 6px; background: #fff; color: #303538; font-weight: 800; }
 .adreem-investment-dialog > footer .is-primary { border-color: var(--dialog-accent); background: var(--dialog-accent); color: #fff; }
@@ -2990,6 +3005,9 @@
   .adreem-investment-dialog-body .is-paired.is-investment-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .adreem-investment-fx { grid-template-columns: 1fr; gap: 2px; }
   .adreem-investment-fx small { padding-block-end: 0; }
+  .adreem-investment-transfer-currency button { min-height: 44px; }
+  .adreem-investment-transfer-route { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 5px; }
+  .adreem-investment-transfer-route > svg { width: 14px; }
   .adreem-investment-dialog-body input,
   .adreem-investment-dialog-body select { min-height: 42px; font-size: 16px; }
   .adreem-investment-dialog-body { scrollbar-gutter: auto; padding: 10px; }

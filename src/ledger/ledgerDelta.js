@@ -8,6 +8,7 @@ export const LEDGER_DELTA_COLLECTIONS = [
   'investmentPlatforms',
   'investmentHoldings',
   'investmentTrades',
+  'investmentTransfers',
   'auditEvents',
 ]
 

@@ -21,7 +21,7 @@ const MAX_SAVE_ATTEMPTS = 4
 const DEFAULT_BACKUP_LIMIT = 60
 const DEFAULT_REGISTRY_FILE = './adreem-users.json'
 const REQUIRED_PERSISTED_LISTS = ['accounts', 'movements']
-const OPTIONAL_PERSISTED_RECORD_LISTS = ['dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'auditEvents']
+const OPTIONAL_PERSISTED_RECORD_LISTS = ['dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'investmentTransfers', 'auditEvents']
 const OPTIONAL_PERSISTED_LISTS = [...OPTIONAL_PERSISTED_RECORD_LISTS, 'ignoredExternalAccounts']
 
 export class ConcurrentLedgerUpdateError extends Error {

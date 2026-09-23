@@ -27,6 +27,7 @@ select json_build_object(
   'public.adreem_investment_platforms', (select count(*)::text from public.adreem_investment_platforms),
   'public.adreem_investment_holdings', (select count(*)::text from public.adreem_investment_holdings),
   'public.adreem_investment_trades', (select count(*)::text from public.adreem_investment_trades),
+  'public.adreem_investment_transfers', (select count(*)::text from public.adreem_investment_transfers),
   'public.adreem_audit_events', (select count(*)::text from public.adreem_audit_events),
   'public.adreem_ignored_external_accounts', (select count(*)::text from public.adreem_ignored_external_accounts),
   'adreem_private.adreem_security_events', (select count(*)::text from adreem_private.adreem_security_events)

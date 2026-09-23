@@ -125,6 +125,26 @@ describe('ADREEM relational migration projection', () => {
     expect(batches.indexOf('movements')).toBeLessThan(batches.indexOf('investmentTrades'))
   })
 
+  it('migrates investment transfers between their source and destination trades with the matching audit', () => {
+    const source = sourceFixture()
+    source.investmentPlatforms = [{ id: 'source-platform', name: 'Source', status: 'active' }, { id: 'destination-platform', name: 'Destination', status: 'active' }]
+    source.investmentHoldings = [{ id: 'source-usdt', platformId: 'source-platform', symbol: 'USDT/USD' }, { id: 'destination-usdt', platformId: 'destination-platform', symbol: 'USDT/USD' }]
+    source.investmentTrades = [
+      { id: 'opening-usdt', platformId: 'source-platform', holdingId: 'source-usdt', type: 'opening', occurredAt: '2026-09-24T00:00:00.000Z' },
+      { id: 'sale-usdt', platformId: 'destination-platform', holdingId: 'destination-usdt', type: 'sell', occurredAt: '2026-09-24T00:02:00.000Z' },
+    ]
+    source.investmentTransfers = [{ id: 'move-usdt', asset: 'USDT', fromPlatformId: 'source-platform', toPlatformId: 'destination-platform', sourceHoldingId: 'source-usdt', destinationHoldingId: 'destination-usdt', occurredAt: '2026-09-24T00:01:00.000Z' }]
+    const audit = { id: 'audit-move', action: 'investment.transfer.created', details: { transferId: 'move-usdt', asset: 'USDT', fromPlatformId: 'source-platform', toPlatformId: 'destination-platform' } }
+    source.auditEvents = [audit]
+
+    const batches = createLedgerMigrationBatches(source).batches
+    const investmentBatches = batches.filter((batch) => ['investmentTrades', 'investmentTransfers'].includes(batch.collection))
+    expect(investmentBatches.map((batch) => batch.collection)).toEqual(['investmentTrades', 'investmentTransfers', 'investmentTrades'])
+    expect(investmentBatches[1].delta.auditEvents).toEqual([audit])
+    expect(batches.filter((batch) => batch.collection === 'auditEvents')).toHaveLength(0)
+    expect(() => createLedgerMigrationBatches({ ...source, auditEvents: [] })).toThrow(/no matching audit event/)
+  })
+
   it('rejects money and exchange values outside the exact application range', () => {
     const source = sourceFixture()
     source.movements.push({

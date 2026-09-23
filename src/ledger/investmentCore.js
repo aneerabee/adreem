@@ -19,6 +19,7 @@ export const INVESTMENT_TRADE_TYPES = Object.freeze({
   BUY: 'buy',
   SELL: 'sell',
 })
+export const INVESTMENT_TRANSFER_ASSETS = Object.freeze({ USD: 'USD', USDT: 'USDT' })
 export const INVESTMENT_ASSET_TYPES = Object.freeze({
   STOCK: 'stock',
   CRYPTO: 'crypto',
@@ -140,6 +141,28 @@ export function investmentHoldingIsLiquidity(holding = {}) {
   return symbol.split(':')[0].split('/')[0] === 'USDT'
 }
 
+export function createInvestmentTransfer(draft = {}, createdAt = new Date().toISOString()) {
+  const asset = draft.asset === INVESTMENT_TRANSFER_ASSETS.USDT ? INVESTMENT_TRANSFER_ASSETS.USDT : INVESTMENT_TRANSFER_ASSETS.USD
+  return {
+    id: cleanText(draft.id, 160) || `investment-transfer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    asset,
+    fromPlatformId: cleanText(draft.fromPlatformId, 160),
+    toPlatformId: cleanText(draft.toPlatformId, 160),
+    ...(asset === INVESTMENT_TRANSFER_ASSETS.USD
+      ? { amountUsdMicros: safePositiveInteger(draft.amountUsdMicros) }
+      : {
+          sourceHoldingId: cleanText(draft.sourceHoldingId, 160),
+          destinationHoldingId: cleanText(draft.destinationHoldingId, 160),
+          quantityUnits: safePositiveInteger(draft.quantityUnits),
+          costBasisUsdMicros: safeInteger(draft.costBasisUsdMicros, -1),
+        }),
+    note: cleanText(draft.note, 300),
+    status: INVESTMENT_RECORD_STATUSES.ACTIVE,
+    occurredAt: createdAt,
+    createdAt,
+  }
+}
+
 export function investmentPriceChange(holding = {}) {
   const current = safePositiveInteger(holding.lastPriceUsdMicros)
   const previous = safePositiveInteger(holding.previousPriceUsdMicros)
@@ -184,6 +207,14 @@ export function investmentTradeValueMicros(trade = {}) {
   const priceUsdMicros = safePositiveInteger(trade.priceUsdMicros)
   if (!quantityUnits || !priceUsdMicros) return 0
   return safeScaledProduct(quantityUnits, priceUsdMicros, INVESTMENT_QUANTITY_SCALE)
+}
+
+export function investmentTransferCostBasisUsdMicros(holdingRow = {}, quantityUnits = 0) {
+  const available = safePositiveInteger(holdingRow.quantityUnits)
+  const cost = safeInteger(holdingRow.costBasisUsdMicros, -1)
+  const quantity = safePositiveInteger(quantityUnits)
+  if (!available || !quantity || quantity > available || cost < 0) return -1
+  return safeScaledProduct(cost, quantity, available)
 }
 
 export function createInvestmentPlatform(draft = {}, createdAt = new Date().toISOString()) {
@@ -308,10 +339,11 @@ export function buildInvestmentTradeEdit(trade = {}, draft = {}, updatedAt = new
   return { ok: true, trade: nextTrade }
 }
 
-export function investmentOpeningTradeIsLocked(trade = {}, trades = []) {
+export function investmentOpeningTradeIsLocked(trade = {}, trades = [], transfers = []) {
   if (!trade || trade.type !== INVESTMENT_TRADE_TYPES.OPENING || !trade.id || !trade.holdingId) return false
   const tradeTime = createdTime(trade)
-  return trades.some((candidate) => (
+  return transfers.some((transfer) => transfer?.sourceHoldingId === trade.holdingId
+    && transfer.status !== INVESTMENT_RECORD_STATUSES.VOIDED) || trades.some((candidate) => (
     candidate?.id !== trade.id
     && candidate?.holdingId === trade.holdingId
     && candidate?.status !== INVESTMENT_RECORD_STATUSES.VOIDED
@@ -423,15 +455,37 @@ export function investmentMovementCashMicros(movement = {}) {
   return 0
 }
 
-function summarizeHolding(holding, trades = []) {
+function holdingEvents(holdingId, trades = [], transfers = []) {
+  return [
+    ...trades.filter((trade) => trade?.holdingId === holdingId && trade.status !== INVESTMENT_RECORD_STATUSES.VOIDED)
+      .map((record) => ({ kind: 'trade', record })),
+    ...transfers.filter((transfer) => transfer?.asset === INVESTMENT_TRANSFER_ASSETS.USDT
+      && transfer.status !== INVESTMENT_RECORD_STATUSES.VOIDED
+      && (transfer.sourceHoldingId === holdingId || transfer.destinationHoldingId === holdingId))
+      .map((record) => ({ kind: 'transfer', record })),
+  ].sort((left, right) => createdTime(left.record) - createdTime(right.record)
+    || String(left.record.id).localeCompare(String(right.record.id)))
+}
+
+function summarizeHolding(holding, trades = [], transfers = []) {
   let quantityUnits = 0
   let costBasisUsdMicros = 0
   let realizedProfitUsdMicros = 0
-  const orderedTrades = trades
-    .filter((trade) => trade?.holdingId === holding.id && trade.status !== INVESTMENT_RECORD_STATUSES.VOIDED)
-    .sort((left, right) => createdTime(left) - createdTime(right) || String(left.id).localeCompare(String(right.id)))
-
-  for (const trade of orderedTrades) {
+  for (const event of holdingEvents(holding.id, trades, transfers)) {
+    if (event.kind === 'transfer') {
+      const transfer = event.record
+      const quantity = safePositiveInteger(transfer.quantityUnits)
+      const cost = Math.max(0, safeInteger(transfer.costBasisUsdMicros))
+      if (transfer.sourceHoldingId === holding.id) {
+        quantityUnits -= quantity
+        costBasisUsdMicros -= cost
+      } else {
+        quantityUnits += quantity
+        costBasisUsdMicros += cost
+      }
+      continue
+    }
+    const trade = event.record
     const quantity = safePositiveInteger(trade.quantityUnits)
     const value = investmentTradeValueMicros(trade)
     const fee = Math.max(0, safeInteger(trade.feeUsdMicros))
@@ -471,7 +525,7 @@ function summarizeHolding(holding, trades = []) {
   }
 }
 
-export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], trades = [], movements = [] } = {}) {
+export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], trades = [], transfers = [], movements = [] } = {}) {
   const activePlatforms = platforms.filter((platform) => platform?.status !== INVESTMENT_RECORD_STATUSES.INACTIVE)
   const activeHoldings = holdings.filter((holding) => holding?.status !== INVESTMENT_RECORD_STATUSES.INACTIVE)
   const platformRows = activePlatforms.map((platform) => {
@@ -479,6 +533,10 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     const cashFromLedgerUsdMicros = movements
       .filter((movement) => movement?.investmentPlatformId === platform.id)
       .reduce((sum, movement) => sum + investmentMovementCashMicros(movement), 0)
+    const cashFromTransfersUsdMicros = transfers
+      .filter((transfer) => transfer?.asset === INVESTMENT_TRANSFER_ASSETS.USD && transfer.status !== INVESTMENT_RECORD_STATUSES.VOIDED)
+      .reduce((sum, transfer) => sum + (transfer.toPlatformId === platform.id ? transfer.amountUsdMicros : 0)
+        - (transfer.fromPlatformId === platform.id ? transfer.amountUsdMicros : 0), 0)
     const tradeCashUsdMicros = platformTrades.reduce((sum, trade) => {
       const value = investmentTradeValueMicros(trade)
       const fee = Math.max(0, safeInteger(trade.feeUsdMicros))
@@ -488,7 +546,7 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     }, 0)
     const allHoldingRows = activeHoldings
       .filter((holding) => holding.platformId === platform.id)
-      .map((holding) => summarizeHolding(holding, platformTrades))
+      .map((holding) => summarizeHolding(holding, platformTrades, transfers))
     const holdingRows = allHoldingRows.filter((row) => (
       row.quantityUnits > 0
       || !platformTrades.some((trade) => trade.holdingId === row.holding.id)
@@ -499,7 +557,7 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     const investedMarketValueUsdMicros = holdingRows
       .filter((row) => !investmentHoldingIsLiquidity(row.holding))
       .reduce((sum, row) => sum + row.marketValueUsdMicros, 0)
-    const freeCashUsdMicros = cashFromLedgerUsdMicros + tradeCashUsdMicros
+    const freeCashUsdMicros = cashFromLedgerUsdMicros + cashFromTransfersUsdMicros + tradeCashUsdMicros
     const marketValueUsdMicros = stablecoinUsdMicros + investedMarketValueUsdMicros
     return {
       platform,
@@ -543,7 +601,7 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
   }
 }
 
-export function validateInvestmentState({ platforms = [], holdings = [], trades = [], movements = [] } = {}) {
+export function validateInvestmentState({ platforms = [], holdings = [], trades = [], transfers = [], movements = [] } = {}) {
   const errors = []
   const platformById = new Map()
   const holdingById = new Map()
@@ -619,16 +677,85 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
       errors.push({ field: 'investmentTrades', id: trade.id, message: 'تاريخ عملية الاستثمار غير صالح.' })
     }
   }
+  const transferIds = new Set()
+  for (const transfer of transfers) {
+    if (!transfer?.id || transferIds.has(transfer.id)) {
+      errors.push({ field: 'investmentTransfers', id: transfer?.id, message: 'النقل ناقص أو مكرر.' })
+    }
+    transferIds.add(transfer?.id)
+    const source = platformById.get(transfer?.fromPlatformId)
+    const destination = platformById.get(transfer?.toPlatformId)
+    if (!source || !destination || source.id === destination.id
+      || source.status !== INVESTMENT_RECORD_STATUSES.ACTIVE
+      || destination.status !== INVESTMENT_RECORD_STATUSES.ACTIVE) {
+      errors.push({ field: 'investmentTransfers', id: transfer?.id, message: 'اختر منصتين مختلفتين ونشطتين.' })
+    }
+    if (!Object.values(INVESTMENT_TRANSFER_ASSETS).includes(transfer?.asset)
+      || ![INVESTMENT_RECORD_STATUSES.ACTIVE, INVESTMENT_RECORD_STATUSES.VOIDED].includes(transfer?.status)
+      || !isValidDateValue(transfer?.occurredAt)
+      || !isValidDateValue(transfer?.createdAt)
+      || String(transfer?.note || '').length > 300) {
+      errors.push({ field: 'investmentTransfers', id: transfer?.id, message: 'بيانات النقل غير صالحة.' })
+    }
+    if (transfer?.asset === INVESTMENT_TRANSFER_ASSETS.USD) {
+      if (!safePositiveInteger(transfer.amountUsdMicros) || transfer.sourceHoldingId || transfer.destinationHoldingId
+        || transfer.quantityUnits || transfer.costBasisUsdMicros) {
+        errors.push({ field: 'investmentTransfers', id: transfer.id, message: 'قيمة نقل الدولار غير صالحة.' })
+      }
+    } else if (transfer?.asset === INVESTMENT_TRANSFER_ASSETS.USDT) {
+      const sourceHolding = holdingById.get(transfer.sourceHoldingId)
+      const destinationHolding = holdingById.get(transfer.destinationHoldingId)
+      if (!sourceHolding || !destinationHolding || sourceHolding.id === destinationHolding.id
+        || sourceHolding.platformId !== transfer.fromPlatformId
+        || destinationHolding.platformId !== transfer.toPlatformId
+        || sourceHolding.status !== INVESTMENT_RECORD_STATUSES.ACTIVE
+        || destinationHolding.status !== INVESTMENT_RECORD_STATUSES.ACTIVE
+        || sourceHolding.quoteCurrency !== CURRENCIES.USD
+        || destinationHolding.quoteCurrency !== CURRENCIES.USD
+        || !investmentHoldingIsLiquidity(sourceHolding)
+        || !investmentHoldingIsLiquidity(destinationHolding)
+        || !safePositiveInteger(transfer.quantityUnits)
+        || !Number.isSafeInteger(transfer.costBasisUsdMicros)
+        || transfer.costBasisUsdMicros < 0
+        || transfer.amountUsdMicros) {
+        errors.push({ field: 'investmentTransfers', id: transfer.id, message: 'كمية أو محفظة USDT غير صالحة.' })
+      }
+    }
+  }
   for (const holding of holdings) {
     let availableUnits = 0n
     let grossCostUsdMicros = 0n
-    const holdingTrades = trades
-      .filter((trade) => trade?.holdingId === holding.id && trade.status !== INVESTMENT_RECORD_STATUSES.VOIDED)
-      .sort((left, right) => createdTime(left) - createdTime(right) || String(left.id).localeCompare(String(right.id)))
-    if (holding.status === INVESTMENT_RECORD_STATUSES.INACTIVE && holdingTrades.length) {
+    const events = holdingEvents(holding.id, trades, transfers)
+    if (holding.status === INVESTMENT_RECORD_STATUSES.INACTIVE && events.length) {
       errors.push({ field: 'investmentHoldings', id: holding.id, message: 'لا يمكن إيقاف استثمار له عمليات محفوظة.' })
     }
-    for (const trade of holdingTrades) {
+    for (const event of events) {
+      if (event.kind === 'transfer') {
+        const transfer = event.record
+        const quantity = BigInt(safePositiveInteger(transfer.quantityUnits))
+        const cost = BigInt(Math.max(0, safeInteger(transfer.costBasisUsdMicros)))
+        if (transfer.sourceHoldingId === holding.id) {
+          if (quantity > availableUnits) {
+            errors.push({ field: 'investmentTransfers', id: transfer.id, message: 'رصيد USDT في المنصة الأولى غير كافٍ.' })
+            continue
+          }
+          const expectedCost = BigInt(safeScaledProduct(Number(grossCostUsdMicros), Number(quantity), Number(availableUnits)))
+          if (cost !== expectedCost) {
+            errors.push({ field: 'investmentTransfers', id: transfer.id, message: 'تكلفة USDT المنقولة لا تطابق الرصيد الأصلي.' })
+          }
+          availableUnits -= quantity
+          grossCostUsdMicros -= cost
+        } else {
+          availableUnits += quantity
+          grossCostUsdMicros += cost
+        }
+        if (availableUnits > BigInt(Number.MAX_SAFE_INTEGER) || grossCostUsdMicros < 0n
+          || grossCostUsdMicros > BigInt(Number.MAX_SAFE_INTEGER)) {
+          errors.push({ field: 'investmentTransfers', id: transfer.id, message: 'النقل تجاوز حد الدقة المسموح.' })
+        }
+        continue
+      }
+      const trade = event.record
       const quantityUnits = safePositiveInteger(trade.quantityUnits)
       const quantity = BigInt(quantityUnits)
       if (trade.type === INVESTMENT_TRADE_TYPES.OPENING || trade.type === INVESTMENT_TRADE_TYPES.BUY) {
@@ -642,6 +769,7 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
         if (quantity > availableUnits) {
           errors.push({ field: 'investmentTrades', id: trade.id, message: 'لا يمكن بيع كمية أكبر من الكمية الموجودة.' })
         } else {
+          grossCostUsdMicros -= BigInt(safeScaledProduct(Number(grossCostUsdMicros), Number(quantity), Number(availableUnits)))
           availableUnits -= quantity
         }
       }
@@ -651,6 +779,7 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
     if (platform.status === INVESTMENT_RECORD_STATUSES.INACTIVE && (
       holdings.some((holding) => holding.platformId === platform.id)
       || trades.some((trade) => trade.platformId === platform.id)
+      || transfers.some((transfer) => transfer.fromPlatformId === platform.id || transfer.toPlatformId === platform.id)
       || movements.some((movement) => movement.investmentPlatformId === platform.id)
     )) {
       errors.push({ field: 'investmentPlatforms', id: platform.id, message: 'لا يمكن إيقاف منصة مرتبطة ببيانات محفوظة.' })
@@ -666,6 +795,11 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
       if (trade.type === INVESTMENT_TRADE_TYPES.BUY) freeCashUsdMicros -= value + fee
       if (trade.type === INVESTMENT_TRADE_TYPES.SELL) freeCashUsdMicros += value - fee
     }
+    for (const transfer of transfers) {
+      if (transfer.asset !== INVESTMENT_TRANSFER_ASSETS.USD || transfer.status === INVESTMENT_RECORD_STATUSES.VOIDED) continue
+      if (transfer.fromPlatformId === platform.id) freeCashUsdMicros -= BigInt(safePositiveInteger(transfer.amountUsdMicros))
+      if (transfer.toPlatformId === platform.id) freeCashUsdMicros += BigInt(safePositiveInteger(transfer.amountUsdMicros))
+    }
     if (freeCashUsdMicros < 0n) errors.push({ field: 'investmentTrades', id: platform.id, message: 'النقد الحر في منصة الاستثمار لا يمكن أن يصبح سالبًا.' })
     if (freeCashUsdMicros > BigInt(Number.MAX_SAFE_INTEGER) || freeCashUsdMicros < BigInt(Number.MIN_SAFE_INTEGER)) {
       errors.push({ field: 'investmentTrades', id: platform.id, message: 'إجمالي نقد الاستثمار تجاوز حد الدقة المسموح.' })
@@ -678,7 +812,7 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
       errors.push({ field: 'amount', id: movement.id, message: `قيمة حركة الاستثمار يجب ألا تتجاوز ${MAX_INVESTMENT_USD.toLocaleString('en-US')} USD.` })
     }
   }
-  const summary = summarizeInvestmentPortfolio({ platforms, holdings, trades, movements })
+  const summary = summarizeInvestmentPortfolio({ platforms, holdings, trades, transfers, movements })
   for (const value of [summary.freeCashUsdMicros, summary.stablecoinUsdMicros, summary.liquidBalanceUsdMicros, summary.marketValueUsdMicros, summary.investedMarketValueUsdMicros, summary.totalValueUsdMicros, summary.costBasisUsdMicros, summary.realizedProfitUsdMicros, summary.unrealizedProfitUsdMicros, summary.investmentProfitUsdMicros, summary.totalProfitUsdMicros]) {
     if (!Number.isSafeInteger(value)) {
       errors.push({ field: 'investmentTrades', message: 'إجمالي المحفظة تجاوز حد الدقة المسموح.' })

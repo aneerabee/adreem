@@ -37,6 +37,7 @@ const LEDGER_RECORD_COLLECTIONS = [
   'investmentPlatforms',
   'investmentHoldings',
   'investmentTrades',
+  'investmentTransfers',
   'auditEvents',
 ]
 const LEGACY_LEDGER_STORAGE_PREFIXES = [

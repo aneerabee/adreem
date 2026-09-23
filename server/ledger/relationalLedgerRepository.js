@@ -522,7 +522,7 @@ export function createRelationalLedgerRepository(client, options = {}) {
             const movementAttachments = await loadMovementAttachments(client, ledger.id, movementIds)
             return mergeRowsByRecordId(accountAttachments, movementAttachments)
           })
-    const [movementResult, reviewResult, investmentFundingMovements, accounts, dimensions, attachments, recurringRules, reconciliations, investmentPlatforms, investmentHoldings, investmentTrades, auditEvents, ignoredRows] = await Promise.all([
+    const [movementResult, reviewResult, investmentFundingMovements, accounts, dimensions, attachments, recurringRules, reconciliations, investmentPlatforms, investmentHoldings, investmentTrades, investmentTransfers, auditEvents, ignoredRows] = await Promise.all([
       movementRequest,
       reviewRequest,
       loadOptions.includeAllMovements ? Promise.resolve([]) : loadInvestmentFundingMovements(client, ledger.id),
@@ -538,6 +538,7 @@ export function createRelationalLedgerRepository(client, options = {}) {
       fetchAll(client, 'adreem_investment_platforms', 'record_id, payload', ledger.id),
       fetchAll(client, 'adreem_investment_holdings', 'record_id, payload', ledger.id),
       fetchAll(client, 'adreem_investment_trades', 'record_id, payload', ledger.id),
+      fetchAll(client, 'adreem_investment_transfers', 'record_id, payload', ledger.id),
       includeAllAuditEvents
         ? loadAllAuditEvents(client, ledger.id)
         : loadRecentAuditEvents(client, ledger.id),
@@ -560,6 +561,7 @@ export function createRelationalLedgerRepository(client, options = {}) {
       investmentPlatforms: investmentPlatforms.map(payloadFromRow),
       investmentHoldings: investmentHoldings.map(payloadFromRow),
       investmentTrades: investmentTrades.map(payloadFromRow),
+      investmentTransfers: investmentTransfers.map(payloadFromRow),
       auditEvents: auditEvents.map(payloadFromRow),
       ignoredExternalAccounts: ignoredRows.map((row) => row.account_id),
       version: Number(confirmedLedger.version || 3),

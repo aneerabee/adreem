@@ -1,5 +1,5 @@
 import { MOVEMENT_TYPES } from './ledgerCore.js'
-import { investmentTradeValueMicros, usdToMicros } from './investmentCore.js'
+import { INVESTMENT_TRANSFER_ASSETS, investmentTradeValueMicros, usdToMicros } from './investmentCore.js'
 
 const FUNDING_TYPES = new Set([
   MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
@@ -11,8 +11,9 @@ function activityTime(record = {}) {
   return Number.isFinite(value) ? value : 0
 }
 
-export function buildInvestmentPlatformActivity({ platformId = '', trades = [], movements = [], holdings = [], accounts = [] } = {}) {
+export function buildInvestmentPlatformActivity({ platformId = '', trades = [], transfers = [], movements = [], holdings = [], platforms = [], accounts = [] } = {}) {
   const holdingById = new Map(holdings.map((holding) => [holding.id, holding]))
+  const platformById = new Map(platforms.map((platform) => [platform.id, platform]))
   const accountById = new Map(accounts.map((account) => [account.id, account]))
   const tradeRows = trades
     .filter((trade) => trade?.platformId === platformId)
@@ -44,7 +45,22 @@ export function buildInvestmentPlatformActivity({ platformId = '', trades = [], 
       sourceAccount: accountById.get(movement.sourceAccountId) || null,
       destinationAccount: accountById.get(movement.destinationAccountId) || null,
     }))
+  const transferRows = transfers
+    .filter((transfer) => transfer?.fromPlatformId === platformId || transfer?.toPlatformId === platformId)
+    .map((transfer) => ({
+      id: transfer.id,
+      kind: 'transfer',
+      action: transfer.fromPlatformId === platformId ? 'transfer_out' : 'transfer_in',
+      status: transfer.status,
+      occurredAt: transfer.occurredAt || transfer.createdAt || '',
+      note: transfer.note || '',
+      amountUsdMicros: transfer.asset === INVESTMENT_TRANSFER_ASSETS.USD
+        ? transfer.amountUsdMicros : transfer.costBasisUsdMicros,
+      transfer,
+      otherPlatform: platformById.get(transfer.fromPlatformId === platformId
+        ? transfer.toPlatformId : transfer.fromPlatformId) || null,
+    }))
 
-  return [...tradeRows, ...movementRows]
+  return [...tradeRows, ...movementRows, ...transferRows]
     .sort((left, right) => activityTime(right) - activityTime(left) || String(right.id).localeCompare(String(left.id)))
 }

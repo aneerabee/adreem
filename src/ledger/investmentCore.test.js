@@ -3,6 +3,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
   INVESTMENT_ASSET_TYPES,
   INVESTMENT_TRADE_TYPES,
+  INVESTMENT_TRANSFER_ASSETS,
   INVESTMENT_FX_FORM_MAX_AGE_MS,
   applyInvestmentMarketPrice,
   applyInvestmentTradeEditPriceFallback,
@@ -12,6 +13,7 @@ import {
   createInvestmentHolding,
   createInvestmentPlatform,
   createInvestmentTrade,
+  createInvestmentTransfer,
   convertTryPriceToUsdMicros,
   investmentOpeningTradeIsLocked,
   investmentFxRateIsFresh,
@@ -49,6 +51,52 @@ function fixture() {
 }
 
 describe('investment portfolio core', () => {
+  it('moves only free USD between platforms without changing portfolio total', () => {
+    const { platform, deposit } = fixture()
+    const destination = createInvestmentPlatform({ id: 'platform-2', name: 'Exodus' })
+    const transfer = createInvestmentTransfer({
+      id: 'usd-transfer', asset: INVESTMENT_TRANSFER_ASSETS.USD,
+      fromPlatformId: platform.id, toPlatformId: destination.id, amountUsdMicros: usdToMicros(400),
+    }, '2026-01-03T00:00:00.000Z')
+    const input = { platforms: [platform, destination], movements: [deposit], transfers: [transfer] }
+    const result = validateInvestmentState(input)
+    expect(result.ok).toBe(true)
+    expect(result.summary.platforms.map((row) => row.freeCashUsdMicros)).toEqual([usdToMicros(600), usdToMicros(400)])
+    expect(result.summary.totalValueUsdMicros).toBe(usdToMicros(1_000))
+    expect(validateInvestmentState({ ...input, transfers: [{ ...transfer, amountUsdMicros: usdToMicros(1_001) }] }).ok).toBe(false)
+    expect(validateInvestmentState({ ...input, transfers: [{ ...transfer, toPlatformId: platform.id }] }).ok).toBe(false)
+    expect(validateInvestmentState({ ...input, transfers: [transfer, transfer] }).ok).toBe(false)
+  })
+
+  it('moves USDT units and original cost without a sale or invented profit', () => {
+    const source = createInvestmentPlatform({ id: 'source', name: 'Source' })
+    const destination = createInvestmentPlatform({ id: 'destination', name: 'Destination' })
+    const holdings = [source, destination].map((platform) => createInvestmentHolding({
+      id: `${platform.id}-usdt`, platformId: platform.id, name: 'Tether', symbol: 'USDT/USD',
+      providerSymbol: 'USDT/USD:BINANCE', assetType: INVESTMENT_ASSET_TYPES.CRYPTO,
+      lastPriceUsdMicros: usdToMicros(1),
+    }))
+    const opening = createInvestmentTrade({
+      id: 'opening', platformId: source.id, holdingId: holdings[0].id,
+      type: INVESTMENT_TRADE_TYPES.OPENING, quantityUnits: quantityToUnits(10), priceUsdMicros: usdToMicros(1),
+    }, '2026-01-01T00:00:00.000Z')
+    const transfer = createInvestmentTransfer({
+      id: 'usdt-transfer', asset: INVESTMENT_TRANSFER_ASSETS.USDT,
+      fromPlatformId: source.id, toPlatformId: destination.id,
+      sourceHoldingId: holdings[0].id, destinationHoldingId: holdings[1].id,
+      quantityUnits: quantityToUnits(4), costBasisUsdMicros: usdToMicros(4),
+    }, '2026-01-02T00:00:00.000Z')
+    const input = { platforms: [source, destination], holdings, trades: [opening], transfers: [transfer] }
+    const result = validateInvestmentState(input)
+    expect(result.ok).toBe(true)
+    expect(result.summary.platforms.map((row) => row.holdings[0].quantityUnits)).toEqual([quantityToUnits(6), quantityToUnits(4)])
+    expect(result.summary.platforms.map((row) => row.costBasisUsdMicros)).toEqual([usdToMicros(6), usdToMicros(4)])
+    expect(result.summary.totalValueUsdMicros).toBe(usdToMicros(10))
+    expect(result.summary.realizedProfitUsdMicros).toBe(0)
+    expect(validateInvestmentState({ ...input, transfers: [{ ...transfer, quantityUnits: quantityToUnits(11) }] }).ok).toBe(false)
+    expect(validateInvestmentState({ ...input, transfers: [{ ...transfer, costBasisUsdMicros: usdToMicros(5) }] }).ok).toBe(false)
+  })
+
   it('keeps a manually entered stock distinct from a provider-priced holding', () => {
     const platform = createInvestmentPlatform({ id: 'platform-manual', name: 'Midas' })
     const holding = createInvestmentHolding({
@@ -532,6 +580,7 @@ describe('investment portfolio core', () => {
 
     expect(investmentOpeningTradeIsLocked(opening, [opening, laterBuy])).toBe(true)
     expect(investmentOpeningTradeIsLocked(opening, [opening, { ...laterBuy, status: 'voided' }])).toBe(false)
+    expect(investmentOpeningTradeIsLocked(opening, [opening], [{ sourceHoldingId: holding.id, status: 'active' }])).toBe(true)
     expect(investmentOpeningTradeIsLocked(laterBuy, [opening, laterBuy])).toBe(false)
   })
 

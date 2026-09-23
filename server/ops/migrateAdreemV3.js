@@ -34,6 +34,7 @@ const TARGET_LEDGER_TABLES = [
   'adreem_investment_platforms',
   'adreem_investment_holdings',
   'adreem_investment_trades',
+  'adreem_investment_transfers',
   'adreem_audit_events',
   'adreem_ignored_external_accounts',
 ]
@@ -51,6 +52,7 @@ const TARGET_V3_SCHEMA_MARKERS = [
   ['adreem_investment_platforms', 'ledger_id, owner_id, record_id, payload'],
   ['adreem_investment_holdings', 'ledger_id, owner_id, record_id, platform_id, payload'],
   ['adreem_investment_trades', 'ledger_id, owner_id, record_id, platform_id, holding_id, payload'],
+  ['adreem_investment_transfers', 'ledger_id, owner_id, record_id, from_platform_id, to_platform_id, payload'],
   ['adreem_audit_events', 'ledger_id, owner_id, record_id, payload'],
   ['adreem_ignored_external_accounts', 'ledger_id, owner_id, account_id'],
 ]
@@ -69,6 +71,7 @@ const TARGET_SECURITY_POLICIES = [
   ['adreem_investment_platforms', 'adreem_investment_platforms_own', 'r', false, 'owner'],
   ['adreem_investment_holdings', 'adreem_investment_holdings_own', 'r', false, 'owner'],
   ['adreem_investment_trades', 'adreem_investment_trades_own', 'r', false, 'owner'],
+  ['adreem_investment_transfers', 'adreem_investment_transfers_own', 'r', false, 'owner'],
   ['adreem_audit_events', 'adreem_audit_events_own', 'r', false, 'owner'],
   ['adreem_ignored_external_accounts', 'adreem_ignored_accounts_own', 'r', false, 'owner'],
 ]
@@ -671,7 +674,7 @@ export async function loadTargetMigrationState(target, ledgerId) {
   const [
     ledgerResult, accounts, movements, movementEntries, dimensions, attachments,
     recurringRules, reconciliations, investmentPlatforms, investmentHoldings,
-    investmentTrades, auditEvents, ignoredExternalAccounts,
+    investmentTrades, investmentTransfers, auditEvents, ignoredExternalAccounts,
   ] = await Promise.all([
     target.from('adreem_ledgers').select('reset_at').eq('id', ledgerId).maybeSingle(),
     targetRows(target, 'adreem_accounts', 'record_id, payload, balance_dinar, balance_usd, balance_try, posted_count', ledgerId),
@@ -684,6 +687,7 @@ export async function loadTargetMigrationState(target, ledgerId) {
     targetRows(target, 'adreem_investment_platforms', 'record_id, payload', ledgerId),
     targetRows(target, 'adreem_investment_holdings', 'record_id, payload', ledgerId),
     targetRows(target, 'adreem_investment_trades', 'record_id, payload', ledgerId),
+    targetRows(target, 'adreem_investment_transfers', 'record_id, payload', ledgerId),
     targetRows(target, 'adreem_audit_events', 'record_id, payload', ledgerId),
     targetRows(target, 'adreem_ignored_external_accounts', 'account_id', ledgerId),
   ])
@@ -712,6 +716,7 @@ export async function loadTargetMigrationState(target, ledgerId) {
     investmentPlatforms: investmentPlatforms.map((row) => payloadRecord(row)),
     investmentHoldings: investmentHoldings.map((row) => payloadRecord(row)),
     investmentTrades: investmentTrades.map((row) => payloadRecord(row)),
+    investmentTransfers: investmentTransfers.map((row) => payloadRecord(row)),
     auditEvents: auditEvents.map((row) => payloadRecord(row)),
     ignoredExternalAccounts: ignoredExternalAccounts.map((row) => row.account_id),
     resetAt: ledgerResult.data.reset_at || null,

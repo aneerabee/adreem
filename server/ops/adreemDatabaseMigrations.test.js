@@ -16,8 +16,23 @@ const investmentHoldingHardeningSql = readFileSync(new URL('../../supabase/migra
 const investmentFundingSql = readFileSync(new URL('../../supabase/migrations/20260919184500_allow_person_investment_funding.sql', import.meta.url), 'utf8')
 const investmentTradeEditingSql = readFileSync(new URL('../../supabase/migrations/20260920214500_allow_audited_investment_trade_edits.sql', import.meta.url), 'utf8')
 const turkishTradeCorrectionSql = readFileSync(new URL('../../supabase/migrations/20260923233000_allow_turkish_trade_price_corrections.sql', import.meta.url), 'utf8')
+const investmentTransferSql = readFileSync(new URL('../../supabase/migrations/20260924013000_add_investment_transfers.sql', import.meta.url), 'utf8')
+const investmentTransferGuardsSql = readFileSync(new URL('../../supabase/migrations/20260924013500_make_investment_guards_transfer_aware.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
+  it('keeps platform transfers tenant-bound, append-only and atomic', () => {
+    expect(investmentTransferSql).toContain('create table public.adreem_investment_transfers')
+    expect(investmentTransferSql).toContain('foreign key (ledger_id, owner_id)')
+    expect(investmentTransferSql).toContain('adreem_investment_transfers_immutable')
+    expect(investmentTransferSql).toContain("p_delta - 'investmentTransfers'")
+    expect(investmentTransferSql).toContain('ADREEM_INVESTMENT_TRANSFER_COST_MISMATCH')
+    expect(investmentTransferSql).toContain('ADREEM_INVESTMENT_TRANSFER_CASH_NEGATIVE')
+    expect(investmentTransferGuardsSql).toContain('function public.adreem_apply_ledger_delta_v2_internal(')
+    expect(investmentTransferGuardsSql).toContain('function public.adreem_apply_ledger_delta_v2_before_transfers(')
+    expect(investmentTransferGuardsSql).toContain("transfer.asset = 'USD'")
+    expect(investmentTransferGuardsSql).toContain("transfer.source_holding_id = v_previous.holding_id")
+    expect(investmentTransferGuardsSql).toContain("account.account_type not in ('cash', 'bank', 'person')")
+  })
   it('keeps the original Turkish exchange rate immutable and ties corrected TRY prices to USD', () => {
     expect(turkishTradeCorrectionSql).toContain('create or replace function adreem_private.protect_investment_trade_history()')
     expect(turkishTradeCorrectionSql).toContain("old.payload - array['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros', 'note', 'updatedAt']")

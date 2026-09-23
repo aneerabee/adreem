@@ -35,6 +35,7 @@ const SECURITY_TABLES = [
   'adreem_investment_platforms',
   'adreem_investment_holdings',
   'adreem_investment_trades',
+  'adreem_investment_transfers',
   'adreem_audit_events',
   'adreem_ignored_external_accounts',
 ]
@@ -53,6 +54,7 @@ const SECURITY_POLICIES = [
   ['adreem_investment_platforms', 'adreem_investment_platforms_own', 'r', false],
   ['adreem_investment_holdings', 'adreem_investment_holdings_own', 'r', false],
   ['adreem_investment_trades', 'adreem_investment_trades_own', 'r', false],
+  ['adreem_investment_transfers', 'adreem_investment_transfers_own', 'r', false],
   ['adreem_audit_events', 'adreem_audit_events_own', 'r', false],
   ['adreem_ignored_external_accounts', 'adreem_ignored_accounts_own', 'r', false],
 ]
@@ -384,7 +386,7 @@ describe('ADREEM v3 migration safety', () => {
       },
     }
     await ensureEmptyTarget(target, { id: 'ledger-a', revision: 0 })
-    expect(selected).toHaveLength(12)
+    expect(selected).toHaveLength(13)
     expect(selected.every(({ columns, options }) => columns === '*' && options.count === 'exact' && options.head === true)).toBe(true)
   })
 

@@ -5,7 +5,7 @@ import { DIMENSION_TYPES, RECURRING_FREQUENCIES, createAuditEvent } from '../../
 import { createEmptyAdreemState } from '../../src/ledger/ledgerState.js'
 import { buildCounterpartyAccountBundle } from '../../src/ledger/counterpartyAccounts.js'
 import { emptyAccountDraft } from '../../src/ledger/accountConfig.js'
-import { INVESTMENT_ASSET_TYPES, INVESTMENT_TRADE_TYPES, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, quantityToUnits, usdToMicros } from '../../src/ledger/investmentCore.js'
+import { INVESTMENT_ASSET_TYPES, INVESTMENT_TRADE_TYPES, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, createInvestmentTransfer, quantityToUnits, usdToMicros } from '../../src/ledger/investmentCore.js'
 import { validateLedgerStateTransition } from './stateValidation.js'
 
 const at = '2026-08-19T12:00:00.000Z'
@@ -694,6 +694,24 @@ describe('server ledger state validation', () => {
       field: 'providerSymbol',
     }))
     expect(validateLedgerStateTransition(updatedPrice, current, { now: validationNow }).ok).toBe(true)
+  })
+
+  it('requires an audit for a USDT transfer and never permits changing a saved transfer', () => {
+    const source = createInvestmentPlatform({ id: 'source', name: 'Source' }, at)
+    const destination = createInvestmentPlatform({ id: 'destination', name: 'Destination' }, at)
+    const sourceHolding = createInvestmentHolding({ id: 'usdt-source', platformId: source.id, name: 'Tether', symbol: 'USDT/USD', assetType: INVESTMENT_ASSET_TYPES.CRYPTO }, at)
+    const destinationHolding = createInvestmentHolding({ id: 'usdt-destination', platformId: destination.id, name: 'Tether', symbol: 'USDT/USD', assetType: INVESTMENT_ASSET_TYPES.CRYPTO }, at)
+    const openingTrade = createInvestmentTrade({ id: 'usdt-opening', platformId: source.id, holdingId: sourceHolding.id, type: INVESTMENT_TRADE_TYPES.OPENING, quantityUnits: quantityToUnits(10), priceUsdMicros: usdToMicros(1) }, at)
+    const current = { ...createEmptyAdreemState(at), investmentPlatforms: [source, destination], investmentHoldings: [sourceHolding, destinationHolding], investmentTrades: [openingTrade] }
+    const transfer = createInvestmentTransfer({ id: 'move-usdt', asset: 'USDT', fromPlatformId: source.id, toPlatformId: destination.id, sourceHoldingId: sourceHolding.id, destinationHoldingId: destinationHolding.id, quantityUnits: quantityToUnits(4), costBasisUsdMicros: usdToMicros(4) }, validationNow)
+    const next = { ...current, investmentTransfers: [transfer] }
+    const audit = createAuditEvent('investment.transfer.created', { transferId: transfer.id, asset: transfer.asset, fromPlatformId: source.id, toPlatformId: destination.id })
+    const audited = { ...next, auditEvents: [audit] }
+
+    expect(validateLedgerStateTransition(next, current, { now: validationNow }).errors).toContainEqual(expect.objectContaining({ code: 'investment-transfer-audit-required', id: transfer.id }))
+    expect(validateLedgerStateTransition(audited, current, { now: validationNow }).ok).toBe(true)
+    expect(validateLedgerStateTransition({ ...audited, investmentTransfers: [{ ...transfer, quantityUnits: quantityToUnits(3) }] }, audited, { now: validationNow }).errors).toContainEqual(expect.objectContaining({ code: 'investment-transfer-immutable', id: transfer.id }))
+    expect(validateLedgerStateTransition({ ...audited, investmentTransfers: [] }, audited, { now: validationNow }).errors).toContainEqual(expect.objectContaining({ code: 'investment-transfer-immutable', id: transfer.id }))
   })
 
   it('allows only audited investment trade value edits while keeping identity immutable', () => {

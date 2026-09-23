@@ -33,7 +33,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentMarketPrice, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, convertTryPriceToUsdMicros, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, INVESTMENT_TRANSFER_ASSETS, applyInvestmentMarketPrice, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, convertTryPriceToUsdMicros, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, createInvestmentTransfer, investmentHoldingIsLiquidity, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, investmentTransferCostBasisUsdMicros, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 import { isAutoPricedHolding } from './investmentMarketPolicy'
 
 const CANCEL_WINDOW_HOURS = 24
@@ -273,6 +273,7 @@ function ledgerExtrasFromState(state) {
     investmentPlatforms: normalized.investmentPlatforms,
     investmentHoldings: normalized.investmentHoldings,
     investmentTrades: normalized.investmentTrades,
+    investmentTransfers: normalized.investmentTransfers,
     ignoredExternalAccounts: normalized.ignoredExternalAccounts,
     auditEvents: normalized.auditEvents,
   }
@@ -4137,8 +4138,9 @@ export default function LedgerApp() {
     platforms: ledgerExtras.investmentPlatforms || [],
     holdings: ledgerExtras.investmentHoldings || [],
     trades: ledgerExtras.investmentTrades || [],
+    transfers: ledgerExtras.investmentTransfers || [],
     movements,
-  }), [ledgerExtras.investmentHoldings, ledgerExtras.investmentPlatforms, ledgerExtras.investmentTrades, movements])
+  }), [ledgerExtras.investmentHoldings, ledgerExtras.investmentPlatforms, ledgerExtras.investmentTrades, ledgerExtras.investmentTransfers, movements])
   const investmentPriceRefreshSignature = useMemo(() => (ledgerExtras.investmentHoldings || [])
     .filter((holding) => isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true'))
     .map((holding) => `${holding.id}:${holding.lastPriceAt || ''}`)
@@ -5392,6 +5394,7 @@ export default function LedgerApp() {
       platforms: ledgerExtras.investmentPlatforms || [],
       holdings: ledgerExtras.investmentHoldings || [],
       trades: ledgerExtras.investmentTrades || [],
+      transfers: ledgerExtras.investmentTransfers || [],
       movements: candidateMovements,
     })
   }
@@ -6261,6 +6264,85 @@ export default function LedgerApp() {
     return true
   }
 
+  function transferBetweenInvestmentPlatforms(draft) {
+    const platforms = ledgerExtras.investmentPlatforms || []
+    const holdings = ledgerExtras.investmentHoldings || []
+    const transfers = ledgerExtras.investmentTransfers || []
+    const source = platforms.find((platform) => platform.id === draft.fromPlatformId && platform.status === INVESTMENT_RECORD_STATUSES.ACTIVE)
+    const destination = platforms.find((platform) => platform.id === draft.toPlatformId && platform.status === INVESTMENT_RECORD_STATUSES.ACTIVE)
+    if (!source || !destination || source.id === destination.id) {
+      setFeedback('اختر منصتين مختلفتين.')
+      return false
+    }
+    const sourceRow = investmentSummary.platforms.find((row) => row.platform.id === source.id)
+    const now = new Date().toISOString()
+    let newHolding = null
+    let transfer
+    if (draft.asset === INVESTMENT_TRANSFER_ASSETS.USD) {
+      const amountUsdMicros = usdToMicros(draft.amount)
+      if (!amountUsdMicros || amountUsdMicros > Number(sourceRow?.freeCashUsdMicros || 0)) {
+        setFeedback('نقد USD الحر في المنصة الأولى غير كافٍ.')
+        return false
+      }
+      transfer = createInvestmentTransfer({ ...draft, amountUsdMicros }, now)
+    } else if (draft.asset === INVESTMENT_TRANSFER_ASSETS.USDT) {
+      const sourceHoldingRow = sourceRow?.holdings.find((row) => row.holding.id === draft.sourceHoldingId
+        && row.holding.status === INVESTMENT_RECORD_STATUSES.ACTIVE
+        && row.holding.quoteCurrency === CURRENCIES.USD
+        && investmentHoldingIsLiquidity(row.holding))
+      const quantityUnits = quantityToUnits(draft.amount)
+      if (!sourceHoldingRow || !quantityUnits || quantityUnits > sourceHoldingRow.quantityUnits) {
+        setFeedback('رصيد USDT في المنصة الأولى غير كافٍ.')
+        return false
+      }
+      const destinationHolding = holdings.find((holding) => holding.platformId === destination.id
+        && holding.status === INVESTMENT_RECORD_STATUSES.ACTIVE
+        && holding.quoteCurrency === CURRENCIES.USD
+        && investmentHoldingIsLiquidity(holding))
+      if (!destinationHolding) {
+        newHolding = createInvestmentHolding({
+          ...sourceHoldingRow.holding,
+          id: '',
+          platformId: destination.id,
+        }, now)
+      }
+      transfer = createInvestmentTransfer({
+        ...draft,
+        destinationHoldingId: destinationHolding?.id || newHolding.id,
+        quantityUnits,
+        costBasisUsdMicros: investmentTransferCostBasisUsdMicros(sourceHoldingRow, quantityUnits),
+      }, now)
+    } else {
+      setFeedback('اختر USD أو USDT.')
+      return false
+    }
+    const nextHoldings = newHolding ? [...holdings, newHolding] : holdings
+    const validation = validateInvestmentState({
+      platforms,
+      holdings: nextHoldings,
+      trades: ledgerExtras.investmentTrades || [],
+      transfers: [...transfers, transfer],
+      movements,
+    })
+    if (!validation.ok) {
+      setFeedback(validation.errors[0]?.message || 'تعذر حفظ النقل.')
+      return false
+    }
+    setLedgerExtras((current) => ({
+      ...current,
+      investmentHoldings: newHolding ? [...(current.investmentHoldings || []), newHolding] : current.investmentHoldings,
+      investmentTransfers: [...(current.investmentTransfers || []), transfer],
+      auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.transfer.created', {
+        transferId: transfer.id,
+        asset: transfer.asset,
+        fromPlatformId: source.id,
+        toPlatformId: destination.id,
+      })],
+    }))
+    setFeedback('تم تسجيل النقل بين المنصتين.')
+    return true
+  }
+
   function addInvestmentHolding(draft) {
     const initialQuantity = parseInvestmentDecimal(draft?.initialQuantity)
     const priceNativeMicros = draft?.quoteCurrency === CURRENCIES.TRY ? usdToMicros(draft?.initialPriceNative) : 0
@@ -6304,6 +6386,7 @@ export default function LedgerApp() {
       platforms: ledgerExtras.investmentPlatforms || [],
       holdings: [...(ledgerExtras.investmentHoldings || []), holding],
       trades: openingTrade ? [...(ledgerExtras.investmentTrades || []), openingTrade] : ledgerExtras.investmentTrades || [],
+      transfers: ledgerExtras.investmentTransfers || [],
       movements,
     }
     const validation = validateInvestmentState(candidate)
@@ -6354,6 +6437,7 @@ export default function LedgerApp() {
       platforms: ledgerExtras.investmentPlatforms || [],
       holdings: ledgerExtras.investmentHoldings || [],
       trades: nextTrades,
+      transfers: ledgerExtras.investmentTransfers || [],
       movements,
     })
     if (!validation.ok) {
@@ -6389,7 +6473,7 @@ export default function LedgerApp() {
     }
     const financialFields = ['quantityUnits', 'priceUsdMicros', 'feeUsdMicros']
     const financialChanged = financialFields.some((field) => Number(edit.trade[field] || 0) !== Number(currentTrade[field] || 0))
-    if (financialChanged && investmentOpeningTradeIsLocked(currentTrade, ledgerExtras.investmentTrades || [])) {
+    if (financialChanged && investmentOpeningTradeIsLocked(currentTrade, ledgerExtras.investmentTrades || [], ledgerExtras.investmentTransfers || [])) {
       setFeedback('القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة. يمكنك تعديل الملاحظة فقط.')
       return false
     }
@@ -6403,6 +6487,7 @@ export default function LedgerApp() {
       platforms: ledgerExtras.investmentPlatforms || [],
       holdings: nextHoldings,
       trades: nextTrades,
+      transfers: ledgerExtras.investmentTransfers || [],
       movements,
     })
     if (!validation.ok) {
@@ -6455,8 +6540,9 @@ export default function LedgerApp() {
     }
 
     if (closure.kind === 'deactivate') {
-      const hasTrades = (ledgerExtras.investmentTrades || []).some((trade) => trade.holdingId === holdingId)
-      if (hasTrades) {
+      const hasHistory = (ledgerExtras.investmentTrades || []).some((trade) => trade.holdingId === holdingId)
+        || (ledgerExtras.investmentTransfers || []).some((transfer) => transfer.sourceHoldingId === holdingId || transfer.destinationHoldingId === holdingId)
+      if (hasHistory) {
         setFeedback('هذا الاستثمار له سجل محفوظ ولا يمكن حذفه مباشرة.')
         return false
       }
@@ -6470,6 +6556,7 @@ export default function LedgerApp() {
         platforms: ledgerExtras.investmentPlatforms || [],
         holdings: nextHoldings,
         trades: ledgerExtras.investmentTrades || [],
+        transfers: ledgerExtras.investmentTransfers || [],
         movements,
       })
       if (!validation.ok) {
@@ -6494,6 +6581,7 @@ export default function LedgerApp() {
       platforms: ledgerExtras.investmentPlatforms || [],
       holdings: ledgerExtras.investmentHoldings || [],
       trades: nextTrades,
+      transfers: ledgerExtras.investmentTransfers || [],
       movements,
     })
     if (!validation.ok) {
@@ -6838,6 +6926,7 @@ export default function LedgerApp() {
         platforms={ledgerExtras.investmentPlatforms || []}
         holdings={ledgerExtras.investmentHoldings || []}
         trades={ledgerExtras.investmentTrades || []}
+        transfers={ledgerExtras.investmentTransfers || []}
         movements={movements}
         accounts={accounts}
         isRefreshing={isRefreshingInvestmentPrices}
@@ -6845,6 +6934,7 @@ export default function LedgerApp() {
         onAddPlatform={addInvestmentPlatform}
         onAddHolding={addInvestmentHolding}
         onAddTrade={addInvestmentTrade}
+        onTransfer={transferBetweenInvestmentPlatforms}
         onEditTrade={editInvestmentTrade}
         onEditMovement={editReviewMovement}
         onManualPrice={updateInvestmentManualPrice}

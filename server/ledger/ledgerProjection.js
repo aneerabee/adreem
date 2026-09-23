@@ -18,6 +18,7 @@ const RECORD_COLLECTIONS = [
   'investmentPlatforms',
   'investmentHoldings',
   'investmentTrades',
+  'investmentTransfers',
   'auditEvents',
 ]
 
@@ -316,10 +317,46 @@ export function createLedgerMigrationBatches(sourceState = {}, options = {}) {
   const state = validation.state
   const batchSize = options.batchSize || 250
   const batches = []
-  for (const collection of ['accounts', 'dimensions', 'investmentPlatforms', 'investmentHoldings', 'movements', 'investmentTrades', 'attachments', 'recurringRules', 'reconciliations', 'auditEvents']) {
+  for (const collection of ['accounts', 'dimensions', 'investmentPlatforms', 'investmentHoldings', 'movements']) {
     for (const records of chunks(state[collection], batchSize)) {
       batches.push({ collection, delta: { [collection]: records } })
     }
+  }
+  const transferAuditIds = new Set()
+  if (state.investmentTransfers.length) {
+    const events = [
+      ...state.investmentTrades.map((record) => ({ collection: 'investmentTrades', record })),
+      ...state.investmentTransfers.map((record) => ({ collection: 'investmentTransfers', record })),
+    ].sort((left, right) => new Date(left.record.occurredAt || left.record.createdAt).getTime()
+      - new Date(right.record.occurredAt || right.record.createdAt).getTime()
+      || String(left.record.id).localeCompare(String(right.record.id)))
+    for (const event of events) {
+      if (event.collection === 'investmentTrades') {
+        batches.push({ collection: event.collection, delta: { investmentTrades: [event.record] } })
+        continue
+      }
+      const transfer = event.record
+      const audit = state.auditEvents.find((item) => item.action === 'investment.transfer.created'
+        && item.details?.transferId === transfer.id
+        && item.details?.asset === transfer.asset
+        && item.details?.fromPlatformId === transfer.fromPlatformId
+        && item.details?.toPlatformId === transfer.toPlatformId)
+      if (!audit) throw new Error(`ADREEM migration transfer ${transfer.id} has no matching audit event.`)
+      transferAuditIds.add(audit.id)
+      batches.push({ collection: event.collection, delta: { investmentTransfers: [transfer], auditEvents: [audit] } })
+    }
+  } else {
+    for (const records of chunks(state.investmentTrades, batchSize)) {
+      batches.push({ collection: 'investmentTrades', delta: { investmentTrades: records } })
+    }
+  }
+  for (const collection of ['attachments', 'recurringRules', 'reconciliations']) {
+    for (const records of chunks(state[collection], batchSize)) {
+      batches.push({ collection, delta: { [collection]: records } })
+    }
+  }
+  for (const records of chunks(state.auditEvents.filter((event) => !transferAuditIds.has(event.id)), batchSize)) {
+    batches.push({ collection: 'auditEvents', delta: { auditEvents: records } })
   }
   if ((state.ignoredExternalAccounts || []).length || state.resetAt) {
     batches.push({

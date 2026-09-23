@@ -9,8 +9,10 @@ import {
   MIN_VISIBLE_INVESTMENT_USD_MICROS,
   SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS,
   INVESTMENT_TRADE_TYPES,
+  INVESTMENT_TRANSFER_ASSETS,
   convertTryPriceToUsdMicros,
   investmentFxRateIsFresh,
+  investmentHoldingIsLiquidity,
   investmentDecimalInputIsValid,
   investmentOpeningTradeIsLocked,
   investmentPriceChange,
@@ -43,6 +45,7 @@ const blankPlatform = { name: '', kind: 'platform', location: '' }
 const blankHolding = { platformId: '', name: '', symbol: '', providerSymbol: '', marketDataMode: 'manual', assetType: INVESTMENT_ASSET_TYPES.STOCK, exchange: '', quoteCurrency: 'USD', initialQuantity: '', initialPriceUsd: '', initialPriceNative: '' }
 const blankTrade = { holdingId: '', type: INVESTMENT_TRADE_TYPES.BUY, quantity: '', priceUsd: '', priceNative: '', feeUsd: '', note: '' }
 const blankTradeEdit = { quantity: '', priceUsd: '', priceNative: '', feeUsd: '', note: '' }
+const blankTransfer = { asset: INVESTMENT_TRANSFER_ASSETS.USD, fromPlatformId: '', toPlatformId: '', sourceHoldingId: '', amount: '', note: '' }
 const blankTryFx = { status: 'idle', rate: '', quotedAt: '', loadedAt: '', source: '', error: '' }
 const PRICE_SOURCE_LABELS = {
   coinbase: { ar: 'Coinbase', en: 'Coinbase' },
@@ -124,6 +127,8 @@ function activityActionLabel(row) {
   if (row.action === INVESTMENT_TRADE_TYPES.SELL) return 'بيع'
   if (row.action === MOVEMENT_TYPES.INVESTMENT_DEPOSIT) return 'إيداع'
   if (row.action === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL) return 'سحب'
+  if (row.action === 'transfer_out') return 'نقل صادر'
+  if (row.action === 'transfer_in') return 'نقل وارد'
   return 'عملية'
 }
 
@@ -285,6 +290,7 @@ export default function InvestmentsPanel({
   platforms = [],
   holdings = [],
   trades = [],
+  transfers = [],
   movements = [],
   accounts = [],
   isRefreshing = false,
@@ -292,6 +298,7 @@ export default function InvestmentsPanel({
   onAddPlatform,
   onAddHolding,
   onAddTrade,
+  onTransfer,
   onEditTrade,
   onEditMovement,
   onManualPrice,
@@ -312,6 +319,8 @@ export default function InvestmentsPanel({
   const [editingTradeBaseline, setEditingTradeBaseline] = useState(null)
   const [tradeEditDraft, setTradeEditDraft] = useState(blankTradeEdit)
   const [tradeEditStage, setTradeEditStage] = useState('fields')
+  const [transferDraft, setTransferDraft] = useState(blankTransfer)
+  const [transferStage, setTransferStage] = useState('fields')
   const [tryFx, setTryFx] = useState(blankTryFx)
   const [tryFxReloadKey, setTryFxReloadKey] = useState(0)
   const [query, setQuery] = useState('')
@@ -343,10 +352,12 @@ export default function InvestmentsPanel({
   const historyRows = useMemo(() => buildInvestmentPlatformActivity({
     platformId: historyPlatformId,
     trades,
+    transfers,
     movements,
     holdings,
+    platforms,
     accounts,
-  }), [accounts, historyPlatformId, holdings, movements, trades])
+  }), [accounts, historyPlatformId, holdings, movements, platforms, trades, transfers])
   const assetSearchPlaceholder = holdingDraft.assetType === INVESTMENT_ASSET_TYPES.CRYPTO
     ? 'BTC أو اسم العملة'
     : holdingDraft.assetType === INVESTMENT_ASSET_TYPES.METAL
@@ -495,6 +506,34 @@ export default function InvestmentsPanel({
     setTryFxReloadKey(0)
     setTradeDraft({ ...blankTrade, type, holdingId: holdingId || activeHoldings[0]?.id || '' })
     setDialog('trade')
+  }
+
+  function openTransfer(fromPlatformId = '') {
+    submissionRef.current = false
+    const sourceId = fromPlatformId || activePlatforms[0]?.id || ''
+    setTransferDraft({
+      ...blankTransfer,
+      fromPlatformId: sourceId,
+      toPlatformId: activePlatforms.find((platform) => platform.id !== sourceId)?.id || '',
+    })
+    setTransferStage('fields')
+    setDialog('transfer')
+  }
+
+  function submitTransfer(event) {
+    event.preventDefault()
+    if (!canSubmitTransfer || submissionRef.current) return
+    if (transferStage === 'fields') {
+      setTransferStage('review')
+      return
+    }
+    submissionRef.current = true
+    if (onTransfer?.({ ...transferDraft, sourceHoldingId: selectedTransferHolding?.id || '' }) !== true) {
+      submissionRef.current = false
+      setTransferStage('fields')
+      return
+    }
+    setDialog('')
   }
 
   function openSmallClosure(row) {
@@ -667,7 +706,7 @@ export default function InvestmentsPanel({
   const tradeHasEnoughCash = tradeDraft.type !== INVESTMENT_TRADE_TYPES.BUY || tradeDebitUsdMicros <= Number(selectedTradePlatform?.freeCashUsdMicros || 0)
   const tradeHasEnoughUnits = tradeDraft.type !== INVESTMENT_TRADE_TYPES.SELL || quantityToUnits(tradeDraft.quantity) <= Number(selectedTradeRow?.quantityUnits || 0)
   const canSubmitTrade = tradeHasValidInput && tradeHasEnoughCash && tradeHasEnoughUnits
-  const openingTradeLocked = investmentOpeningTradeIsLocked(editingTradeBaseline, trades)
+  const openingTradeLocked = investmentOpeningTradeIsLocked(editingTradeBaseline, trades, transfers)
   const editedQuantityUnits = quantityToUnits(tradeEditDraft.quantity)
   const editedPriceUsdMicros = editingTradeBaseline?.priceNativeMicros
     ? convertTryPriceToUsdMicros(usdToMicros(tradeEditDraft.priceNative), editingTradeBaseline.fxTryPerUsdMicros)
@@ -702,6 +741,23 @@ export default function InvestmentsPanel({
   } : null
   const tradeEditBeforeImpact = tradeReviewImpact(editingTradeBaseline)
   const tradeEditAfterImpact = tradeReviewImpact(editedTradePreview)
+  const transferSourceRow = summary.platforms.find((row) => row.platform.id === transferDraft.fromPlatformId)
+  const transferDestinationRow = summary.platforms.find((row) => row.platform.id === transferDraft.toPlatformId)
+  const transferUsdtRows = (transferSourceRow?.holdings || []).filter((row) => row.quantityUnits > 0
+    && row.holding.status !== 'inactive' && row.holding.quoteCurrency === 'USD'
+    && investmentHoldingIsLiquidity(row.holding))
+  const selectedTransferHolding = transferUsdtRows.find((row) => row.holding.id === transferDraft.sourceHoldingId)?.holding
+    || transferUsdtRows[0]?.holding
+  const transferAvailable = transferDraft.asset === INVESTMENT_TRANSFER_ASSETS.USD
+    ? Number(transferSourceRow?.freeCashUsdMicros || 0)
+    : Number(transferUsdtRows.find((row) => row.holding.id === selectedTransferHolding?.id)?.quantityUnits || 0)
+  const transferAmount = transferDraft.asset === INVESTMENT_TRANSFER_ASSETS.USD
+    ? usdToMicros(transferDraft.amount) : quantityToUnits(transferDraft.amount)
+  const canSubmitTransfer = Boolean(transferSourceRow && transferDestinationRow
+    && transferSourceRow.platform.id !== transferDestinationRow.platform.id
+    && (transferDraft.asset === INVESTMENT_TRANSFER_ASSETS.USD || selectedTransferHolding)
+    && investmentDecimalInputIsValid(transferDraft.amount, { allowZero: false })
+    && transferAmount > 0 && transferAmount <= transferAvailable)
 
   const portfolioLiquidityUsdMicros = Number.isSafeInteger(summary.liquidBalanceUsdMicros)
     ? summary.liquidBalanceUsdMicros
@@ -730,6 +786,7 @@ export default function InvestmentsPanel({
           </button>
           <button type="button" onClick={openPlatform}><Landmark aria-hidden="true" size={16} /> منصة</button>
           <button type="button" disabled={!activePlatforms.length} onClick={openHolding}><Plus aria-hidden="true" size={16} /> استثمار</button>
+          <button type="button" disabled={activePlatforms.length < 2} onClick={() => openTransfer()}><ArrowLeftRight aria-hidden="true" size={16} /> نقل</button>
         </div>
       </div>
 
@@ -795,6 +852,7 @@ export default function InvestmentsPanel({
                     </div>
                     <div className="adreem-investment-platform-actions">
                       <button type="button" className="is-history" aria-label="السجل" title="السجل" onClick={() => openPlatformHistory(platformRow.platform.id)}><History aria-hidden="true" size={14} /><span>السجل</span></button>
+                      <button type="button" disabled={activePlatforms.length < 2} aria-label="نقل إلى منصة" title="نقل إلى منصة" onClick={() => openTransfer(platformRow.platform.id)}><ArrowLeftRight aria-hidden="true" size={14} /><span>نقل</span></button>
                       <button type="button" aria-label="تمويل" title="تمويل" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /><span>تمويل</span></button>
                     </div>
                   </div>
@@ -919,6 +977,46 @@ export default function InvestmentsPanel({
             </div>
           </InvestmentDialog>
         ) : null}
+        {dialog === 'transfer' ? (
+          <InvestmentDialog
+            title="نقل بين المنصات"
+            subtitle={transferStage === 'review' ? 'راجع قبل التسجيل' : 'USD أو USDT'}
+            icon={ArrowLeftRight}
+            tone="neutral"
+            className="is-transfer"
+            onClose={() => setDialog('')}
+            onSecondary={transferStage === 'review' ? () => setTransferStage('fields') : () => setDialog('')}
+            secondaryLabel={transferStage === 'review' ? 'تعديل' : 'إلغاء'}
+            onSubmit={submitTransfer}
+            canSubmit={canSubmitTransfer}
+            submitLabel={transferStage === 'review' ? 'تأكيد النقل' : 'مراجعة النقل'}
+          >
+            {transferStage === 'fields' ? (
+              <>
+                <div className="adreem-investment-transfer-currency" role="group" aria-label="ما الذي تنقله؟">
+                  {Object.values(INVESTMENT_TRANSFER_ASSETS).map((asset) => <button type="button" key={asset} className={transferDraft.asset === asset ? 'is-active' : ''} aria-pressed={transferDraft.asset === asset} onClick={() => setTransferDraft((current) => ({ ...current, asset, amount: '', sourceHoldingId: '' }))}>{asset}</button>)}
+                </div>
+                <div className="adreem-investment-transfer-route">
+                  <label><span>من</span><select value={transferDraft.fromPlatformId} onChange={(event) => setTransferDraft((current) => ({ ...current, fromPlatformId: event.target.value, toPlatformId: current.toPlatformId === event.target.value ? activePlatforms.find((platform) => platform.id !== event.target.value)?.id || '' : current.toPlatformId, sourceHoldingId: '', amount: '' }))}>{activePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}</select></label>
+                  <ArrowLeftRight aria-hidden="true" size={17} />
+                  <label><span>إلى</span><select value={transferDraft.toPlatformId} onChange={(event) => setTransferDraft((current) => ({ ...current, toPlatformId: event.target.value }))}>{activePlatforms.filter((platform) => platform.id !== transferDraft.fromPlatformId).map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}</select></label>
+                </div>
+                {transferDraft.asset === INVESTMENT_TRANSFER_ASSETS.USDT && transferUsdtRows.length > 1 ? <label><span>رصيد USDT</span><select value={selectedTransferHolding?.id || ''} onChange={(event) => setTransferDraft((current) => ({ ...current, sourceHoldingId: event.target.value, amount: '' }))}>{transferUsdtRows.map((row) => <option key={row.holding.id} value={row.holding.id}>{preserveUiData(row.holding.name)} · {decimal(unitsToQuantity(row.quantityUnits), 8)} USDT</option>)}</select></label> : null}
+                <label><span>الكمية {transferDraft.asset}</span><input dir="ltr" inputMode="decimal" value={transferDraft.amount} onChange={(event) => setTransferDraft((current) => ({ ...current, amount: event.target.value }))} placeholder="0" /></label>
+                <output className="adreem-investment-transfer-available">المتاح <strong dir="ltr">{transferDraft.asset === INVESTMENT_TRANSFER_ASSETS.USD ? decimal(microsToUsd(transferAvailable), 6) : decimal(unitsToQuantity(transferAvailable), 8)} {transferDraft.asset}</strong></output>
+                <label><span>ملاحظة</span><input value={transferDraft.note} maxLength={300} onChange={(event) => setTransferDraft((current) => ({ ...current, note: event.target.value }))} placeholder="اختياري" /></label>
+              </>
+            ) : (
+              <div className="adreem-investment-transfer-review">
+                <div><small>من</small><strong>{preserveUiData(transferSourceRow?.platform.name || '')}</strong><span dir="ltr">-{decimal(transferDraft.amount, transferDraft.asset === INVESTMENT_TRANSFER_ASSETS.USD ? 6 : 8)} {transferDraft.asset}</span></div>
+                <ArrowLeftRight aria-hidden="true" size={18} />
+                <div><small>إلى</small><strong>{preserveUiData(transferDestinationRow?.platform.name || '')}</strong><span dir="ltr">+{decimal(transferDraft.amount, transferDraft.asset === INVESTMENT_TRANSFER_ASSETS.USD ? 6 : 8)} {transferDraft.asset}</span></div>
+                {transferDraft.note ? <p>{preserveUiData(transferDraft.note)}</p> : null}
+                <small>تسجيل في الدفتر فقط؛ لا يرسل أموالًا فعليًا.</small>
+              </div>
+            )}
+          </InvestmentDialog>
+        ) : null}
         {dialog === 'history' && historyPlatform ? (() => {
           const brand = resolveInvestmentPlatformBrand(historyPlatform.name)
           const logoUrl = platformLogoUrl(brand)
@@ -933,6 +1031,7 @@ export default function InvestmentsPanel({
                 <div className="adreem-investment-history-list">
                   {historyRows.map((row) => {
                     const isTrade = row.kind === 'trade'
+                    const isTransfer = row.kind === 'transfer'
                     const isVoided = row.status === MOVEMENT_STATUSES.VOIDED || row.status === 'voided'
                     const routeLabel = row.action === MOVEMENT_TYPES.INVESTMENT_DEPOSIT
                       ? accountLabel(row.sourceAccount)
@@ -941,18 +1040,18 @@ export default function InvestmentsPanel({
                         : ''
                     return (
                       <article className={`adreem-investment-history-row is-${row.action} ${isVoided ? 'is-voided' : ''}`} key={`${row.kind}-${row.id}`}>
-                        <i>{row.action === INVESTMENT_TRADE_TYPES.BUY || row.action === MOVEMENT_TYPES.INVESTMENT_DEPOSIT ? <ArrowDownToLine aria-hidden="true" size={17} /> : row.action === INVESTMENT_TRADE_TYPES.SELL || row.action === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL ? <ArrowUpFromLine aria-hidden="true" size={17} /> : <PackageCheck aria-hidden="true" size={17} />}</i>
+                        <i>{isTransfer ? <ArrowLeftRight aria-hidden="true" size={17} /> : row.action === INVESTMENT_TRADE_TYPES.BUY || row.action === MOVEMENT_TYPES.INVESTMENT_DEPOSIT ? <ArrowDownToLine aria-hidden="true" size={17} /> : row.action === INVESTMENT_TRADE_TYPES.SELL || row.action === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL ? <ArrowUpFromLine aria-hidden="true" size={17} /> : <PackageCheck aria-hidden="true" size={17} />}</i>
                         <div className="adreem-investment-history-main">
                           <header><strong>{activityActionLabel(row)}</strong>{isVoided ? <em>ملغاة</em> : null}<time><Clock3 aria-hidden="true" size={12} />{activityDate(row.occurredAt)}</time></header>
-                          <span>{isTrade ? preserveUiData(`${row.holding?.symbol || ''} · ${row.holding?.name || ''}`) : routeLabel ? preserveUiData(routeLabel) : 'تمويل المحفظة'}</span>
+                          <span>{isTransfer ? preserveUiData(row.otherPlatform?.name || 'منصة أخرى') : isTrade ? preserveUiData(`${row.holding?.symbol || ''} · ${row.holding?.name || ''}`) : routeLabel ? preserveUiData(routeLabel) : 'تمويل المحفظة'}</span>
                           {row.note ? <small>{preserveUiData(row.note)}</small> : null}
                         </div>
                         <div className="adreem-investment-history-values">
                           {isTrade ? <small>{decimal(unitsToQuantity(row.trade.quantityUnits), 8)} × {row.trade.priceNativeMicros ? `${tryUnitMicros(row.trade.priceNativeMicros)} · ${usdUnitMicros(row.trade.priceUsdMicros)}` : usdUnitMicros(row.trade.priceUsdMicros)}</small> : null}
-                          <strong>{usdMicros(row.amountUsdMicros)}</strong>
+                          <strong>{isTransfer && row.transfer.asset === INVESTMENT_TRANSFER_ASSETS.USDT ? `${decimal(unitsToQuantity(row.transfer.quantityUnits), 8)} USDT` : usdMicros(row.amountUsdMicros)}</strong>
                           {isTrade && row.trade.feeUsdMicros > 0 ? <em><span>رسوم</span> {usdMicros(row.trade.feeUsdMicros)}</em> : null}
                         </div>
-                        {!isVoided ? <button type="button" className="adreem-investment-history-edit" aria-label="تعديل العملية" title="تعديل العملية" onClick={() => isTrade ? openTradeEdit(row.trade) : editFundingMovement(row.movement)}><PencilLine aria-hidden="true" size={14} /><span>تعديل</span></button> : null}
+                        {!isVoided && !isTransfer ? <button type="button" className="adreem-investment-history-edit" aria-label="تعديل العملية" title="تعديل العملية" onClick={() => isTrade ? openTradeEdit(row.trade) : editFundingMovement(row.movement)}><PencilLine aria-hidden="true" size={14} /><span>تعديل</span></button> : null}
                       </article>
                     )
                   })}

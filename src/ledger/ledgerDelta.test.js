@@ -51,11 +51,13 @@ describe('ledger delta', () => {
       investmentPlatforms: [],
       investmentHoldings: [],
       investmentTrades: [],
+      investmentTransfers: [],
     }
     const next = {
       investmentPlatforms: [{ id: 'platform-1', name: 'IBKR' }],
       investmentHoldings: [{ id: 'holding-1', platformId: 'platform-1', symbol: 'AAPL' }],
       investmentTrades: [{ id: 'trade-1', holdingId: 'holding-1', type: 'buy' }],
+      investmentTransfers: [{ id: 'transfer-1', fromPlatformId: 'platform-1', toPlatformId: 'platform-2', asset: 'USD' }],
     }
     const delta = createLedgerDelta(next, base)
 

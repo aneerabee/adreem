@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import { buildInvestmentPlatformActivity } from './investmentActivity.js'
-import { INVESTMENT_TRADE_TYPES, createInvestmentHolding, createInvestmentTrade, quantityToUnits, usdToMicros } from './investmentCore.js'
+import { INVESTMENT_TRADE_TYPES, createInvestmentHolding, createInvestmentTrade, createInvestmentTransfer, quantityToUnits, usdToMicros } from './investmentCore.js'
 
 describe('investment platform activity', () => {
   it('combines trades and funding movements newest first without merging records', () => {
@@ -38,5 +38,14 @@ describe('investment platform activity', () => {
 
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ id: 'voided', status: MOVEMENT_STATUSES.VOIDED, amountUsdMicros: usdToMicros(20) })
+  })
+
+  it('shows one transfer on both platform histories with its direction and note', () => {
+    const platforms = [{ id: 'one', name: 'Source' }, { id: 'two', name: 'Destination' }]
+    const transfer = createInvestmentTransfer({ id: 'move-1', asset: 'USD', fromPlatformId: 'one', toPlatformId: 'two', amountUsdMicros: usdToMicros(25), note: 'Internal move' }, '2026-01-04T10:00:00.000Z')
+    const source = buildInvestmentPlatformActivity({ platformId: 'one', transfers: [transfer], platforms })
+    const destination = buildInvestmentPlatformActivity({ platformId: 'two', transfers: [transfer], platforms })
+    expect(source).toMatchObject([{ id: 'move-1', kind: 'transfer', action: 'transfer_out', note: 'Internal move', otherPlatform: platforms[1] }])
+    expect(destination).toMatchObject([{ id: 'move-1', kind: 'transfer', action: 'transfer_in', note: 'Internal move', otherPlatform: platforms[0] }])
   })
 })

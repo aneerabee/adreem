@@ -22,7 +22,7 @@ import {
 import { INVESTMENT_RECORD_STATUSES, investmentOpeningTradeIsLocked, validateInvestmentState } from '../../src/ledger/investmentCore.js'
 
 const OWN_VALUE_KINDS = new Set([VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET])
-const RECORD_LISTS = ['accounts', 'movements', 'dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'auditEvents']
+const RECORD_LISTS = ['accounts', 'movements', 'dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'investmentTransfers', 'auditEvents']
 const ACCOUNT_CLASSIFICATION_FIELDS = ['type', 'valueKind', 'currencyKind']
 const INVESTMENT_HOLDING_IDENTITY_FIELDS = ['platformId', 'symbol', 'providerSymbol', 'assetType', 'exchange', 'quoteCurrency']
 const INVESTMENT_TRADE_EDITABLE_FIELDS = ['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros', 'note']
@@ -585,6 +585,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   const investmentPlatforms = Array.isArray(nextState.investmentPlatforms) ? nextState.investmentPlatforms : []
   const investmentHoldings = Array.isArray(nextState.investmentHoldings) ? nextState.investmentHoldings : []
   const investmentTrades = Array.isArray(nextState.investmentTrades) ? nextState.investmentTrades : []
+  const investmentTransfers = Array.isArray(nextState.investmentTransfers) ? nextState.investmentTransfers : []
   const previousAccounts = recordsById(currentState.accounts)
   const previousMovements = recordsById(currentState.movements)
   const previousDimensions = recordsById(currentState.dimensions)
@@ -857,6 +858,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
     platforms: investmentPlatforms,
     holdings: investmentHoldings,
     trades: investmentTrades,
+    transfers: investmentTransfers,
     movements,
   })
   investmentValidation.errors.forEach((error) => errors.push({
@@ -879,6 +881,8 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
     if (!previousHolding) continue
     const hasSavedTrade = investmentTrades.some((trade) => trade.holdingId === holding.id)
       || (currentState.investmentTrades || []).some((trade) => trade.holdingId === holding.id)
+      || investmentTransfers.some((transfer) => transfer.sourceHoldingId === holding.id || transfer.destinationHoldingId === holding.id)
+      || (currentState.investmentTransfers || []).some((transfer) => transfer.sourceHoldingId === holding.id || transfer.destinationHoldingId === holding.id)
     if (!hasSavedTrade) continue
     for (const field of INVESTMENT_HOLDING_IDENTITY_FIELDS) {
       if (previousHolding[field] === holding[field]) continue
@@ -894,6 +898,23 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
   for (const previousTrade of currentState.investmentTrades || []) {
     if (investmentTrades.some((trade) => trade.id === previousTrade.id)) continue
     errors.push({ code: 'investment-trade-deletion-not-allowed', recordType: 'investmentTrades', id: previousTrade.id, message: 'ألغ عملية الاستثمار بدل حذفها من مسار الحفظ.' })
+  }
+  for (const previousTransfer of currentState.investmentTransfers || []) {
+    const transfer = investmentTransfers.find((item) => item.id === previousTransfer.id)
+    if (!transfer || !isDeepStrictEqual(transfer, previousTransfer)) {
+      errors.push({ code: 'investment-transfer-immutable', recordType: 'investmentTransfers', id: previousTransfer.id, message: 'النقل المحفوظ ثابت. سجّل نقلًا عكسيًا لتصحيحه.' })
+    }
+  }
+  for (const transfer of investmentTransfers) {
+    if ((currentState.investmentTransfers || []).some((item) => item.id === transfer.id)) continue
+    const hasAudit = auditEvents.some((event) => event?.id && !previousAuditEventIds.has(cleanId(event.id))
+      && event.action === 'investment.transfer.created' && validTimestamp(event.createdAt)
+      && event.details?.transferId === transfer.id && event.details?.asset === transfer.asset
+      && event.details?.fromPlatformId === transfer.fromPlatformId
+      && event.details?.toPlatformId === transfer.toPlatformId)
+    if (!hasAudit) {
+      errors.push({ code: 'investment-transfer-audit-required', recordType: 'investmentTransfers', id: transfer.id, message: 'النقل يحتاج سجلًا مطابقًا قبل الحفظ.' })
+    }
   }
   for (const trade of investmentTrades) {
     const previousTrade = (currentState.investmentTrades || []).find((item) => item.id === trade.id)
@@ -917,7 +938,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
     }
     const financialChanged = ['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros']
       .some((field) => !isDeepStrictEqual(previousTrade[field], trade[field]))
-    if (financialChanged && investmentOpeningTradeIsLocked(previousTrade, investmentTrades)) {
+    if (financialChanged && investmentOpeningTradeIsLocked(previousTrade, investmentTrades, investmentTransfers)) {
       errors.push({ code: 'investment-opening-trade-locked', recordType: 'investmentTrades', id: trade.id, message: 'القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة.' })
       continue
     }
