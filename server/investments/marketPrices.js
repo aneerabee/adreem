@@ -1,6 +1,10 @@
 const DEFAULT_TWELVE_DATA_URL = 'https://api.twelvedata.com'
 const DEFAULT_BINANCE_DATA_URL = 'https://api.binance.com'
 const DEFAULT_CACHE_MS = 5 * 60 * 1000
+const MAX_QUOTE_CLOCK_SKEW_MS = 5 * 60 * 1000
+const MAX_OPEN_MARKET_QUOTE_AGE_MS = 2 * 60 * 60 * 1000
+const MAX_FX_QUOTE_AGE_MS = 7 * 24 * 60 * 60 * 1000
+const MAX_USDT_QUOTE_AGE_MS = 60 * 60 * 1000
 const MAX_PRICE_ITEMS = 40
 const MAX_CACHE_ENTRIES = 500
 const MAX_SEARCH_RESULTS = 15
@@ -106,11 +110,30 @@ function pruneExpired(cache, currentTime) {
   }
 }
 
-function priceFromPayload(payload, symbol, singleSymbol) {
+function quoteTime(candidate, currentTime) {
+  for (const value of [candidate?.last_quote_at, candidate?.timestamp]) {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric) || numeric <= 0) continue
+    const millis = numeric < 1_000_000_000_000 ? numeric * 1_000 : numeric
+    if (millis < Date.UTC(2000, 0, 1) || millis > currentTime + MAX_QUOTE_CLOCK_SKEW_MS) continue
+    return new Date(millis).toISOString()
+  }
+  return null
+}
+
+function quoteFromPayload(payload, symbol, singleSymbol, currentTime) {
   const candidate = singleSymbol ? payload : payload?.[symbol]
-  const price = Number(candidate?.price)
+  const price = Number(candidate?.close ?? candidate?.price)
   if (candidate?.status === 'error' || !Number.isFinite(price) || price <= 0) return null
-  return price
+  return {
+    price,
+    quotedAt: quoteTime(candidate, currentTime),
+    marketOpen: typeof candidate?.is_market_open === 'boolean' ? candidate.is_market_open : null,
+  }
+}
+
+function quoteIsStale(quote, currentTime, maxAgeMs) {
+  return !quote?.quotedAt || currentTime - new Date(quote.quotedAt).getTime() > maxAgeMs
 }
 
 function priceFailureMessage(payload, usingDemoAccess) {
@@ -178,6 +201,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
   const cacheMs = Math.max(10_000, Number(options.cacheMs || env.ADREEM_MARKET_PRICE_CACHE_MS || DEFAULT_CACHE_MS))
   const cache = new Map()
   const searchCache = new Map()
+  let usdtUsdCache = null
 
   function providerHeaders(apiKey) {
     return { accept: 'application/json', authorization: `apikey ${apiKey}` }
@@ -191,9 +215,27 @@ export function createMarketPriceService(env = process.env, options = {}) {
     return `${base}USDT`
   }
 
+  async function fetchUsdtUsdRate() {
+    const apiKey = String(env.TWELVE_DATA_API_KEY || '').trim()
+    if (!apiKey) return null
+    if (usdtUsdCache && usdtUsdCache.expiresAt > now()) return usdtUsdCache.quote
+    const endpoint = new URL('/quote', String(env.TWELVE_DATA_API_URL || DEFAULT_TWELVE_DATA_URL).replace(/\/+$/, ''))
+    endpoint.searchParams.set('symbol', 'USDT/USD')
+    try {
+      const response = await fetchImpl(endpoint, { headers: providerHeaders(apiKey), signal: AbortSignal.timeout(8_000) })
+      if (!response.ok) return null
+      const quote = quoteFromPayload(await response.json(), 'USDT/USD', true, now())
+      if (quoteIsStale(quote, now(), MAX_USDT_QUOTE_AGE_MS)) return null
+      usdtUsdCache = { quote, expiresAt: now() + Math.min(cacheMs, 60_000) }
+      return quote
+    } catch {
+      return null
+    }
+  }
+
   async function fetchBinancePrice(item) {
     const tickerSymbol = binanceTickerSymbol(item)
-    if (!tickerSymbol) return null
+    if (!tickerSymbol || !String(env.TWELVE_DATA_API_KEY || '').trim()) return null
     const endpoint = new URL('/api/v3/ticker/price', String(env.ADREEM_BINANCE_API_URL || DEFAULT_BINANCE_DATA_URL).replace(/\/+$/, ''))
     endpoint.searchParams.set('symbol', tickerSymbol)
     let response
@@ -205,7 +247,9 @@ export function createMarketPriceService(env = process.env, options = {}) {
     const payload = await response.json().catch(() => ({}))
     const price = Number(payload?.price)
     if (!response.ok || !Number.isFinite(price) || price <= 0) return null
-    const priceUsdMicros = usdMicros(price)
+    const usdtUsd = await fetchUsdtUsdRate()
+    if (!usdtUsd) return null
+    const priceUsdMicros = usdMicros(price * usdtUsd.price)
     if (!priceUsdMicros) return null
     const refreshedAt = new Date(now()).toISOString()
     const result = {
@@ -215,7 +259,10 @@ export function createMarketPriceService(env = process.env, options = {}) {
       nativePriceMicros: priceUsdMicros,
       priceUsdMicros,
       refreshedAt,
-      source: 'binance-usdt',
+      quotedAt: null,
+      fxQuotedAt: usdtUsd.quotedAt,
+      marketOpen: true,
+      source: 'binance-usdt+twelve-data-usdt-usd',
       cached: false,
       ok: true,
     }
@@ -235,7 +282,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
 
     const currencies = Array.from(new Set(items.map((item) => item.quoteCurrency).filter((currency) => currency !== 'USD')))
     const symbols = Array.from(new Set([...items.map((item) => item.symbol), ...currencies.map((currency) => `${currency}/USD`)]))
-    const endpoint = new URL('/price', String(env.TWELVE_DATA_API_URL || DEFAULT_TWELVE_DATA_URL).replace(/\/+$/, ''))
+    const endpoint = new URL('/quote', String(env.TWELVE_DATA_API_URL || DEFAULT_TWELVE_DATA_URL).replace(/\/+$/, ''))
     endpoint.searchParams.set('symbol', symbols.join(','))
     let response
     try {
@@ -268,16 +315,24 @@ export function createMarketPriceService(env = process.env, options = {}) {
     const singleSymbol = symbols.length === 1
     const refreshedAt = new Date(now()).toISOString()
     return Promise.all(items.map(async (item) => {
-      const nativePrice = priceFromPayload(payload, item.symbol, singleSymbol)
-      const fxPrice = item.quoteCurrency === 'USD'
-        ? 1
-        : priceFromPayload(payload, `${item.quoteCurrency}/USD`, false)
-      if (!nativePrice || !fxPrice) {
-        const failedPayload = !nativePrice ? (singleSymbol ? payload : payload?.[item.symbol]) : payload?.[`${item.quoteCurrency}/USD`]
+      const nativeQuote = quoteFromPayload(payload, item.symbol, singleSymbol, now())
+      const fxQuote = item.quoteCurrency === 'USD'
+        ? { price: 1, quotedAt: null }
+        : quoteFromPayload(payload, `${item.quoteCurrency}/USD`, false, now())
+      const fxAgeLimit = fxQuote?.marketOpen === true ? MAX_OPEN_MARKET_QUOTE_AGE_MS : MAX_FX_QUOTE_AGE_MS
+      if (!nativeQuote || !fxQuote || (item.quoteCurrency !== 'USD' && quoteIsStale(fxQuote, now(), fxAgeLimit))) {
+        const failedPayload = !nativeQuote ? (singleSymbol ? payload : payload?.[item.symbol]) : payload?.[`${item.quoteCurrency}/USD`]
+        if (nativeQuote && fxQuote && item.quoteCurrency !== 'USD') {
+          return { id: item.id, symbol: item.symbol, ok: false, error: 'سعر تحويل العملة قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.' }
+        }
         return withCryptoFallback(item, { id: item.id, symbol: item.symbol, ok: false, error: priceFailureMessage(failedPayload, usingDemoAccess) })
       }
-      const nativeMicros = usdMicros(nativePrice)
-      const priceUsdMicros = usdMicros(nativePrice * fxPrice)
+      const nativeAgeLimit = nativeQuote.marketOpen === true ? MAX_OPEN_MARKET_QUOTE_AGE_MS : MAX_FX_QUOTE_AGE_MS
+      if (quoteIsStale(nativeQuote, now(), nativeAgeLimit)) {
+        return { id: item.id, symbol: item.symbol, ok: false, error: 'سعر السوق قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.' }
+      }
+      const nativeMicros = usdMicros(nativeQuote.price)
+      const priceUsdMicros = usdMicros(nativeQuote.price * fxQuote.price)
       if (!nativeMicros || !priceUsdMicros) return { id: item.id, symbol: item.symbol, ok: false, error: 'السعر المستلم غير صالح.' }
       const result = {
         id: item.id,
@@ -286,6 +341,9 @@ export function createMarketPriceService(env = process.env, options = {}) {
         nativePriceMicros: nativeMicros,
         priceUsdMicros,
         refreshedAt,
+        quotedAt: nativeQuote.quotedAt,
+        fxQuotedAt: fxQuote.quotedAt,
+        marketOpen: nativeQuote.marketOpen,
         source: 'twelve-data',
         cached: false,
         ok: true,

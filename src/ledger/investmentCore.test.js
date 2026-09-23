@@ -3,6 +3,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
   INVESTMENT_ASSET_TYPES,
   INVESTMENT_TRADE_TYPES,
+  applyInvestmentMarketPrice,
   applyInvestmentTradeEditPriceFallback,
   applyInvestmentTradePriceFallback,
   buildSmallInvestmentClosure,
@@ -216,6 +217,7 @@ describe('investment portfolio core', () => {
       lastPriceUsdMicros: usdToMicros(105),
       lastPriceNativeMicros: usdToMicros(105),
       lastPriceAt: '2026-01-02T00:00:00.000Z',
+      lastPriceQuotedAt: '2026-01-02T00:00:00.000Z',
       lastPriceSource: 'trade',
     }))
     expect(applyInvestmentTradePriceFallback(holding, buy)).toBe(holding)
@@ -532,6 +534,32 @@ describe('investment portfolio core', () => {
       lastPriceNativeMicros: usdToMicros(120), previousPriceNativeMicros: usdToMicros(100),
       lastPriceUsdMicros: usdToMicros(3), previousPriceUsdMicros: usdToMicros(4),
     })).toEqual({ direction: 'up', percent: 20 })
+  })
+
+  it('preserves the last actual price change when a later check returns the same quote', () => {
+    const holding = {
+      lastPriceUsdMicros: usdToMicros(120), lastPriceNativeMicros: usdToMicros(120),
+      previousPriceUsdMicros: usdToMicros(110), previousPriceNativeMicros: usdToMicros(110),
+      lastPriceAt: '2026-09-22T12:00:00.000Z', previousPriceAt: '2026-09-22T10:00:00.000Z',
+    }
+    const same = applyInvestmentMarketPrice(holding, {
+      priceUsdMicros: usdToMicros(120), nativePriceMicros: usdToMicros(120),
+      refreshedAt: '2026-09-23T12:00:00.000Z', quotedAt: '2026-09-22T12:00:00.000Z',
+      marketOpen: false, source: 'twelve-data',
+    })
+    const changed = applyInvestmentMarketPrice(same, {
+      priceUsdMicros: usdToMicros(130), nativePriceMicros: usdToMicros(130),
+      refreshedAt: '2026-09-23T14:00:00.000Z', quotedAt: '2026-09-23T13:59:00.000Z',
+      marketOpen: true, source: 'twelve-data',
+    })
+
+    expect(investmentPriceDirection(same)).toBe('up')
+    expect(same.previousPriceUsdMicros).toBe(usdToMicros(110))
+    expect(same.lastPriceAt).toBe('2026-09-23T12:00:00.000Z')
+    expect(same.lastPriceQuotedAt).toBe('2026-09-22T12:00:00.000Z')
+    expect(changed.previousPriceUsdMicros).toBe(usdToMicros(120))
+    expect(changed.previousPriceAt).toBe(same.lastPriceAt)
+    expect(holding).not.toHaveProperty('lastPriceQuotedAt')
   })
 
   it('schedules the complete portfolio refresh from the oldest confirmed price', () => {

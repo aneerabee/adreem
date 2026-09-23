@@ -31,7 +31,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentMarketPrice, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -6484,6 +6484,9 @@ export default function LedgerApp() {
         lastPriceUsdMicros: priceUsdMicros,
         lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : 0,
         lastPriceAt: updatedAt,
+        lastPriceQuotedAt: updatedAt,
+        lastPriceFxQuotedAt: null,
+        lastPriceMarketOpen: null,
         lastPriceSource: 'manual',
         updatedAt,
       } : holding),
@@ -6519,17 +6522,7 @@ export default function LedgerApp() {
         ...current,
         investmentHoldings: (current.investmentHoldings || []).map((holding) => {
           const price = prices.get(holding.id)
-          return price ? {
-            ...holding,
-            previousPriceUsdMicros: Number(holding.lastPriceUsdMicros || 0),
-            previousPriceNativeMicros: Number(holding.lastPriceNativeMicros || 0),
-            previousPriceAt: holding.lastPriceAt || null,
-            lastPriceUsdMicros: price.priceUsdMicros,
-            lastPriceNativeMicros: price.nativePriceMicros,
-            lastPriceAt: price.refreshedAt,
-            lastPriceSource: price.source,
-            updatedAt: price.refreshedAt,
-          } : holding
+          return price ? applyInvestmentMarketPrice(holding, price) : holding
         }),
         auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.prices.refreshed', { holdingIds: updatedIds })],
       }))

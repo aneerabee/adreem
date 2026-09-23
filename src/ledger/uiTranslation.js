@@ -172,6 +172,11 @@ const ENGLISH_TEXT = Object.freeze({
   'تكلفة المتبقي': 'Remaining cost',
   'آخر تحديث': 'Last update',
   'آخر سعر': 'Last price',
+  'آخر تحقق': 'Last check',
+  'وقت السعر': 'Price time',
+  'وقت الإدخال': 'Entry time',
+  'وقت الصرف': 'FX rate time',
+  'إغلاق السوق': 'Market close',
   'لم يتحدث': 'Not updated',
   'السعر السابق': 'Previous price',
   'السعر بالدولار': 'Price in USD',
@@ -195,6 +200,7 @@ const ENGLISH_TEXT = Object.freeze({
   'حفظ السعر': 'Save price',
   'السعر الحالي USD': 'Current price in USD',
   'بدون سعر': 'No price',
+  'فحص كل ساعتين أثناء الاستخدام · ويمكن إدخال السعر يدويًا': 'Checks every two hours while in use · Manual price is also available',
   'تلقائي كل ساعتين · ويمكن إدخال السعر يدويًا': 'Automatic every two hours · Manual price is also available',
   'متوسط الشراء': 'Average cost',
   'وقت الشراء': 'At purchase',
@@ -1394,6 +1400,8 @@ const ENGLISH_TEXT = Object.freeze({
 })
 
 const ENGLISH_PATTERNS = [
+  [/^فحص كل ساعتين أثناء الاستخدام · آخر تحقق (.+)$/u, 'Checks every two hours while in use · Last check $1'],
+  [/^تلقائي كل ساعتين · آخر تحقق (.+)$/u, 'Automatic every two hours · Last check $1'],
   [/^تلقائي كل ساعتين · آخر سعر (.+)$/u, 'Automatic every two hours · Last price $1'],
   [/^السعر الحالي\s+(.+)$/u, 'Current price $1'],
   [/^الخطوة\s+(.+)\s+من\s+(.+)$/u, 'Step $1 of $2'],

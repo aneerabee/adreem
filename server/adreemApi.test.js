@@ -112,7 +112,7 @@ describe('ADREEM web API auth helpers', () => {
         }
       }
       expect(endpoint.searchParams.get('symbol')).toBe('AAPL:XNAS')
-      return { ok: true, json: async () => ({ price: '190' }) }
+      return { ok: true, json: async () => ({ close: '190', last_quote_at: Math.floor(Date.now() / 1000) }) }
     })
     vi.stubGlobal('fetch', providerFetch)
     const file = tempRegistry([

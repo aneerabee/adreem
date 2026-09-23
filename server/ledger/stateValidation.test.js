@@ -685,7 +685,7 @@ describe('server ledger state validation', () => {
     }
     const updatedPrice = {
       ...current,
-      investmentHoldings: [{ ...holding, lastPriceUsdMicros: usdToMicros(105), lastPriceAt: validationNow, updatedAt: validationNow }],
+      investmentHoldings: [{ ...holding, lastPriceUsdMicros: usdToMicros(105), lastPriceAt: validationNow, lastPriceQuotedAt: at, lastPriceFxQuotedAt: validationNow, lastPriceMarketOpen: false, updatedAt: validationNow }],
     }
 
     expect(validateLedgerStateTransition(changedIdentity, current, { now: validationNow }).errors).toContainEqual(expect.objectContaining({

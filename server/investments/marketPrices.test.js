@@ -38,17 +38,22 @@ describe('investment market prices', () => {
       return {
         ok: true,
         json: async () => ({
-          'THYAO:BIST': { price: '300' },
-          'TRY/USD': { price: '0.03' },
+          'THYAO:BIST': { close: '300', last_quote_at: 1_800_000_000, is_market_open: false },
+          'TRY/USD': { close: '0.03', last_quote_at: 1_800_000_000 },
         }),
       }
     })
     const service = createMarketPriceService({ TWELVE_DATA_API_KEY: 'secret' }, { fetchImpl, now: () => 1_800_000_000_000 })
     const first = await service.refresh({ items: [{ id: 'holding-1', providerSymbol: 'THYAO:BIST', quoteCurrency: 'TRY' }] })
     const second = await service.refresh({ items: [{ id: 'holding-1', providerSymbol: 'THYAO:BIST', quoteCurrency: 'TRY' }] })
-    expect(first.prices[0]).toMatchObject({ ok: true, priceUsdMicros: 9_000_000, nativePriceMicros: 300_000_000, cached: false })
+    expect(first.prices[0]).toMatchObject({
+      ok: true, priceUsdMicros: 9_000_000, nativePriceMicros: 300_000_000,
+      quotedAt: '2027-01-15T08:00:00.000Z', fxQuotedAt: '2027-01-15T08:00:00.000Z',
+      marketOpen: false, cached: false,
+    })
     expect(second.prices[0].cached).toBe(true)
     expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(new URL(fetchImpl.mock.calls[0][0]).pathname).toBe('/quote')
     expect(fetchImpl.mock.calls[0][1].headers.authorization).toBe('apikey secret')
   })
 
@@ -154,8 +159,8 @@ describe('investment market prices', () => {
   })
 
   it('uses the provider demo access for direct refresh when no private key is configured', async () => {
-    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ price: '125.50' }) }))
-    const service = createMarketPriceService({}, { fetchImpl })
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ close: '125.50', last_quote_at: 1_800_000_000 }) }))
+    const service = createMarketPriceService({}, { fetchImpl, now: () => 1_800_000_000_000 })
     const result = await service.refresh({ items: [{ id: 'a', symbol: 'AAPL', quoteCurrency: 'USD' }] })
 
     expect(result.prices[0]).toMatchObject({ ok: true, priceUsdMicros: 125_500_000 })
@@ -164,8 +169,8 @@ describe('investment market prices', () => {
 
   it('requests a fresh confirmed price for a manual update instead of reusing the short cache', async () => {
     let price = 125
-    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ price: String(price++) }) }))
-    const service = createMarketPriceService({}, { fetchImpl })
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ close: String(price++), last_quote_at: 1_800_000_000 }) }))
+    const service = createMarketPriceService({}, { fetchImpl, now: () => 1_800_000_000_000 })
     const items = [{ id: 'a', symbol: 'AAPL', quoteCurrency: 'USD' }]
 
     expect((await service.refresh({ items })).prices[0]).toMatchObject({ priceUsdMicros: 125_000_000, cached: false })
@@ -177,10 +182,10 @@ describe('investment market prices', () => {
   it('isolates unsupported demo symbols without blocking confirmed prices', async () => {
     const fetchImpl = vi.fn(async (url) => {
       const symbols = new URL(url).searchParams.get('symbol')
-      if (symbols === 'AAPL') return { ok: true, status: 200, json: async () => ({ price: '125.50' }) }
+      if (symbols === 'AAPL') return { ok: true, status: 200, json: async () => ({ close: '125.50', last_quote_at: 1_800_000_000 }) }
       return { ok: false, status: 401, json: async () => ({ status: 'error', message: 'not available' }) }
     })
-    const service = createMarketPriceService({}, { fetchImpl })
+    const service = createMarketPriceService({}, { fetchImpl, now: () => 1_800_000_000_000 })
 
     const result = await service.refresh({ items: [
       { id: 'confirmed', symbol: 'AAPL', quoteCurrency: 'USD' },
@@ -205,11 +210,11 @@ describe('investment market prices', () => {
   it('isolates a restricted market from working stocks and metals with a configured key', async () => {
     const fetchImpl = vi.fn(async (url) => {
       const symbols = new URL(url).searchParams.get('symbol')
-      if (symbols === 'AAPL:NASDAQ') return { ok: true, status: 200, json: async () => ({ price: '210' }) }
-      if (symbols === 'XAU/USD') return { ok: true, status: 200, json: async () => ({ price: '2700' }) }
+      if (symbols === 'AAPL:NASDAQ') return { ok: true, status: 200, json: async () => ({ close: '210', last_quote_at: 1_800_000_000 }) }
+      if (symbols === 'XAU/USD') return { ok: true, status: 200, json: async () => ({ close: '2700', last_quote_at: 1_800_000_000 }) }
       return { ok: false, status: 401, json: async () => ({ status: 'error', code: 401 }) }
     })
-    const service = createMarketPriceService({ TWELVE_DATA_API_KEY: 'configured-key' }, { fetchImpl })
+    const service = createMarketPriceService({ TWELVE_DATA_API_KEY: 'configured-key' }, { fetchImpl, now: () => 1_800_000_000_000 })
     const result = await service.refresh({ items: [
       { id: 'stock', symbol: 'AAPL:NASDAQ', quoteCurrency: 'USD' },
       { id: 'turkey', symbol: 'THYAO:BIST', quoteCurrency: 'TRY' },
@@ -224,7 +229,7 @@ describe('investment market prices', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(4)
   })
 
-  it('refreshes Binance crypto prices when the primary demo feed has no quote', async () => {
+  it('converts Binance USDT prices using a separately confirmed USD quote', async () => {
     const fetchImpl = vi.fn(async (url) => {
       const endpoint = new URL(url)
       if (endpoint.hostname === 'api.binance.com') {
@@ -232,9 +237,12 @@ describe('investment market prices', () => {
         expect(endpoint.searchParams.get('symbol')).toBe('FETUSDT')
         return { ok: true, status: 200, json: async () => ({ symbol: 'FETUSDT', price: '0.17480000' }) }
       }
+      if (endpoint.searchParams.get('symbol') === 'USDT/USD') {
+        return { ok: true, status: 200, json: async () => ({ close: '0.99', last_quote_at: 1_800_000_000 }) }
+      }
       return { ok: false, status: 401, json: async () => ({ status: 'error', message: 'not available' }) }
     })
-    const service = createMarketPriceService({}, { fetchImpl, now: () => 1_800_000_000_000 })
+    const service = createMarketPriceService({ TWELVE_DATA_API_KEY: 'configured-key' }, { fetchImpl, now: () => 1_800_000_000_000 })
 
     const first = await service.refresh({ items: [{ id: 'fet', symbol: 'FET/USD:BINANCE', quoteCurrency: 'USD' }] })
     const second = await service.refresh({ items: [{ id: 'fet', symbol: 'FET/USD:BINANCE', quoteCurrency: 'USD' }] })
@@ -242,13 +250,81 @@ describe('investment market prices', () => {
     expect(first.prices[0]).toMatchObject({
       id: 'fet',
       ok: true,
-      priceUsdMicros: 174_800,
-      nativePriceMicros: 174_800,
-      source: 'binance-usdt',
+      priceUsdMicros: 173_052,
+      nativePriceMicros: 173_052,
+      source: 'binance-usdt+twelve-data-usdt-usd',
       cached: false,
     })
     expect(second.prices[0]).toMatchObject({ ok: true, cached: true })
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not mistake a USDT quote for USD when no conversion source is configured', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({ status: 'error', code: 401 }) }))
+    const service = createMarketPriceService({}, { fetchImpl })
+    const result = await service.refresh({ items: [{ id: 'fet', symbol: 'FET/USD:BINANCE', quoteCurrency: 'USD' }] })
+
+    expect(result.prices[0]).toMatchObject({ ok: false })
+    expect(fetchImpl.mock.calls.every(([url]) => new URL(url).hostname === 'api.twelvedata.com')).toBe(true)
+  })
+
+  it('rejects a stale FX quote rather than valuing a TRY stock in USD incorrectly', async () => {
+    const now = 1_800_000_000_000
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        'THYAO:BIST': { close: '300', last_quote_at: now / 1_000 },
+        'TRY/USD': { close: '0.03', last_quote_at: now / 1_000 - 8 * 24 * 60 * 60 },
+      }),
+    }))
+    const service = createMarketPriceService({ TWELVE_DATA_API_KEY: 'configured-key' }, { fetchImpl, now: () => now })
+    const result = await service.refresh({ items: [{ id: 'holding-1', symbol: 'THYAO:BIST', quoteCurrency: 'TRY' }] })
+
+    expect(result.prices[0]).toMatchObject({ ok: false, error: expect.stringMatching(/تحويل العملة قديم/) })
+  })
+
+  it('rejects a market quote without its own trade timestamp', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ close: '200', is_market_open: true }) }))
+    const service = createMarketPriceService({}, { fetchImpl, now: () => 1_800_000_000_000 })
+    const result = await service.refresh({ items: [{ id: 'stock', symbol: 'AAPL', quoteCurrency: 'USD' }] })
+
+    expect(result.prices[0]).toMatchObject({ ok: false, error: expect.stringMatching(/توقيت مؤكد/) })
+  })
+
+  it('rejects an old quote while open and a long-abandoned closed-market quote', async () => {
+    const now = 1_800_000_000_000
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        AAPL: { close: '200', last_quote_at: now / 1_000 - 3 * 60 * 60, is_market_open: true },
+        'XAU/USD': { close: '2700', last_quote_at: now / 1_000 - 8 * 24 * 60 * 60, is_market_open: false },
+      }),
+    }))
+    const service = createMarketPriceService({ TWELVE_DATA_API_KEY: 'configured-key' }, { fetchImpl, now: () => now })
+    const result = await service.refresh({ items: [
+      { id: 'stock', symbol: 'AAPL', quoteCurrency: 'USD' },
+      { id: 'gold', symbol: 'XAU/USD', quoteCurrency: 'USD' },
+    ] })
+
+    expect(result.prices).toEqual([
+      expect.objectContaining({ id: 'stock', ok: false }),
+      expect.objectContaining({ id: 'gold', ok: false }),
+    ])
+  })
+
+  it('rejects an old FX rate while that market is open', async () => {
+    const now = 1_800_000_000_000
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        'THYAO:BIST': { close: '300', last_quote_at: now / 1_000, is_market_open: false },
+        'TRY/USD': { close: '0.03', last_quote_at: now / 1_000 - 3 * 60 * 60, is_market_open: true },
+      }),
+    }))
+    const service = createMarketPriceService({ TWELVE_DATA_API_KEY: 'configured-key' }, { fetchImpl, now: () => now })
+    const result = await service.refresh({ items: [{ id: 'turkish-stock', symbol: 'THYAO:BIST', quoteCurrency: 'TRY' }] })
+
+    expect(result.prices[0]).toMatchObject({ ok: false, error: expect.stringMatching(/تحويل العملة قديم/) })
   })
 
   it('does not treat a non-Binance or malformed crypto venue as a Binance ticker', async () => {

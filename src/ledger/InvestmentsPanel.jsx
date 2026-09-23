@@ -122,7 +122,7 @@ function InvestmentMarketPrice({ holding, error, onOpen }) {
   const nativePriceMicros = Number(holding.lastPriceNativeMicros || 0)
   const priceMicros = nativePriceMicros || Number(holding.lastPriceUsdMicros || 0)
   const priceCurrency = nativePriceMicros ? holding.quoteCurrency : 'USD'
-  const priceTimestamp = String(holding.lastPriceAt || '')
+  const priceTimestamp = String(holding.lastPriceQuotedAt || '')
   const { direction, percent } = error ? { direction: 'neutral', percent: 0 } : investmentPriceChange(holding)
   const DirectionIcon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus
   const prefersReducedMotion = useReducedMotion()
@@ -133,10 +133,10 @@ function InvestmentMarketPrice({ holding, error, onOpen }) {
       className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${error ? 'is-stale' : ''}`.trim()}
       onClick={() => onOpen(holding)}
       aria-label={priceMicros ? `${error ? 'السعر السابق' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} ${priceCurrency}` : 'إدخال السعر الحالي'}
-      title={error || 'إدخال سعر يدوي'}
+      title={error || (holding.lastPriceQuotedAt ? `وقت السعر: ${activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
     >
       <small>
-        <span>{error ? 'لم يتحدث' : 'آخر سعر'} {error ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
+        <span>{error ? 'لم يتحدث' : holding.lastPriceMarketOpen === false ? 'إغلاق السوق' : 'آخر سعر'} {error ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
         {direction !== 'neutral' ? <em><DirectionIcon aria-hidden="true" size={11} />{Math.abs(percent).toLocaleString('en-US', { maximumFractionDigits: 2 })}%</em> : null}
       </small>
       <strong aria-live="polite">
@@ -611,7 +611,7 @@ export default function InvestmentsPanel({
       <div className="adreem-investment-toolbar">
         <label><Search aria-hidden="true" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث باسم أو رمز" /></label>
         <small className={firstPriceError ? 'is-price-error' : undefined} role={firstPriceError ? 'status' : undefined}>
-          {firstPriceError ? <><AlertCircle aria-hidden="true" size={13} />{firstPriceError}</> : latestPriceAt ? `تلقائي كل ساعتين · آخر سعر ${new Date(latestPriceAt).toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'short', timeStyle: 'short' })}` : 'تلقائي كل ساعتين · ويمكن إدخال السعر يدويًا'}
+          {firstPriceError ? <><AlertCircle aria-hidden="true" size={13} />{firstPriceError}</> : latestPriceAt ? `فحص كل ساعتين أثناء الاستخدام · آخر تحقق ${new Date(latestPriceAt).toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'short', timeStyle: 'short' })}` : 'فحص كل ساعتين أثناء الاستخدام · ويمكن إدخال السعر يدويًا'}
         </small>
       </div>
 
@@ -707,7 +707,8 @@ export default function InvestmentsPanel({
                           <span><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
                           <span><small>تكلفة المتبقي</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
                           {row.holding.quoteCurrency !== 'USD' && row.holding.lastPriceUsdMicros ? <span><small>السعر بالدولار</small><strong>{usdUnitMicros(row.holding.lastPriceUsdMicros)}</strong></span> : null}
-                          <span><small>آخر تحديث</small><strong>{row.holding.lastPriceAt ? activityDate(row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
+                          <span><small>{row.holding.lastPriceQuotedAt ? 'وقت السعر' : ['manual', 'trade', 'opening'].includes(row.holding.lastPriceSource) ? 'وقت الإدخال' : 'آخر تحقق'}</small><strong>{row.holding.lastPriceQuotedAt || row.holding.lastPriceAt ? activityDate(row.holding.lastPriceQuotedAt || row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
+                          {row.holding.lastPriceFxQuotedAt ? <span><small>وقت الصرف</small><strong>{activityDate(row.holding.lastPriceFxQuotedAt)}</strong></span> : null}
                           {priceErrors[row.holding.id] ? <p className="is-error"><AlertCircle aria-hidden="true" size={13} />{priceErrors[row.holding.id]}</p> : null}
                           {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
                         </div> : null}

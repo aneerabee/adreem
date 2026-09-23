@@ -74,7 +74,26 @@ describe('investments panel', () => {
     expect(html).toContain('600 USD')
     expect(html).toContain('+100 USD')
     expect(html).toContain('is-profit-positive')
-    expect(html).toContain('تلقائي كل ساعتين')
+    expect(html).toContain('فحص كل ساعتين أثناء الاستخدام')
+  })
+
+  it('labels a closed-market quote without presenting the request time as the trade time', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'Midas' })
+    const holding = createInvestmentHolding({
+      id: 'holding-1', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO',
+      quoteCurrency: 'TRY', lastPriceUsdMicros: usdToMicros(9), lastPriceNativeMicros: usdToMicros(300),
+      lastPriceAt: '2026-09-23T11:00:00.000Z', lastPriceQuotedAt: '2026-09-22T15:00:00.000Z',
+      lastPriceFxQuotedAt: '2026-09-23T10:59:00.000Z', lastPriceMarketOpen: false,
+    })
+    const summary = {
+      platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 100_000_000, costBasisUsdMicros: usdToMicros(8), marketValueUsdMicros: usdToMicros(9), unrealizedProfitUsdMicros: usdToMicros(1) }] }],
+      totalValueUsdMicros: usdToMicros(9),
+    }
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
+
+    expect(html).toContain('إغلاق السوق')
+    expect(html).toContain('وقت السعر:')
+    expect(html).toContain('فحص كل ساعتين أثناء الاستخدام')
   })
 
   it('shows the local market price and a specific refresh failure without changing the USD valuation', () => {
