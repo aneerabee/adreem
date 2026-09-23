@@ -112,6 +112,22 @@ describe('investments panel', () => {
     expect(html).toContain('300 TRY')
   })
 
+  it('attributes a US daily close on the holding and labels it as an end-of-day price', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-us', name: 'IBKR' })
+    const holding = createInvestmentHolding({
+      id: 'holding-us', platformId: platform.id, name: 'Apple Inc.', symbol: 'AAPL',
+      providerSymbol: 'AAPL:TGM', marketDataMode: 'provider', quoteCurrency: 'USD',
+      lastPriceUsdMicros: usdToMicros(190.25), lastPriceNativeMicros: usdToMicros(190.25),
+      lastPriceSource: 'tgmcharts-eod', lastPriceQuotedAt: '2027-01-14T00:00:00.000Z',
+      lastPriceMarketOpen: false,
+    })
+    const summary = { platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 100_000_000, costBasisUsdMicros: usdToMicros(180), marketValueUsdMicros: usdToMicros(190.25), unrealizedProfitUsdMicros: usdToMicros(10.25) }] }], totalValueUsdMicros: usdToMicros(190.25) }
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
+    expect(html).toContain('href="https://tgmcharts.com/"')
+    expect(html).toContain('إغلاق يومي')
+    expect(html).not.toContain('03:00')
+  })
+
   it('shows the local market price and a specific refresh failure without changing the USD valuation', () => {
     const platform = createInvestmentPlatform({ id: 'platform-try', name: 'Midas' })
     const holding = createInvestmentHolding({

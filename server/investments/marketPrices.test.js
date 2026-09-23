@@ -85,8 +85,61 @@ describe('investment market prices', () => {
     const fetchImpl = vi.fn()
     const service = createMarketPriceService({ ADREEM_TWELVE_STOCK_DISPLAY_LICENSED: 'true' }, { fetchImpl, now: () => NOW })
     expect((await service.refresh({ items: [stock] })).prices[0]).toMatchObject({ ok: false, error: expect.stringMatching(/يدوي/) })
-    expect((await service.search({ query: 'Apple', quoteCurrency: 'USD', assetType: 'stock' })).mode).toBe('manual')
+    expect((await service.search({ query: 'Apple Inc.', quoteCurrency: 'USD', assetType: 'stock' })).mode).toBe('daily-close')
     expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('finds an exact US ticker and refreshes only its verified daily close', async () => {
+    const payload = { symbol: 'AAPL', name: 'Apple Inc.', currency: 'USD', price: { lastClose: 190.25, lastCloseDate: '2027-01-14' } }
+    const fetchImpl = vi.fn(async () => response(payload))
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    const search = await service.search({ query: 'AAPL', quoteCurrency: 'USD', assetType: 'stock' })
+    expect(search).toMatchObject({ mode: 'daily-close', results: [expect.objectContaining({ providerSymbol: 'AAPL:TGM', name: 'Apple Inc.' })] })
+    const holding = { id: 'apple', symbol: 'AAPL', providerSymbol: 'AAPL:TGM', exchange: '', quoteCurrency: 'USD', assetType: 'stock', status: 'active', marketDataMode: 'provider' }
+    expect(marketPriceItemsForHoldings({ ids: ['apple'] }, { investmentHoldings: [holding] })[0].symbol).toBe('AAPL:TGM')
+    const first = await service.refresh({ items: [{ id: 'apple', symbol: 'AAPL:TGM', quoteCurrency: 'USD', assetType: 'stock' }] })
+    const cached = await service.refresh({ items: [{ id: 'apple', symbol: 'AAPL:TGM', quoteCurrency: 'USD', assetType: 'stock' }] })
+    expect(first.prices[0]).toMatchObject({ ok: true, priceUsdMicros: 190_250_000, nativePriceMicros: 190_250_000, quotedAt: '2027-01-14T00:00:00.000Z', source: 'tgmcharts-eod', marketOpen: false })
+    expect(cached.prices[0]).toMatchObject({ ok: true, cached: true })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl.mock.calls.every(([url]) => new URL(url).pathname === '/api/v1/summary/AAPL')).toBe(true)
+  })
+
+  it('rejects mismatched, stale, missing or wrong-currency US closing prices', async () => {
+    const valid = { symbol: 'AAPL', name: 'Apple Inc.', currency: 'USD', price: { lastClose: 190.25, lastCloseDate: '2027-01-14' } }
+    const invalid = [
+      { ...valid, symbol: 'MSFT' },
+      { ...valid, currency: 'EUR' },
+      { ...valid, price: { ...valid.price, lastClose: -1 } },
+      { ...valid, price: { ...valid.price, lastCloseDate: '2026-12-01' } },
+      { ...valid, price: { ...valid.price, lastCloseDate: '' } },
+    ]
+    for (const payload of invalid) {
+      const service = createMarketPriceService({}, { fetchImpl: async () => response(payload), now: () => NOW })
+      expect((await service.refresh({ items: [{ id: 'apple', symbol: 'AAPL:TGM', quoteCurrency: 'USD', assetType: 'stock' }] })).prices[0].ok).toBe(false)
+      expect((await service.search({ query: 'AAPL', quoteCurrency: 'USD', assetType: 'stock' })).results).toEqual([])
+    }
+  })
+
+  it('does not price manual US holdings or mistake a fund for a stock', async () => {
+    const payload = { symbol: 'SPY', name: 'SPDR S&P 500 ETF', currency: 'USD', price: { lastClose: 700, lastCloseDate: '2027-01-14' } }
+    const fetchImpl = vi.fn(async () => response(payload))
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    expect((await service.search({ query: 'SPY', quoteCurrency: 'USD', assetType: 'stock' })).results).toEqual([])
+    expect((await service.search({ query: 'SPY', quoteCurrency: 'USD', assetType: 'fund' })).results)
+      .toEqual([expect.objectContaining({ providerSymbol: 'SPY:TGM', assetType: 'fund' })])
+    expect((await service.refresh({ items: [{ id: 'manual', symbol: 'SPY:TGM', quoteCurrency: 'USD', assetType: 'fund', marketDataMode: 'manual' }] })).prices[0].ok).toBe(false)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps US price failures isolated when the free source has no symbol or is rate-limited', async () => {
+    const fetchImpl = vi.fn(async () => response({}, 404))
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    expect((await service.search({ query: 'ZZZZ', quoteCurrency: 'USD', assetType: 'stock' })).results).toEqual([])
+    expect((await service.refresh({ items: [{ id: 'missing', symbol: 'ZZZZ:TGM', quoteCurrency: 'USD', assetType: 'stock' }] })).prices[0].ok).toBe(false)
+    expect(fetchImpl.mock.calls.every(([url]) => new URL(url).hostname === 'tgmcharts.com')).toBe(true)
+    const limited = createMarketPriceService({}, { fetchImpl: vi.fn(async () => response({}, 429)), now: () => NOW })
+    expect((await limited.refresh({ items: [{ id: 'apple', symbol: 'AAPL:TGM', quoteCurrency: 'USD', assetType: 'stock' }] })).prices[0].ok).toBe(false)
   })
 
   it('refreshes US stock quotes with confirmed timestamps only when licensed', async () => {

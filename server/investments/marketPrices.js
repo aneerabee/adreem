@@ -1,12 +1,14 @@
-import { freeReferenceSymbol, isAutoPricedHolding } from '../../src/ledger/investmentMarketPolicy.js'
+import { freeReferenceSymbol, isAutoPricedHolding, isTgmEodHolding } from '../../src/ledger/investmentMarketPolicy.js'
 
 const DEFAULT_TWELVE_DATA_URL = 'https://api.twelvedata.com'
 const DEFAULT_GOLD_DATA_URL = 'https://api.gold-api.com'
+const DEFAULT_TGM_DATA_URL = 'https://tgmcharts.com'
 const ECB_FX_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+TRY.EUR.SP00.A?lastNObservations=1&format=jsondata'
 const DEFAULT_CACHE_MS = 5 * 60 * 1000
 const MAX_QUOTE_CLOCK_SKEW_MS = 5 * 60 * 1000
 const MAX_OPEN_MARKET_QUOTE_AGE_MS = 2 * 60 * 60 * 1000
 const MAX_FX_QUOTE_AGE_MS = 7 * 24 * 60 * 60 * 1000
+const TGM_EOD_CACHE_MS = 2 * 60 * 60 * 1000
 const MAX_CRYPTO_QUOTE_AGE_MS = 15 * 60 * 1000
 const MAX_PRICE_ITEMS = 40
 const MAX_CACHE_ENTRIES = 500
@@ -56,6 +58,7 @@ function cleanSearchText(value) {
 function providerSymbolForHolding(holding = {}) {
   const symbol = cleanSymbol(holding.symbol)
   const exchange = cleanSymbol(holding.exchange)
+  if (isTgmEodHolding(holding)) return cleanSymbol(holding.providerSymbol || holding.symbol)
   if (holding.assetType === 'metal' || ['COMMODITY', 'FOREX', 'FX'].includes(exchange)) return symbol || cleanSymbol(holding.providerSymbol).split(':')[0]
   if (symbol && exchange && !symbol.includes(':')) return `${symbol}:${exchange}`
   return cleanSymbol(holding.providerSymbol || symbol)
@@ -312,8 +315,54 @@ export function createMarketPriceService(env = process.env, options = {}) {
       cached: false,
       ok: true,
     }
-    cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
+    cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + (source === 'tgmcharts-eod' ? TGM_EOD_CACHE_MS : cacheMs), result })
     return result
+  }
+
+  async function fetchTgmEodPrice(item) {
+    const ticker = item.symbol.slice(0, -4)
+    const endpoint = new URL(`/api/v1/summary/${ticker}`, String(env.ADREEM_TGM_API_URL || DEFAULT_TGM_DATA_URL).replace(/\/+$/, ''))
+    try {
+      const response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
+      if (!response.ok) return failedPrice(item, 'سعر الإغلاق غير متاح لهذا الرمز. بقي السعر السابق محفوظًا.')
+      const payload = await response.json()
+      const date = String(payload?.price?.lastCloseDate || '')
+      const quotedAt = /^\d{4}-\d{2}-\d{2}$/.test(date) ? isoQuoteTime(`${date}T00:00:00Z`, now()) : null
+      const price = Number(payload?.price?.lastClose)
+      if (cleanSymbol(payload?.symbol) !== ticker || cleanCurrency(payload?.currency) !== 'USD'
+        || !Number.isFinite(price) || price <= 0 || quoteIsStale({ quotedAt }, now(), MAX_FX_QUOTE_AGE_MS)) {
+        return failedPrice(item, 'سعر الإغلاق قديم أو لا يطابق الرمز والدولار. بقي السعر السابق محفوظًا.')
+      }
+      return verifiedPrice(item, { price, quotedAt, marketOpen: false }, { price: 1, quotedAt: null }, 'tgmcharts-eod')
+    } catch {
+      return failedPrice(item, 'تعذر الوصول إلى سعر الإغلاق. بقي السعر السابق محفوظًا.')
+    }
+  }
+
+  async function searchTgmTicker(request) {
+    const ticker = cleanSymbol(request.query)
+    if (!/^[A-Z][A-Z0-9.]{1,9}$/.test(ticker)) return []
+    const endpoint = new URL(`/api/v1/summary/${ticker}`, String(env.ADREEM_TGM_API_URL || DEFAULT_TGM_DATA_URL).replace(/\/+$/, ''))
+    try {
+      const response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
+      if (response.status === 404) return []
+      if (!response.ok) throw new Error('provider unavailable')
+      const payload = await response.json()
+      const name = cleanSearchText(payload?.name)
+      const fundName = /\b(?:ETF|FUND)\b/i.test(name)
+      const typeMatches = request.assetType === 'fund' ? fundName : !fundName
+      const price = Number(payload?.price?.lastClose)
+      const date = String(payload?.price?.lastCloseDate || '')
+      const quotedAt = /^\d{4}-\d{2}-\d{2}$/.test(date) ? isoQuoteTime(`${date}T00:00:00Z`, now()) : null
+      if (cleanSymbol(payload?.symbol) !== ticker || cleanCurrency(payload?.currency) !== 'USD'
+        || !name || !typeMatches || !Number.isFinite(price) || price <= 0
+        || quoteIsStale({ quotedAt }, now(), MAX_FX_QUOTE_AGE_MS)) return []
+      return [{ id: `${ticker}:TGM:USD`, symbol: ticker, providerSymbol: `${ticker}:TGM`, name,
+        exchange: '', instrumentType: request.assetType === 'fund' ? 'ETF' : 'Common Stock',
+        assetType: request.assetType, quoteCurrency: 'USD' }]
+    } catch {
+      throw new MarketPriceError('تعذر التحقق من الرمز الأمريكي الآن.', 502, 'us-market-search-network')
+    }
   }
 
   async function fetchTwelveNativeWithEcb(item, apiKey) {
@@ -427,6 +476,11 @@ export function createMarketPriceService(env = process.env, options = {}) {
         results.set(item.id, result || failedPrice(item, 'السعر المرجعي غير متاح الآن. بقي السعر السابق محفوظًا.'))
       })
     }
+    const usEodItems = items.filter((item) => !results.has(item.id) && isTgmEodHolding(item))
+    for (let offset = 0; offset < usEodItems.length; offset += 4) {
+      const group = await Promise.all(usEodItems.slice(offset, offset + 4).map((item) => fetchTgmEodPrice(item)))
+      group.forEach((result) => results.set(result.id, result))
+    }
     const licensedItems = items.filter((item) => !results.has(item.id) && isAutoPricedHolding(item, licensedStocksEnabled))
     const eodItems = licensedItems.filter((item) => item.quoteCurrency === 'TRY')
     for (let offset = 0; offset < eodItems.length; offset += 4) {
@@ -530,10 +584,12 @@ export function createMarketPriceService(env = process.env, options = {}) {
           && `${asset.symbol} ${asset.name} ${asset.aliases}`.toLocaleLowerCase('en').includes(request.query.toLocaleLowerCase('en')))
           .map((asset) => ({ symbol: asset.symbol, name: asset.name, assetType: asset.assetType, id: asset.symbol, providerSymbol: asset.symbol, exchange: '', quoteCurrency: 'USD' }))
         : []
+      const usEodSearch = !licensedStocksEnabled && request.quoteCurrency === 'USD' && ['stock', 'fund'].includes(request.assetType)
       const result = {
-        results: localResults.length || !licensedStocksEnabled || !['stock', 'fund'].includes(request.assetType)
-          ? localResults : await searchProvider(request),
-        mode: localResults.length ? 'reference' : licensedStocksEnabled && ['stock', 'fund'].includes(request.assetType) ? 'licensed' : 'manual',
+        results: localResults.length ? localResults : usEodSearch ? await searchTgmTicker(request)
+          : licensedStocksEnabled && ['stock', 'fund'].includes(request.assetType) ? await searchProvider(request) : [],
+        mode: localResults.length ? 'reference' : usEodSearch ? 'daily-close'
+          : licensedStocksEnabled && ['stock', 'fund'].includes(request.assetType) ? 'licensed' : 'manual',
         searchedAt: new Date(currentTime).toISOString(),
         cached: false,
       }
