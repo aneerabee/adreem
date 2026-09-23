@@ -32,6 +32,7 @@ import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDime
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
 import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentMarketPrice, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { isAutoPricedHolding } from './investmentMarketPolicy'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -4117,7 +4118,7 @@ export default function LedgerApp() {
     movements,
   }), [ledgerExtras.investmentHoldings, ledgerExtras.investmentPlatforms, ledgerExtras.investmentTrades, movements])
   const investmentPriceRefreshSignature = useMemo(() => (ledgerExtras.investmentHoldings || [])
-    .filter((holding) => holding.status !== INVESTMENT_RECORD_STATUSES.INACTIVE && holding.providerSymbol)
+    .filter((holding) => isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true'))
     .map((holding) => `${holding.id}:${holding.lastPriceAt || ''}`)
     .sort()
     .join('|'), [ledgerExtras.investmentHoldings])
@@ -6503,7 +6504,7 @@ export default function LedgerApp() {
 
   async function refreshInvestmentPrices(force = false) {
     const ids = (ledgerExtras.investmentHoldings || [])
-      .filter((holding) => holding.status !== INVESTMENT_RECORD_STATUSES.INACTIVE && holding.providerSymbol)
+      .filter((holding) => isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true'))
       .map((holding) => holding.id)
     if (!ids.length || isRefreshingInvestmentPrices || investmentPriceRefreshRef.current.isRefreshing) return
     investmentPriceRefreshRef.current.isRefreshing = true
@@ -6547,7 +6548,7 @@ export default function LedgerApp() {
 
   useEffect(() => {
     if (!investmentPriceRefreshSignature) return undefined
-    const firstDelay = investmentPriceRefreshDelay(ledgerExtras.investmentHoldings || [])
+    const firstDelay = investmentPriceRefreshDelay(ledgerExtras.investmentHoldings || [], Date.now(), import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true')
     if (firstDelay === null) return undefined
     const refreshAllPrices = () => {
       const now = Date.now()
@@ -6560,7 +6561,7 @@ export default function LedgerApp() {
     const firstTimer = window.setTimeout(refreshAllPrices, firstDelay)
     const interval = window.setInterval(refreshAllPrices, INVESTMENT_PRICE_REFRESH_INTERVAL_MS)
     const refreshOnReturn = () => {
-      if (document.visibilityState === 'visible' && investmentPriceRefreshDelay(ledgerExtras.investmentHoldings || []) <= INVESTMENT_PRICE_REFRESH_START_DELAY_MS) refreshAllPrices()
+      if (document.visibilityState === 'visible' && investmentPriceRefreshDelay(ledgerExtras.investmentHoldings || [], Date.now(), import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true') <= INVESTMENT_PRICE_REFRESH_START_DELAY_MS) refreshAllPrices()
     }
     document.addEventListener('visibilitychange', refreshOnReturn)
     return () => {

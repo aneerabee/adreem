@@ -74,7 +74,7 @@ describe('investments panel', () => {
     expect(html).toContain('600 USD')
     expect(html).toContain('+100 USD')
     expect(html).toContain('is-profit-positive')
-    expect(html).toContain('فحص كل ساعتين أثناء الاستخدام')
+    expect(html).toContain('الأسعار اليدوية محفوظة حتى تغييرها')
   })
 
   it('labels a closed-market quote without presenting the request time as the trade time', () => {
@@ -93,7 +93,23 @@ describe('investments panel', () => {
 
     expect(html).toContain('إغلاق السوق')
     expect(html).toContain('وقت السعر:')
-    expect(html).toContain('فحص كل ساعتين أثناء الاستخدام')
+    expect(html).toContain('الأسعار اليدوية محفوظة حتى تغييرها')
+  })
+
+  it('shows an end-of-day Turkish quote as a date, never as a fabricated trade time', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'Midas' })
+    const holding = createInvestmentHolding({
+      id: 'holding-eod', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO',
+      quoteCurrency: 'TRY', lastPriceUsdMicros: usdToMicros(9), lastPriceNativeMicros: usdToMicros(300),
+      lastPriceSource: 'twelve-data-eod+ecb-fx', lastPriceQuotedAt: '2027-01-15T00:00:00.000Z',
+      lastPriceMarketOpen: false,
+    })
+    const summary = { platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 100_000_000, costBasisUsdMicros: usdToMicros(8), marketValueUsdMicros: usdToMicros(9), unrealizedProfitUsdMicros: usdToMicros(1) }] }], totalValueUsdMicros: usdToMicros(9) }
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
+
+    expect(html).toContain('إغلاق السوق')
+    expect(html).not.toContain('03:00')
+    expect(html).toContain('300 TRY')
   })
 
   it('shows the local market price and a specific refresh failure without changing the USD valuation', () => {

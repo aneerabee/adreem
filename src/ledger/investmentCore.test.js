@@ -46,6 +46,17 @@ function fixture() {
 }
 
 describe('investment portfolio core', () => {
+  it('keeps a manually entered stock distinct from a provider-priced holding', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-manual', name: 'Midas' })
+    const holding = createInvestmentHolding({
+      id: 'holding-manual', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO',
+      quoteCurrency: 'TRY', assetType: INVESTMENT_ASSET_TYPES.STOCK, marketDataMode: 'manual',
+    })
+    expect(holding).toMatchObject({ symbol: 'THYAO', providerSymbol: 'THYAO', quoteCurrency: 'TRY', marketDataMode: 'manual' })
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [], movements: [] }).ok).toBe(true)
+    expect(investmentPriceRefreshDelay([holding])).toBeNull()
+  })
+
   it('keeps USD precision and quantity precision as safe integers', () => {
     expect(quantityToUnits(0.12345678)).toBe(12_345_678)
     expect(usdToMicros(12.345678)).toBe(12_345_678)
@@ -564,13 +575,15 @@ describe('investment portfolio core', () => {
 
   it('schedules the complete portfolio refresh from the oldest confirmed price', () => {
     const now = new Date('2026-01-01T12:00:00.000Z').getTime()
-    const active = { id: 'active', status: 'active', providerSymbol: 'AAPL', lastPriceAt: '2026-01-01T11:00:00.000Z' }
-    const older = { id: 'older', status: 'active', providerSymbol: 'BTC/USD', lastPriceAt: '2026-01-01T09:30:00.000Z' }
-    const inactive = { id: 'inactive', status: 'inactive', providerSymbol: 'MSFT', lastPriceAt: null }
+    const active = { id: 'active', status: 'active', providerSymbol: 'AAPL', assetType: 'stock', quoteCurrency: 'USD', lastPriceAt: '2026-01-01T11:00:00.000Z' }
+    const older = { id: 'older', status: 'active', providerSymbol: 'BTC/USD', assetType: 'crypto', quoteCurrency: 'USD', lastPriceAt: '2026-01-01T09:30:00.000Z' }
+    const inactive = { id: 'inactive', status: 'inactive', providerSymbol: 'MSFT', assetType: 'stock', quoteCurrency: 'USD', lastPriceAt: null }
 
     expect(investmentPriceRefreshDelay([active, older, inactive], now)).toBe(1_200)
-    expect(investmentPriceRefreshDelay([active], now)).toBe(60 * 60 * 1000)
-    expect(investmentPriceRefreshDelay([{ ...active, lastPriceAt: null }], now)).toBe(1_200)
+    expect(investmentPriceRefreshDelay([active], now, true)).toBe(60 * 60 * 1000)
+    expect(investmentPriceRefreshDelay([{ ...active, lastPriceAt: null }], now, true)).toBe(1_200)
+    expect(investmentPriceRefreshDelay([active], now)).toBeNull()
+    expect(investmentPriceRefreshDelay([{ ...older, marketDataMode: 'manual' }], now)).toBeNull()
     expect(investmentPriceRefreshDelay([inactive], now)).toBeNull()
   })
 })

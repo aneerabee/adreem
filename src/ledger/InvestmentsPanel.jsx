@@ -22,6 +22,7 @@ import {
 import { buildInvestmentPlatformActivity } from './investmentActivity.js'
 import { investmentPlatformBrandStyle, resolveInvestmentPlatformBrand } from './investmentPlatformBrands.js'
 import { getActiveUiLanguage, preserveUiData } from './uiTranslation.js'
+import { isAutoPricedHolding } from './investmentMarketPolicy.js'
 
 const ASSET_OPTIONS = [
   { value: INVESTMENT_ASSET_TYPES.STOCK, label: 'سهم مباشر' },
@@ -38,15 +39,17 @@ const MARKET_OPTIONS = [
 ]
 
 const blankPlatform = { name: '', kind: 'platform', location: '' }
-const blankHolding = { platformId: '', name: '', symbol: '', providerSymbol: '', assetType: INVESTMENT_ASSET_TYPES.STOCK, exchange: '', quoteCurrency: 'USD', initialQuantity: '', initialPriceUsd: '' }
+const blankHolding = { platformId: '', name: '', symbol: '', providerSymbol: '', marketDataMode: 'manual', assetType: INVESTMENT_ASSET_TYPES.STOCK, exchange: '', quoteCurrency: 'USD', initialQuantity: '', initialPriceUsd: '' }
 const blankTrade = { holdingId: '', type: INVESTMENT_TRADE_TYPES.BUY, quantity: '', priceUsd: '', feeUsd: '', note: '' }
 const blankTradeEdit = { quantity: '', priceUsd: '', feeUsd: '', note: '' }
 const PRICE_SOURCE_LABELS = {
   coinbase: { ar: 'Coinbase', en: 'Coinbase' },
   'gold-api': { ar: 'Gold API', en: 'Gold API' },
+  'gold-api-reference': { ar: 'سعر مرجعي', en: 'Reference price' },
   'binance-usdt+coinbase-usdt-usd': { ar: 'Binance · تحويل Coinbase', en: 'Binance · Coinbase FX' },
   'binance-usdt+twelve-data-usdt-usd': { ar: 'Binance · تحويل Twelve Data', en: 'Binance · Twelve Data FX' },
   'twelve-data': { ar: 'Twelve Data', en: 'Twelve Data' },
+  'twelve-data-eod+ecb-fx': { ar: 'إغلاق يومي · صرف أوروبي', en: 'Daily close · ECB FX' },
   'twelve-data+ecb-fx': { ar: 'Twelve Data · صرف أوروبي يومي', en: 'Twelve Data · ECB daily FX' },
 }
 
@@ -147,7 +150,7 @@ function InvestmentMarketPrice({ holding, error, onOpen }) {
       className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${error ? 'is-stale' : ''}`.trim()}
       onClick={() => onOpen(holding)}
       aria-label={priceMicros ? `${error ? 'السعر السابق' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} ${priceCurrency}` : 'إدخال السعر الحالي'}
-      title={error || (holding.lastPriceQuotedAt ? `وقت السعر: ${activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
+      title={error || (holding.lastPriceQuotedAt ? `وقت السعر: ${holding.lastPriceSource === 'twelve-data-eod+ecb-fx' ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
     >
       <small>
         <span>{error ? 'لم يتحدث' : holding.lastPriceMarketOpen === false ? 'إغلاق السوق' : 'آخر سعر'} {error ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
@@ -280,6 +283,7 @@ export default function InvestmentsPanel({
   const assetSearchSequenceRef = useRef(0)
   const activePlatforms = useMemo(() => platforms.filter((platform) => platform.status !== 'inactive'), [platforms])
   const activeHoldings = useMemo(() => holdings.filter((holding) => holding.status !== 'inactive'), [holdings])
+  const autoPricedHoldings = useMemo(() => activeHoldings.filter((holding) => isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true')), [activeHoldings])
   const holdingById = useMemo(() => new Map(activeHoldings.map((holding) => [holding.id, holding])), [activeHoldings])
   const platformById = useMemo(() => new Map(activePlatforms.map((platform) => [platform.id, platform])), [activePlatforms])
   const normalizedQuery = query.trim().toLocaleLowerCase('ar')
@@ -287,10 +291,10 @@ export default function InvestmentsPanel({
     ...platformRow,
     holdings: platformRow.holdings.filter((row) => !normalizedQuery || `${row.holding.name} ${row.holding.symbol} ${row.holding.exchange}`.toLocaleLowerCase('ar').includes(normalizedQuery)),
   })).filter((row) => !normalizedQuery || row.holdings.length || `${row.platform.name} ${row.platform.location}`.toLocaleLowerCase('ar').includes(normalizedQuery)), [normalizedQuery, summary.platforms])
-  const latestPriceAt = useMemo(() => activeHoldings.reduce((latest, holding) => {
+  const latestPriceAt = useMemo(() => autoPricedHoldings.reduce((latest, holding) => {
     const timestamp = new Date(holding.lastPriceAt || 0).getTime()
     return Number.isFinite(timestamp) && timestamp > latest ? timestamp : latest
-  }, 0), [activeHoldings])
+  }, 0), [autoPricedHoldings])
   const historyPlatform = activePlatforms.find((platform) => platform.id === historyPlatformId) || null
   const historyPlatformSummary = summary.platforms.find((row) => row.platform.id === historyPlatformId) || null
   const historyRows = useMemo(() => buildInvestmentPlatformActivity({
@@ -307,11 +311,7 @@ export default function InvestmentsPanel({
       : holdingDraft.quoteCurrency === 'TRY'
         ? holdingDraft.assetType === INVESTMENT_ASSET_TYPES.FUND ? 'ISMDL أو اسم الصندوق' : 'THYAO أو اسم الشركة'
         : 'الاسم أو الرمز'
-  const emptyMarketSearchMessage = holdingDraft.quoteCurrency === 'TRY'
-    ? 'لا توجد نتيجة في سوق تركيا.'
-    : holdingDraft.quoteCurrency === 'EUR'
-      ? 'لا توجد نتيجة في سوق أوروبا.'
-      : 'لا توجد نتيجة في سوق أمريكا.'
+  const emptyMarketSearchMessage = 'لا توجد نتيجة. اكتب الاسم والرمز يدويًا.'
 
   useEffect(() => {
     const sequence = ++assetSearchSequenceRef.current
@@ -390,6 +390,7 @@ export default function InvestmentsPanel({
       name: result.name,
       symbol: result.symbol,
       providerSymbol: result.providerSymbol,
+      marketDataMode: 'provider',
       exchange: result.exchange || result.micCode || '',
       quoteCurrency: result.quoteCurrency,
       assetType: result.assetType || assetTypeForMarketResult(result) || current.assetType,
@@ -400,7 +401,7 @@ export default function InvestmentsPanel({
   }
 
   function clearSelectedMarketAsset() {
-    setHoldingDraft((current) => ({ ...current, name: '', symbol: '', providerSymbol: '', exchange: '' }))
+    setHoldingDraft((current) => ({ ...current, name: '', symbol: '', providerSymbol: '', marketDataMode: 'manual', exchange: '' }))
     resetAssetDiscovery()
   }
 
@@ -457,9 +458,12 @@ export default function InvestmentsPanel({
 
   function submitHolding(event) {
     event.preventDefault()
-    if (!holdingDraft.platformId || !holdingDraft.name.trim() || !holdingDraft.symbol.trim() || !holdingDraft.providerSymbol.trim() || submissionRef.current) return
+    if (!holdingDraft.platformId || !holdingDraft.name.trim() || !/^[A-Z0-9./_-]{1,32}$/.test(holdingDraft.symbol.trim().toUpperCase()) || submissionRef.current) return
+    const draft = holdingDraft.marketDataMode === 'manual'
+      ? { ...holdingDraft, providerSymbol: holdingDraft.symbol.trim().toUpperCase() }
+      : holdingDraft
     submissionRef.current = true
-    if (onAddHolding(holdingDraft) === false) {
+    if (onAddHolding(draft) === false) {
       submissionRef.current = false
       return
     }
@@ -606,7 +610,7 @@ export default function InvestmentsPanel({
           <div><small>USD</small><h2>محفظتي</h2></div>
         </div>
         <div className="adreem-investment-actions">
-          <button type="button" className="is-refresh" disabled={isRefreshing || !activeHoldings.length} onClick={onRefreshPrices}>
+          <button type="button" className="is-refresh" disabled={isRefreshing || !autoPricedHoldings.length} onClick={onRefreshPrices}>
             <RefreshCw aria-hidden="true" size={16} className={isRefreshing ? 'is-spinning' : ''} />
             {isRefreshing ? 'جاري تحديث الكل' : 'تحديث الكل'}
           </button>
@@ -625,7 +629,7 @@ export default function InvestmentsPanel({
       <div className="adreem-investment-toolbar">
         <label><Search aria-hidden="true" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث باسم أو رمز" /></label>
         <small className={firstPriceError ? 'is-price-error' : undefined} role={firstPriceError ? 'status' : undefined}>
-          {firstPriceError ? <><AlertCircle aria-hidden="true" size={13} />{firstPriceError}</> : latestPriceAt ? `فحص كل ساعتين أثناء الاستخدام · آخر تحقق ${new Date(latestPriceAt).toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'short', timeStyle: 'short' })}` : 'فحص كل ساعتين أثناء الاستخدام · ويمكن إدخال السعر يدويًا'}
+          {firstPriceError ? <><AlertCircle aria-hidden="true" size={13} />{firstPriceError}</> : autoPricedHoldings.length ? latestPriceAt ? `فحص كل ساعتين أثناء الاستخدام · آخر تحقق ${new Date(latestPriceAt).toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'short', timeStyle: 'short' })}` : 'فحص كل ساعتين أثناء الاستخدام · ويمكن إدخال السعر يدويًا' : 'الأسعار اليدوية محفوظة حتى تغييرها'}
         </small>
       </div>
 
@@ -721,8 +725,8 @@ export default function InvestmentsPanel({
                           <span><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
                           <span><small>تكلفة المتبقي</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
                           {row.holding.quoteCurrency !== 'USD' && row.holding.lastPriceUsdMicros ? <span><small>السعر بالدولار</small><strong>{usdUnitMicros(row.holding.lastPriceUsdMicros)}</strong></span> : null}
-                          <span><small>{row.holding.lastPriceQuotedAt ? 'وقت السعر' : ['manual', 'trade', 'opening'].includes(row.holding.lastPriceSource) ? 'وقت الإدخال' : 'آخر تحقق'}</small><strong>{row.holding.lastPriceQuotedAt || row.holding.lastPriceAt ? activityDate(row.holding.lastPriceQuotedAt || row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
-                          {row.holding.lastPriceFxQuotedAt ? <span><small>{row.holding.lastPriceSource === 'twelve-data+ecb-fx' ? 'تاريخ الصرف' : 'وقت الصرف'}</small><strong>{row.holding.lastPriceSource === 'twelve-data+ecb-fx' ? activityDay(row.holding.lastPriceFxQuotedAt) : activityDate(row.holding.lastPriceFxQuotedAt)}</strong></span> : null}
+                          <span><small>{row.holding.lastPriceSource === 'twelve-data-eod+ecb-fx' ? 'تاريخ الإغلاق' : row.holding.lastPriceQuotedAt ? 'وقت السعر' : ['manual', 'trade', 'opening'].includes(row.holding.lastPriceSource) ? 'وقت الإدخال' : 'آخر تحقق'}</small><strong>{row.holding.lastPriceQuotedAt || row.holding.lastPriceAt ? row.holding.lastPriceSource === 'twelve-data-eod+ecb-fx' ? activityDay(row.holding.lastPriceQuotedAt) : activityDate(row.holding.lastPriceQuotedAt || row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
+                          {row.holding.lastPriceFxQuotedAt ? <span><small>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? 'تاريخ الصرف' : 'وقت الصرف'}</small><strong>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceFxQuotedAt) : activityDate(row.holding.lastPriceFxQuotedAt)}</strong></span> : null}
                           {PRICE_SOURCE_LABELS[row.holding.lastPriceSource] ? <span><small>مصدر السعر</small><strong>{PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</strong></span> : null}
                           {priceErrors[row.holding.id] ? <p className="is-error"><AlertCircle aria-hidden="true" size={13} />{priceErrors[row.holding.id]}</p> : null}
                           {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
@@ -754,7 +758,7 @@ export default function InvestmentsPanel({
           </InvestmentDialog>
         ) : null}
         {dialog === 'holding' ? (
-          <InvestmentDialog title="استثمار جديد" subtitle="ابحث ثم اختر الأصل الصحيح" icon={ChartCandlestick} tone="market" className="is-holding" onClose={() => setDialog('')} onSubmit={submitHolding} canSubmit={Boolean(holdingDraft.platformId && holdingDraft.name.trim() && holdingDraft.symbol.trim() && holdingDraft.providerSymbol.trim())}>
+          <InvestmentDialog title="استثمار جديد" subtitle="ابحث أو اكتب الأصل يدويًا" icon={ChartCandlestick} tone="market" className="is-holding" onClose={() => setDialog('')} onSubmit={submitHolding} canSubmit={Boolean(holdingDraft.platformId && holdingDraft.name.trim() && /^[A-Z0-9./_-]{1,32}$/.test(holdingDraft.symbol.trim().toUpperCase()) && (holdingDraft.marketDataMode === 'manual' || holdingDraft.providerSymbol.trim()))}>
             <label><span>المنصة</span><select value={holdingDraft.platformId} onChange={(event) => setHoldingDraft((current) => ({ ...current, platformId: event.target.value }))}>{activePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}</select></label>
             <div className="is-paired">
               <label><span>النوع</span><select value={holdingDraft.assetType} onChange={(event) => changeHoldingAssetType(event.target.value)}>{ASSET_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
@@ -765,12 +769,13 @@ export default function InvestmentsPanel({
                 </div>
               </div>
             </div>
-            <label className="adreem-investment-market-search"><span>ابحث عن الاستثمار</span><div><Search aria-hidden="true" size={16} /><input autoFocus value={assetQuery} onChange={(event) => { const value = event.target.value; setAssetQuery(value); setAssetResults([]); setAssetSearchStatus(value.trim().length >= 2 ? 'loading' : 'idle'); setAssetSearchError(''); setHoldingDraft((current) => ({ ...current, name: '', symbol: '', providerSymbol: '', exchange: '' })) }} placeholder={assetSearchPlaceholder} /></div></label>
+            <label className="adreem-investment-market-search"><span>بحث اختياري</span><div><Search aria-hidden="true" size={16} /><input autoFocus value={assetQuery} onChange={(event) => { const value = event.target.value; setAssetQuery(value); setAssetResults([]); setAssetSearchStatus(value.trim().length >= 2 ? 'loading' : 'idle'); setAssetSearchError(''); if (holdingDraft.marketDataMode === 'provider') setHoldingDraft((current) => ({ ...current, name: '', symbol: '', providerSymbol: '', marketDataMode: 'manual', exchange: '' })) }} placeholder={assetSearchPlaceholder} /></div></label>
             {assetSearchStatus === 'loading' ? <p className="adreem-investment-search-note">جاري البحث...</p> : null}
             {assetSearchError ? <p className="adreem-investment-search-note is-error">{assetSearchError}</p> : null}
             {assetSearchStatus === 'ready' && !assetResults.length ? <p className="adreem-investment-search-note">{emptyMarketSearchMessage}</p> : null}
             {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([holdingTypeLabel(result.assetType), result.exchange].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
-            {holdingDraft.providerSymbol ? <div className="adreem-investment-selected-asset"><Check aria-hidden="true" size={16} /><span><strong>{preserveUiData(holdingDraft.name)}</strong><small>{preserveUiData(`${holdingDraft.symbol} · ${holdingDraft.exchange || holdingDraft.quoteCurrency}`)}</small></span><div><b>{holdingTypeLabel(holdingDraft.assetType)}</b><button type="button" onClick={clearSelectedMarketAsset}><PencilLine aria-hidden="true" size={12} /> تغيير</button></div></div> : null}
+            {holdingDraft.marketDataMode === 'provider' && holdingDraft.providerSymbol ? <div className="adreem-investment-selected-asset"><Check aria-hidden="true" size={16} /><span><strong>{preserveUiData(holdingDraft.name)}</strong><small>{preserveUiData(`${holdingDraft.symbol} · ${holdingDraft.exchange || holdingDraft.quoteCurrency}`)}</small></span><div><b>{holdingTypeLabel(holdingDraft.assetType)}</b><button type="button" onClick={clearSelectedMarketAsset}><PencilLine aria-hidden="true" size={12} /> تغيير</button></div></div> : <div className="is-paired"><label><span>الاسم</span><input value={holdingDraft.name} maxLength={80} onChange={(event) => setHoldingDraft((current) => ({ ...current, name: event.target.value, marketDataMode: 'manual' }))} placeholder="اسم الاستثمار" /></label><label><span>الرمز</span><input dir="ltr" value={holdingDraft.symbol} maxLength={32} onChange={(event) => setHoldingDraft((current) => ({ ...current, symbol: event.target.value.toUpperCase(), marketDataMode: 'manual' }))} placeholder="THYAO" /></label></div>}
+            {holdingDraft.marketDataMode === 'manual' ? <p className="adreem-investment-search-note">السعر يدوي حتى يتوفر مصدر معتمد.</p> : null}
             <div className="is-paired is-investment-numbers"><label><span>كمية سابقة</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialQuantity} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialQuantity: event.target.value }))} placeholder="0" /></label><label><span>متوسطها USD</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialPriceUsd} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialPriceUsd: event.target.value }))} placeholder="0" /></label></div>
           </InvestmentDialog>
         ) : null}
@@ -786,7 +791,7 @@ export default function InvestmentsPanel({
           </InvestmentDialog>
         ) : null}
         {dialog === 'price' ? (
-          <InvestmentDialog title="سعر يدوي" subtitle="يبقى حتى التحديث القادم" icon={PencilLine} tone="market" onClose={() => setDialog('')} onSubmit={submitManualPrice} canSubmit={parseInvestmentDecimal(manualPrice) > 0} submitLabel="حفظ السعر">
+          <InvestmentDialog title="سعر يدوي" subtitle={isAutoPricedHolding(manualHolding || {}, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true') ? 'يبقى حتى التحديث القادم' : 'يبقى حتى تغييره'} icon={PencilLine} tone="market" onClose={() => setDialog('')} onSubmit={submitManualPrice} canSubmit={parseInvestmentDecimal(manualPrice) > 0} submitLabel="حفظ السعر">
             {manualHolding ? <div className="adreem-investment-dialog-context"><span><strong>{preserveUiData(`${manualHolding.symbol} · ${manualHolding.name}`)}</strong><small>{preserveUiData(manualPlatform?.name || '')}</small></span><b>{manualHolding.lastPriceUsdMicros ? usdUnitMicros(manualHolding.lastPriceUsdMicros) : 'بدون سعر'}</b></div> : null}
             <label><span>السعر الحالي USD</span><input autoFocus dir="ltr" inputMode="decimal" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} placeholder="0" /></label>
           </InvestmentDialog>

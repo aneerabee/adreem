@@ -1,4 +1,5 @@
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
+import { isAutoPricedHolding } from './investmentMarketPolicy.js'
 
 export const INVESTMENT_QUANTITY_SCALE = 100_000_000
 export const INVESTMENT_PRICE_SCALE = 1_000_000
@@ -156,8 +157,8 @@ export function applyInvestmentMarketPrice(holding = {}, price = {}) {
   }
 }
 
-export function investmentPriceRefreshDelay(holdings = [], now = Date.now()) {
-  const refreshable = holdings.filter((holding) => holding?.status !== INVESTMENT_RECORD_STATUSES.INACTIVE && cleanText(holding?.providerSymbol, 80))
+export function investmentPriceRefreshDelay(holdings = [], now = Date.now(), licensedStocksEnabled = false) {
+  const refreshable = holdings.filter((holding) => isAutoPricedHolding(holding, licensedStocksEnabled))
   if (!refreshable.length) return null
   const timestamps = refreshable.map((holding) => new Date(holding.lastPriceAt || 0).getTime())
   if (timestamps.some((timestamp) => !Number.isFinite(timestamp) || timestamp <= 0)) return INVESTMENT_PRICE_REFRESH_START_DELAY_MS
@@ -201,6 +202,7 @@ export function createInvestmentHolding(draft = {}, createdAt = new Date().toISO
     name: cleanText(draft.name, 80),
     symbol: cleanText(draft.symbol, 32).toUpperCase(),
     providerSymbol: cleanText(draft.providerSymbol || draft.symbol, 80).toUpperCase(),
+    marketDataMode: draft.marketDataMode === 'manual' ? 'manual' : 'provider',
     assetType,
     exchange: cleanText(draft.exchange, 40).toUpperCase(),
     quoteCurrency: normalizedQuoteCurrency,

@@ -123,6 +123,7 @@ describe('ADREEM web API auth helpers', () => {
     const api = createAdreemApiHandler({
       ADREEM_USERS_FILE: file,
       TWELVE_DATA_API_KEY: 'private-key',
+      ADREEM_TWELVE_STOCK_DISPLAY_LICENSED: 'true',
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     })
@@ -131,7 +132,7 @@ describe('ADREEM web API auth helpers', () => {
       async load() {
         return {
           state: {
-            investmentHoldings: [{ id: 'holding-1', providerSymbol: 'AAPL:XNAS', quoteCurrency: 'USD', status: 'active' }],
+            investmentHoldings: [{ id: 'holding-1', providerSymbol: 'AAPL:XNAS', assetType: 'stock', quoteCurrency: 'USD', status: 'active' }],
           },
         }
       },
