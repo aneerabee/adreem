@@ -16,22 +16,8 @@
 }
 
 .adreem-app--investments .adreem-view {
-  position: relative;
-  isolation: isolate;
   background: var(--canvas);
 }
-
-.adreem-app--investments .adreem-view::before {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 290px;
-  background: url('./market-watermark.svg') no-repeat center top / min(960px, 100%) auto;
-  content: '';
-  opacity: 0.12;
-  pointer-events: none;
-}
-
-.adreem-app--investments .adreem-view > * { position: relative; }
 
 /* The outer frame is quiet; controls communicate their priority. */
 .adreem-app .adreem-header { height: 58px; padding-block: 6px; box-shadow: none; }
@@ -231,8 +217,4 @@
 @media (hover: none) {
   .adreem-app :is(.adreem-nav button, .ml3-action-choice, .ml3-balance-ledger button):hover { transform: none; box-shadow: none; }
   .adreem-app .adreem-nav button:not(.is-active):hover { background: transparent; color: var(--nav-idle); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .adreem-app--investments .adreem-view::before { opacity: 0.1; }
 }
