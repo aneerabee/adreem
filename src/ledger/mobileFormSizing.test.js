@@ -48,7 +48,7 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('overflow: visible !important;')
     expect(financeStylesheet).toContain('text-overflow: clip !important;')
     expect(financeStylesheet).toContain('white-space: normal !important;')
-    expect(financeStylesheet).toContain('grid-template-areas: "name name name" "status settlement .";')
+    expect(financeStylesheet).toContain('.adreem-counterparty-identity strong { display: block; min-width: 0;')
     expect((ledgerSource.match(/adreem-account-name/g) || []).length).toBeGreaterThanOrEqual(25)
   })
 

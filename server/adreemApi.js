@@ -630,7 +630,7 @@ export function createAdreemApiHandler(env = process.env) {
         const repository = repositoryForToken(token)
         const loaded = await repository.load()
         const trustedItems = marketPriceItemsForHoldings(body, loaded.state || loaded)
-        const result = await marketPriceService.refresh({ items: trustedItems })
+        const result = await marketPriceService.refresh({ items: trustedItems, force: body.force === true })
         const confirmedCount = result.prices.filter((price) => price?.ok).length
         audit(env, { action: 'investment.prices.refreshed', ledgerId, count: confirmedCount, failedCount: result.prices.length - confirmedCount })
         return sendJson(res, 200, result, allowedOrigin)

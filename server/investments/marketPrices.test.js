@@ -162,6 +162,18 @@ describe('investment market prices', () => {
     expect(fetchImpl.mock.calls[0][1].headers.authorization).toBe('apikey demo')
   })
 
+  it('requests a fresh confirmed price for a manual update instead of reusing the short cache', async () => {
+    let price = 125
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ price: String(price++) }) }))
+    const service = createMarketPriceService({}, { fetchImpl })
+    const items = [{ id: 'a', symbol: 'AAPL', quoteCurrency: 'USD' }]
+
+    expect((await service.refresh({ items })).prices[0]).toMatchObject({ priceUsdMicros: 125_000_000, cached: false })
+    expect((await service.refresh({ items })).prices[0]).toMatchObject({ priceUsdMicros: 125_000_000, cached: true })
+    expect((await service.refresh({ items, force: true })).prices[0]).toMatchObject({ priceUsdMicros: 126_000_000, cached: false })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
   it('isolates unsupported demo symbols without blocking confirmed prices', async () => {
     const fetchImpl = vi.fn(async (url) => {
       const symbols = new URL(url).searchParams.get('symbol')

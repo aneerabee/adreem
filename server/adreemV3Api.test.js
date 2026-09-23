@@ -247,7 +247,7 @@ describe('ADREEM v3 API', () => {
     const req = request({
       method: 'POST',
       url: '/api/investments/prices',
-      body: { ids: ['holding-a'], items: [{ id: 'holding-a', providerSymbol: 'ATTACKER' }] },
+      body: { ids: ['holding-a'], items: [{ id: 'holding-a', providerSymbol: 'ATTACKER' }], force: true },
     })
     const res = response()
 
@@ -259,6 +259,7 @@ describe('ADREEM v3 API', () => {
     expect(res.statusCode).toBe(200)
     expect(marketPriceService.refresh).toHaveBeenCalledWith({
       items: [{ id: 'holding-a', symbol: 'AAPL:XNAS', quoteCurrency: 'USD' }],
+      force: true,
     })
   })
 

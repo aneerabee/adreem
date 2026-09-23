@@ -583,6 +583,7 @@ export default function InvestmentsPanel({
       ? summary.totalProfitUsdMicros
       : summary.unrealizedProfitUsdMicros || 0
   const profitTone = portfolioProfitUsdMicros > 0 ? 'is-positive' : portfolioProfitUsdMicros < 0 ? 'is-negative' : 'is-neutral'
+  const firstPriceError = activeHoldings.map((holding) => priceErrors[holding.id]).find(Boolean)
   return (
     <section className="adreem-investments" aria-label="محفظتي">
       <div className="adreem-investment-hero">
@@ -609,7 +610,9 @@ export default function InvestmentsPanel({
 
       <div className="adreem-investment-toolbar">
         <label><Search aria-hidden="true" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث باسم أو رمز" /></label>
-        <small>{latestPriceAt ? `تلقائي كل ساعتين · آخر سعر ${new Date(latestPriceAt).toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'short', timeStyle: 'short' })}` : 'تلقائي كل ساعتين · ويمكن إدخال السعر يدويًا'}</small>
+        <small className={firstPriceError ? 'is-price-error' : undefined} role={firstPriceError ? 'status' : undefined}>
+          {firstPriceError ? <><AlertCircle aria-hidden="true" size={13} />{firstPriceError}</> : latestPriceAt ? `تلقائي كل ساعتين · آخر سعر ${new Date(latestPriceAt).toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'short', timeStyle: 'short' })}` : 'تلقائي كل ساعتين · ويمكن إدخال السعر يدويًا'}
+        </small>
       </div>
 
       {!activePlatforms.length ? (

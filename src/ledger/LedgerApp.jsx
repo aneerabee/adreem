@@ -31,7 +31,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 
 const CANCEL_WINDOW_HOURS = 24
 const CANCEL_WINDOW_MS = CANCEL_WINDOW_HOURS * 60 * 60 * 1000
@@ -1960,7 +1960,6 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
   const hasReceivable = group.receivable.dinar > 0 || group.receivable.usd > 0 || group.receivable.try > 0 || Number(group.receivable.eur || 0) > 0
   const hasPayable = group.payable.dinar > 0 || group.payable.usd > 0 || group.payable.try > 0 || Number(group.payable.eur || 0) > 0
   const settlementPinned = Boolean(group.settlementPinned)
-  const balanceStatus = hasReceivable && hasPayable ? 'أقبض وأدفع' : hasReceivable ? 'أقبض منه' : hasPayable ? 'أدفع له' : 'مسكر'
   const tone = hasReceivable && hasPayable ? 'mixed' : hasReceivable ? 'receivable' : hasPayable ? 'payable' : 'zero'
   const previewRows = group.rows.filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
   return (
@@ -1977,8 +1976,6 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
           <span className="adreem-counterparty-avatar"><UserRound aria-hidden="true" size={16} /></span>
           <span className="adreem-counterparty-identity">
             <strong className="adreem-account-name">{preserveUiData(group.ownerName)}</strong>
-            <small>{balanceStatus}</small>
-            {settlementPinned ? <b className="adreem-counterparty-settlement-tag"><Pin aria-hidden="true" size={10} fill="currentColor" /> تسوية</b> : null}
           </span>
           <ChevronDown className="adreem-counterparty-chevron" aria-hidden="true" size={16} />
         </button>
@@ -6501,14 +6498,15 @@ export default function LedgerApp() {
     return true
   }
 
-  async function refreshInvestmentPrices() {
+  async function refreshInvestmentPrices(force = false) {
     const ids = (ledgerExtras.investmentHoldings || [])
       .filter((holding) => holding.status !== INVESTMENT_RECORD_STATUSES.INACTIVE && holding.providerSymbol)
       .map((holding) => holding.id)
-    if (!ids.length || isRefreshingInvestmentPrices) return
+    if (!ids.length || isRefreshingInvestmentPrices || investmentPriceRefreshRef.current.isRefreshing) return
+    investmentPriceRefreshRef.current.isRefreshing = true
     setIsRefreshingInvestmentPrices(true)
     try {
-      const result = await refreshAdreemInvestmentPrices(ids)
+      const result = await refreshAdreemInvestmentPrices(ids, { force })
       const prices = new Map((result.prices || []).filter((price) => price?.ok).map((price) => [price.id, price]))
       const failed = new Map((result.prices || []).filter((price) => price && !price.ok).map((price) => [price.id, price.error]))
       setInvestmentPriceErrors(Object.fromEntries(ids.filter((id) => !prices.has(id)).map((id) => [id, failed.get(id) || 'تعذر تحديث السعر. بقي السعر السابق محفوظًا.'])))
@@ -6542,6 +6540,7 @@ export default function LedgerApp() {
       setInvestmentPriceErrors(Object.fromEntries(ids.map((id) => [id, message])))
       setFeedback(message)
     } finally {
+      investmentPriceRefreshRef.current.isRefreshing = false
       setIsRefreshingInvestmentPrices(false)
     }
   }
@@ -6549,7 +6548,7 @@ export default function LedgerApp() {
   useEffect(() => {
     investmentPriceRefreshRef.current = {
       isRefreshing: isRefreshingInvestmentPrices,
-      refresh: refreshInvestmentPrices,
+      refresh: () => refreshInvestmentPrices(false),
     }
   })
 
@@ -6567,9 +6566,14 @@ export default function LedgerApp() {
     }
     const firstTimer = window.setTimeout(refreshAllPrices, firstDelay)
     const interval = window.setInterval(refreshAllPrices, INVESTMENT_PRICE_REFRESH_INTERVAL_MS)
+    const refreshOnReturn = () => {
+      if (document.visibilityState === 'visible' && investmentPriceRefreshDelay(ledgerExtras.investmentHoldings || []) <= INVESTMENT_PRICE_REFRESH_START_DELAY_MS) refreshAllPrices()
+    }
+    document.addEventListener('visibilitychange', refreshOnReturn)
     return () => {
       window.clearTimeout(firstTimer)
       window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshOnReturn)
     }
   }, [investmentPriceRefreshSignature, ledgerExtras.investmentHoldings])
 
@@ -6781,7 +6785,7 @@ export default function LedgerApp() {
         onManualPrice={updateInvestmentManualPrice}
         onCloseSmallHolding={closeSmallInvestment}
         onOpenFunding={openInvestmentFunding}
-        onRefreshPrices={refreshInvestmentPrices}
+        onRefreshPrices={() => refreshInvestmentPrices(true)}
         onSearchAssets={searchAdreemInvestmentAssets}
       />
     )

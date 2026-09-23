@@ -51,11 +51,12 @@ describe('ADREEM cloud-only persistence', () => {
     vi.stubGlobal('fetch', fetchMock)
     const ids = Array.from({ length: 81 }, (_, index) => `holding-${index + 1}`)
 
-    const result = await module.refreshAdreemInvestmentPrices(ids)
+    const result = await module.refreshAdreemInvestmentPrices(ids, { force: true })
 
     expect(result.prices).toHaveLength(81)
     expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).ids).toHaveLength(40)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).force).toBe(true)
     expect(JSON.parse(fetchMock.mock.calls[2][1].body).ids).toHaveLength(1)
   })
 

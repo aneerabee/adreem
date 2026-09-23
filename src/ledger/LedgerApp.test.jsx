@@ -1468,6 +1468,21 @@ describe('LedgerApp people account views', () => {
     expect(markup.match(/أقبض 1,200 LYD/g)).toHaveLength(1)
     expect(markup.match(/أدفع 450 LYD/g)).toHaveLength(1)
     expect(markup.match(/أقبض 80 USD/g)).toHaveLength(1)
+    expect(markup).not.toContain('أقبض وأدفع')
+    expect(markup).not.toContain('adreem-counterparty-settlement-tag')
+  })
+
+  it('keeps settlement visible through the pin button without adding a caption under the name', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={{
+      id: 'person:pinned', ownerName: 'اسم طويل للتسوية', settlementPinned: true,
+      receivable: { dinar: 0, usd: 0, try: 0, eur: 0 },
+      payable: { dinar: 0, usd: 0, try: 0, eur: 0 }, rows: [],
+    }} />))
+
+    expect(markup).toContain('is-settlement-pinned')
+    expect(markup).toContain('aria-pressed="true"')
+    expect(markup).toContain('إلغاء تثبيت التسوية')
+    expect(markup).not.toContain('adreem-counterparty-settlement-tag')
   })
 
   it('persists a settlement pin across every account for the same person', () => {
@@ -1507,8 +1522,7 @@ describe('LedgerApp people account views', () => {
     const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} onToggleSettlement={() => {}} />))
 
     expect(markup).toContain('is-settlement-pinned')
-    expect(markup).toContain('adreem-counterparty-settlement-tag')
-    expect(markup).toContain(' تسوية</b>')
+    expect(markup).not.toContain('adreem-counterparty-settlement-tag')
     expect(markup).toContain('aria-label="إلغاء تثبيت التسوية"')
     expect(markup).toContain('aria-pressed="true"')
   })
@@ -1565,7 +1579,8 @@ describe('LedgerApp people account views', () => {
     const markup = stripUiDataProtection(renderToStaticMarkup(<CounterpartyCard group={group} />))
 
     expect(markup).toContain('is-balances-view')
-    expect(markup).toContain('مسكر')
+    expect(markup).toContain('is-settled')
+    expect(markup).toContain('شخص جديد')
     expect(markup).not.toContain('adreem-counterparty-channel-preview')
   })
 

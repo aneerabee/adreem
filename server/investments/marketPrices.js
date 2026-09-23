@@ -361,12 +361,13 @@ export function createMarketPriceService(env = process.env, options = {}) {
   return {
     async refresh(body = {}) {
       const items = normalizeMarketPriceRequest(body)
+      const force = body.force === true
       pruneExpired(cache, now())
       const fresh = []
       const results = new Map()
       for (const item of items) {
         const cached = cache.get(`${item.symbol}:${item.quoteCurrency}`)
-        if (cached && cached.expiresAt > now()) results.set(item.id, { ...cached.result, id: item.id, cached: true })
+        if (!force && cached && cached.expiresAt > now()) results.set(item.id, { ...cached.result, id: item.id, cached: true })
         else fresh.push(item)
       }
       if (fresh.length) {

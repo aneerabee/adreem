@@ -834,7 +834,7 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
           if (url.pathname === '/api/investments/search') return reply(200, await marketPriceService.search(body))
           const loaded = await repository.load()
           const trustedItems = marketPriceItemsForHoldings(body, loaded.state || loaded)
-          return reply(200, await marketPriceService.refresh({ items: trustedItems }))
+          return reply(200, await marketPriceService.refresh({ items: trustedItems, force: body.force === true }))
         } catch (error) {
           if (!(error instanceof MarketPriceError)) throw error
           const mapped = new V3ApiError(error.message, error.statusCode)

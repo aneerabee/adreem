@@ -1226,16 +1226,8 @@
 .adreem-counterparty-identity {
   grid-area: identity;
   min-width: 0;
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  grid-template-areas: "name name name" "status settlement .";
-  align-content: center;
-  justify-content: start;
-  gap: 3px 5px;
 }
-.adreem-counterparty-identity strong { grid-area: name; min-width: 0; color: var(--finance-ink); font-size: 0.82rem; }
-.adreem-counterparty-identity small { grid-area: status; justify-self: start; padding: 2px 5px; border-radius: 999px; background: var(--counterparty-soft); color: var(--counterparty-ink); font-size: 0.53rem; font-weight: 790; }
-.adreem-counterparty-settlement-tag { grid-area: settlement; justify-self: start; display: inline-flex; align-items: center; gap: 2px; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--finance-gold) 34%, transparent); border-radius: 999px; background: var(--finance-gold-soft); color: var(--finance-gold); font-size: 0.5rem; font-weight: 850; line-height: 1; }
+.adreem-counterparty-identity strong { display: block; min-width: 0; color: var(--finance-ink); font-size: 0.82rem; }
 .adreem-counterparty-settlement-toggle { width: 38px; min-width: 38px; min-height: 38px; display: grid; place-items: center; align-self: stretch; padding: 0; border: 0; border-inline-start: 1px solid var(--finance-line); border-radius: 0; background: transparent; color: var(--finance-muted); }
 .adreem-counterparty-settlement-toggle:hover { background: color-mix(in srgb, var(--finance-gold-soft) 66%, transparent); color: var(--finance-gold); }
 .adreem-counterparty-settlement-toggle[aria-pressed="true"] { background: color-mix(in srgb, var(--finance-gold-soft) 84%, white); color: var(--finance-gold); }
@@ -2554,6 +2546,8 @@
 }
 .adreem-investment-toolbar input { min-width: 0; width: 100%; height: 100%; border: 0; outline: 0; background: transparent; font: inherit; font-size: 0.75rem; }
 .adreem-investment-toolbar > small { color: #77726b; font-size: 0.62rem; font-weight: 700; }
+.adreem-investment-toolbar > small.is-price-error { display: inline-flex; align-items: center; gap: 5px; color: var(--investment-negative); }
+.adreem-investment-toolbar > small.is-price-error svg { flex: none; }
 .adreem-investment-empty {
   min-height: 210px;
   display: grid;

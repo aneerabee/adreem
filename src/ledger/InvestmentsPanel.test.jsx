@@ -94,6 +94,8 @@ describe('investments panel', () => {
     expect(html).toContain('سعر السوق غير متاح')
     expect(html).toContain('لم يتحدث')
     expect(html).toContain('السعر السابق 300 TRY')
+    expect(html).toContain('role="status"')
+    expect(html).toContain('is-price-error')
   })
 
   it('uses the official visual identity for a known platform alias', () => {
