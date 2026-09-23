@@ -234,6 +234,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
   const searchCache = new Map()
   let ecbFxCache = null
   let ecbFxPending = null
+  let tryUsdRateCache = null
   const burkutCatalogs = new Map()
   const burkutPending = new Map()
   const burkutKey = String(env.ADREEM_BURKUT_API_KEY || '').trim()
@@ -702,6 +703,40 @@ export function createMarketPriceService(env = process.env, options = {}) {
   }
 
   return {
+    async tryUsdRate() {
+      if (tryUsdRateCache?.expiresAt > now()) return tryUsdRateCache.value
+      const apiKey = String(env.TWELVE_DATA_API_KEY || '').trim()
+      let quote = null
+      if (apiKey && typeof fetchImpl === 'function') {
+        try {
+          const endpoint = new URL('/quote', String(env.TWELVE_DATA_API_URL || DEFAULT_TWELVE_DATA_URL).replace(/\/+$/, ''))
+          endpoint.searchParams.set('symbol', 'TRY/USD')
+          const response = await fetchImpl(endpoint, { headers: providerHeaders(apiKey), signal: AbortSignal.timeout(8_000) })
+          if (response.ok) {
+            const payload = await response.json()
+            const candidate = quoteFromPayload(payload, 'TRY/USD', true, now())
+            if (cleanSymbol(payload?.symbol) === 'TRY/USD' && candidate
+              && !quoteIsStale(candidate, now(), candidate.marketOpen === true ? MAX_OPEN_MARKET_QUOTE_AGE_MS : MAX_FX_QUOTE_AGE_MS)) {
+              quote = { ...candidate, source: 'twelve-data' }
+            }
+          }
+        } catch {
+          // The verified daily reference is the fallback when the market quote fails.
+        }
+      }
+      quote ||= await fetchEcbFxQuote('TRY')
+      const tryPerUsdMicros = quote?.price ? usdMicros(1 / quote.price) : 0
+      if (!tryPerUsdMicros || !quote?.quotedAt) {
+        throw new MarketPriceError('سعر تحويل TRY إلى USD غير متاح الآن. أدخل سعر الصرف الفعلي قبل الحفظ.', 503, 'try-usd-rate-unavailable')
+      }
+      const value = {
+        tryPerUsdMicros,
+        quotedAt: quote.quotedAt,
+        source: quote.source === 'ecb-fx' ? 'ecb-reference' : quote.source,
+      }
+      tryUsdRateCache = { value, expiresAt: now() + cacheMs }
+      return value
+    },
     async refresh(body = {}) {
       const items = normalizeMarketPriceRequest(body)
       const force = body.force === true

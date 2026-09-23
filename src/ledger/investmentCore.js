@@ -119,17 +119,30 @@ export function microsToUsd(value) {
   return safeInteger(value) / INVESTMENT_PRICE_SCALE
 }
 
+export function convertTryPriceToUsdMicros(priceTryMicros, tryPerUsdMicros) {
+  const nativePrice = safePositiveInteger(priceTryMicros)
+  const rate = safePositiveInteger(tryPerUsdMicros)
+  if (!nativePrice || !rate) return 0
+  const result = (BigInt(nativePrice) * BigInt(INVESTMENT_PRICE_SCALE) + BigInt(rate) / 2n) / BigInt(rate)
+  return result > 0n && result <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(result) : 0
+}
+
+export const INVESTMENT_FX_FORM_MAX_AGE_MS = 5 * 60 * 1000
+
+export function investmentFxRateIsFresh(fx = {}, now = Date.now()) {
+  if (fx.source === 'manual') return true
+  const loadedAt = Date.parse(fx.loadedAt || '')
+  return Number.isFinite(loadedAt) && loadedAt <= now && now - loadedAt < INVESTMENT_FX_FORM_MAX_AGE_MS
+}
+
 export function investmentHoldingIsLiquidity(holding = {}) {
   const symbol = cleanText(holding.symbol || holding.providerSymbol, 80).toUpperCase()
   return symbol.split(':')[0].split('/')[0] === 'USDT'
 }
 
 export function investmentPriceChange(holding = {}) {
-  const nativeCurrent = safePositiveInteger(holding.lastPriceNativeMicros)
-  const nativePrevious = safePositiveInteger(holding.previousPriceNativeMicros)
-  const hasNativeComparison = nativeCurrent > 0 && nativePrevious > 0
-  const current = hasNativeComparison ? nativeCurrent : safePositiveInteger(holding.lastPriceUsdMicros)
-  const previous = hasNativeComparison ? nativePrevious : safePositiveInteger(holding.previousPriceUsdMicros)
+  const current = safePositiveInteger(holding.lastPriceUsdMicros)
+  const previous = safePositiveInteger(holding.previousPriceUsdMicros)
   if (!current || !previous || current === previous) return { direction: 'neutral', percent: 0 }
   return { direction: current > previous ? 'up' : 'down', percent: ((current - previous) / previous) * 100 }
 }
@@ -227,6 +240,7 @@ export function createInvestmentTrade(draft = {}, createdAt = new Date().toISOSt
   const type = Object.values(INVESTMENT_TRADE_TYPES).includes(draft.type)
     ? draft.type
     : INVESTMENT_TRADE_TYPES.BUY
+  const hasNativePrice = Object.hasOwn(draft, 'priceNativeMicros')
   return {
     id: cleanText(draft.id, 160) || `investment-trade-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     platformId: cleanText(draft.platformId, 160),
@@ -234,6 +248,12 @@ export function createInvestmentTrade(draft = {}, createdAt = new Date().toISOSt
     type,
     quantityUnits: safePositiveInteger(draft.quantityUnits),
     priceUsdMicros: safePositiveInteger(draft.priceUsdMicros),
+    ...(hasNativePrice ? {
+      priceNativeMicros: safePositiveInteger(draft.priceNativeMicros),
+      fxTryPerUsdMicros: safePositiveInteger(draft.fxTryPerUsdMicros),
+      fxQuotedAt: draft.fxQuotedAt || null,
+      fxSource: ['twelve-data', 'ecb-reference', 'manual'].includes(draft.fxSource) ? draft.fxSource : '',
+    } : {}),
     feeUsdMicros: safeInteger(draft.feeUsdMicros),
     occurredAt: draft.occurredAt || createdAt,
     note: cleanText(draft.note, 300),
@@ -251,7 +271,7 @@ export function buildInvestmentTradeEdit(trade = {}, draft = {}, updatedAt = new
   }
   if (
     !investmentDecimalInputIsValid(draft.quantity, { allowZero: false })
-    || !investmentDecimalInputIsValid(draft.priceUsd, { allowZero: false })
+    || !investmentDecimalInputIsValid(trade.priceNativeMicros ? draft.priceNative : draft.priceUsd, { allowZero: false })
   ) {
     return { ok: false, message: 'الكمية والسعر يجب أن يكونا أكبر من صفر.' }
   }
@@ -259,7 +279,10 @@ export function buildInvestmentTradeEdit(trade = {}, draft = {}, updatedAt = new
     return { ok: false, message: 'الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.' }
   }
   const quantityUnits = quantityToUnits(draft.quantity)
-  const priceUsdMicros = usdToMicros(draft.priceUsd)
+  const priceNativeMicros = trade.priceNativeMicros ? usdToMicros(draft.priceNative) : 0
+  const priceUsdMicros = priceNativeMicros
+    ? convertTryPriceToUsdMicros(priceNativeMicros, trade.fxTryPerUsdMicros)
+    : usdToMicros(draft.priceUsd)
   const feeUsdMicros = usdToMicros(draft.feeUsd || 0)
   if (trade.type === INVESTMENT_TRADE_TYPES.OPENING && feeUsdMicros !== 0) {
     return { ok: false, message: 'الرصيد الافتتاحي لا يقبل رسومًا.' }
@@ -267,10 +290,14 @@ export function buildInvestmentTradeEdit(trade = {}, draft = {}, updatedAt = new
   if (!quantityUnits || !priceUsdMicros) {
     return { ok: false, message: 'الكمية والسعر يجب أن يكونا أكبر من صفر.' }
   }
+  if (priceNativeMicros !== Number(trade.priceNativeMicros || 0) && priceUsdMicros === Number(trade.priceUsdMicros || 0)) {
+    return { ok: false, message: 'فرق سعر الليرة أصغر من دقة USD. أدخل سعرًا أدق.' }
+  }
   const nextTrade = {
     ...trade,
     quantityUnits,
     priceUsdMicros,
+    ...(priceNativeMicros ? { priceNativeMicros } : {}),
     feeUsdMicros,
     note: cleanText(draft.note, 300),
     updatedAt,
@@ -297,7 +324,7 @@ export function investmentOpeningTradeIsLocked(trade = {}, trades = []) {
 
 export function investmentTradeMatchesBaseline(currentTrade = {}, baselineTrade = {}) {
   if (!currentTrade?.id || currentTrade.id !== baselineTrade?.id) return false
-  return ['platformId', 'holdingId', 'type', 'occurredAt', 'createdAt', 'updatedAt', 'quantityUnits', 'priceUsdMicros', 'feeUsdMicros', 'note', 'status']
+  return ['platformId', 'holdingId', 'type', 'occurredAt', 'createdAt', 'updatedAt', 'quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'fxTryPerUsdMicros', 'fxQuotedAt', 'fxSource', 'feeUsdMicros', 'note', 'status']
     .every((field) => String(currentTrade[field] ?? '') === String(baselineTrade[field] ?? ''))
 }
 
@@ -345,7 +372,7 @@ export function applyInvestmentTradePriceFallback(holding = {}, trade = {}) {
   return {
     ...holding,
     lastPriceUsdMicros: priceUsdMicros,
-    lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : 0,
+    lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : safePositiveInteger(trade.priceNativeMicros),
     lastPriceAt: updatedAt,
     lastPriceQuotedAt: updatedAt,
     lastPriceFxQuotedAt: null,
@@ -380,7 +407,7 @@ export function applyInvestmentTradeEditPriceFallback(holding = {}, previousTrad
     previousPriceNativeMicros: safePositiveInteger(holding.lastPriceNativeMicros),
     previousPriceAt: holding.lastPriceAt || null,
     lastPriceUsdMicros: nextPrice,
-    lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? nextPrice : 0,
+    lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? nextPrice : safePositiveInteger(nextTrade.priceNativeMicros),
     lastPriceTradeId: nextTrade.id || previousTrade.id || holding.lastPriceTradeId || '',
     updatedAt: nextTrade.updatedAt || holding.updatedAt,
   }
@@ -577,6 +604,16 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
     if (holdingById.get(trade.holdingId)?.platformId !== trade.platformId) errors.push({ field: 'investmentTrades', id: trade.id, message: 'الاستثمار لا يتبع المنصة المختارة.' })
     if (!Object.values(INVESTMENT_TRADE_TYPES).includes(trade.type) || !safePositiveInteger(trade.quantityUnits) || !safePositiveInteger(trade.priceUsdMicros) || !investmentTradeValueMicros(trade) || ![INVESTMENT_RECORD_STATUSES.ACTIVE, INVESTMENT_RECORD_STATUSES.VOIDED].includes(trade.status) || safeInteger(trade.feeUsdMicros, -1) < 0 || (trade.type === INVESTMENT_TRADE_TYPES.OPENING && safeInteger(trade.feeUsdMicros) !== 0)) {
       errors.push({ field: 'investmentTrades', id: trade.id, message: 'كمية أو سعر عملية الاستثمار غير صالح.' })
+    }
+    if (trade.priceNativeMicros !== undefined || trade.fxTryPerUsdMicros !== undefined) {
+      if (holdingById.get(trade.holdingId)?.quoteCurrency !== CURRENCIES.TRY
+        || !safePositiveInteger(trade.priceNativeMicros)
+        || !safePositiveInteger(trade.fxTryPerUsdMicros)
+        || !isValidDateValue(trade.fxQuotedAt)
+        || !['twelve-data', 'ecb-reference', 'manual'].includes(trade.fxSource)
+        || convertTryPriceToUsdMicros(trade.priceNativeMicros, trade.fxTryPerUsdMicros) !== trade.priceUsdMicros) {
+        errors.push({ field: 'investmentTrades', id: trade.id, message: 'سعر الليرة أو تحويله إلى USD غير متطابق.' })
+      }
     }
     if (!isValidDateValue(trade.occurredAt || trade.createdAt)) {
       errors.push({ field: 'investmentTrades', id: trade.id, message: 'تاريخ عملية الاستثمار غير صالح.' })

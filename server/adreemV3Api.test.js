@@ -221,6 +221,46 @@ function fixture(overrides = {}) {
 }
 
 describe('ADREEM v3 API', () => {
+  it('serves the TRY exchange rate only to an authenticated session', async () => {
+    const marketPriceService = { tryUsdRate: vi.fn(async () => ({ tryPerUsdMicros: 33_333_333, quotedAt: '2026-08-20T12:00:00.000Z', source: 'ecb-reference' })) }
+    const { handler } = fixture({ marketPriceService })
+    const anonymous = response()
+    await handler(request({ url: '/api/investments/fx/try-usd', accessToken: '' }), anonymous)
+    expect(anonymous.statusCode).toBe(401)
+    expect(marketPriceService.tryUsdRate).not.toHaveBeenCalled()
+
+    const authenticated = response()
+    await handler(request({ url: '/api/investments/fx/try-usd' }), authenticated)
+    expect(authenticated.statusCode).toBe(200)
+    expect(JSON.parse(authenticated.body)).toMatchObject({ tryPerUsdMicros: 33_333_333, source: 'ecb-reference' })
+    expect(marketPriceService.tryUsdRate).toHaveBeenCalledTimes(1)
+
+    const wrongMethod = response()
+    await handler(request({ method: 'POST', url: '/api/investments/fx/try-usd' }), wrongMethod)
+    expect(wrongMethod.statusCode).toBe(405)
+  })
+
+  it('does not let repeated exchange-rate views consume the market-price quota', async () => {
+    const marketPriceService = {
+      tryUsdRate: vi.fn(async () => ({ tryPerUsdMicros: 33_333_333, quotedAt: '2026-08-20T12:00:00.000Z', source: 'ecb-reference' })),
+      refresh: vi.fn(async () => ({ prices: [] })),
+    }
+    const { handler, repository } = fixture({ marketPriceService })
+    repository.load.mockResolvedValue({ state: { investmentHoldings: [{ id: 'holding-a', providerSymbol: 'AAPL:XNAS', quoteCurrency: 'USD', status: 'active' }] } })
+    for (let index = 0; index < 12; index += 1) {
+      const res = response()
+      await handler(request({ url: '/api/investments/fx/try-usd' }), res)
+      expect(res.statusCode).toBe(200)
+    }
+    const req = request({ method: 'POST', url: '/api/investments/prices', body: { ids: ['holding-a'] } })
+    const res = response()
+    const pending = handler(req, res)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    req.emitBody()
+    await pending
+    expect(res.statusCode).toBe(200)
+    expect(marketPriceService.refresh).toHaveBeenCalledOnce()
+  })
   it('searches the market only after authentication', async () => {
     const marketPriceService = { search: vi.fn(async () => ({ results: [{ symbol: 'AAPL' }] })), refresh: vi.fn() }
     const { handler } = fixture({ marketPriceService })

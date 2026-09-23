@@ -730,6 +730,41 @@ describe('server ledger state validation', () => {
     expect(changedIdentity.errors).toContainEqual(expect.objectContaining({ code: 'investment-trade-identity-immutable', id: trade.id }))
   })
 
+  it('accepts an audited TRY price correction but freezes the original exchange rate', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-try', name: 'Midas' }, at)
+    const holding = createInvestmentHolding({
+      id: 'holding-try', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO',
+      quoteCurrency: CURRENCIES.TRY, assetType: INVESTMENT_ASSET_TYPES.STOCK,
+    }, at)
+    const trade = createInvestmentTrade({
+      id: 'trade-try', platformId: platform.id, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.OPENING, quantityUnits: quantityToUnits(2),
+      priceNativeMicros: usdToMicros(300), priceUsdMicros: usdToMicros(10),
+      fxTryPerUsdMicros: usdToMicros(30), fxQuotedAt: at, fxSource: 'manual',
+    }, at)
+    const current = { ...createEmptyAdreemState(at), investmentPlatforms: [platform], investmentHoldings: [holding], investmentTrades: [trade] }
+    const edited = { ...trade, priceNativeMicros: usdToMicros(330), priceUsdMicros: usdToMicros(11), updatedAt: validationNow }
+    const audit = createAuditEvent('investment.trade.updated', {
+      tradeId: trade.id, holdingId: holding.id, platformId: platform.id,
+      before: { quantityUnits: trade.quantityUnits, priceUsdMicros: trade.priceUsdMicros, feeUsdMicros: 0, note: '' },
+      after: { quantityUnits: edited.quantityUnits, priceUsdMicros: edited.priceUsdMicros, feeUsdMicros: 0, note: '' },
+      priceNativeBeforeMicros: trade.priceNativeMicros,
+      priceNativeAfterMicros: edited.priceNativeMicros,
+      fxTryPerUsdMicros: trade.fxTryPerUsdMicros,
+    })
+
+    expect(validateLedgerStateTransition({ ...current, investmentTrades: [edited], auditEvents: [audit] }, current, { now: validationNow }).ok).toBe(true)
+    expect(validateLedgerStateTransition({ ...current, investmentTrades: [edited] }, current, { now: validationNow }).errors)
+      .toContainEqual(expect.objectContaining({ code: 'investment-trade-audit-required' }))
+    const incompleteAudit = { ...audit, details: { ...audit.details, priceNativeAfterMicros: 0 } }
+    expect(validateLedgerStateTransition({ ...current, investmentTrades: [edited], auditEvents: [incompleteAudit] }, current, { now: validationNow }).errors)
+      .toContainEqual(expect.objectContaining({ code: 'investment-trade-audit-required' }))
+    const subPrecisionEdit = { ...trade, priceNativeMicros: trade.priceNativeMicros + 1, updatedAt: validationNow }
+    expect(validateLedgerStateTransition({ ...current, investmentTrades: [subPrecisionEdit], auditEvents: [audit] }, current, { now: validationNow }).errors)
+      .toContainEqual(expect.objectContaining({ code: 'invalid-investment-trade-edit' }))
+    expect(validateLedgerStateTransition({ ...current, investmentTrades: [{ ...edited, fxTryPerUsdMicros: usdToMicros(33) }], auditEvents: [audit] }, current, { now: validationNow }).ok).toBe(false)
+  })
+
   it('locks audited opening-value edits after a later investment trade', () => {
     const platform = createInvestmentPlatform({ id: 'platform-opening-lock', name: 'Midas' }, at)
     const holding = createInvestmentHolding({

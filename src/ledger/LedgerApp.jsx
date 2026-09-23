@@ -22,7 +22,7 @@ import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, ac
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
 import { formatZonedDate, formatZonedDateTime, formatZonedTime, isZonedToday, isZonedYesterday, zonedDayKey, zonedDayRange } from './dateRange'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, canCommitMovementEdit, createAccount, createOpeningMovements, markOptimisticMovementChange, postMovement, previewMovement, summarizeBalances, validateAccount, validateMovement, validateMovementBalanceTransition, voidMovement } from './ledgerCore'
-import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUnusedAccount, deleteAdreemUploadedAttachment, getLedgerPersistenceMode, loadAdreemMovementPage, loadPersistedLedgerState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, refreshAdreemInvestmentPrices, resolveAdreemAttachmentUrl, savePersistedLedgerState, searchAdreemInvestmentAssets, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './ledgerPersistence'
+import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUnusedAccount, deleteAdreemUploadedAttachment, getLedgerPersistenceMode, loadAdreemInvestmentTryUsdRate, loadAdreemMovementPage, loadPersistedLedgerState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, refreshAdreemInvestmentPrices, resolveAdreemAttachmentUrl, savePersistedLedgerState, searchAdreemInvestmentAssets, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './ledgerPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeLedgerAccounts, sameRecordVersions, sameSerializableContent } from './ledgerState'
 import { buildNetPosition, convertNetPosition, filterNetContributions, isAccountIncludedInNet } from './ledgerScope'
@@ -33,7 +33,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentMarketPrice, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, applyInvestmentMarketPrice, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, convertTryPriceToUsdMicros, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 import { isAutoPricedHolding } from './investmentMarketPolicy'
 
 const CANCEL_WINDOW_HOURS = 24
@@ -6263,9 +6263,21 @@ export default function LedgerApp() {
 
   function addInvestmentHolding(draft) {
     const initialQuantity = parseInvestmentDecimal(draft?.initialQuantity)
-    const initialPriceUsd = parseInvestmentDecimal(draft?.initialPriceUsd)
+    const priceNativeMicros = draft?.quoteCurrency === CURRENCIES.TRY ? usdToMicros(draft?.initialPriceNative) : 0
+    const fxTryPerUsdMicros = Number(draft?.fxTryPerUsdMicros || 0)
+    const initialPriceUsdMicros = draft?.quoteCurrency === CURRENCIES.TRY
+      ? convertTryPriceToUsdMicros(priceNativeMicros, fxTryPerUsdMicros)
+      : usdToMicros(draft?.initialPriceUsd)
+    const initialPriceUsd = initialPriceUsdMicros / 1_000_000
     if ((initialQuantity > 0) !== (initialPriceUsd > 0)) {
       setFeedback('الرصيد السابق يحتاج الكمية ومتوسط الشراء معًا.')
+      return false
+    }
+    if (draft?.quoteCurrency === CURRENCIES.TRY && initialQuantity > 0 && (
+      !priceNativeMicros || !initialPriceUsdMicros || initialPriceUsdMicros !== usdToMicros(draft?.initialPriceUsd)
+      || !draft?.fxQuotedAt || !['twelve-data', 'ecb-reference', 'manual'].includes(draft?.fxSource)
+    )) {
+      setFeedback('سعر الليرة أو تحويله إلى USD غير صالح.')
       return false
     }
     const duplicate = (ledgerExtras.investmentHoldings || []).some((holding) =>
@@ -6277,13 +6289,14 @@ export default function LedgerApp() {
       return false
     }
     const createdAt = new Date().toISOString()
-    const initialHolding = createInvestmentHolding(draft, createdAt)
+    const initialHolding = createInvestmentHolding({ ...draft, initialPriceUsd, lastPriceNativeMicros: priceNativeMicros }, createdAt)
     const openingTrade = initialQuantity > 0 ? createInvestmentTrade({
       platformId: initialHolding.platformId,
       holdingId: initialHolding.id,
       type: INVESTMENT_TRADE_TYPES.OPENING,
       quantityUnits: quantityToUnits(initialQuantity),
-      priceUsdMicros: usdToMicros(initialPriceUsd),
+      priceUsdMicros: initialPriceUsdMicros,
+      ...(priceNativeMicros ? { priceNativeMicros, fxTryPerUsdMicros, fxQuotedAt: draft.fxQuotedAt, fxSource: draft.fxSource } : {}),
       note: 'رصيد استثمار عند البداية',
     }, createdAt) : null
     const holding = openingTrade ? applyInvestmentTradePriceFallback(initialHolding, openingTrade) : initialHolding
@@ -6314,12 +6327,25 @@ export default function LedgerApp() {
       setFeedback('الاستثمار غير موجود.')
       return false
     }
+    const priceNativeMicros = holding.quoteCurrency === CURRENCIES.TRY ? usdToMicros(draft.priceNative) : 0
+    const fxTryPerUsdMicros = Number(draft.fxTryPerUsdMicros || 0)
+    const priceUsdMicros = priceNativeMicros
+      ? convertTryPriceToUsdMicros(priceNativeMicros, fxTryPerUsdMicros)
+      : usdToMicros(draft.priceUsd)
+    if (holding.quoteCurrency === CURRENCIES.TRY && (
+      !priceNativeMicros || !priceUsdMicros || priceUsdMicros !== usdToMicros(draft.priceUsd)
+      || !draft.fxQuotedAt || !['twelve-data', 'ecb-reference', 'manual'].includes(draft.fxSource)
+    )) {
+      setFeedback('سعر الليرة أو تحويله إلى USD غير صالح.')
+      return false
+    }
     const trade = createInvestmentTrade({
       platformId: holding.platformId,
       holdingId: holding.id,
       type: draft.type,
       quantityUnits: quantityToUnits(draft.quantity),
-      priceUsdMicros: usdToMicros(draft.priceUsd),
+      priceUsdMicros,
+      ...(priceNativeMicros ? { priceNativeMicros, fxTryPerUsdMicros, fxQuotedAt: draft.fxQuotedAt, fxSource: draft.fxSource } : {}),
       feeUsdMicros: usdToMicros(draft.feeUsd || 0),
       note: draft.note,
     })
@@ -6407,6 +6433,11 @@ export default function LedgerApp() {
           feeUsdMicros: edit.trade.feeUsdMicros,
           note: edit.trade.note || '',
         },
+        ...(currentTrade.priceNativeMicros ? {
+          priceNativeBeforeMicros: currentTrade.priceNativeMicros,
+          priceNativeAfterMicros: edit.trade.priceNativeMicros,
+          fxTryPerUsdMicros: currentTrade.fxTryPerUsdMicros,
+        } : {}),
       })],
     }))
     setFeedback('تم تعديل عملية الاستثمار بعد المراجعة.')
@@ -6821,6 +6852,7 @@ export default function LedgerApp() {
         onOpenFunding={openInvestmentFunding}
         onRefreshPrices={() => refreshInvestmentPrices(true)}
         onSearchAssets={searchAdreemInvestmentAssets}
+        onLoadTryUsdRate={loadAdreemInvestmentTryUsdRate}
       />
     )
     if (activeSection === 'review') {

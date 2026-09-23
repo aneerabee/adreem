@@ -3,6 +3,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
 import {
   INVESTMENT_ASSET_TYPES,
   INVESTMENT_TRADE_TYPES,
+  INVESTMENT_FX_FORM_MAX_AGE_MS,
   applyInvestmentMarketPrice,
   applyInvestmentTradeEditPriceFallback,
   applyInvestmentTradePriceFallback,
@@ -11,7 +12,9 @@ import {
   createInvestmentHolding,
   createInvestmentPlatform,
   createInvestmentTrade,
+  convertTryPriceToUsdMicros,
   investmentOpeningTradeIsLocked,
+  investmentFxRateIsFresh,
   investmentPriceChange,
   investmentPriceDirection,
   investmentPriceRefreshDelay,
@@ -61,6 +64,58 @@ describe('investment portfolio core', () => {
     expect(quantityToUnits(0.12345678)).toBe(12_345_678)
     expect(usdToMicros(12.345678)).toBe(12_345_678)
     expect(microsToUsd(12_345_678)).toBe(12.345678)
+  })
+
+  it('stores Turkish purchase prices in TRY and a fixed USD cost without repricing past trades', () => {
+    const platform = createInvestmentPlatform({ id: 'turkish-platform', name: 'Midas' })
+    const holding = createInvestmentHolding({
+      id: 'turkish-holding', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO',
+      quoteCurrency: CURRENCIES.TRY, assetType: INVESTMENT_ASSET_TYPES.STOCK,
+      lastPriceUsdMicros: usdToMicros(10), lastPriceNativeMicros: usdToMicros(300),
+    })
+    const rate = usdToMicros(30)
+    const opening = createInvestmentTrade({
+      id: 'turkish-opening', platformId: platform.id, holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.OPENING, quantityUnits: quantityToUnits(2),
+      priceNativeMicros: usdToMicros(300), priceUsdMicros: convertTryPriceToUsdMicros(usdToMicros(300), rate),
+      fxTryPerUsdMicros: rate, fxQuotedAt: '2026-01-01T00:00:00.000Z', fxSource: 'ecb-reference',
+    })
+    expect(opening.priceUsdMicros).toBe(usdToMicros(10))
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [opening] }).ok).toBe(true)
+    expect(summarizeInvestmentPortfolio({ platforms: [platform], holdings: [holding], trades: [opening] }).costBasisUsdMicros).toBe(usdToMicros(20))
+
+    const edited = buildInvestmentTradeEdit(opening, { quantity: '2', priceNative: '330', feeUsd: '0', note: 'corrected' })
+    expect(edited).toMatchObject({ ok: true, trade: { priceNativeMicros: usdToMicros(330), priceUsdMicros: usdToMicros(11), fxTryPerUsdMicros: rate } })
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [edited.trade] }).ok).toBe(true)
+    expect(investmentTradeMatchesBaseline(edited.trade, opening)).toBe(false)
+
+    const tampered = { ...opening, priceUsdMicros: usdToMicros(9) }
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [tampered] }).errors)
+      .toContainEqual(expect.objectContaining({ message: expect.stringContaining('غير متطابق') }))
+    expect(convertTryPriceToUsdMicros(usdToMicros(300), 0)).toBe(0)
+    expect(convertTryPriceToUsdMicros(Number.MAX_SAFE_INTEGER, 1)).toBe(0)
+  })
+
+  it('does not fabricate a missing exchange-rate source or timestamp', () => {
+    const platform = createInvestmentPlatform({ id: 'try-platform', name: 'Midas' })
+    const holding = createInvestmentHolding({ id: 'try-holding', platformId: platform.id, name: 'Stock', symbol: 'STK', quoteCurrency: CURRENCIES.TRY })
+    const draft = { platformId: platform.id, holdingId: holding.id, quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(10), priceNativeMicros: usdToMicros(300), fxTryPerUsdMicros: usdToMicros(30) }
+    const missing = createInvestmentTrade(draft)
+    expect(missing).toMatchObject({ fxQuotedAt: null, fxSource: '' })
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [missing] }).ok).toBe(false)
+    const invalidNative = createInvestmentTrade({ ...draft, priceNativeMicros: -1, fxQuotedAt: '2026-09-24T00:00:00.000Z', fxSource: 'manual' })
+    expect(invalidNative).toHaveProperty('priceNativeMicros', 0)
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [invalidNative] }).ok).toBe(false)
+  })
+
+  it('requires an automatic TRY exchange rate to be freshly checked at save time', () => {
+    const now = Date.parse('2026-09-24T12:00:00.000Z')
+    const rate = { source: 'ecb-reference', loadedAt: new Date(now - INVESTMENT_FX_FORM_MAX_AGE_MS + 1).toISOString() }
+    expect(investmentFxRateIsFresh(rate, now)).toBe(true)
+    expect(investmentFxRateIsFresh({ ...rate, loadedAt: new Date(now - INVESTMENT_FX_FORM_MAX_AGE_MS).toISOString() }, now)).toBe(false)
+    expect(investmentFxRateIsFresh({ ...rate, loadedAt: new Date(now + 1).toISOString() }, now)).toBe(false)
+    expect(investmentFxRateIsFresh({ source: 'twelve-data', loadedAt: 'invalid' }, now)).toBe(false)
+    expect(investmentFxRateIsFresh({ source: 'manual', loadedAt: '' }, now)).toBe(true)
   })
 
   it('accepts localized decimal input without losing investment precision', () => {
@@ -544,7 +599,8 @@ describe('investment portfolio core', () => {
     expect(investmentPriceChange({
       lastPriceNativeMicros: usdToMicros(120), previousPriceNativeMicros: usdToMicros(100),
       lastPriceUsdMicros: usdToMicros(3), previousPriceUsdMicros: usdToMicros(4),
-    })).toEqual({ direction: 'up', percent: 20 })
+    })).toEqual({ direction: 'down', percent: -25 })
+    expect(investmentPriceDirection({ lastPriceNativeMicros: usdToMicros(120), previousPriceNativeMicros: usdToMicros(100) })).toBe('neutral')
   })
 
   it('preserves the last actual price change when a later check returns the same quote', () => {

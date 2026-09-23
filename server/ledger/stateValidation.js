@@ -25,7 +25,7 @@ const OWN_VALUE_KINDS = new Set([VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS
 const RECORD_LISTS = ['accounts', 'movements', 'dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'auditEvents']
 const ACCOUNT_CLASSIFICATION_FIELDS = ['type', 'valueKind', 'currencyKind']
 const INVESTMENT_HOLDING_IDENTITY_FIELDS = ['platformId', 'symbol', 'providerSymbol', 'assetType', 'exchange', 'quoteCurrency']
-const INVESTMENT_TRADE_EDITABLE_FIELDS = ['quantityUnits', 'priceUsdMicros', 'feeUsdMicros', 'note']
+const INVESTMENT_TRADE_EDITABLE_FIELDS = ['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros', 'note']
 const INVESTMENT_TRADE_UPDATE_FIELDS = new Set([...INVESTMENT_TRADE_EDITABLE_FIELDS, 'updatedAt'])
 const ACTIVE_STATUS = 'active'
 const INACTIVE_STATUS = 'inactive'
@@ -171,6 +171,11 @@ function matchingInvestmentTradeHistory(trade, previousTrade, auditEvents = [], 
       && cleanId(details.platformId) === cleanId(trade.platformId)
       && isDeepStrictEqual(details.before, before)
       && isDeepStrictEqual(details.after, after)
+      && (!previousTrade.priceNativeMicros || (
+        details.priceNativeBeforeMicros === previousTrade.priceNativeMicros
+        && details.priceNativeAfterMicros === trade.priceNativeMicros
+        && details.fxTryPerUsdMicros === previousTrade.fxTryPerUsdMicros
+      ))
   })
 }
 
@@ -901,11 +906,16 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
       continue
     }
     const valuesChanged = INVESTMENT_TRADE_EDITABLE_FIELDS.some((field) => !isDeepStrictEqual(previousTrade[field], trade[field]))
+    if (previousTrade.priceNativeMicros !== trade.priceNativeMicros
+      && previousTrade.priceUsdMicros === trade.priceUsdMicros) {
+      errors.push({ code: 'invalid-investment-trade-edit', recordType: 'investmentTrades', id: trade.id, message: 'تعديل سعر الليرة أصغر من دقة الدولار.' })
+      continue
+    }
     if (!valuesChanged || !validTimestamp(trade.updatedAt)) {
       errors.push({ code: 'invalid-investment-trade-edit', recordType: 'investmentTrades', id: trade.id, message: 'تعديل عملية الاستثمار غير مكتمل.' })
       continue
     }
-    const financialChanged = ['quantityUnits', 'priceUsdMicros', 'feeUsdMicros']
+    const financialChanged = ['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros']
       .some((field) => !isDeepStrictEqual(previousTrade[field], trade[field]))
     if (financialChanged && investmentOpeningTradeIsLocked(previousTrade, investmentTrades)) {
       errors.push({ code: 'investment-opening-trade-locked', recordType: 'investmentTrades', id: trade.id, message: 'القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة.' })

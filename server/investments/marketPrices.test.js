@@ -28,6 +28,27 @@ function ecbPayload(date = '2027-01-15', tryDate = date) {
 }
 
 describe('investment market prices', () => {
+  it('returns a verified TRY per USD quote and caches it for the purchase form', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      expect(new URL(url).searchParams.get('symbol')).toBe('TRY/USD')
+      return response({ symbol: 'TRY/USD', close: '0.03', timestamp: Math.floor(NOW / 1000), is_market_open: true })
+    })
+    const service = createMarketPriceService(licensedEnv, { fetchImpl, now: () => NOW })
+    expect(await service.tryUsdRate()).toMatchObject({ tryPerUsdMicros: 33_333_333, source: 'twelve-data' })
+    expect(await service.tryUsdRate()).toMatchObject({ tryPerUsdMicros: 33_333_333 })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to the dated ECB reference, never an unverified rate', async () => {
+    const fetchImpl = vi.fn(async (url) => new URL(url).pathname === '/quote'
+      ? response({ status: 'error' }) : response(ecbPayload()))
+    const service = createMarketPriceService(licensedEnv, { fetchImpl, now: () => NOW })
+    expect(await service.tryUsdRate()).toMatchObject({ tryPerUsdMicros: 33_333_333, source: 'ecb-reference', quotedAt: '2027-01-15T00:00:00.000Z' })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+
+    const unavailable = createMarketPriceService({}, { fetchImpl: vi.fn(async () => response(ecbPayload('2020-01-01'))), now: () => NOW })
+    await expect(unavailable.tryUsdRate()).rejects.toMatchObject({ code: 'try-usd-rate-unavailable', statusCode: 503 })
+  })
   it('rejects duplicate holdings, invalid symbols and unsupported currencies', () => {
     expect(() => normalizeMarketPriceRequest({ items: [{ id: 'a', symbol: 'AAPL' }, { id: 'a', symbol: 'MSFT' }] })).toThrow(/مكرر/)
     expect(() => normalizeMarketPriceRequest({ items: [{ id: 'a', symbol: '<bad>' }] })).toThrow(/غير صالح/)

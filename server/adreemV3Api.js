@@ -823,13 +823,14 @@ export function createAdreemV3ApiHandler(env = process.env, options = {}) {
       const { context } = authenticated
       const repository = repositoryFactory(context)
 
-      if (url.pathname === '/api/investments/search' || url.pathname === '/api/investments/prices') {
-        if (req.method !== 'POST') throw new V3ApiError('Method not allowed.', 405)
+      if (url.pathname === '/api/investments/search' || url.pathname === '/api/investments/prices' || url.pathname === '/api/investments/fx/try-usd') {
+        if (req.method !== (url.pathname === '/api/investments/fx/try-usd' ? 'GET' : 'POST')) throw new V3ApiError('Method not allowed.', 405)
         const isMarketSearch = url.pathname === '/api/investments/search'
-        const rateScope = isMarketSearch ? 'market-search' : 'market-price'
+        const rateScope = isMarketSearch ? 'market-search' : url.pathname === '/api/investments/fx/try-usd' ? 'market-fx' : 'market-price'
         const rateLimitPerMinute = isMarketSearch ? 30 : 12
         if (!rateLimit(`${rateScope}:${context.profile.id}`, rateLimitPerMinute)) throw new V3ApiError('طلبات كثيرة. حاول بعد قليل.', 429)
         try {
+          if (url.pathname === '/api/investments/fx/try-usd') return reply(200, await marketPriceService.tryUsdRate())
           const body = await readJson(req)
           if (url.pathname === '/api/investments/search') return reply(200, await marketPriceService.search(body))
           const loaded = await repository.load()

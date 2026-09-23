@@ -112,7 +112,8 @@ describe('investments panel', () => {
 
     expect(html).toContain('إغلاق سابق')
     expect(html).not.toContain('03:00')
-    expect(html).toContain('300 TRY')
+    expect(html).toContain('السعر السابق 9 USD')
+    expect(html).not.toContain('300 TRY')
   })
 
   it('attributes a US daily close on the holding and labels it as an end-of-day price', () => {
@@ -131,7 +132,7 @@ describe('investments panel', () => {
     expect(html).not.toContain('03:00')
   })
 
-  it('shows the local market price and a specific refresh failure without changing the USD valuation', () => {
+  it('shows the USD market price and a specific refresh failure without changing the valuation', () => {
     const platform = createInvestmentPlatform({ id: 'platform-try', name: 'Midas' })
     const holding = createInvestmentHolding({
       id: 'holding-try', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO', quoteCurrency: 'TRY',
@@ -141,13 +142,13 @@ describe('investments panel', () => {
     const summary = { platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 100_000_000, costBasisUsdMicros: usdToMicros(8), marketValueUsdMicros: usdToMicros(9), unrealizedProfitUsdMicros: usdToMicros(1) }] }], totalValueUsdMicros: usdToMicros(9) }
     const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} priceErrors={{ 'holding-try': 'سعر السوق غير متاح' }} {...callbacks()} />)
 
-    expect(html).toContain('300 TRY')
+    expect(html).not.toContain('300 TRY')
     expect(html).not.toContain('20%')
     expect(html).toContain('is-market-price has-price is-neutral is-stale')
     expect(html).toContain('9 USD')
     expect(html).toContain('سعر السوق غير متاح')
     expect(html).toContain('لم يتحدث')
-    expect(html).toContain('السعر السابق 300 TRY')
+    expect(html).toContain('السعر السابق 9 USD')
     expect(html).toContain('role="status"')
     expect(html).toContain('is-price-error')
   })

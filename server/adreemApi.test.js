@@ -99,6 +99,43 @@ async function loginForToken(api, email, password) {
 }
 
 describe('ADREEM web API auth helpers', () => {
+  it('serves the TRY/USD rate only to an authenticated ledger session', async () => {
+    const providerFetch = vi.fn(async (url) => {
+      const endpoint = new URL(url)
+      expect(endpoint.pathname).toBe('/quote')
+      expect(endpoint.searchParams.get('symbol')).toBe('TRY/USD')
+      return {
+        ok: true,
+        json: async () => ({ symbol: 'TRY/USD', close: '0.025', last_quote_at: Math.floor(Date.now() / 1000) }),
+      }
+    })
+    vi.stubGlobal('fetch', providerFetch)
+    const file = tempRegistry([
+      registryPasswordUser({
+        userId: 'owner-main', displayName: 'Owner', email: 'owner@example.com', password: 'owner-pass-123', ledgerId: 'owner-main',
+      }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_USERS_FILE: file,
+      TWELVE_DATA_API_KEY: 'private-key',
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'owner@example.com', 'owner-pass-123')
+
+    const request = createJsonRequest(null, { method: 'GET', url: '/api/investments/fx/try-usd', token })
+    const response = createMockResponse()
+    await api(request, response)
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toMatchObject({ tryPerUsdMicros: 40_000_000, source: 'twelve-data' })
+
+    const deniedRequest = createJsonRequest(null, { method: 'GET', url: '/api/investments/fx/try-usd', token: 'invalid-token' })
+    const deniedResponse = createMockResponse()
+    await api(deniedRequest, deniedResponse)
+    expect(deniedResponse.statusCode).toBe(401)
+    expect(providerFetch).toHaveBeenCalledTimes(1)
+  })
+
   it('searches the provider and refreshes only a holding from the authenticated ledger', async () => {
     const providerFetch = vi.fn(async (url) => {
       const endpoint = new URL(url)

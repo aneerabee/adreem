@@ -287,6 +287,10 @@ export async function searchAdreemInvestmentAssets(query, quoteCurrency = 'USD',
   })
 }
 
+export async function loadAdreemInvestmentTryUsdRate() {
+  return adreemApiJson('/api/investments/fx/try-usd')
+}
+
 const apiJson = adreemApiJson
 
 function recordsById(records = []) {

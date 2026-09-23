@@ -609,16 +609,26 @@ export function createAdreemApiHandler(env = process.env) {
         return sendJson(res, 500, { error: 'ADREEM admin API failed.' }, allowedOrigin)
       }
     }
-    if (url.pathname === '/api/investments/search' || url.pathname === '/api/investments/prices') {
+    if (url.pathname === '/api/investments/search' || url.pathname === '/api/investments/prices' || url.pathname === '/api/investments/fx/try-usd') {
       const isMarketSearch = url.pathname === '/api/investments/search'
       const priceLimit = rateLimiter.check(
-        rateKey(req, isMarketSearch ? 'market-search' : 'market-price'),
+        rateKey(req, isMarketSearch ? 'market-search' : url.pathname === '/api/investments/fx/try-usd' ? 'market-fx' : 'market-price'),
         isMarketSearch ? RATE_LIMITS.marketSearch : RATE_LIMITS.marketPrice,
       )
       if (!priceLimit.ok) return rejectRateLimited(res, allowedOrigin, priceLimit)
       const token = tokenFromAuthHeader(req.headers.authorization)
       const ledgerId = ledgerIdForToken(token)
       if (!ledgerId) return sendJson(res, 401, { error: 'Invalid ledger token.' }, allowedOrigin)
+      if (url.pathname === '/api/investments/fx/try-usd') {
+        if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
+        try {
+          return sendJson(res, 200, await marketPriceService.tryUsdRate(), allowedOrigin)
+        } catch (error) {
+          const status = error instanceof MarketPriceError ? error.statusCode : 500
+          audit(env, { action: 'investment.fx.failed', ledgerId, code: error?.code || '', status })
+          return sendJson(res, status, { error: status >= 500 && !(error instanceof MarketPriceError) ? 'Market price request failed.' : error.message, code: error?.code || 'market-price-failed' }, allowedOrigin)
+        }
+      }
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed.' }, allowedOrigin)
       try {
         const body = await readJsonBody(req)

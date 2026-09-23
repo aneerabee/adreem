@@ -2866,6 +2866,12 @@
 .adreem-investment-dialog-body input:focus,
 .adreem-investment-dialog-body select:focus { border-color: var(--dialog-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--dialog-accent) 14%, transparent); }
 .adreem-investment-dialog-body .is-paired { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.adreem-investment-fx { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: end; gap: 8px; }
+.adreem-investment-fx label { min-width: 0; }
+.adreem-investment-fx small { min-width: 0; padding-block-end: 9px; color: #5f6b69; font-size: 0.66rem; line-height: 1.35; overflow-wrap: anywhere; }
+.adreem-investment-fx small.is-error { color: #aa3030; }
+.adreem-investment-fx-result { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; margin: 0; padding: 7px 9px; border-inline-start: 3px solid var(--dialog-accent); border-radius: 5px; background: #f4f6f5; color: #52605d; font-size: 0.68rem; }
+.adreem-investment-fx-result strong { direction: ltr; color: #1e2926; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
 .adreem-investment-dialog > footer { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 7px; padding: 9px 11px; border-top: 1px solid #dfe3e4; background: #fff; }
 .adreem-investment-dialog > footer button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid #d7d2c8; border-radius: 6px; background: #fff; color: #303538; font-weight: 800; }
 .adreem-investment-dialog > footer .is-primary { border-color: var(--dialog-accent); background: var(--dialog-accent); color: #fff; }
@@ -2982,6 +2988,8 @@
   .adreem-investment-dialog.is-history { max-height: 92dvh; }
   .adreem-investment-dialog-body .is-paired { grid-template-columns: 1fr; }
   .adreem-investment-dialog-body .is-paired.is-investment-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .adreem-investment-fx { grid-template-columns: 1fr; gap: 2px; }
+  .adreem-investment-fx small { padding-block-end: 0; }
   .adreem-investment-dialog-body input,
   .adreem-investment-dialog-body select { min-height: 42px; font-size: 16px; }
   .adreem-investment-dialog-body { scrollbar-gutter: auto; padding: 10px; }

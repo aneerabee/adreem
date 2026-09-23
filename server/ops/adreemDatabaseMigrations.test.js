@@ -15,8 +15,17 @@ const investmentHardeningSql = readFileSync(new URL('../../supabase/migrations/2
 const investmentHoldingHardeningSql = readFileSync(new URL('../../supabase/migrations/20260919001000_harden_adreem_investment_holdings.sql', import.meta.url), 'utf8')
 const investmentFundingSql = readFileSync(new URL('../../supabase/migrations/20260919184500_allow_person_investment_funding.sql', import.meta.url), 'utf8')
 const investmentTradeEditingSql = readFileSync(new URL('../../supabase/migrations/20260920214500_allow_audited_investment_trade_edits.sql', import.meta.url), 'utf8')
+const turkishTradeCorrectionSql = readFileSync(new URL('../../supabase/migrations/20260923233000_allow_turkish_trade_price_corrections.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
+  it('keeps the original Turkish exchange rate immutable and ties corrected TRY prices to USD', () => {
+    expect(turkishTradeCorrectionSql).toContain('create or replace function adreem_private.protect_investment_trade_history()')
+    expect(turkishTradeCorrectionSql).toContain("old.payload - array['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros', 'note', 'updatedAt']")
+    expect(turkishTradeCorrectionSql).toContain("old.payload ->> 'priceNativeMicros' is distinct from new.payload ->> 'priceNativeMicros'")
+    expect(turkishTradeCorrectionSql).toContain("new.payload ->> 'fxTryPerUsdMicros'")
+    expect(turkishTradeCorrectionSql).toContain('ADREEM_INVALID_INVESTMENT_TRADE_FX')
+    expect(turkishTradeCorrectionSql).toContain('ADREEM_INVESTMENT_TRADE_PAYLOAD_IMMUTABLE')
+  })
   it('keeps financial numbers inside the exact application range', () => {
     expect(schemaSql).not.toContain('numeric(20, 0)')
     expect(schemaSql).toContain('balance_dinar numeric(15, 0)')
