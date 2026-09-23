@@ -6,6 +6,9 @@ const NOW = 1_800_000_000_000
 const licensedEnv = { TWELVE_DATA_API_KEY: 'private-key', ADREEM_TWELVE_STOCK_DISPLAY_LICENSED: 'true' }
 const stock = { id: 'apple', symbol: 'AAPL:NASDAQ', quoteCurrency: 'USD', assetType: 'stock' }
 const turkish = { id: 'turkish', symbol: 'THYAO:BIST', quoteCurrency: 'TRY', assetType: 'stock' }
+const burkutEnv = { ADREEM_BURKUT_API_KEY: 'private-burkut-key' }
+const burkutStock = { id: 'turkish', symbol: 'THYAO:BURKUT', quoteCurrency: 'TRY', assetType: 'stock' }
+const burkutFund = { id: 'fund', symbol: 'TI2:BURKUT', quoteCurrency: 'TRY', assetType: 'fund' }
 
 function response(payload, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => payload }
@@ -81,6 +84,91 @@ describe('investment market prices', () => {
     expect(fund.results).toEqual([expect.objectContaining({ providerSymbol: 'ISMDL:BIST', assetType: 'fund' })])
     expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(fetchImpl.mock.calls[0][1].headers.authorization).toBe('apikey private-key')
+  })
+
+  it('searches Turkish stocks and funds from Bürküt without exposing the key', async () => {
+    const fetchImpl = vi.fn(async (url, options) => {
+      const path = new URL(url).pathname
+      expect(options.headers['X-API-Key']).toBe('private-burkut-key')
+      return response({ data: path.endsWith('/stocks')
+        ? [{ symbol: 'THYAO', name: 'Turkish Airlines', instrumentType: 'STOCK', price: 300 }]
+        : [{ symbol: 'TI2', code: 'TI2', name: 'BIST 30 Fund', instrumentType: 'FUND', price: 0.1253 }] })
+    })
+    const service = createMarketPriceService(burkutEnv, { fetchImpl, now: () => NOW })
+    expect(await service.search({ query: 'THYAO', quoteCurrency: 'TRY', assetType: 'stock' }))
+      .toMatchObject({ mode: 'provider', results: [expect.objectContaining({ providerSymbol: 'THYAO:BURKUT', quoteCurrency: 'TRY' })] })
+    expect(await service.search({ query: 'TI2', quoteCurrency: 'TRY', assetType: 'fund' }))
+      .toMatchObject({ mode: 'provider', results: [expect.objectContaining({ providerSymbol: 'TI2:BURKUT', assetType: 'fund' })] })
+    expect(isAutoPricedHolding({ ...burkutStock, providerSymbol: burkutStock.symbol, marketDataMode: 'provider' })).toBe(true)
+    expect(isAutoPricedHolding({ ...turkish, providerSymbol: turkish.symbol, marketDataMode: 'provider' })).toBe(false)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('prices Turkish investments from a shared catalog and keeps the verified ECB conversion', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const path = new URL(url).pathname
+      if (path.endsWith('/stocks')) return response({ data: [{ symbol: 'THYAO', instrumentType: 'STOCK', price: 300, stale: false, freshness: 'FRESH', updatedAt: '2027-01-15T07:00:00Z' }] })
+      if (path.endsWith('/funds')) return response({ data: [{ symbol: 'TI2', code: 'TI2', instrumentType: 'FUND', price: 0.1253, stale: false, freshness: 'FRESH', updatedAt: '2027-01-15T07:00:00Z' }] })
+      return response(ecbPayload())
+    })
+    const service = createMarketPriceService(burkutEnv, { fetchImpl, now: () => NOW })
+    const first = await service.refresh({ items: [burkutStock, burkutFund] })
+    expect(first.prices).toEqual([
+      expect.objectContaining({ ok: true, nativePriceMicros: 300_000_000, priceUsdMicros: 9_000_000, source: 'burkut+ecb-fx' }),
+      expect.objectContaining({ ok: true, nativePriceMicros: 125_300, priceUsdMicros: 3_759, source: 'burkut+ecb-fx' }),
+    ])
+    expect(fetchImpl.mock.calls.map(([url]) => new URL(url).pathname)).toEqual([
+      '/api/public/v1/stocks', '/service/data/EXR/D.USD+TRY.EUR.SP00.A', '/api/public/v1/funds',
+    ])
+    expect((await service.refresh({ items: [burkutStock] })).prices[0]).toMatchObject({ cached: true })
+  })
+
+  it('shares concurrent catalog reads and limits forced refreshes to protect the monthly quota', async () => {
+    let currentTime = NOW
+    const fetchImpl = vi.fn(async (url) => new URL(url).pathname.endsWith('/stocks')
+      ? response({ data: [{ symbol: 'THYAO', name: 'Turkish Airlines', instrumentType: 'STOCK', price: 300,
+        stale: false, freshness: 'FRESH', updatedAt: '2027-01-15T07:00:00Z' }] })
+      : response(ecbPayload()))
+    const service = createMarketPriceService(burkutEnv, { fetchImpl, now: () => currentTime })
+    await Promise.all([
+      service.search({ query: 'THYAO', quoteCurrency: 'TRY', assetType: 'stock' }),
+      service.search({ query: 'Turkish', quoteCurrency: 'TRY', assetType: 'stock' }),
+    ])
+    const stockCalls = () => fetchImpl.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/stocks')).length
+    expect(stockCalls()).toBe(1)
+    expect((await service.refresh({ items: [burkutStock], force: true })).prices[0].ok).toBe(true)
+    expect(stockCalls()).toBe(1)
+    currentTime += 61_000
+    expect((await service.refresh({ items: [burkutStock], force: true })).prices[0].ok).toBe(true)
+    expect(stockCalls()).toBe(2)
+  })
+
+  it('rejects mismatched, stale, untimed and malformed Turkish provider prices', async () => {
+    const valid = { symbol: 'THYAO', instrumentType: 'STOCK', price: 300, stale: false, freshness: 'FRESH', updatedAt: '2027-01-15T07:00:00Z' }
+    for (const invalid of [
+      { ...valid, symbol: 'ASELS' }, { ...valid, instrumentType: 'FUND' }, { ...valid, price: -1 },
+      { ...valid, stale: true }, { ...valid, freshness: 'STALE' }, { ...valid, updatedAt: '' },
+      { ...valid, updatedAt: '2026-12-01T10:00:00Z' },
+    ]) {
+      const fetchImpl = vi.fn(async () => response({ data: [invalid] }))
+      const result = await createMarketPriceService(burkutEnv, { fetchImpl, now: () => NOW }).refresh({ items: [burkutStock] })
+      expect(result.prices[0].ok).toBe(false)
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('keeps old prices on provider failure and never sends Bürküt symbols to Twelve Data', async () => {
+    for (const status of [401, 429, 502]) {
+      const fetchImpl = vi.fn(async () => response({}, status))
+      const service = createMarketPriceService({ ...burkutEnv, ...licensedEnv }, { fetchImpl, now: () => NOW })
+      const result = await service.refresh({ items: [burkutStock] })
+      expect(result.prices[0].ok).toBe(false)
+      expect(fetchImpl.mock.calls.map(([url]) => new URL(url).hostname)).toEqual(['api.burkutportfoy.com'])
+    }
+    const fetchImpl = vi.fn()
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    expect((await service.refresh({ items: [burkutStock] })).prices[0]).toMatchObject({ ok: false })
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 
   it('never tries a demo stock request, even if a display flag exists without a key', async () => {

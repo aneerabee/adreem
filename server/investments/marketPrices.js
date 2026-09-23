@@ -1,15 +1,18 @@
-import { dexReferenceSymbol, freeReferenceSymbol, isAutoPricedHolding, isTgmEodHolding, tgmEodSymbolForHolding } from '../../src/ledger/investmentMarketPolicy.js'
+import { burkutSymbolForHolding, dexReferenceSymbol, freeReferenceSymbol, isAutoPricedHolding, isTgmEodHolding, tgmEodSymbolForHolding } from '../../src/ledger/investmentMarketPolicy.js'
 
 const DEFAULT_TWELVE_DATA_URL = 'https://api.twelvedata.com'
 const DEFAULT_GOLD_DATA_URL = 'https://api.gold-api.com'
 const DEFAULT_TGM_DATA_URL = 'https://tgmcharts.com'
 const DEFAULT_DEX_DATA_URL = 'https://api.dexscreener.com'
+const DEFAULT_BURKUT_DATA_URL = 'https://api.burkutportfoy.com/api/public/v1'
 const ECB_FX_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+TRY.EUR.SP00.A?lastNObservations=1&format=jsondata'
 const DEFAULT_CACHE_MS = 5 * 60 * 1000
 const MAX_QUOTE_CLOCK_SKEW_MS = 5 * 60 * 1000
 const MAX_OPEN_MARKET_QUOTE_AGE_MS = 2 * 60 * 60 * 1000
 const MAX_FX_QUOTE_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const TGM_EOD_CACHE_MS = 2 * 60 * 60 * 1000
+const BURKUT_CATALOG_CACHE_MS = 2 * 60 * 60 * 1000
+const BURKUT_FORCE_COOLDOWN_MS = 60 * 1000
 const MAX_CRYPTO_QUOTE_AGE_MS = 15 * 60 * 1000
 const MIN_DEX_PRIMARY_LIQUIDITY_USD = 500_000
 const MIN_DEX_SECONDARY_LIQUIDITY_USD = 100_000
@@ -69,6 +72,8 @@ function cleanSearchText(value) {
 function providerSymbolForHolding(holding = {}) {
   const symbol = cleanSymbol(holding.symbol)
   const exchange = cleanSymbol(holding.exchange)
+  const burkutSymbol = burkutSymbolForHolding(holding)
+  if (burkutSymbol) return burkutSymbol
   if (isTgmEodHolding(holding)) return tgmEodSymbolForHolding(holding)
   if (holding.assetType === 'metal' || ['COMMODITY', 'FOREX', 'FX'].includes(exchange)) return symbol || cleanSymbol(holding.providerSymbol).split(':')[0]
   if (symbol && exchange && !symbol.includes(':')) return `${symbol}:${exchange}`
@@ -229,11 +234,88 @@ export function createMarketPriceService(env = process.env, options = {}) {
   const searchCache = new Map()
   let ecbFxCache = null
   let ecbFxPending = null
+  const burkutCatalogs = new Map()
+  const burkutPending = new Map()
+  const burkutKey = String(env.ADREEM_BURKUT_API_KEY || '').trim()
   const licensedStocksEnabled = env.ADREEM_TWELVE_STOCK_DISPLAY_LICENSED === 'true'
     && Boolean(String(env.TWELVE_DATA_API_KEY || '').trim())
 
   function providerHeaders(apiKey) {
     return { accept: 'application/json', authorization: `apikey ${apiKey}` }
+  }
+
+  async function fetchBurkutCatalog(assetType, force = false) {
+    const cached = burkutCatalogs.get(assetType)
+    if (cached && ((!force && cached.expiresAt > now()) || (force && now() - cached.fetchedAt < BURKUT_FORCE_COOLDOWN_MS))) return cached.items
+    if (burkutPending.has(assetType)) return burkutPending.get(assetType)
+    const pending = (async () => {
+      const path = assetType === 'fund' ? 'funds' : 'stocks'
+      const endpoint = new URL(`${String(env.ADREEM_BURKUT_API_URL || DEFAULT_BURKUT_DATA_URL).replace(/\/+$/, '')}/${path}`)
+      const response = await fetchImpl(endpoint, { headers: { accept: 'application/json', 'X-API-Key': burkutKey }, signal: AbortSignal.timeout(8_000) })
+      if (!response.ok) throw new MarketPriceError(priceFailureMessage({ code: response.status }), response.status, 'burkut-provider')
+      const payload = await response.json()
+      if (!Array.isArray(payload?.data)) throw new MarketPriceError('قائمة السوق غير صالحة. بقي السعر السابق محفوظًا.', 502, 'burkut-payload')
+      burkutCatalogs.set(assetType, { items: payload.data, fetchedAt: now(), expiresAt: now() + BURKUT_CATALOG_CACHE_MS })
+      return payload.data
+    })()
+    burkutPending.set(assetType, pending)
+    try { return await pending } finally { burkutPending.delete(assetType) }
+  }
+
+  function burkutCode(item) {
+    const match = /^([A-Z0-9.]{2,12}):BURKUT$/.exec(item.symbol)
+    return item.quoteCurrency === 'TRY' && ['stock', 'fund'].includes(item.assetType) ? match?.[1] || '' : ''
+  }
+
+  async function fetchBurkutPrices(items, force = false) {
+    const byType = new Map()
+    for (const item of items) {
+      if (!byType.has(item.assetType)) byType.set(item.assetType, [])
+      byType.get(item.assetType).push(item)
+    }
+    const results = []
+    for (const [assetType, group] of byType) {
+      let catalog
+      try { catalog = await fetchBurkutCatalog(assetType, force) } catch (error) {
+        results.push(...group.map((item) => failedPrice(item, error?.message || 'تعذر الوصول إلى مزود الأسعار. بقي السعر السابق محفوظًا.')))
+        continue
+      }
+      const rows = new Map(catalog.map((row) => [cleanSymbol(row.symbol || row.code), row]))
+      for (const item of group) {
+        const code = burkutCode(item)
+        const row = rows.get(code)
+        const price = Number(row?.price)
+        const quotedAt = isoQuoteTime(row?.updatedAt, now())
+        if (!code || !row || cleanSymbol(row.instrumentType) !== assetType.toUpperCase()
+          || row.stale !== false || cleanSymbol(row.freshness) !== 'FRESH'
+          || !Number.isFinite(price) || price <= 0 || quoteIsStale({ quotedAt }, now(), MAX_FX_QUOTE_AGE_MS)) {
+          results.push(failedPrice(item, 'سعر المزود غير مؤكد لهذا الرمز. بقي السعر السابق محفوظًا.'))
+          continue
+        }
+        const fx = await fetchEcbFxQuote('TRY')
+        results.push(fx
+          ? verifiedPrice(item, { price, quotedAt, marketOpen: false }, fx, 'burkut+ecb-fx')
+          : failedPrice(item, 'سعر تحويل العملة غير متاح. بقي السعر السابق محفوظًا.'))
+      }
+    }
+    return results
+  }
+
+  async function searchBurkut(request) {
+    const catalog = await fetchBurkutCatalog(request.assetType)
+    const query = request.query.toLocaleLowerCase('en')
+    return catalog.filter((row) => {
+      const code = cleanSymbol(row.symbol || row.code)
+      return /^[A-Z0-9.]{2,12}$/.test(code)
+        && cleanSymbol(row.instrumentType) === request.assetType.toUpperCase()
+        && Boolean(cleanSearchText(row.name))
+        && `${code} ${String(row.name || '')}`.toLocaleLowerCase('en').includes(query)
+    }).slice(0, MAX_SEARCH_RESULTS).map((row) => {
+      const symbol = cleanSymbol(row.symbol || row.code)
+      return { id: `${symbol}:BURKUT:TRY`, symbol, providerSymbol: `${symbol}:BURKUT`,
+        name: cleanSearchText(row.name), exchange: request.assetType === 'fund' ? 'TEFAS' : 'BIST', instrumentType: request.assetType === 'stock' ? 'Common Stock' : 'Fund',
+        assetType: request.assetType, quoteCurrency: 'TRY' }
+    })
   }
 
   async function fetchReferencePrice(item) {
@@ -522,7 +604,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
     }))
   }
 
-  async function fetchPrices(items) {
+  async function fetchPrices(items, force = false) {
     const results = new Map()
     const referenceItems = items.filter((item) => isAutoPricedHolding(item, licensedStocksEnabled) && freeReferenceSymbol(item))
     for (let offset = 0; offset < referenceItems.length; offset += 4) {
@@ -544,7 +626,13 @@ export function createMarketPriceService(env = process.env, options = {}) {
       const group = await Promise.all(usEodItems.slice(offset, offset + 4).map((item) => fetchTgmEodPrice(item)))
       group.forEach((result) => results.set(result.id, result))
     }
-    const licensedItems = items.filter((item) => !results.has(item.id) && isAutoPricedHolding(item, licensedStocksEnabled))
+    const burkutItems = burkutKey ? items.filter((item) => !results.has(item.id) && burkutCode(item)) : []
+    if (burkutItems.length) {
+      const providerResults = await fetchBurkutPrices(burkutItems, force)
+      providerResults.forEach((result) => results.set(result.id, result))
+    }
+    const licensedItems = items.filter((item) => licensedStocksEnabled && !results.has(item.id)
+      && !burkutCode(item) && isAutoPricedHolding(item, licensedStocksEnabled))
     const eodItems = licensedItems.filter((item) => item.quoteCurrency === 'TRY')
     for (let offset = 0; offset < eodItems.length; offset += 4) {
       const group = await Promise.all(eodItems.slice(offset, offset + 4).map((item) => fetchTwelveEodPrice(item)))
@@ -627,7 +715,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
         else fresh.push(item)
       }
       if (fresh.length) {
-        const fetched = await fetchPrices(fresh)
+        const fetched = await fetchPrices(fresh, force)
         fetched.forEach((result) => results.set(result.id, result))
       }
       return {
@@ -648,10 +736,11 @@ export function createMarketPriceService(env = process.env, options = {}) {
           .map((asset) => ({ symbol: asset.symbol, name: asset.name, assetType: asset.assetType, id: asset.symbol, providerSymbol: asset.symbol, exchange: '', quoteCurrency: 'USD' }))
         : []
       const usEodSearch = !licensedStocksEnabled && request.quoteCurrency === 'USD' && ['stock', 'fund'].includes(request.assetType)
+      const burkutSearch = Boolean(burkutKey) && request.quoteCurrency === 'TRY' && ['stock', 'fund'].includes(request.assetType)
       const result = {
-        results: localResults.length ? localResults : usEodSearch ? await searchTgmTicker(request)
+        results: localResults.length ? localResults : burkutSearch ? await searchBurkut(request) : usEodSearch ? await searchTgmTicker(request)
           : licensedStocksEnabled && ['stock', 'fund'].includes(request.assetType) ? await searchProvider(request) : [],
-        mode: localResults.length ? 'reference' : usEodSearch ? 'daily-close'
+        mode: localResults.length ? 'reference' : burkutSearch ? 'provider' : usEodSearch ? 'daily-close'
           : licensedStocksEnabled && ['stock', 'fund'].includes(request.assetType) ? 'licensed' : 'manual',
         searchedAt: new Date(currentTime).toISOString(),
         cached: false,

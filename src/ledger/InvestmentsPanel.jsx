@@ -52,6 +52,7 @@ const PRICE_SOURCE_LABELS = {
   'twelve-data-eod+ecb-fx': { ar: 'إغلاق يومي · صرف أوروبي', en: 'Daily close · ECB FX' },
   'twelve-data+ecb-fx': { ar: 'Twelve Data · صرف أوروبي يومي', en: 'Twelve Data · ECB daily FX' },
   'tgmcharts-eod': { ar: 'TGMCharts · إغلاق يومي', en: 'TGMCharts · Daily close' },
+  'burkut+ecb-fx': { ar: 'Bürküt · صرف أوروبي', en: 'Bürküt · ECB FX' },
 }
 
 function decimal(value, digits = 6) {
@@ -143,7 +144,7 @@ function holdingPriceIsStale(holding) {
   if (sourceUnavailable) return true
   if (!automated) return false
   const quotedAge = Date.now() - Date.parse(String(holding.lastPriceQuotedAt || ''))
-  const dailyClose = ['tgmcharts-eod', 'twelve-data-eod+ecb-fx'].includes(holding.lastPriceSource)
+  const dailyClose = ['tgmcharts-eod', 'twelve-data-eod+ecb-fx', 'burkut+ecb-fx'].includes(holding.lastPriceSource)
   const maxQuoteAge = holding.assetType === 'crypto' ? 15 * 60 * 1000 : dailyClose || holding.lastPriceMarketOpen === false ? 7 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000
   return !Number.isFinite(quotedAge) || quotedAge > maxQuoteAge
 }
@@ -154,12 +155,13 @@ function InvestmentMarketPrice({ holding, error, onOpen }) {
   const priceCurrency = nativePriceMicros ? holding.quoteCurrency : 'USD'
   const priceTimestamp = String(holding.lastPriceQuotedAt || '')
   const dailyClose = holding.lastPriceSource === 'tgmcharts-eod'
+  const providerUpdate = holding.lastPriceSource === 'burkut+ecb-fx'
   const sourceUnavailable = Boolean(holding.lastPriceSource && !['manual', 'trade', 'opening'].includes(holding.lastPriceSource)
     && !isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true'))
   const stale = Boolean(error || holdingPriceIsStale(holding))
   const priceStatus = error ? 'لم يتحدث'
     : stale ? (dailyClose || holding.lastPriceSource === 'twelve-data-eod+ecb-fx' ? 'إغلاق سابق' : 'سعر سابق')
-      : dailyClose ? 'إغلاق يومي' : holding.lastPriceMarketOpen === false ? 'إغلاق السوق' : 'آخر سعر'
+      : dailyClose ? 'إغلاق يومي' : providerUpdate ? 'سعر المزود' : holding.lastPriceMarketOpen === false ? 'إغلاق السوق' : 'آخر سعر'
   const { direction, percent } = stale ? { direction: 'neutral', percent: 0 } : investmentPriceChange(holding)
   const DirectionIcon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus
   const prefersReducedMotion = useReducedMotion()
@@ -169,8 +171,8 @@ function InvestmentMarketPrice({ holding, error, onOpen }) {
       type="button"
       className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${stale ? 'is-stale' : ''}`.trim()}
       onClick={() => onOpen(holding)}
-      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} ${priceCurrency}` : 'إدخال السعر الحالي'}
-      title={error || (sourceUnavailable ? 'مصدر التحديث غير متاح لهذا الرمز؛ السعر المعروض سابق.' : holding.lastPriceQuotedAt ? `${dailyClose ? 'تاريخ الإغلاق' : holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : 'وقت السعر'}: ${['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(holding.lastPriceSource) ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
+      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : providerUpdate ? 'سعر المزود' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} ${priceCurrency}` : 'إدخال السعر الحالي'}
+      title={error || (sourceUnavailable ? 'مصدر التحديث غير متاح لهذا الرمز؛ السعر المعروض سابق.' : holding.lastPriceQuotedAt ? `${dailyClose ? 'تاريخ الإغلاق' : providerUpdate ? 'وقت تحديث المزود' : holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : 'وقت السعر'}: ${['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(holding.lastPriceSource) ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
     >
       <small>
         <span>{priceStatus} {stale ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
