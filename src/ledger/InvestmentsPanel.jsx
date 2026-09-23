@@ -41,6 +41,14 @@ const blankPlatform = { name: '', kind: 'platform', location: '' }
 const blankHolding = { platformId: '', name: '', symbol: '', providerSymbol: '', assetType: INVESTMENT_ASSET_TYPES.STOCK, exchange: '', quoteCurrency: 'USD', initialQuantity: '', initialPriceUsd: '' }
 const blankTrade = { holdingId: '', type: INVESTMENT_TRADE_TYPES.BUY, quantity: '', priceUsd: '', feeUsd: '', note: '' }
 const blankTradeEdit = { quantity: '', priceUsd: '', feeUsd: '', note: '' }
+const PRICE_SOURCE_LABELS = {
+  coinbase: { ar: 'Coinbase', en: 'Coinbase' },
+  'gold-api': { ar: 'Gold API', en: 'Gold API' },
+  'binance-usdt+coinbase-usdt-usd': { ar: 'Binance · تحويل Coinbase', en: 'Binance · Coinbase FX' },
+  'binance-usdt+twelve-data-usdt-usd': { ar: 'Binance · تحويل Twelve Data', en: 'Binance · Twelve Data FX' },
+  'twelve-data': { ar: 'Twelve Data', en: 'Twelve Data' },
+  'twelve-data+ecb-fx': { ar: 'Twelve Data · صرف أوروبي يومي', en: 'Twelve Data · ECB daily FX' },
+}
 
 function decimal(value, digits = 6) {
   const number = Number(value || 0)
@@ -98,6 +106,12 @@ function activityDate(value) {
   const date = new Date(value || 0)
   if (!Number.isFinite(date.getTime())) return 'بدون تاريخ'
   return date.toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function activityDay(value) {
+  const date = new Date(value || 0)
+  if (!Number.isFinite(date.getTime())) return 'بدون تاريخ'
+  return date.toLocaleDateString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'medium', timeZone: 'UTC' })
 }
 
 function accountLabel(account) {
@@ -708,7 +722,8 @@ export default function InvestmentsPanel({
                           <span><small>تكلفة المتبقي</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
                           {row.holding.quoteCurrency !== 'USD' && row.holding.lastPriceUsdMicros ? <span><small>السعر بالدولار</small><strong>{usdUnitMicros(row.holding.lastPriceUsdMicros)}</strong></span> : null}
                           <span><small>{row.holding.lastPriceQuotedAt ? 'وقت السعر' : ['manual', 'trade', 'opening'].includes(row.holding.lastPriceSource) ? 'وقت الإدخال' : 'آخر تحقق'}</small><strong>{row.holding.lastPriceQuotedAt || row.holding.lastPriceAt ? activityDate(row.holding.lastPriceQuotedAt || row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
-                          {row.holding.lastPriceFxQuotedAt ? <span><small>وقت الصرف</small><strong>{activityDate(row.holding.lastPriceFxQuotedAt)}</strong></span> : null}
+                          {row.holding.lastPriceFxQuotedAt ? <span><small>{row.holding.lastPriceSource === 'twelve-data+ecb-fx' ? 'تاريخ الصرف' : 'وقت الصرف'}</small><strong>{row.holding.lastPriceSource === 'twelve-data+ecb-fx' ? activityDay(row.holding.lastPriceFxQuotedAt) : activityDate(row.holding.lastPriceFxQuotedAt)}</strong></span> : null}
+                          {PRICE_SOURCE_LABELS[row.holding.lastPriceSource] ? <span><small>مصدر السعر</small><strong>{PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</strong></span> : null}
                           {priceErrors[row.holding.id] ? <p className="is-error"><AlertCircle aria-hidden="true" size={13} />{priceErrors[row.holding.id]}</p> : null}
                           {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
                         </div> : null}

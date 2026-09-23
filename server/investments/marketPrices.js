@@ -1,10 +1,14 @@
 const DEFAULT_TWELVE_DATA_URL = 'https://api.twelvedata.com'
-const DEFAULT_BINANCE_DATA_URL = 'https://api.binance.com'
+const DEFAULT_BINANCE_DATA_URL = 'https://data-api.binance.vision'
+const DEFAULT_COINBASE_DATA_URL = 'https://api.exchange.coinbase.com'
+const DEFAULT_GOLD_DATA_URL = 'https://api.gold-api.com'
+const ECB_FX_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+TRY.EUR.SP00.A?lastNObservations=1&format=jsondata'
 const DEFAULT_CACHE_MS = 5 * 60 * 1000
 const MAX_QUOTE_CLOCK_SKEW_MS = 5 * 60 * 1000
 const MAX_OPEN_MARKET_QUOTE_AGE_MS = 2 * 60 * 60 * 1000
 const MAX_FX_QUOTE_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const MAX_USDT_QUOTE_AGE_MS = 60 * 60 * 1000
+const MAX_CRYPTO_QUOTE_AGE_MS = 15 * 60 * 1000
 const MAX_PRICE_ITEMS = 40
 const MAX_CACHE_ENTRIES = 500
 const MAX_SEARCH_RESULTS = 15
@@ -121,6 +125,34 @@ function quoteTime(candidate, currentTime) {
   return null
 }
 
+function isoQuoteTime(value, currentTime) {
+  if (typeof value !== 'string' || !/(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return null
+  const millis = Date.parse(value)
+  if (!Number.isFinite(millis) || millis < Date.UTC(2000, 0, 1) || millis > currentTime + MAX_QUOTE_CLOCK_SKEW_MS) return null
+  return new Date(millis).toISOString()
+}
+
+function ecbRatesFromPayload(payload, currentTime) {
+  const dimensions = payload?.structure?.dimensions
+  const currencyIndex = dimensions?.series?.findIndex((item) => item.id === 'CURRENCY') ?? -1
+  const currencies = dimensions?.series?.[currencyIndex]?.values
+  const periods = dimensions?.observation?.find((item) => item.id === 'TIME_PERIOD')?.values
+  const series = payload?.dataSets?.[0]?.series
+  if (currencyIndex < 0 || !Array.isArray(currencies) || !Array.isArray(periods) || !series) return null
+  const rates = new Map()
+  for (const [seriesKey, data] of Object.entries(series)) {
+    const currency = currencies[Number(seriesKey.split(':')[currencyIndex])]?.id
+    const [periodIndex, observation] = Object.entries(data?.observations || {})[0] || []
+    const date = periods[Number(periodIndex)]?.id
+    const price = Number(observation?.[0])
+    const quotedAt = /^\d{4}-\d{2}-\d{2}$/.test(date || '') ? isoQuoteTime(`${date}T00:00:00Z`, currentTime) : null
+    if (['USD', 'TRY'].includes(currency) && Number.isFinite(price) && price > 0 && quotedAt && !quoteIsStale({ quotedAt }, currentTime, MAX_FX_QUOTE_AGE_MS)) {
+      rates.set(currency, { price, quotedAt, date })
+    }
+  }
+  return rates
+}
+
 function quoteFromPayload(payload, symbol, singleSymbol, currentTime) {
   const candidate = singleSymbol ? payload : payload?.[symbol]
   const price = Number(candidate?.close ?? candidate?.price)
@@ -163,7 +195,8 @@ export function normalizeMarketPriceRequest(body = {}) {
     if (!symbol || !PROVIDER_SYMBOL_PATTERN.test(symbol)) throw new MarketPriceError('رمز السعر غير صالح.', 400, 'invalid-price-symbol')
     if (!quoteCurrency) throw new MarketPriceError('عملة السوق غير مدعومة.', 400, 'invalid-market-currency')
     ids.add(id)
-    return { id, symbol, quoteCurrency }
+    const assetType = cleanAssetType(item?.assetType)
+    return { id, symbol, quoteCurrency, ...(assetType ? { assetType } : {}) }
   })
 }
 
@@ -180,7 +213,7 @@ export function marketPriceItemsForHoldings(body = {}, state = {}) {
     const holding = holdings.get(id)
     const providerSymbol = providerSymbolForHolding(holding)
     if (!holding || !providerSymbol) throw new MarketPriceError('أحد الاستثمارات غير موجود أو لا يملك مصدر سعر.', 400, 'unknown-price-item')
-    return { id, providerSymbol, quoteCurrency: holding.quoteCurrency }
+    return { id, providerSymbol, quoteCurrency: holding.quoteCurrency, assetType: holding.assetType }
   })
   return normalizeMarketPriceRequest({ items })
 }
@@ -202,6 +235,9 @@ export function createMarketPriceService(env = process.env, options = {}) {
   const cache = new Map()
   const searchCache = new Map()
   let usdtUsdCache = null
+  let usdtUsdPending = null
+  let ecbFxCache = null
+  let ecbFxPending = null
 
   function providerHeaders(apiKey) {
     return { accept: 'application/json', authorization: `apikey ${apiKey}` }
@@ -209,44 +245,86 @@ export function createMarketPriceService(env = process.env, options = {}) {
 
   function binanceTickerSymbol(item = {}) {
     const [marketSymbol, exchange = ''] = cleanSymbol(item.symbol).split(':')
-    if (exchange !== 'BINANCE' || item.quoteCurrency !== 'USD') return ''
+    if (item.assetType !== 'crypto' || exchange !== 'BINANCE' || item.quoteCurrency !== 'USD') return ''
     const [base, quote] = marketSymbol.split('/')
     if (!base || quote !== 'USD' || !/^[A-Z0-9]+$/.test(base)) return ''
     return `${base}USDT`
   }
 
-  async function fetchUsdtUsdRate() {
-    const apiKey = String(env.TWELVE_DATA_API_KEY || '').trim()
-    if (!apiKey) return null
-    if (usdtUsdCache && usdtUsdCache.expiresAt > now()) return usdtUsdCache.quote
-    const endpoint = new URL('/quote', String(env.TWELVE_DATA_API_URL || DEFAULT_TWELVE_DATA_URL).replace(/\/+$/, ''))
-    endpoint.searchParams.set('symbol', 'USDT/USD')
+  function coinbaseTickerSymbol(item = {}) {
+    const [marketSymbol, exchange = ''] = cleanSymbol(item.symbol).split(':')
+    if (item.assetType !== 'crypto' || !['COINBASE', 'COINBASE PRO'].includes(exchange) || item.quoteCurrency !== 'USD') return ''
+    const [base, quote] = marketSymbol.split('/')
+    return base && quote === 'USD' && /^[A-Z0-9]+$/.test(base) ? `${base}-USD` : ''
+  }
+
+  function metalTickerSymbol(item = {}) {
+    if (item.assetType !== 'metal' || item.quoteCurrency !== 'USD') return ''
+    const [base, quote] = cleanSymbol(item.symbol).split('/')
+    return quote === 'USD' && ['XAU', 'XAG', 'XPT', 'XPD'].includes(base) ? base : ''
+  }
+
+  async function fetchCoinbaseQuote(productId, maxAgeMs = MAX_CRYPTO_QUOTE_AGE_MS) {
+    const endpoint = new URL(`/products/${productId}/ticker`, String(env.ADREEM_COINBASE_API_URL || DEFAULT_COINBASE_DATA_URL).replace(/\/+$/, ''))
     try {
-      const response = await fetchImpl(endpoint, { headers: providerHeaders(apiKey), signal: AbortSignal.timeout(8_000) })
+      const response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
       if (!response.ok) return null
-      const quote = quoteFromPayload(await response.json(), 'USDT/USD', true, now())
-      if (quoteIsStale(quote, now(), MAX_USDT_QUOTE_AGE_MS)) return null
-      usdtUsdCache = { quote, expiresAt: now() + Math.min(cacheMs, 60_000) }
-      return quote
+      const payload = await response.json()
+      const price = Number(payload?.price)
+      const quotedAt = isoQuoteTime(payload?.time, now())
+      if (!Number.isFinite(price) || price <= 0 || quoteIsStale({ quotedAt }, now(), maxAgeMs)) return null
+      return { price, quotedAt, marketOpen: true }
     } catch {
       return null
     }
   }
 
+  async function fetchUsdtUsdRate() {
+    if (usdtUsdCache && usdtUsdCache.expiresAt > now()) return usdtUsdCache.quote
+    if (usdtUsdPending) return usdtUsdPending
+    usdtUsdPending = (async () => {
+      const coinbaseQuote = await fetchCoinbaseQuote('USDT-USD', MAX_USDT_QUOTE_AGE_MS)
+      if (coinbaseQuote) return { ...coinbaseQuote, source: 'coinbase' }
+      const apiKey = String(env.TWELVE_DATA_API_KEY || '').trim()
+      if (!apiKey) return null
+      const endpoint = new URL('/quote', String(env.TWELVE_DATA_API_URL || DEFAULT_TWELVE_DATA_URL).replace(/\/+$/, ''))
+      endpoint.searchParams.set('symbol', 'USDT/USD')
+      try {
+        const response = await fetchImpl(endpoint, { headers: providerHeaders(apiKey), signal: AbortSignal.timeout(8_000) })
+        if (!response.ok) return null
+        const quote = quoteFromPayload(await response.json(), 'USDT/USD', true, now())
+        return quoteIsStale(quote, now(), MAX_USDT_QUOTE_AGE_MS) ? null : { ...quote, source: 'twelve-data' }
+      } catch {
+        return null
+      }
+    })()
+    try {
+      const quote = await usdtUsdPending
+      if (quote) usdtUsdCache = { quote, expiresAt: now() + Math.min(cacheMs, 60_000) }
+      return quote
+    } finally {
+      usdtUsdPending = null
+    }
+  }
+
   async function fetchBinancePrice(item) {
     const tickerSymbol = binanceTickerSymbol(item)
-    if (!tickerSymbol || !String(env.TWELVE_DATA_API_KEY || '').trim()) return null
-    const endpoint = new URL('/api/v3/ticker/price', String(env.ADREEM_BINANCE_API_URL || DEFAULT_BINANCE_DATA_URL).replace(/\/+$/, ''))
+    if (!tickerSymbol) return null
+    const endpoint = new URL('/api/v3/trades', String(env.ADREEM_BINANCE_API_URL || DEFAULT_BINANCE_DATA_URL).replace(/\/+$/, ''))
     endpoint.searchParams.set('symbol', tickerSymbol)
-    let response
+    endpoint.searchParams.set('limit', '1')
+    let payload
     try {
-      response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
+      const response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
+      if (!response.ok) return null
+      payload = await response.json()
     } catch {
       return null
     }
-    const payload = await response.json().catch(() => ({}))
-    const price = Number(payload?.price)
-    if (!response.ok || !Number.isFinite(price) || price <= 0) return null
+    const trade = Array.isArray(payload) ? payload[0] : null
+    const price = Number(trade?.price)
+    const quotedAt = quoteTime({ timestamp: trade?.time }, now())
+    if (!Number.isFinite(price) || price <= 0 || quoteIsStale({ quotedAt }, now(), MAX_CRYPTO_QUOTE_AGE_MS)) return null
     const usdtUsd = await fetchUsdtUsdRate()
     if (!usdtUsd) return null
     const priceUsdMicros = usdMicros(price * usdtUsd.price)
@@ -259,10 +337,10 @@ export function createMarketPriceService(env = process.env, options = {}) {
       nativePriceMicros: priceUsdMicros,
       priceUsdMicros,
       refreshedAt,
-      quotedAt: null,
+      quotedAt,
       fxQuotedAt: usdtUsd.quotedAt,
       marketOpen: true,
-      source: 'binance-usdt+twelve-data-usdt-usd',
+      source: `binance-usdt+${usdtUsd.source}-usdt-usd`,
       cached: false,
       ok: true,
     }
@@ -270,16 +348,144 @@ export function createMarketPriceService(env = process.env, options = {}) {
     return result
   }
 
-  async function withCryptoFallback(item, failedResult) {
-    return await fetchBinancePrice(item) || failedResult
+  async function fetchCoinbasePrice(item) {
+    const productId = coinbaseTickerSymbol(item)
+    if (!productId) return null
+    const quote = await fetchCoinbaseQuote(productId)
+    const priceUsdMicros = usdMicros(quote?.price)
+    if (!priceUsdMicros) return null
+    const result = {
+      id: item.id,
+      symbol: item.symbol,
+      quoteCurrency: item.quoteCurrency,
+      nativePriceMicros: priceUsdMicros,
+      priceUsdMicros,
+      refreshedAt: new Date(now()).toISOString(),
+      quotedAt: quote.quotedAt,
+      fxQuotedAt: null,
+      marketOpen: true,
+      source: 'coinbase',
+      cached: false,
+      ok: true,
+    }
+    cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
+    return result
   }
 
-  async function fetchPrices(items) {
+  async function fetchMetalPrice(item) {
+    const metal = metalTickerSymbol(item)
+    if (!metal) return null
+    const endpoint = new URL(`/price/${metal}`, String(env.ADREEM_GOLD_API_URL || DEFAULT_GOLD_DATA_URL).replace(/\/+$/, ''))
+    try {
+      const response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
+      if (!response.ok) return null
+      const payload = await response.json()
+      const price = Number(payload?.price)
+      const quotedAt = isoQuoteTime(payload?.updatedAt, now())
+      if (payload?.symbol !== metal || payload?.currency !== 'USD' || !Number.isFinite(price) || price <= 0
+        || quoteIsStale({ quotedAt }, now(), MAX_OPEN_MARKET_QUOTE_AGE_MS)) return null
+      const priceUsdMicros = usdMicros(price)
+      if (!priceUsdMicros) return null
+      const result = {
+        id: item.id,
+        symbol: item.symbol,
+        quoteCurrency: item.quoteCurrency,
+        nativePriceMicros: priceUsdMicros,
+        priceUsdMicros,
+        refreshedAt: new Date(now()).toISOString(),
+        quotedAt,
+        fxQuotedAt: null,
+        marketOpen: null,
+        source: 'gold-api',
+        cached: false,
+        ok: true,
+      }
+      cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
+      return result
+    } catch {
+      return null
+    }
+  }
+
+  async function fetchEcbFxRates() {
+    if (ecbFxCache && ecbFxCache.expiresAt > now()) return ecbFxCache.rates
+    if (!ecbFxPending) {
+      ecbFxPending = (async () => {
+        try {
+          const response = await fetchImpl(ECB_FX_URL, { headers: { accept: 'application/vnd.sdmx.data+json;version=1.0.0-wd' }, signal: AbortSignal.timeout(8_000) })
+          if (!response.ok) return null
+          return ecbRatesFromPayload(await response.json(), now())
+        } catch {
+          return null
+        }
+      })()
+    }
+    const rates = await ecbFxPending
+    ecbFxPending = null
+    ecbFxCache = { rates, expiresAt: now() + (rates?.size ? 60 * 60 * 1000 : 60_000) }
+    return rates
+  }
+
+  async function fetchEcbFxQuote(currency) {
+    const rates = await fetchEcbFxRates()
+    const usd = rates?.get('USD')
+    const quoted = currency === 'TRY' ? rates?.get('TRY') : usd
+    if (!usd || !quoted || usd.date !== quoted.date) return null
+    const price = currency === 'TRY' ? usd.price / quoted.price : usd.price
+    return Number.isFinite(price) && price > 0 ? { price, quotedAt: quoted.quotedAt, marketOpen: false, source: 'ecb-fx' } : null
+  }
+
+  function failedPrice(item, error) {
+    return { id: item.id, symbol: item.symbol, ok: false, error }
+  }
+
+  function verifiedPrice(item, nativeQuote, fxQuote) {
+    const nativeAgeLimit = nativeQuote?.marketOpen === true ? MAX_OPEN_MARKET_QUOTE_AGE_MS : MAX_FX_QUOTE_AGE_MS
+    if (quoteIsStale(nativeQuote, now(), nativeAgeLimit)) return failedPrice(item, 'سعر السوق قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.')
+    const fxAgeLimit = fxQuote?.marketOpen === true ? MAX_OPEN_MARKET_QUOTE_AGE_MS : MAX_FX_QUOTE_AGE_MS
+    if (item.quoteCurrency !== 'USD' && quoteIsStale(fxQuote, now(), fxAgeLimit)) {
+      return failedPrice(item, 'سعر تحويل العملة قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.')
+    }
+    const nativePriceMicros = usdMicros(nativeQuote.price)
+    const priceUsdMicros = usdMicros(nativeQuote.price * fxQuote.price)
+    if (!nativePriceMicros || !priceUsdMicros) return failedPrice(item, 'السعر المستلم غير صالح.')
+    const result = {
+      id: item.id,
+      symbol: item.symbol,
+      quoteCurrency: item.quoteCurrency,
+      nativePriceMicros,
+      priceUsdMicros,
+      refreshedAt: new Date(now()).toISOString(),
+      quotedAt: nativeQuote.quotedAt,
+      fxQuotedAt: fxQuote.quotedAt,
+      marketOpen: nativeQuote.marketOpen,
+      source: fxQuote.source === 'ecb-fx' ? 'twelve-data+ecb-fx' : 'twelve-data',
+      cached: false,
+      ok: true,
+    }
+    cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
+    return result
+  }
+
+  async function fetchTwelveNativeWithEcb(item, apiKey) {
+    const endpoint = new URL('/quote', String(env.TWELVE_DATA_API_URL || DEFAULT_TWELVE_DATA_URL).replace(/\/+$/, ''))
+    endpoint.searchParams.set('symbol', item.symbol)
+    try {
+      const response = await fetchImpl(endpoint, { headers: providerHeaders(apiKey), signal: AbortSignal.timeout(8_000) })
+      if (!response.ok) return null
+      const nativeQuote = quoteFromPayload(await response.json(), item.symbol, true, now())
+      if (!nativeQuote) return null
+      const fxQuote = await fetchEcbFxQuote(item.quoteCurrency)
+      return fxQuote ? verifiedPrice(item, nativeQuote, fxQuote) : null
+    } catch {
+      return null
+    }
+  }
+
+  async function fetchTwelvePrices(items) {
     const configuredApiKey = String(env.TWELVE_DATA_API_KEY || '').trim()
     const apiKey = configuredApiKey || 'demo'
     const usingDemoAccess = !configuredApiKey
-    if (typeof fetchImpl !== 'function') throw new MarketPriceError('خدمة الأسعار غير متاحة.', 503, 'market-price-unavailable')
-
     const currencies = Array.from(new Set(items.map((item) => item.quoteCurrency).filter((currency) => currency !== 'USD')))
     const symbols = Array.from(new Set([...items.map((item) => item.symbol), ...currencies.map((currency) => `${currency}/USD`)]))
     const endpoint = new URL('/quote', String(env.TWELVE_DATA_API_URL || DEFAULT_TWELVE_DATA_URL).replace(/\/+$/, ''))
@@ -297,9 +503,9 @@ export function createMarketPriceService(env = process.env, options = {}) {
         for (let offset = 0; offset < items.length; offset += 4) {
           const group = await Promise.all(items.slice(offset, offset + 4).map(async (item) => {
             try {
-              return await fetchPrices([item])
+              return await fetchTwelvePrices([item])
             } catch (error) {
-              return [{ id: item.id, symbol: item.symbol, ok: false, error: error?.message || 'السعر غير متاح لهذا الرمز.' }]
+              return [failedPrice(item, error?.message || 'السعر غير متاح لهذا الرمز.')]
             }
           }))
           isolatedResults.push(...group.flat())
@@ -307,50 +513,52 @@ export function createMarketPriceService(env = process.env, options = {}) {
         return isolatedResults
       }
       if (items.length === 1) {
-        const failedResult = { id: items[0].id, symbol: items[0].symbol, ok: false, error: priceFailureMessage({ ...payload, code: payload?.code || response.status }, usingDemoAccess) }
-        return [await withCryptoFallback(items[0], failedResult)]
+        const item = items[0]
+        if (item.quoteCurrency !== 'USD' && response.status !== 429) {
+          const recovered = await fetchTwelveNativeWithEcb(item, apiKey)
+          if (recovered) return [recovered]
+        }
       }
-      return Promise.all(items.map((item) => withCryptoFallback(item, { id: item.id, symbol: item.symbol, ok: false, error: priceFailureMessage({ ...payload, code: payload?.code || response.status }, usingDemoAccess) })))
+      return items.map((item) => failedPrice(item, priceFailureMessage({ ...payload, code: payload?.code || response.status }, usingDemoAccess)))
     }
     const singleSymbol = symbols.length === 1
-    const refreshedAt = new Date(now()).toISOString()
     return Promise.all(items.map(async (item) => {
       const nativeQuote = quoteFromPayload(payload, item.symbol, singleSymbol, now())
-      const fxQuote = item.quoteCurrency === 'USD'
+      let fxQuote = item.quoteCurrency === 'USD'
         ? { price: 1, quotedAt: null }
         : quoteFromPayload(payload, `${item.quoteCurrency}/USD`, false, now())
       const fxAgeLimit = fxQuote?.marketOpen === true ? MAX_OPEN_MARKET_QUOTE_AGE_MS : MAX_FX_QUOTE_AGE_MS
-      if (!nativeQuote || !fxQuote || (item.quoteCurrency !== 'USD' && quoteIsStale(fxQuote, now(), fxAgeLimit))) {
-        const failedPayload = !nativeQuote ? (singleSymbol ? payload : payload?.[item.symbol]) : payload?.[`${item.quoteCurrency}/USD`]
-        if (nativeQuote && fxQuote && item.quoteCurrency !== 'USD') {
-          return { id: item.id, symbol: item.symbol, ok: false, error: 'سعر تحويل العملة قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.' }
-        }
-        return withCryptoFallback(item, { id: item.id, symbol: item.symbol, ok: false, error: priceFailureMessage(failedPayload, usingDemoAccess) })
+      if (nativeQuote && item.quoteCurrency !== 'USD' && quoteIsStale(fxQuote, now(), fxAgeLimit)) {
+        fxQuote = await fetchEcbFxQuote(item.quoteCurrency) || fxQuote
       }
-      const nativeAgeLimit = nativeQuote.marketOpen === true ? MAX_OPEN_MARKET_QUOTE_AGE_MS : MAX_FX_QUOTE_AGE_MS
-      if (quoteIsStale(nativeQuote, now(), nativeAgeLimit)) {
-        return { id: item.id, symbol: item.symbol, ok: false, error: 'سعر السوق قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.' }
-      }
-      const nativeMicros = usdMicros(nativeQuote.price)
-      const priceUsdMicros = usdMicros(nativeQuote.price * fxQuote.price)
-      if (!nativeMicros || !priceUsdMicros) return { id: item.id, symbol: item.symbol, ok: false, error: 'السعر المستلم غير صالح.' }
-      const result = {
-        id: item.id,
-        symbol: item.symbol,
-        quoteCurrency: item.quoteCurrency,
-        nativePriceMicros: nativeMicros,
-        priceUsdMicros,
-        refreshedAt,
-        quotedAt: nativeQuote.quotedAt,
-        fxQuotedAt: fxQuote.quotedAt,
-        marketOpen: nativeQuote.marketOpen,
-        source: 'twelve-data',
-        cached: false,
-        ok: true,
-      }
-      cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
-      return result
+      if (!nativeQuote) return failedPrice(item, priceFailureMessage(singleSymbol ? payload : payload?.[item.symbol], usingDemoAccess))
+      if (!fxQuote) return failedPrice(item, 'سعر تحويل العملة غير متاح. بقي السعر السابق محفوظًا.')
+      return verifiedPrice(item, nativeQuote, fxQuote)
     }))
+  }
+
+  async function fetchPrices(items) {
+    if (typeof fetchImpl !== 'function') throw new MarketPriceError('خدمة الأسعار غير متاحة.', 503, 'market-price-unavailable')
+    const results = new Map()
+    for (let offset = 0; offset < items.length; offset += 4) {
+      const group = await Promise.all(items.slice(offset, offset + 4).map(async (item) => {
+        if (coinbaseTickerSymbol(item)) return fetchCoinbasePrice(item)
+        if (binanceTickerSymbol(item)) return fetchBinancePrice(item)
+        if (metalTickerSymbol(item)) return fetchMetalPrice(item)
+        return null
+      }))
+      group.forEach((result) => { if (result) results.set(result.id, result) })
+    }
+    const remaining = items.filter((item) => !results.has(item.id))
+    if (remaining.length) {
+      try {
+        const providerResults = await fetchTwelvePrices(remaining)
+        providerResults.forEach((result) => results.set(result.id, result))
+      } catch (error) {
+        remaining.forEach((item) => results.set(item.id, failedPrice(item, error?.message || 'السعر غير متاح لهذا الرمز.')))
+      }
+    }
+    return items.map((item) => results.get(item.id))
   }
 
   async function searchProvider(request) {
