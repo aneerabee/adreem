@@ -1,6 +1,6 @@
 const SECTION_KEYS = new Set(['entry', 'accounts', 'investments', 'history', 'review'])
 const ENTRY_MODE_KEYS = new Set(['movement', 'account'])
-const ACCOUNT_GROUP_KEYS = new Set(['money', 'people', 'assets', 'expenses', 'separate', 'review'])
+const ACCOUNT_GROUP_KEYS = new Set(['money', 'people', 'assets', 'expenses', 'separate'])
 const BALANCE_FOCUS_KEYS = new Set(['cash', 'bank', 'receivable', 'payable'])
 
 export const DEFAULT_LEDGER_NAVIGATION = Object.freeze({
@@ -16,7 +16,9 @@ function allowed(value, values, fallback) {
 
 export function readLedgerNavigation(search = '') {
   const params = new URLSearchParams(String(search || '').replace(/^\?/, ''))
-  const section = allowed(params.get('section'), SECTION_KEYS, DEFAULT_LEDGER_NAVIGATION.section)
+  const section = params.get('section') === 'accounts' && params.get('group') === 'review'
+    ? 'review'
+    : allowed(params.get('section'), SECTION_KEYS, DEFAULT_LEDGER_NAVIGATION.section)
   const accountGroup = allowed(params.get('group'), ACCOUNT_GROUP_KEYS, DEFAULT_LEDGER_NAVIGATION.accountGroup)
   const requestedFocus = allowed(params.get('focus'), BALANCE_FOCUS_KEYS, DEFAULT_LEDGER_NAVIGATION.balanceFocus)
   const balanceFocus = section === 'accounts' && (

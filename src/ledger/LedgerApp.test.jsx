@@ -12,6 +12,7 @@ import {
   preventImplicitNumericSubmit,
   NetPositionPanel,
   SeparateLedgerPanel,
+  TrackingPanel,
   SearchField,
   AccountRow,
   MoneyAccountList,
@@ -116,6 +117,136 @@ describe('LedgerApp numeric entry', () => {
   it('formats exact totals that exceed the ordinary numeric limit without rounding them', () => {
     expect(formatMoneyNumber(9_999_999_999_999_990n)).toBe('9,999,999,999,999,990')
     expect(formatMoneyNumber(-9_999_999_999_999_990n)).toBe('-9,999,999,999,999,990')
+  })
+})
+
+describe('tracking reports', () => {
+  const salaryReport = {
+    dimension: { id: 'salary', name: 'راتب شركة تجريبية', type: 'project', linkedAccountId: 'salary-account' },
+    movementCount: 2,
+    income: 6_500,
+    expense: 0,
+    net: 6_500,
+    incomeUsd: 400,
+    expenseUsd: 100,
+    netUsd: 300,
+    incomeTry: 0,
+    expenseTry: 0,
+    incomeEur: 0,
+    expenseEur: 0,
+  }
+  const monthlySalary = {
+    id: 'monthly-salary', name: 'مرتب تجريبي', status: 'active', frequency: 'monthly',
+    nextRunOn: '2026-10-01', template: { dimensionId: 'salary', amount: 3_000, currency: CURRENCIES.DINAR },
+  }
+
+  it('shows the project income, each currency, linked monthly entry and history action together', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(<TrackingPanel
+      reports={[salaryReport]}
+      recurringRules={[monthlySalary]}
+      dueRules={[]}
+      onOpenAccount={() => {}}
+      onOpenHistory={() => {}}
+      onRunRecurring={() => {}}
+      onDisableRecurring={() => {}}
+      onUpdateRecurring={() => {}}
+    />))
+
+    expect(markup).toContain('راتب شركة تجريبية')
+    expect(markup).toContain('6,500 LYD')
+    expect(markup).toContain('400 USD')
+    expect(markup).toContain('100 USD')
+    expect(markup).toContain('300 USD')
+    expect(markup).toContain('مرتب تجريبي')
+    expect(markup).toContain('3,000 LYD')
+    expect(markup).toContain('2026-10-01')
+    expect(markup).toContain('الحركات 2')
+  })
+
+  it('keeps unlinked monthly entries visible and does not show a false zero balance for a new project', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(<TrackingPanel
+      reports={[{ ...salaryReport, movementCount: 0, income: 0, net: 0, incomeUsd: 0, expenseUsd: 0, netUsd: 0 }]}
+      recurringRules={[{ ...monthlySalary, template: { ...monthlySalary.template, dimensionId: '' } }]}
+      dueRules={[]}
+      onOpenAccount={() => {}}
+      onOpenHistory={() => {}}
+      onRunRecurring={() => {}}
+      onDisableRecurring={() => {}}
+      onUpdateRecurring={() => {}}
+    />))
+
+    expect(markup).toContain('لا توجد حركات مرتبطة بعد.')
+    expect(markup).toContain('حركات شهرية')
+    expect(markup).toContain('مرتب تجريبي')
+    expect(markup).not.toContain('Zero')
+  })
+
+  it('shows the linked project report in account details instead of a fictitious cash balance', () => {
+    const account = { id: 'salary-account', ownerName: 'راتب شركة تجريبية', subAccountName: '', type: ACCOUNT_TYPES.PROJECT, valueKind: VALUE_KINDS.PROJECT, status: ACCOUNT_STATUSES.ACTIVE }
+    const markup = stripUiDataProtection(renderToStaticMarkup(<AccountProfile
+      bucket={{ account, dinar: 0, usd: 0, try: 0, eur: 0, postedCount: 0 }}
+      accounts={[account]}
+      movements={[]}
+      dimensionReport={salaryReport}
+      onClose={() => {}}
+      onViewDimensionHistory={() => {}}
+    />))
+
+    expect(markup).toContain('6,500 LYD')
+    expect(markup).toContain('حركات المشروع')
+    expect(markup).not.toContain('لا توجد حركات لهذا الحساب.')
+  })
+
+  it('preserves an owned asset value in account details while its tracking report stays separate', () => {
+    const account = { id: 'asset-account', ownerName: 'أصل تجريبي', subAccountName: '', type: ACCOUNT_TYPES.ASSET, valueKind: VALUE_KINDS.ASSET, currencyKind: CURRENCIES.DINAR, status: ACCOUNT_STATUSES.ACTIVE }
+    const markup = stripUiDataProtection(renderToStaticMarkup(<AccountProfile
+      bucket={{ account, dinar: 10_000, usd: 0, try: 0, eur: 0, postedCount: 1 }}
+      accounts={[account]}
+      movements={[]}
+      dimensionReport={{ ...salaryReport, dimension: { id: 'asset', name: 'أصل تجريبي', type: 'asset', linkedAccountId: account.id } }}
+      onClose={() => {}}
+    />))
+
+    expect(markup).toContain('10,000 LYD')
+    expect(markup).not.toContain('صافي التتبع')
+  })
+
+  it('finds a project by its linked monthly entry name without duplicating it', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(<TrackingPanel
+      reports={[salaryReport]}
+      recurringRules={[{ ...monthlySalary, name: 'دفعة شهرية' }]}
+      dueRules={[]}
+      query="دفعة"
+      onOpenAccount={() => {}}
+      onOpenHistory={() => {}}
+      onRunRecurring={() => {}}
+      onDisableRecurring={() => {}}
+      onUpdateRecurring={() => {}}
+    />))
+
+    expect(markup).toContain('راتب شركة تجريبية')
+    expect(markup).toContain('دفعة شهرية')
+    expect(markup.match(/دفعة شهرية/g)).toHaveLength(1)
+  })
+
+  it('keeps TRY and EUR separate and highlights a negative project result', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(<TrackingPanel
+      reports={[{ ...salaryReport, income: 0, net: 0, incomeUsd: 0, expenseUsd: 0, netUsd: 0, incomeTry: 500, expenseTry: 700, netTry: -200, incomeEur: 90, expenseEur: 0, netEur: 90 }]}
+      recurringRules={[]}
+      dueRules={[]}
+      onOpenAccount={() => {}}
+      onOpenHistory={() => {}}
+      onRunRecurring={() => {}}
+      onDisableRecurring={() => {}}
+      onUpdateRecurring={() => {}}
+    />))
+
+    expect(markup).toContain('500 TRY')
+    expect(markup).toContain('700 TRY')
+    expect(markup).toContain('-200 TRY')
+    expect(markup).toContain('90 EUR')
+    expect(markup).toContain('class="is-negative"')
+    expect(markup).not.toContain('LYD 0')
   })
 })
 

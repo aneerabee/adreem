@@ -666,7 +666,7 @@ export default function InvestmentsPanel({
         </div>
       ) : (
         <div className="adreem-investment-platforms">
-          {visiblePlatforms.map((platformRow, platformIndex) => {
+          {visiblePlatforms.map((platformRow) => {
             const brand = resolveInvestmentPlatformBrand(platformRow.platform.name)
             const logoUrl = platformLogoUrl(brand)
             const smallRows = platformRow.holdings.filter(holdingIsSmall)
@@ -684,10 +684,9 @@ export default function InvestmentsPanel({
                 className={`adreem-investment-platform is-brand-${brand.key}`}
                 key={platformRow.platform.id}
                 style={investmentPlatformBrandStyle(brand)}
-                layout={prefersReducedMotion ? false : 'position'}
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, delay: Math.min(platformIndex * 0.035, 0.18), ease: [0.22, 1, 0.36, 1] }}
+                initial={prefersReducedMotion ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.14, ease: 'easeOut' }}
               >
                 <header>
                   <div className="adreem-investment-platform-identity">
@@ -721,10 +720,9 @@ export default function InvestmentsPanel({
                       <Motion.section
                         className={`adreem-investment-holding is-profit-${holdingProfitTone} ${holdingIsSmall(row) ? 'is-small' : ''}`.trim()}
                         key={row.holding.id}
-                        layout={prefersReducedMotion ? false : 'position'}
-                        initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                        initial={prefersReducedMotion ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.14, ease: 'easeOut' }}
                       >
                         <div className="adreem-investment-holding-identity">
                           <div className="adreem-investment-symbol"><b dir="ltr">{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>

@@ -3,12 +3,13 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, ChartCandlestick, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Pin, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Star, Trash2, UserRound, WalletCards, Wrench, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, ChartCandlestick, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Pin, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Star, Trash2, UserRound, WalletCards, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
 import './adreemFinance.css'
 import './adreemType.css'
+import './adreemTracking.css'
 import AdreemChrome from './AdreemChrome'
 import InvestmentsPanel from './InvestmentsPanel'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
@@ -103,10 +104,9 @@ function LedgerOverlayPortal({ children }) {
 const accountGroupTabs = [
   { key: 'money', label: 'فلوسي', title: 'فلوسي' },
   { key: 'people', label: 'الناس', title: 'الناس' },
-  { key: 'assets', label: 'متابعة', title: 'الأصول والمشاريع' },
+  { key: 'assets', label: 'تتبّع', title: 'التتبّع' },
   { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
   { key: 'separate', label: 'منفصل', title: 'السجل المنفصل' },
-  { key: 'review', label: 'ناقص', title: 'مراجعة' },
 ]
 
 const ACCOUNT_WIZARD_STEPS = {
@@ -1467,7 +1467,7 @@ export function SeparateLedgerPanel({ records, names, totals, query, draft, edit
             const direction = normalizeSeparateRecordDirection(movement.recordDirection)
             const isPinned = Boolean(movement.separateRecordPinned)
             return (
-              <Motion.article layout="position" key={movement.id} className={`is-${direction}${isPinned ? ' is-featured' : ''}`} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={UI_MOTION_TRANSITION}>
+              <Motion.article key={movement.id} className={`is-${direction}${isPinned ? ' is-featured' : ''}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
                 <i>{direction === SEPARATE_RECORD_DIRECTIONS.RECEIVABLE ? <ArrowDownToLine aria-hidden="true" size={16} /> : direction === SEPARATE_RECORD_DIRECTIONS.PAYABLE ? <ArrowUpFromLine aria-hidden="true" size={16} /> : <NotebookPen aria-hidden="true" size={16} />}</i>
                 <span className="adreem-separate-record-copy">
                   <span className="adreem-separate-record-heading">
@@ -1507,7 +1507,7 @@ export function AccountRow({ bucket, muted = false, onConfirm, onDisable, onOpen
   const primaryBalance = accountPrimaryBalance(bucket)
   const balanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
   return (
-    <Motion.article layout="position" initial={{ y: 4 }} animate={{ y: 0 }} exit={{ opacity: 0, y: -3 }} transition={UI_MOTION_TRANSITION} className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
+    <Motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION} className={`ml3-account-row ml3-account-row--${visualKind(account)} ${balanceTone} ${muted ? 'is-muted' : ''}`}>
       <button type="button" className="ml3-account-main" onClick={() => onOpen?.(account.id)}>
         <i className="ml3-account-row-icon"><AccountChoiceIcon account={account} size={16} /></i>
         <span className="ml3-account-copy">
@@ -1639,7 +1639,7 @@ export function MoneyAccountList({ rows = [], onOpen }) {
             }))
           })
           return (
-            <Motion.article layout="position" key={group.id} className={`adreem-money-group is-${primaryAccount.valueKind}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }} transition={UI_MOTION_TRANSITION}>
+            <Motion.article key={group.id} className={`adreem-money-group is-${primaryAccount.valueKind}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
               <div className="adreem-money-group-head">
                 <i><AccountChoiceIcon account={primaryAccount} size={16} /></i>
                 <span>
@@ -1793,7 +1793,7 @@ export function ExpenseReportList({ rows = [], onOpen }) {
             </>
           )
           return (
-            <Motion.article layout="position" key={row.id} initial={{ y: 4 }} animate={{ y: 0 }} exit={{ opacity: 0, y: -3 }} transition={UI_MOTION_TRANSITION} className={`ml3-account-row ml3-account-row--expense ${row.count ? 'is-positive' : 'is-zero'}`}>
+            <Motion.article key={row.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION} className={`ml3-account-row ml3-account-row--expense ${row.count ? 'is-positive' : 'is-zero'}`}>
               {row.account ? (
                 <button type="button" className="ml3-account-main" onClick={() => onOpen?.(row.account.id)}>{content}</button>
               ) : (
@@ -1965,9 +1965,9 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
   const previewRows = group.rows.filter((bucket) => hasMoneyValue(counterpartyBucketAmount(bucket).amount))
   return (
     <Motion.article
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -3 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       transition={UI_MOTION_TRANSITION}
       className={['adreem-counterparty-card', `is-${tone}`, 'is-balances-view', previewRows.length ? 'has-balances' : 'is-settled', settlementPinned && 'is-settlement-pinned', isFocused && 'is-focused', isDimmed && 'is-dimmed'].filter(Boolean).join(' ')}
       data-counterparty-id={group.id}
@@ -1992,7 +1992,7 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
         </button>
       </div>
       {isFocused ? (
-        <Motion.div key="channels" className="adreem-counterparty-channels" initial={{ opacity: 0, y: -2 }} animate={{ opacity: 1, y: 0 }} transition={UI_MOTION_TRANSITION}>
+        <Motion.div key="channels" className="adreem-counterparty-channels" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={UI_MOTION_TRANSITION}>
           {group.rows.map((bucket) => {
             const { amount, currency } = counterpartyBucketAmount(bucket)
             const rowTone = amount > 0 ? 'is-positive' : amount < 0 ? 'is-negative' : 'is-zero'
@@ -2011,8 +2011,8 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
           key="channel-preview"
           className="adreem-counterparty-channel-preview"
           aria-label="تفصيل الرصيد"
-          initial={{ opacity: 0, y: -2 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={UI_MOTION_TRANSITION}
         >
           {previewRows.map((bucket) => <CounterpartyChannel key={bucket.account.id} bucket={bucket} />)}
@@ -3101,7 +3101,7 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
   )
 }
 
-export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, isDeletingAccount = false, onClose, onEditMovement, onUpdateAccount, onDeleteAccount, onAddAttachment, onDeleteAttachment, onLoadMoreMovements, onLoadStatement }) {
+export function AccountProfile({ bucket, movements, accounts, attachments = [], reconciliations = [], recurringRules = [], dimensions = [], dimensionReport = null, auditEvents = [], movementPage = null, isLoadingMovements = false, isAddingAttachment = false, isDeletingAccount = false, onClose, onEditMovement, onUpdateAccount, onDeleteAccount, onAddAttachment, onDeleteAttachment, onLoadMoreMovements, onLoadStatement, onViewDimensionHistory }) {
   const [deleteConfirmationAccountId, setDeleteConfirmationAccountId] = useState('')
   const [statementOpen, setStatementOpen] = useState(false)
   const [statementMovements, setStatementMovements] = useState(null)
@@ -3158,6 +3158,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
   if (!bucket) return null
 
   const { account, postedCount } = bucket
+  const isTrackingAccount = account.valueKind === VALUE_KINDS.PROJECT
   const accountUsage = accountStructureUsage(account, { accounts, movements, reconciliations, recurringRules, dimensions })
   const structureLocked = accountUsage.locked
   const accountLocked = accountUsage.movement
@@ -3168,6 +3169,12 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
   const accountMap = new Map(accounts.map((item) => [item.id, item]))
   const primaryBalance = accountPrimaryBalance(bucket)
   const profileBalanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
+  const trackingNetAmounts = dimensionReport ? [
+    { currency: CURRENCIES.DINAR, income: dimensionReport.income, expense: dimensionReport.expense, net: dimensionReport.net },
+    { currency: CURRENCIES.USD, income: dimensionReport.incomeUsd, expense: dimensionReport.expenseUsd, net: dimensionReport.netUsd },
+    { currency: CURRENCIES.TRY, income: dimensionReport.incomeTry, expense: dimensionReport.expenseTry, net: dimensionReport.netTry },
+    { currency: CURRENCIES.EUR, income: dimensionReport.incomeEur, expense: dimensionReport.expenseEur, net: dimensionReport.netEur },
+  ].filter(({ income, expense }) => income || expense) : []
   const deletion = accountDeletionEligibility(account, { accounts, movements, attachments, reconciliations, recurringRules, dimensions })
   const deleteLabel = deletion.isCounterpartyBundle ? 'حذف الشخص وحساباته' : 'حذف الحساب'
   const isDeleteConfirmationOpen = deleteConfirmationAccountId === profileAccountId
@@ -3205,10 +3212,17 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
 
         <div className="ml3-profile-body">
           <section className="ml3-profile-overview">
-            <div className={`ml3-profile-balance ${profileBalanceTone}`}>
-              <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong>
-              <span>{hasMoneyValue(primaryBalance.secondaryAmount) ? money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : money(0, primaryBalance.currency)}</span>
-            </div>
+            {isTrackingAccount ? (
+              <div className="ml3-profile-balance adreem-profile-tracking-balance">
+                <strong>صافي التتبع</strong>
+                <span>{trackingNetAmounts.length ? trackingNetAmounts.map(({ currency, net }) => <b key={currency}>{money(net, currency)}</b>) : 'لا توجد حركات بعد'}</span>
+              </div>
+            ) : (
+              <div className={`ml3-profile-balance ${profileBalanceTone}`}>
+                <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong>
+                <span>{hasMoneyValue(primaryBalance.secondaryAmount) ? money(primaryBalance.secondaryAmount, primaryBalance.secondaryCurrency) : money(0, primaryBalance.currency)}</span>
+              </div>
+            )}
 
             <div className="ml3-profile-facts">
               <div>
@@ -3217,7 +3231,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
               </div>
               <div>
                 <span>الحركات</span>
-                <strong>{formatCount(postedCount)}</strong>
+                <strong>{formatCount(isTrackingAccount ? dimensionReport?.movementCount || 0 : postedCount)}</strong>
               </div>
               <div>
                 <span>الحالة</span>
@@ -3226,9 +3240,15 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
             </div>
           </section>
 
-          <button type="button" className="adreem-statement-open" onClick={openStatement}>
-            <ReceiptText aria-hidden="true" size={17} /> كشف حساب
-          </button>
+          {isTrackingAccount ? (
+            <button type="button" className="adreem-statement-open" onClick={() => onViewDimensionHistory?.(dimensionReport?.dimension?.id || account.dimensionId || `dimension-account-${account.id}`)}>
+              <ReceiptText aria-hidden="true" size={17} /> حركات المشروع
+            </button>
+          ) : (
+            <button type="button" className="adreem-statement-open" onClick={openStatement}>
+              <ReceiptText aria-hidden="true" size={17} /> كشف حساب
+            </button>
+          )}
 
           {statementOpen ? (
             <AccountStatement
@@ -3312,7 +3332,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
             ) : null}
           </section>
 
-          <section className="ml3-profile-activity">
+          {!isTrackingAccount ? <section className="ml3-profile-activity">
             <div className="ml3-profile-movements">
               <div className="ml3-profile-section-head">
                 <h3>الحركات</h3>
@@ -3364,7 +3384,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
                 </button>
               ) : null}
             </div>
-          </section>
+          </section> : null}
         </div>
         </aside>
       </div>
@@ -3603,97 +3623,98 @@ function AlertBoard({ reviewAccounts, reviewMovements, externalMissing, balances
   )
 }
 
-function OperationsPanel({ reports, expenseReports, dueRules, recurringRules, attachments, reconciliations, onRunRecurring, onDisableRecurring, onUpdateRecurring }) {
-  const activeRecurringRules = recurringRules.filter((rule) => rule.status === 'active')
-  const dueRuleIds = new Set(dueRules.map((rule) => rule.id))
+export function TrackingPanel({ reports, recurringRules, dueRules, query = '', onOpenAccount, onOpenHistory, onRunRecurring, onDisableRecurring, onUpdateRecurring }) {
+  const [pendingRuleAction, setPendingRuleAction] = useState(null)
+  const activeRules = recurringRules.filter((rule) => rule.status === 'active')
+  const dueIds = new Set(dueRules.map((rule) => rule.id))
+  const normalizedQuery = normalizeAccountSearchText(query)
+  const visibleReports = reports.filter((report) => (
+    normalizeAccountSearchText(report.dimension.name).includes(normalizedQuery)
+    || activeRules.some((rule) => rule.template?.dimensionId === report.dimension.id && normalizeAccountSearchText(rule.name).includes(normalizedQuery))
+  ))
+  const knownDimensionIds = new Set(reports.map((report) => report.dimension.id))
+  const unlinkedRules = activeRules.filter((rule) => !knownDimensionIds.has(rule.template?.dimensionId) && normalizeAccountSearchText(rule.name).includes(normalizedQuery))
+
+  function renderRule(rule) {
+    const dueOn = recurringRuleDueOn(rule)
+    const isDue = dueIds.has(rule.id)
+    const pendingAction = pendingRuleAction?.id === rule.id ? pendingRuleAction.action : ''
+    return (
+      <div className={`adreem-tracking-recurring ${isDue ? 'is-due' : ''}`} key={rule.id}>
+        <div>
+          <strong className="adreem-account-name">{preserveUiData(rule.name)}</strong>
+          <span>{money(rule.template?.amount || 0, rule.template?.currency || CURRENCIES.DINAR)} · {isDue ? 'مستحقة' : 'القادمة'} {recurringDateLabel(dueOn)}</span>
+        </div>
+        <div className="adreem-tracking-recurring-actions">
+          <label>الموعد القادم <input type="date" value={dueOn} onChange={(event) => { setPendingRuleAction(null); onUpdateRecurring(rule.id, event.target.value) }} /></label>
+          <button type="button" disabled={!isDue} onClick={() => setPendingRuleAction({ id: rule.id, action: 'run' })}>تنفيذ</button>
+          <button type="button" onClick={() => setPendingRuleAction({ id: rule.id, action: 'stop' })}>إيقاف</button>
+        </div>
+        {pendingAction ? (
+          <div className="adreem-tracking-confirm" role="group" aria-label={pendingAction === 'run' ? 'تأكيد التنفيذ' : 'تأكيد الإيقاف'}>
+            <strong>{pendingAction === 'run' ? 'تنفيذ الحركة الآن وتحديث الأرصدة؟' : 'إيقاف الحركة الشهرية؟'}</strong>
+            <button type="button" onClick={() => {
+              if (pendingAction === 'run') onRunRecurring(rule.id)
+              else onDisableRecurring(rule.id)
+              setPendingRuleAction(null)
+            }}>تأكيد</button>
+            <button type="button" onClick={() => setPendingRuleAction(null)}>تراجع</button>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
-    <section className="ml3-ops-grid">
-      <article className="ml3-ops-card">
-        <div className="ml3-ops-head">
-          <strong>مشاريع وأصول</strong>
-          <span>{formatCount(reports.length)}</span>
-        </div>
-        {reports.length === 0 ? <p className="ml3-empty">لا توجد مراكز متابعة بعد.</p> : null}
-        {reports.map((item) => (
-          <div className="ml3-ops-row" key={item.dimension.id}>
-            <span>{preserveUiData(item.dimension.name)}</span>
-            <b className={(item.net || item.netUsd) >= 0 ? 'is-positive' : 'is-negative'}>{signedMoney(item.net)}</b>
-            <small>
-              دخل {money(item.income)} · مصروف {money(item.expense)}
-            </small>
-            {item.incomeUsd || item.expenseUsd ? (
-              <small>
-                USD: دخل {money(item.incomeUsd, CURRENCIES.USD)} · مصروف {money(item.expenseUsd, CURRENCIES.USD)}
-              </small>
-            ) : null}
-            {item.incomeTry || item.expenseTry ? (
-              <small>
-                TRY: دخل {money(item.incomeTry, CURRENCIES.TRY)} · مصروف {money(item.expenseTry, CURRENCIES.TRY)}
-              </small>
-            ) : null}
-            {item.incomeEur || item.expenseEur ? (
-              <small>
-                EUR: دخل {money(item.incomeEur, CURRENCIES.EUR)} · مصروف {money(item.expenseEur, CURRENCIES.EUR)}
-              </small>
-            ) : null}
-          </div>
-        ))}
-      </article>
-      <article className="ml3-ops-card">
-        <div className="ml3-ops-head">
-          <strong>المصروفات</strong>
-          <span>{formatCount(expenseReports.length)}</span>
-        </div>
-        {expenseReports.length === 0 ? <p className="ml3-empty">لا توجد مصروفات مصنفة.</p> : null}
-        {expenseReports.map((item) => (
-          <div className="ml3-ops-row" key={item.categoryId || 'uncategorized'}>
-            <span>{preserveUiData(item.name)}</span>
-            <b>{money(item.dinar)}</b>
-            {item.usd ? <small>{money(item.usd, CURRENCIES.USD)}</small> : null}
-            {item.try ? <small>{money(item.try, CURRENCIES.TRY)}</small> : null}
-            {item.eur ? <small>{money(item.eur, CURRENCIES.EUR)}</small> : null}
-          </div>
-        ))}
-      </article>
-      <article className="ml3-ops-card">
-        <div className="ml3-ops-head">
-          <strong>متكرر</strong>
-          <span>{formatCount(dueRules.length)}</span>
-        </div>
-        {activeRecurringRules.length === 0 ? <p className="ml3-empty">لا توجد حركة شهرية.</p> : null}
-        {activeRecurringRules.slice(0, 5).map((rule) => {
-          const dueOn = recurringRuleDueOn(rule)
-          const isDue = dueRuleIds.has(rule.id)
-          return (
-            <div className={`ml3-ops-row ml3-recurring-row ${isDue ? 'is-due' : ''}`} key={rule.id}>
-              <span>{preserveUiData(rule.name)}</span>
-              <b>{money(rule.template?.amount || 0, rule.template?.currency || CURRENCIES.DINAR)}</b>
-              <small>{isDue ? 'مستحقة' : 'القادمة'} · {recurringDateLabel(dueOn)}</small>
-              <label className="ml3-recurring-day">
-                الموعد القادم
-                <input type="date" value={dueOn} onChange={(event) => onUpdateRecurring(rule.id, event.target.value)} />
-              </label>
-              <div className="ml3-ops-actions">
-                <button type="button" disabled={!isDue} onClick={() => onRunRecurring(rule.id)}>
-                  تنفيذ
-                </button>
-                <button type="button" onClick={() => onDisableRecurring(rule.id)}>
-                  إيقاف
-                </button>
+    <div className="adreem-tracking-list">
+      {visibleReports.length === 0 && unlinkedRules.length === 0 ? <p className="ml3-empty">{normalizedQuery ? 'لا توجد نتائج' : 'لا توجد مشاريع أو حركات شهرية.'}</p> : null}
+      {visibleReports.map((report) => {
+        const currencyRows = [
+          { currency: CURRENCIES.DINAR, income: report.income, expense: report.expense },
+          { currency: CURRENCIES.USD, income: report.incomeUsd, expense: report.expenseUsd },
+          { currency: CURRENCIES.TRY, income: report.incomeTry, expense: report.expenseTry },
+          { currency: CURRENCIES.EUR, income: report.incomeEur, expense: report.expenseEur },
+        ].filter(({ income, expense }) => income || expense)
+        const linkedRules = activeRules.filter((rule) => rule.template?.dimensionId === report.dimension.id)
+        return (
+          <article className="adreem-tracking-item" key={report.dimension.id}>
+            <header>
+              <div className="adreem-tracking-identity">
+                <i><BriefcaseBusiness aria-hidden="true" size={17} /></i>
+                <div>
+                  <span>{report.dimension.type === DIMENSION_TYPES.ASSET ? 'أصل' : report.dimension.type === DIMENSION_TYPES.COST_CENTER ? 'مركز تكلفة' : 'مشروع'}</span>
+                  {report.dimension.linkedAccountId ? (
+                    <button type="button" className="adreem-tracking-name" onClick={() => onOpenAccount(report.dimension.linkedAccountId)}>{preserveUiData(report.dimension.name)}</button>
+                  ) : <strong className="adreem-account-name">{preserveUiData(report.dimension.name)}</strong>}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </article>
-      <article className="ml3-ops-card">
-        <div className="ml3-ops-head">
-          <strong>حفظ وأدلة</strong>
-          <span>{formatCount(attachments.length)}</span>
-        </div>
-        <p className="ml3-empty">المرفقات محفوظة في مساحة خاصة وآمنة.</p>
-        <small>مطابقات محفوظة: {formatCount(reconciliations.length)}</small>
-      </article>
-    </section>
+              <button type="button" className="adreem-tracking-history" onClick={() => onOpenHistory(report.dimension.id)}>
+                <ReceiptText aria-hidden="true" size={15} /> الحركات {formatCount(report.movementCount)}
+              </button>
+            </header>
+            {currencyRows.length ? (
+              <div className="adreem-tracking-values">
+                {currencyRows.map(({ currency, income, expense }) => (
+                  <div className="adreem-tracking-currency" key={currency}>
+                    <b>{currency}</b>
+                    <span>دخل <strong>{money(income, currency)}</strong></span>
+                    <span>مصروف <strong>{money(expense, currency)}</strong></span>
+                    <span className={income - expense < 0 ? 'is-negative' : 'is-positive'}>الصافي <strong>{money(income - expense, currency)}</strong></span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="adreem-tracking-empty">لا توجد حركات مرتبطة بعد.</p>}
+            {linkedRules.length ? <div className="adreem-tracking-rule-list">{linkedRules.map(renderRule)}</div> : null}
+          </article>
+        )
+      })}
+      {unlinkedRules.length ? (
+        <section className="adreem-tracking-unlinked">
+          <h3>حركات شهرية</h3>
+          {unlinkedRules.map(renderRule)}
+        </section>
+      ) : null}
+    </div>
   )
 }
 
@@ -5022,6 +5043,20 @@ export default function LedgerApp() {
       targetIndex >= currentIndex ? 'forward' : 'back',
       'section',
     )
+  }
+
+  function openDimensionHistory(dimensionId) {
+    setHistoryQuery('')
+    setHistoryType('')
+    setHistoryStatus('')
+    setHistoryAccountId('')
+    setHistoryExpenseCategoryId('')
+    setHistoryDimensionId(dimensionId)
+    setHistoryRemoteMovements(null)
+    setHistoryPage(null)
+    if (ledgerStorageMode === 'relational') setIsLoadingHistory(true)
+    setSelectedAccountId('')
+    switchSection('history')
   }
 
   function selectAccountGroup(groupKey) {
@@ -6600,10 +6635,8 @@ export default function LedgerApp() {
     const accountRowsByGroup = {
       people: peopleBalances,
       money: filterRows(filterMoneyBalanceRows(moneyRows, activeBalanceFocus)),
-      assets: filterRows(balancesByKind.assets || []),
       expenses: filteredExpenseRows,
       separate: [],
-      review: filterRows(balancesByKind.review || []),
     }
     const rows = accountRowsByGroup[activeGroup.key] || []
     return (
@@ -6690,8 +6723,8 @@ export default function LedgerApp() {
                     setAccountQuery(value)
                     setFocusedCounterpartyId('')
                   }}
-                  placeholder={activeGroup.key === 'separate' ? 'اسم أو ملاحظة' : 'اسم الحساب'}
-                  ariaLabel={activeGroup.key === 'separate' ? 'بحث في السجل المنفصل' : 'بحث في الأرصدة'}
+                  placeholder={activeGroup.key === 'separate' ? 'اسم أو ملاحظة' : activeGroup.key === 'assets' ? 'اسم المشروع أو الأصل' : 'اسم الحساب'}
+                  ariaLabel={activeGroup.key === 'separate' ? 'بحث في السجل المنفصل' : activeGroup.key === 'assets' ? 'بحث في التتبع' : 'بحث في الأرصدة'}
                 />
               </div>
 
@@ -6746,6 +6779,18 @@ export default function LedgerApp() {
                   </div>
                   <ExpenseReportList rows={rows} onOpen={setSelectedAccountId} />
                 </>
+              ) : activeGroup.key === 'assets' ? (
+                <TrackingPanel
+                  reports={dimensionReports}
+                  recurringRules={ledgerExtras.recurringRules || []}
+                  dueRules={dueRules}
+                  query={accountQuery}
+                  onOpenAccount={setSelectedAccountId}
+                  onOpenHistory={openDimensionHistory}
+                  onRunRecurring={runRecurring}
+                  onDisableRecurring={disableRecurring}
+                  onUpdateRecurring={changeRecurringDate}
+                />
               ) : (
                 <AccountList title={activeGroup.title} rows={rows} onOpen={setSelectedAccountId} embedded tone={activeGroup.key} compactValues hideHeader />
               )}
@@ -6811,12 +6856,6 @@ export default function LedgerApp() {
               {activeReviewItem?.type === 'movement' ? <ReviewMovementCard key={activeReviewItem.movement.id} movement={activeReviewItem.movement} activeAccounts={activeAccounts} referenceAccounts={accounts} balanceByAccountId={balanceByAccountId} investmentPlatforms={activeInvestmentPlatforms} onResolve={resolveReviewMovement} onEdit={editReviewMovement} onCancel={requestMovementCancellation} /> : null}
             </div>
           </div>
-          <details className="ml3-ops-disclosure">
-            <summary>
-              <Wrench aria-hidden="true" size={16} /> أدوات الدفتر
-            </summary>
-            <OperationsPanel reports={dimensionReports} expenseReports={expenseCategoryReports} dueRules={dueRules} recurringRules={ledgerExtras.recurringRules || []} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} onRunRecurring={runRecurring} onDisableRecurring={disableRecurring} onUpdateRecurring={changeRecurringDate} />
-          </details>
         </section>
       )
     }
@@ -7692,7 +7731,7 @@ export default function LedgerApp() {
           </section>
         ) : null}
       </section>
-      <AccountProfile key={selectedAccountId} bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} isDeletingAccount={isDeletingAccount} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onDeleteAccount={deleteAccountPermanently} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} onLoadStatement={loadCompleteAccountStatement} />
+      <AccountProfile key={selectedAccountId} bucket={selectedBucket} movements={movements} accounts={accounts} attachments={ledgerExtras.attachments || []} reconciliations={ledgerExtras.reconciliations || []} recurringRules={ledgerExtras.recurringRules || []} dimensions={ledgerExtras.dimensions || []} dimensionReport={dimensionReports.find((report) => report.dimension.linkedAccountId === selectedAccountId) || null} auditEvents={ledgerExtras.auditEvents || []} movementPage={activeAccountProfilePage} isLoadingMovements={isLoadingAccountProfile} isAddingAttachment={isAddingAccountAttachment} isDeletingAccount={isDeletingAccount} onClose={() => setSelectedAccountId('')} onEditMovement={editReviewMovement} onUpdateAccount={updateAccountClassification} onDeleteAccount={deleteAccountPermanently} onAddAttachment={addAccountAttachment} onDeleteAttachment={deleteAttachment} onLoadMoreMovements={loadOlderAccountProfileMovements} onLoadStatement={loadCompleteAccountStatement} onViewDimensionHistory={openDimensionHistory} />
       <AnimatePresence>
         {expenseCategoryCreator ? (
           <ExpenseCategoryDialog

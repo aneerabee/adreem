@@ -49,4 +49,13 @@ describe('ADREEM ledger navigation', () => {
   it('falls back safely when a link contains unknown navigation values', () => {
     expect(readLedgerNavigation('?section=unknown&entry=wrong&group=bad&people=no')).toEqual(DEFAULT_LEDGER_NAVIGATION)
   })
+
+  it('opens the main review when an old link requests the retired short review tab', () => {
+    expect(readLedgerNavigation('?section=accounts&group=review')).toEqual({
+      section: 'review',
+      entryMode: 'movement',
+      accountGroup: 'money',
+      balanceFocus: '',
+    })
+  })
 })
