@@ -1,8 +1,9 @@
-import { freeReferenceSymbol, isAutoPricedHolding, isTgmEodHolding } from '../../src/ledger/investmentMarketPolicy.js'
+import { dexReferenceSymbol, freeReferenceSymbol, isAutoPricedHolding, isTgmEodHolding, tgmEodSymbolForHolding } from '../../src/ledger/investmentMarketPolicy.js'
 
 const DEFAULT_TWELVE_DATA_URL = 'https://api.twelvedata.com'
 const DEFAULT_GOLD_DATA_URL = 'https://api.gold-api.com'
 const DEFAULT_TGM_DATA_URL = 'https://tgmcharts.com'
+const DEFAULT_DEX_DATA_URL = 'https://api.dexscreener.com'
 const ECB_FX_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+TRY.EUR.SP00.A?lastNObservations=1&format=jsondata'
 const DEFAULT_CACHE_MS = 5 * 60 * 1000
 const MAX_QUOTE_CLOCK_SKEW_MS = 5 * 60 * 1000
@@ -10,6 +11,14 @@ const MAX_OPEN_MARKET_QUOTE_AGE_MS = 2 * 60 * 60 * 1000
 const MAX_FX_QUOTE_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const TGM_EOD_CACHE_MS = 2 * 60 * 60 * 1000
 const MAX_CRYPTO_QUOTE_AGE_MS = 15 * 60 * 1000
+const MIN_DEX_PRIMARY_LIQUIDITY_USD = 500_000
+const MIN_DEX_SECONDARY_LIQUIDITY_USD = 100_000
+const MIN_DEX_DAILY_VOLUME_USD = 10_000
+const MAX_DEX_PRICE_DEVIATION = 0.03
+const DEX_TOKENS = {
+  FET: { chain: 'ethereum', contract: '0xaea46a60368a7bd060eec7df8cba43b7ef41ad85', symbol: 'FET' },
+  AVAX: { chain: 'avalanche', contract: '0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7', symbol: 'WAVAX' },
+}
 const MAX_PRICE_ITEMS = 40
 const MAX_CACHE_ENTRIES = 500
 const MAX_SEARCH_RESULTS = 15
@@ -22,6 +31,8 @@ const FUND_TYPES = new Set(['ETF', 'MUTUAL FUND', 'BOND FUND', 'CLOSED-END FUND'
 const FREE_REFERENCE_ASSETS = [
   { symbol: 'BTC/USD', name: 'Bitcoin', assetType: 'crypto', aliases: 'bitcoin بيتكوين btc' },
   { symbol: 'ETH/USD', name: 'Ethereum', assetType: 'crypto', aliases: 'ethereum ether إيثيريوم ايثيريوم eth' },
+  { symbol: 'FET/USD', name: 'Artificial Superintelligence Alliance', assetType: 'crypto', aliases: 'fet fetch ai asi' },
+  { symbol: 'AVAX/USD', name: 'Avalanche', assetType: 'crypto', aliases: 'avax avalanche' },
   { symbol: 'XAU/USD', name: 'Gold', assetType: 'metal', aliases: 'gold ذهب xau' },
   { symbol: 'XAG/USD', name: 'Silver', assetType: 'metal', aliases: 'silver فضة xag' },
   { symbol: 'XPT/USD', name: 'Platinum', assetType: 'metal', aliases: 'platinum بلاتين xpt' },
@@ -58,7 +69,7 @@ function cleanSearchText(value) {
 function providerSymbolForHolding(holding = {}) {
   const symbol = cleanSymbol(holding.symbol)
   const exchange = cleanSymbol(holding.exchange)
-  if (isTgmEodHolding(holding)) return cleanSymbol(holding.providerSymbol || holding.symbol)
+  if (isTgmEodHolding(holding)) return tgmEodSymbolForHolding(holding)
   if (holding.assetType === 'metal' || ['COMMODITY', 'FOREX', 'FX'].includes(exchange)) return symbol || cleanSymbol(holding.providerSymbol).split(':')[0]
   if (symbol && exchange && !symbol.includes(':')) return `${symbol}:${exchange}`
   return cleanSymbol(holding.providerSymbol || symbol)
@@ -202,7 +213,9 @@ export function normalizeMarketSearchRequest(body = {}) {
   const query = cleanSearchText(body.query)
   const quoteCurrency = cleanCurrency(body.quoteCurrency || 'USD')
   const assetType = cleanAssetType(body.assetType || 'stock')
-  if (query.length < 2) throw new MarketPriceError('اكتب حرفين على الأقل للبحث.', 400, 'market-search-too-short')
+  if (query.length < 2 && !(query.length === 1 && /^[A-Z]$/i.test(query) && quoteCurrency === 'USD' && ['stock', 'fund'].includes(assetType))) {
+    throw new MarketPriceError('اكتب حرفين على الأقل للبحث.', 400, 'market-search-too-short')
+  }
   if (!quoteCurrency) throw new MarketPriceError('عملة السوق غير مدعومة.', 400, 'invalid-market-currency')
   if (!assetType) throw new MarketPriceError('نوع الاستثمار غير مدعوم.', 400, 'invalid-market-asset-type')
   return { query, quoteCurrency, assetType }
@@ -256,6 +269,51 @@ export function createMarketPriceService(env = process.env, options = {}) {
       return result
     } catch {
       return null
+    }
+  }
+
+  async function fetchDexReferencePrice(item) {
+    const base = dexReferenceSymbol(item)
+    const token = DEX_TOKENS[base]
+    if (!token) return null
+    const endpoint = new URL(`/token-pairs/v1/${token.chain}/${token.contract}`, String(env.ADREEM_DEX_API_URL || DEFAULT_DEX_DATA_URL).replace(/\/+$/, ''))
+    try {
+      const response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
+      if (!response.ok) return failedPrice(item, 'تعذر تحديث السعر المرجعي. بقي السعر السابق محفوظًا.')
+      const payload = await response.json()
+      const seenPairs = new Set()
+      const pairs = (Array.isArray(payload) ? payload : []).filter((pair) => {
+        const address = String(pair?.pairAddress || '').toLowerCase()
+        if (!address || seenPairs.has(address)) return false
+        seenPairs.add(address)
+        return (
+        pair?.chainId === token.chain
+        && String(pair.baseToken?.address || '').toLowerCase() === token.contract
+        && pair.baseToken?.symbol === token.symbol
+        && Number.isFinite(Number(pair.priceUsd)) && Number(pair.priceUsd) > 0
+        && Number.isFinite(Number(pair.liquidity?.usd))
+        )
+      }).sort((left, right) => Number(right.liquidity.usd) - Number(left.liquidity.usd))
+      const [primary, secondary] = pairs
+      const primaryPrice = Number(primary?.priceUsd)
+      const secondaryPrice = Number(secondary?.priceUsd)
+      const hourlyTrades = Number(primary?.txns?.h1?.buys || 0) + Number(primary?.txns?.h1?.sells || 0)
+      if (!primary || !secondary || Number(primary.liquidity.usd) < MIN_DEX_PRIMARY_LIQUIDITY_USD
+        || Number(secondary.liquidity.usd) < MIN_DEX_SECONDARY_LIQUIDITY_USD
+        || Number(primary.volume?.h24) < MIN_DEX_DAILY_VOLUME_USD || hourlyTrades < 1
+        || Math.abs(primaryPrice - secondaryPrice) / primaryPrice > MAX_DEX_PRICE_DEVIATION) {
+        return failedPrice(item, 'السعر المرجعي غير مؤكد من مجمعين نشطين. بقي السعر السابق محفوظًا.')
+      }
+      const priceUsdMicros = usdMicros(primaryPrice)
+      if (!priceUsdMicros) return failedPrice(item, 'السعر المرجعي غير صالح. بقي السعر السابق محفوظًا.')
+      const observedAt = new Date(now()).toISOString()
+      const result = { id: item.id, symbol: item.symbol, quoteCurrency: item.quoteCurrency,
+        nativePriceMicros: priceUsdMicros, priceUsdMicros, refreshedAt: observedAt, quotedAt: observedAt,
+        fxQuotedAt: null, marketOpen: true, source: 'dexscreener-reference', cached: false, ok: true }
+      cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
+      return result
+    } catch {
+      return failedPrice(item, 'تعذر الوصول إلى السعر المرجعي. بقي السعر السابق محفوظًا.')
     }
   }
 
@@ -341,7 +399,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
 
   async function searchTgmTicker(request) {
     const ticker = cleanSymbol(request.query)
-    if (!/^[A-Z][A-Z0-9.]{1,9}$/.test(ticker)) return []
+    if (!/^[A-Z][A-Z0-9.]{0,9}$/.test(ticker)) return []
     const endpoint = new URL(`/api/v1/summary/${ticker}`, String(env.ADREEM_TGM_API_URL || DEFAULT_TGM_DATA_URL).replace(/\/+$/, ''))
     try {
       const response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
@@ -475,6 +533,11 @@ export function createMarketPriceService(env = process.env, options = {}) {
         const item = referenceItems[offset + index]
         results.set(item.id, result || failedPrice(item, 'السعر المرجعي غير متاح الآن. بقي السعر السابق محفوظًا.'))
       })
+    }
+    const dexItems = items.filter((item) => !results.has(item.id) && isAutoPricedHolding(item, licensedStocksEnabled) && dexReferenceSymbol(item))
+    for (let offset = 0; offset < dexItems.length; offset += 4) {
+      const group = await Promise.all(dexItems.slice(offset, offset + 4).map((item) => fetchDexReferencePrice(item)))
+      group.forEach((result) => results.set(result.id, result))
     }
     const usEodItems = items.filter((item) => !results.has(item.id) && isTgmEodHolding(item))
     for (let offset = 0; offset < usEodItems.length; offset += 4) {

@@ -35,7 +35,6 @@ const ASSET_OPTIONS = [
 const MARKET_OPTIONS = [
   { value: 'USD', label: 'أمريكا' },
   { value: 'TRY', label: 'تركيا' },
-  { value: 'EUR', label: 'أوروبا' },
 ]
 
 const blankPlatform = { name: '', kind: 'platform', location: '' }
@@ -46,6 +45,7 @@ const PRICE_SOURCE_LABELS = {
   coinbase: { ar: 'Coinbase', en: 'Coinbase' },
   'gold-api': { ar: 'Gold API', en: 'Gold API' },
   'gold-api-reference': { ar: 'سعر مرجعي', en: 'Reference price' },
+  'dexscreener-reference': { ar: 'سعر مرجعي · DEX Screener', en: 'Reference price · DEX Screener' },
   'binance-usdt+coinbase-usdt-usd': { ar: 'Binance · تحويل Coinbase', en: 'Binance · Coinbase FX' },
   'binance-usdt+twelve-data-usdt-usd': { ar: 'Binance · تحويل Twelve Data', en: 'Binance · Twelve Data FX' },
   'twelve-data': { ar: 'Twelve Data', en: 'Twelve Data' },
@@ -136,26 +136,44 @@ function tradeReviewImpact(trade = {}) {
   return { label: 'أثر النقد', valueUsdMicros: valueUsdMicros - feeUsdMicros }
 }
 
+function holdingPriceIsStale(holding) {
+  if (Number(holding.lastPriceUsdMicros || 0) <= 0) return false
+  const automated = isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true')
+  const sourceUnavailable = Boolean(holding.lastPriceSource && !['manual', 'trade', 'opening'].includes(holding.lastPriceSource) && !automated)
+  if (sourceUnavailable) return true
+  if (!automated) return false
+  const quotedAge = Date.now() - Date.parse(String(holding.lastPriceQuotedAt || ''))
+  const dailyClose = ['tgmcharts-eod', 'twelve-data-eod+ecb-fx'].includes(holding.lastPriceSource)
+  const maxQuoteAge = holding.assetType === 'crypto' ? 15 * 60 * 1000 : dailyClose || holding.lastPriceMarketOpen === false ? 7 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000
+  return !Number.isFinite(quotedAge) || quotedAge > maxQuoteAge
+}
+
 function InvestmentMarketPrice({ holding, error, onOpen }) {
   const nativePriceMicros = Number(holding.lastPriceNativeMicros || 0)
   const priceMicros = nativePriceMicros || Number(holding.lastPriceUsdMicros || 0)
   const priceCurrency = nativePriceMicros ? holding.quoteCurrency : 'USD'
   const priceTimestamp = String(holding.lastPriceQuotedAt || '')
   const dailyClose = holding.lastPriceSource === 'tgmcharts-eod'
-  const { direction, percent } = error ? { direction: 'neutral', percent: 0 } : investmentPriceChange(holding)
+  const sourceUnavailable = Boolean(holding.lastPriceSource && !['manual', 'trade', 'opening'].includes(holding.lastPriceSource)
+    && !isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true'))
+  const stale = Boolean(error || holdingPriceIsStale(holding))
+  const priceStatus = error ? 'لم يتحدث'
+    : stale ? (dailyClose || holding.lastPriceSource === 'twelve-data-eod+ecb-fx' ? 'إغلاق سابق' : 'سعر سابق')
+      : dailyClose ? 'إغلاق يومي' : holding.lastPriceMarketOpen === false ? 'إغلاق السوق' : 'آخر سعر'
+  const { direction, percent } = stale ? { direction: 'neutral', percent: 0 } : investmentPriceChange(holding)
   const DirectionIcon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus
   const prefersReducedMotion = useReducedMotion()
 
   return (
     <button
       type="button"
-      className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${error ? 'is-stale' : ''}`.trim()}
+      className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${stale ? 'is-stale' : ''}`.trim()}
       onClick={() => onOpen(holding)}
-      aria-label={priceMicros ? `${error ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} ${priceCurrency}` : 'إدخال السعر الحالي'}
-      title={error || (holding.lastPriceQuotedAt ? `${dailyClose ? 'تاريخ الإغلاق' : 'وقت السعر'}: ${['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(holding.lastPriceSource) ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
+      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} ${priceCurrency}` : 'إدخال السعر الحالي'}
+      title={error || (sourceUnavailable ? 'مصدر التحديث غير متاح لهذا الرمز؛ السعر المعروض سابق.' : holding.lastPriceQuotedAt ? `${dailyClose ? 'تاريخ الإغلاق' : holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : 'وقت السعر'}: ${['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(holding.lastPriceSource) ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
     >
       <small>
-        <span>{error ? 'لم يتحدث' : dailyClose ? 'إغلاق يومي' : holding.lastPriceMarketOpen === false ? 'إغلاق السوق' : 'آخر سعر'} {error ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
+        <span>{priceStatus} {stale ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
         {direction !== 'neutral' ? <em><DirectionIcon aria-hidden="true" size={11} />{Math.abs(percent).toLocaleString('en-US', { maximumFractionDigits: 2 })}%</em> : null}
       </small>
       <strong aria-live="polite">
@@ -694,6 +712,7 @@ export default function InvestmentsPanel({
                   {displayedRows.length ? displayedRows.map((row) => {
                     const holdingProfitUsdMicros = row.unrealizedProfitUsdMicros || 0
                     const holdingProfitTone = holdingProfitUsdMicros > 0 ? 'positive' : holdingProfitUsdMicros < 0 ? 'negative' : 'neutral'
+                    const priceIsStale = Boolean(priceErrors[row.holding.id] || holdingPriceIsStale(row.holding))
                     const detailsOpen = Boolean(expandedHoldingIds[row.holding.id])
                     const HoldingTrendIcon = holdingProfitUsdMicros > 0 ? TrendingUp : holdingProfitUsdMicros < 0 ? TrendingDown : Minus
                     return (
@@ -712,9 +731,9 @@ export default function InvestmentsPanel({
                         <div className="adreem-investment-metrics-strip" aria-label="تفاصيل الاستثمار">
                           <div className="is-quantity"><small>الكمية</small><strong>{decimal(unitsToQuantity(row.quantityUnits), 8)} <em>وحدة</em></strong></div>
                           <InvestmentMarketPrice holding={row.holding} error={priceErrors[row.holding.id]} onOpen={openManualPrice} />
-                          <div className="is-current-value"><small>القيمة الآن</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
+                          <div className="is-current-value"><small>{priceIsStale ? 'قيمة بسعر سابق' : 'القيمة الآن'}</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
                           <div className={`adreem-investment-result is-${holdingProfitTone}`}>
-                            <span><HoldingTrendIcon aria-hidden="true" size={14} /><small>النتيجة</small></span>
+                            <span><HoldingTrendIcon aria-hidden="true" size={14} /><small>{priceIsStale ? 'نتيجة تقديرية' : 'النتيجة'}</small></span>
                             <div className="adreem-investment-result-value">
                               <strong>{usdMicros(holdingProfitUsdMicros, true)}</strong>
                               {row.costBasisUsdMicros ? <em>{profitPercent(holdingProfitUsdMicros, row.costBasisUsdMicros)}</em> : null}
@@ -729,7 +748,7 @@ export default function InvestmentsPanel({
                           <span><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
                           <span><small>تكلفة المتبقي</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
                           {row.holding.quoteCurrency !== 'USD' && row.holding.lastPriceUsdMicros ? <span><small>السعر بالدولار</small><strong>{usdUnitMicros(row.holding.lastPriceUsdMicros)}</strong></span> : null}
-                          <span><small>{['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? 'تاريخ الإغلاق' : row.holding.lastPriceQuotedAt ? 'وقت السعر' : ['manual', 'trade', 'opening'].includes(row.holding.lastPriceSource) ? 'وقت الإدخال' : 'آخر تحقق'}</small><strong>{row.holding.lastPriceQuotedAt || row.holding.lastPriceAt ? ['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceQuotedAt) : activityDate(row.holding.lastPriceQuotedAt || row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
+                          <span><small>{['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? 'تاريخ الإغلاق' : row.holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : row.holding.lastPriceQuotedAt ? 'وقت السعر' : ['manual', 'trade', 'opening'].includes(row.holding.lastPriceSource) ? 'وقت الإدخال' : 'آخر تحقق'}</small><strong>{row.holding.lastPriceQuotedAt || row.holding.lastPriceAt ? ['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceQuotedAt) : activityDate(row.holding.lastPriceQuotedAt || row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
                           {row.holding.lastPriceFxQuotedAt ? <span><small>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? 'تاريخ الصرف' : 'وقت الصرف'}</small><strong>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceFxQuotedAt) : activityDate(row.holding.lastPriceFxQuotedAt)}</strong></span> : null}
                           {PRICE_SOURCE_LABELS[row.holding.lastPriceSource] ? <span><small>مصدر السعر</small><strong>{row.holding.lastPriceSource === 'tgmcharts-eod' ? <a href="https://tgmcharts.com/" target="_blank" rel="noopener noreferrer">{PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</a> : PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</strong></span> : null}
                           {priceErrors[row.holding.id] ? <p className="is-error"><AlertCircle aria-hidden="true" size={13} />{priceErrors[row.holding.id]}</p> : null}

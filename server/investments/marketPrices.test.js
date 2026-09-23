@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { isAutoPricedHolding } from '../../src/ledger/investmentMarketPolicy.js'
 import { createMarketPriceService, marketPriceItemsForHoldings, normalizeMarketPriceRequest, normalizeMarketSearchRequest } from './marketPrices.js'
 
 const NOW = 1_800_000_000_000
@@ -49,7 +50,8 @@ describe('investment market prices', () => {
   })
 
   it('validates searches and uses a small local reference catalog without external calls', async () => {
-    expect(() => normalizeMarketSearchRequest({ query: 'A' })).toThrow(/حرفين/)
+    expect(() => normalizeMarketSearchRequest({ query: '!' })).toThrow(/حرفين/)
+    expect(normalizeMarketSearchRequest({ query: 'F', quoteCurrency: 'USD', assetType: 'stock' }).query).toBe('F')
     expect(() => normalizeMarketSearchRequest({ query: 'Apple', quoteCurrency: 'GBP' })).toThrow(/غير مدعومة/)
     const fetchImpl = vi.fn()
     const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
@@ -103,6 +105,41 @@ describe('investment market prices', () => {
     expect(cached.prices[0]).toMatchObject({ ok: true, cached: true })
     expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(fetchImpl.mock.calls.every(([url]) => new URL(url).pathname === '/api/v1/summary/AAPL')).toBe(true)
+  })
+
+  it('refreshes legacy US holdings without changing their stored exchange symbols', async () => {
+    const holding = { id: 'ford', symbol: 'F', providerSymbol: 'F:NYSE', exchange: 'NYSE', quoteCurrency: 'USD', assetType: 'stock', status: 'active' }
+    const payload = { symbol: 'F', name: 'Ford Motor Company', currency: 'USD', price: { lastClose: 12.5, lastCloseDate: '2027-01-14' } }
+    const fetchImpl = vi.fn(async () => response(payload))
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    const state = { investmentHoldings: [holding] }
+    expect(isAutoPricedHolding(holding)).toBe(true)
+    const items = marketPriceItemsForHoldings({ ids: [holding.id] }, state)
+    expect(items).toEqual([{ id: 'ford', symbol: 'F:TGM', quoteCurrency: 'USD', assetType: 'stock' }])
+    expect((await service.refresh({ items })).prices[0]).toMatchObject({ ok: true, priceUsdMicros: 12_500_000, source: 'tgmcharts-eod' })
+    expect(holding.providerSymbol).toBe('F:NYSE')
+    expect(fetchImpl.mock.calls.every(([url]) => new URL(url).pathname === '/api/v1/summary/F')).toBe(true)
+    expect(await service.search({ query: 'F', quoteCurrency: 'USD', assetType: 'stock' }))
+      .toMatchObject({ results: [expect.objectContaining({ providerSymbol: 'F:TGM' })] })
+  })
+
+  it('does not redirect non-US, mismatched or manual holdings to the US close source', async () => {
+    const fixtures = [
+      { symbol: 'F', providerSymbol: 'F:BIST', exchange: 'BIST', quoteCurrency: 'TRY', assetType: 'stock' },
+      { symbol: 'F', providerSymbol: 'F:NYSE', exchange: 'NYSE', quoteCurrency: 'EUR', assetType: 'stock' },
+      { symbol: 'FCX', providerSymbol: 'F:NYSE', exchange: 'NYSE', quoteCurrency: 'USD', assetType: 'stock' },
+      { symbol: 'F', providerSymbol: 'F:NYSE', exchange: 'NASDAQ', quoteCurrency: 'USD', assetType: 'stock' },
+      { symbol: 'F', providerSymbol: 'F:NYSE', exchange: 'NYSE', quoteCurrency: 'USD', assetType: 'stock', marketDataMode: 'manual' },
+    ]
+    const fetchImpl = vi.fn()
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    for (const [index, holding] of fixtures.entries()) {
+      const state = { investmentHoldings: [{ ...holding, id: String(index), status: 'active' }] }
+      const [item] = marketPriceItemsForHoldings({ ids: [String(index)] }, state)
+      expect(item.symbol).not.toBe('F:TGM')
+      expect((await service.refresh({ items: [item] })).prices[0].ok).toBe(false)
+    }
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 
   it('rejects mismatched, stale, missing or wrong-currency US closing prices', async () => {
@@ -253,11 +290,63 @@ describe('investment market prices', () => {
     expect((await service.refresh({ items: [{ id: 'auto', symbol: 'BTC/USD', quoteCurrency: 'USD', assetType: 'crypto' }] })).prices[0].ok).toBe(true)
     const result = await service.refresh({ items: [
       { id: 'manual', symbol: 'BTC/USD', quoteCurrency: 'USD', assetType: 'crypto', marketDataMode: 'manual' },
-      { id: 'unsupported', symbol: 'FET/USD:BINANCE', quoteCurrency: 'USD', assetType: 'crypto' },
+      { id: 'unsupported', symbol: 'DOGE/USD:BINANCE', quoteCurrency: 'USD', assetType: 'crypto' },
       { id: 'usdt', symbol: 'USDT/USD', quoteCurrency: 'USD', assetType: 'crypto' },
     ] })
     expect(result.prices.every((item) => !item.ok && /يدوي/.test(item.error))).toBe(true)
     expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('prices verified FET and AVAX contracts only when two liquid pools agree', async () => {
+    const fetContract = '0xaea46a60368a7bd060eec7df8cba43b7ef41ad85'
+    const avaxContract = '0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7'
+    const pair = (chainId, address, symbol, priceUsd, liquidityUsd, pairAddress) => ({
+      chainId, pairAddress, baseToken: { address, symbol }, priceUsd: String(priceUsd),
+      liquidity: { usd: liquidityUsd }, volume: { h24: 100_000 },
+      txns: { h1: { buys: 1, sells: 1 } },
+    })
+    const fetchImpl = vi.fn(async (url) => {
+      const avax = new URL(url).pathname.includes('/avalanche/')
+      const chain = avax ? 'avalanche' : 'ethereum'
+      const contract = avax ? avaxContract : fetContract
+      const symbol = avax ? 'WAVAX' : 'FET'
+      const price = avax ? 10.75 : 0.2065
+      return response([pair(chain, contract, symbol, price, 1_000_000, '0xprimary'), pair(chain, contract, symbol, price * 1.005, 200_000, '0xsecondary')])
+    })
+    const state = { investmentHoldings: [
+      { id: 'fet', symbol: 'FET/USD', providerSymbol: 'FET/USD:BINANCE', exchange: 'BINANCE', quoteCurrency: 'USD', assetType: 'crypto', status: 'active' },
+      { id: 'avax', symbol: 'AVAX/USD', providerSymbol: 'AVAX/USD:BINANCE', exchange: 'BINANCE', quoteCurrency: 'USD', assetType: 'crypto', status: 'active' },
+    ] }
+    const items = marketPriceItemsForHoldings({ ids: ['fet', 'avax'] }, state)
+    expect(items.map((item) => item.symbol)).toEqual(['FET/USD:BINANCE', 'AVAX/USD:BINANCE'])
+    const prices = (await createMarketPriceService({}, { fetchImpl, now: () => NOW }).refresh({ items })).prices
+    expect(prices).toEqual([
+      expect.objectContaining({ ok: true, priceUsdMicros: 206_500, source: 'dexscreener-reference' }),
+      expect.objectContaining({ ok: true, priceUsdMicros: 10_750_000, source: 'dexscreener-reference' }),
+    ])
+    expect(fetchImpl.mock.calls.map(([url]) => new URL(url).pathname)).toEqual([
+      `/token-pairs/v1/ethereum/${fetContract}`,
+      `/token-pairs/v1/avalanche/${avaxContract}`,
+    ])
+    expect((await createMarketPriceService({}, { fetchImpl, now: () => NOW }).search({ query: 'AVAX', assetType: 'crypto' })).results)
+      .toEqual([expect.objectContaining({ symbol: 'AVAX/USD' })])
+  })
+
+  it('keeps prior crypto prices when pools disagree, are illiquid, or have no recent trades', async () => {
+    const valid = { chainId: 'ethereum', pairAddress: '0xprimary', baseToken: { address: '0xaea46a60368a7bd060eec7df8cba43b7ef41ad85', symbol: 'FET' },
+      priceUsd: '0.2', liquidity: { usd: 1_000_000 }, volume: { h24: 100_000 }, txns: { h1: { buys: 1, sells: 0 } } }
+    const fixtures = [
+      [valid],
+      [valid, { ...valid, pairAddress: '0xsecondary', priceUsd: '0.25', liquidity: { usd: 200_000 } }],
+      [{ ...valid, txns: { h1: { buys: 0, sells: 0 } } }, { ...valid, pairAddress: '0xsecondary', liquidity: { usd: 200_000 } }],
+      [valid, { ...valid, pairAddress: '0xsecondary', baseToken: { ...valid.baseToken, address: '0xFAKE' }, liquidity: { usd: 200_000 } }],
+      [valid, { ...valid, liquidity: { usd: 200_000 } }],
+    ]
+    for (const payload of fixtures) {
+      const result = await createMarketPriceService({}, { fetchImpl: async () => response(payload), now: () => NOW })
+        .refresh({ items: [{ id: 'fet', symbol: 'FET/USD:BINANCE', quoteCurrency: 'USD', assetType: 'crypto' }] })
+      expect(result.prices[0]).toMatchObject({ ok: false, error: expect.stringMatching(/بقي السعر السابق محفوظ/) })
+    }
   })
 
   it('preserves failures separately from valid quotes in mixed batches', async () => {

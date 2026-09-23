@@ -99,7 +99,7 @@ describe('investments panel', () => {
   it('shows an end-of-day Turkish quote as a date, never as a fabricated trade time', () => {
     const platform = createInvestmentPlatform({ id: 'platform-1', name: 'Midas' })
     const holding = createInvestmentHolding({
-      id: 'holding-eod', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO',
+      id: 'holding-eod', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO', assetType: 'stock',
       quoteCurrency: 'TRY', lastPriceUsdMicros: usdToMicros(9), lastPriceNativeMicros: usdToMicros(300),
       lastPriceSource: 'twelve-data-eod+ecb-fx', lastPriceQuotedAt: '2027-01-15T00:00:00.000Z',
       lastPriceMarketOpen: false,
@@ -107,7 +107,7 @@ describe('investments panel', () => {
     const summary = { platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 100_000_000, costBasisUsdMicros: usdToMicros(8), marketValueUsdMicros: usdToMicros(9), unrealizedProfitUsdMicros: usdToMicros(1) }] }], totalValueUsdMicros: usdToMicros(9) }
     const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
 
-    expect(html).toContain('إغلاق السوق')
+    expect(html).toContain('إغلاق سابق')
     expect(html).not.toContain('03:00')
     expect(html).toContain('300 TRY')
   })
@@ -115,7 +115,7 @@ describe('investments panel', () => {
   it('attributes a US daily close on the holding and labels it as an end-of-day price', () => {
     const platform = createInvestmentPlatform({ id: 'platform-us', name: 'IBKR' })
     const holding = createInvestmentHolding({
-      id: 'holding-us', platformId: platform.id, name: 'Apple Inc.', symbol: 'AAPL',
+      id: 'holding-us', platformId: platform.id, name: 'Apple Inc.', symbol: 'AAPL', assetType: 'stock',
       providerSymbol: 'AAPL:TGM', marketDataMode: 'provider', quoteCurrency: 'USD',
       lastPriceUsdMicros: usdToMicros(190.25), lastPriceNativeMicros: usdToMicros(190.25),
       lastPriceSource: 'tgmcharts-eod', lastPriceQuotedAt: '2027-01-14T00:00:00.000Z',
@@ -147,6 +147,25 @@ describe('investments panel', () => {
     expect(html).toContain('السعر السابق 300 TRY')
     expect(html).toContain('role="status"')
     expect(html).toContain('is-price-error')
+  })
+
+  it('marks a cached crypto quote as previous until its new reference source refreshes', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-crypto', name: 'Midas kripto' })
+    const holding = createInvestmentHolding({
+      id: 'holding-fet', platformId: platform.id, name: 'Fetch.ai', symbol: 'FET/USD',
+      providerSymbol: 'FET/USD:BINANCE', assetType: 'crypto', quoteCurrency: 'USD',
+      lastPriceUsdMicros: usdToMicros(1.25), lastPriceSource: 'binance-usdt+coinbase-usdt-usd',
+      lastPriceQuotedAt: '2026-09-23T11:01:52.000Z',
+    })
+    const summary = { platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 100_000_000, costBasisUsdMicros: usdToMicros(1), marketValueUsdMicros: usdToMicros(1.25), unrealizedProfitUsdMicros: usdToMicros(0.25) }] }], totalValueUsdMicros: usdToMicros(1.25) }
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
+
+    expect(html).toContain('is-market-price has-price is-neutral is-stale')
+    expect(html).toContain('سعر سابق')
+    expect(html).not.toContain('مصدر التحديث غير متاح لهذا الرمز')
+    expect(html).toContain('قيمة بسعر سابق')
+    expect(html).toContain('نتيجة تقديرية')
+    expect(html).toContain('1.25 USD')
   })
 
   it('uses the official visual identity for a known platform alias', () => {
