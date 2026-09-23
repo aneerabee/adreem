@@ -3,6 +3,7 @@
   --canvas: #f2f5f3;
   --paper: #fbfcfb;
   --line: #d6dfdb;
+  --nav-idle: #71817b;
   --shadow-soft: 0 2px 8px rgb(30 50 44 / 4%);
 }
 
@@ -193,12 +194,12 @@
   .adreem-app :is(.ml3-entry-card, .ml3-add-account) {
     height: clamp(290px, 52svh, 400px);
     min-height: 0;
-    max-height: calc(100dvh - 180px - env(safe-area-inset-bottom));
+    max-height: calc(100svh - 180px - env(safe-area-inset-bottom));
   }
   .adreem-app :is(.ml3-step-back, .ml3-step-next, .ml3-save, .ml3-account-stage-actions button) { min-height: 40px; }
   .adreem-app .ml3-account-choice-list button { min-height: 51px; }
   .adreem-app .ml3-action-choice { min-height: 43px; }
-  .adreem-app .ml3-today-panel { height: auto; min-height: 0; max-height: min(220px, 34dvh); }
+  .adreem-app .ml3-today-panel { height: auto; min-height: 0; max-height: min(220px, 34svh); }
   .adreem-app .ml3-balance-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
   .adreem-app .ml3-balance-ledger button { min-height: 64px; padding: 5px; }
   .adreem-app .ml3-balances-workspace { grid-template-columns: 1fr; gap: 7px; }
@@ -229,6 +230,7 @@
 
 @media (hover: none) {
   .adreem-app :is(.adreem-nav button, .ml3-action-choice, .ml3-balance-ledger button):hover { transform: none; box-shadow: none; }
+  .adreem-app .adreem-nav button:not(.is-active):hover { background: transparent; color: var(--nav-idle); }
 }
 
 @media (prefers-reduced-motion: reduce) {

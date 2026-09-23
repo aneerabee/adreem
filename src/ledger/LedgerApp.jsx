@@ -3858,7 +3858,7 @@ export default function LedgerApp() {
     if (nextUrl !== currentUrl) window.history.replaceState(window.history.state, '', nextUrl)
   }, [activeAccountGroup, activeEntryMode, activeSection, balanceFocus])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof document === 'undefined') return
     scrollLedgerToTop('auto')
   }, [activeSection])
@@ -4976,11 +4976,6 @@ export default function LedgerApp() {
     })
   }
 
-  function resetSectionScroll(behavior = 'auto') {
-    if (typeof window === 'undefined') return
-    window.requestAnimationFrame(() => scrollLedgerToTop(behavior))
-  }
-
   function resetTemporaryNet() {
     setNetExcludedAccountIds((current) => current.length ? [] : current)
     setNetAccountQuery((current) => current ? '' : current)
@@ -5039,7 +5034,6 @@ export default function LedgerApp() {
       () => {
         if (section !== 'accounts') closeNetPanel()
         setActiveSection(section)
-        resetSectionScroll('auto')
       },
       targetIndex >= currentIndex ? 'forward' : 'back',
       'section',
@@ -5105,11 +5099,11 @@ export default function LedgerApp() {
       const targetIndex = sectionOrder.indexOf('accounts')
       commitFlowChange(() => {
         applyFocus()
-        resetSectionScroll('auto')
       }, targetIndex >= currentIndex ? 'forward' : 'back', 'section')
       return
     }
     applyFocus()
+    scrollLedgerToTop('auto')
   }
 
   function openExpenseCategoryCreator(context = 'balances') {
