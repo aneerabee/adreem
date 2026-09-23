@@ -726,10 +726,9 @@ export default function InvestmentsPanel({
                       >
                         <div className="adreem-investment-holding-identity">
                           <div className="adreem-investment-symbol"><b dir="ltr">{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
-                          <div className="adreem-investment-name"><strong dir="auto">{preserveUiData(row.holding.name)}</strong><small dir="auto">{preserveUiData(row.holding.exchange || brand.displayName || platformRow.platform.name)}{row.holding.lastPriceSource === 'tgmcharts-eod' ? <> · <a href="https://tgmcharts.com/" target="_blank" rel="noopener noreferrer">TGMCharts</a></> : null}</small></div>
+                          <div className="adreem-investment-name"><div className="adreem-investment-name-heading"><strong dir="auto">{preserveUiData(row.holding.name)}</strong><span className="adreem-investment-quantity" aria-label={`الكمية: ${decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة`}><b dir="ltr">{decimal(unitsToQuantity(row.quantityUnits), 8)}</b><em>وحدة</em></span></div><small dir="auto">{preserveUiData(row.holding.exchange || brand.displayName || platformRow.platform.name)}{row.holding.lastPriceSource === 'tgmcharts-eod' ? <> · <a href="https://tgmcharts.com/" target="_blank" rel="noopener noreferrer">TGMCharts</a></> : null}</small></div>
                         </div>
                         <div className="adreem-investment-metrics-strip" aria-label="تفاصيل الاستثمار">
-                          <div className="is-quantity"><small>الكمية</small><strong>{decimal(unitsToQuantity(row.quantityUnits), 8)} <em>وحدة</em></strong></div>
                           <InvestmentMarketPrice holding={row.holding} error={priceErrors[row.holding.id]} onOpen={openManualPrice} />
                           <div className="is-current-value"><small>{priceIsStale ? 'قيمة بسعر سابق' : 'القيمة الآن'}</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
                           <div className={`adreem-investment-result is-${holdingProfitTone}`}>

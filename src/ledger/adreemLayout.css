@@ -7,17 +7,17 @@
 }
 
 .adreem-app--investments {
-  --canvas: #eef2ef;
-  --section-accent: #536c61;
-  --section-soft: #e8eeea;
-  --section-ink: #344b40;
-  --section-line: #c9d5ce;
+  --canvas: #f4f5f6;
+  --section-accent: #657177;
+  --section-soft: #eceff0;
+  --section-ink: #394347;
+  --section-line: #d7dcdf;
 }
 
 .adreem-app--investments .adreem-view {
   position: relative;
   isolation: isolate;
-  background: #eef2ef;
+  background: var(--canvas);
 }
 
 .adreem-app--investments .adreem-view::before {
@@ -26,7 +26,7 @@
   height: 290px;
   background: url('./market-watermark.svg') no-repeat center top / min(960px, 100%) auto;
   content: '';
-  opacity: 0.19;
+  opacity: 0.12;
   pointer-events: none;
 }
 
@@ -232,5 +232,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .adreem-app--investments .adreem-view::before { opacity: 0.15; }
+  .adreem-app--investments .adreem-view::before { opacity: 0.1; }
 }

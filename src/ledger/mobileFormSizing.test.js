@@ -172,7 +172,7 @@ describe('mobile form sizing', () => {
 
   it('keeps investment dialogs and actions usable on narrow touch screens', () => {
     expect(financeStylesheet).toContain('.adreem-investment-metrics-strip { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }')
-    expect(financeStylesheet).toContain('.adreem-investment-metrics-strip > :nth-child(n + 3) { border-top: 1px solid #dfe4e5; }')
+    expect(financeStylesheet).toContain('.adreem-investment-metrics-strip > .adreem-investment-result { grid-column: 1 / -1; border-top: 1px solid #dfe4e5; }')
     expect(financeStylesheet).toContain('.adreem-investment-row-actions { grid-column: 1 / -1; grid-row: 3; }')
     expect(financeStylesheet).toContain('.adreem-investment-row-actions button { flex: 1; justify-content: center; }')
     expect(financeStylesheet).toContain('.adreem-investment-holding-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }')

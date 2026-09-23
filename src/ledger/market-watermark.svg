@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" fill="none">
-  <g stroke="#96a9a1" stroke-width="1">
+  <g stroke="#aeb6ba" stroke-width="1">
     <path d="M0 50H960M0 110H960M0 170H960M0 230H960" opacity=".38"/>
     <path d="M60 0V300M180 0V300M300 0V300M420 0V300M540 0V300M660 0V300M780 0V300M900 0V300" opacity=".3"/>
   </g>
-  <g stroke="#789387" stroke-width="2" stroke-linecap="round">
+  <g stroke="#98a2a7" stroke-width="2" stroke-linecap="round">
     <path d="M105 204v-67M166 221v-93M227 190V98M288 202v-70M349 172V82M410 164V64M471 182V96M532 146V53M593 162V78M654 130V43M715 142V59M776 116V31M837 128V50"/>
     <path d="M105 158v29M166 155v45M227 119v42M288 148v33M349 101v51M410 85v47M471 114v48M532 72v52M593 96v45M654 62v47M715 76v47M776 49v46M837 67v42" stroke-width="10"/>
   </g>
-  <path d="M10 245 89 218 153 226 215 193 272 206 338 177 402 170 467 188 528 155 590 166 651 137 710 147 774 120 839 130 951 91" stroke="#8aa398" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M10 245 89 218 153 226 215 193 272 206 338 177 402 170 467 188 528 155 590 166 651 137 710 147 774 120 839 130 951 91" stroke="#a1aaae" stroke-width="2" stroke-linejoin="round"/>
 </svg>

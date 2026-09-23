@@ -2637,7 +2637,11 @@
 .adreem-investment-symbol b { padding: 2px 6px; border-radius: 4px; background: #343b3e; color: #fff; font-size: 0.66rem; direction: ltr; }
 .adreem-investment-symbol small { padding: 2px 5px; border-radius: 999px; background: #e9eded; color: #525b5e; }
 .adreem-investment-name { min-width: 0; display: grid; gap: 2px; }
+.adreem-investment-name-heading { min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 7px; }
 .adreem-investment-name strong { color: #202628; font-size: 0.74rem; line-height: 1.3; text-align: start; }
+.adreem-investment-quantity { display: inline-flex; align-items: baseline; flex: 0 0 auto; gap: 3px; color: #687277; font-size: 0.59rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adreem-investment-quantity b { font-weight: 750; }
+.adreem-investment-quantity em { font-size: 0.53rem; font-style: normal; }
 .adreem-investment-name small { overflow-wrap: anywhere; text-align: start; }
 .adreem-investment-name small a,
 .adreem-investment-holding-details a { color: #334d57; text-decoration: underline; text-underline-offset: 2px; }
@@ -2646,13 +2650,12 @@
   min-height: 46px;
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(80px, 0.72fr) minmax(126px, 1fr) minmax(126px, 1fr) minmax(130px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   border: 1px solid #e2e5e6;
   border-radius: 6px;
   background: #fff;
 }
-.adreem-investment-metrics-strip > .is-quantity,
 .adreem-investment-metrics-strip > .is-current-value,
 .adreem-investment-metrics-strip > .adreem-investment-price,
 .adreem-investment-result {
@@ -2703,7 +2706,7 @@
 .adreem-investment-result.is-negative span { color: inherit; }
 .adreem-investment-row-actions { display: flex !important; align-items: center; gap: 4px !important; }
 .adreem-investment-row-actions button { min-width: 44px; min-height: 30px; padding: 0 6px; font-size: 0.6rem; }
-.adreem-investment-row-actions .is-record { border-color: #b7ddcf; color: #087757; }
+.adreem-investment-row-actions .is-record { border-color: #cbd2d5; background: #f3f5f6; color: #445056; }
 .adreem-investment-row-actions .is-details[aria-expanded='true'] { border-color: #aeb9bc; background: #eef1f2; }
 .adreem-investment-row-actions .is-details[aria-expanded='true'] svg { transform: rotate(180deg); }
 .adreem-investment-holding-details { grid-column: 1 / -1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; padding: 7px 9px; border-top: 1px solid #e0e5e6; background: #f8f9f9; }
@@ -2948,8 +2951,7 @@
     padding: 7px;
   }
   .adreem-investment-metrics-strip { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .adreem-investment-metrics-strip > :nth-child(odd) { border-inline-start: 0; }
-  .adreem-investment-metrics-strip > :nth-child(n + 3) { border-top: 1px solid #dfe4e5; }
+  .adreem-investment-metrics-strip > .adreem-investment-result { grid-column: 1 / -1; border-top: 1px solid #dfe4e5; }
   .adreem-investment-metrics-strip > * { min-height: 48px; }
   .adreem-investment-result-value strong { font-size: 0.72rem; }
   .adreem-investment-row-actions { grid-column: 1 / -1; grid-row: 3; }
