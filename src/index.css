@@ -1,6 +1,7 @@
 :root {
   --adreem-font-ar: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', system-ui, sans-serif;
   --adreem-font-en: 'Manrope Variable', system-ui, sans-serif;
+  --adreem-font-number: 'Manrope Variable', 'IBM Plex Sans Arabic', system-ui, sans-serif;
   --adreem-flow-next-shift: -10px;
   --adreem-flow-back-shift: 10px;
   --adreem-drawer-shift: 18px;

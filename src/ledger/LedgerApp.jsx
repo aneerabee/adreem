@@ -8,6 +8,7 @@ import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
 import './adreemFinance.css'
+import './adreemType.css'
 import AdreemChrome from './AdreemChrome'
 import InvestmentsPanel from './InvestmentsPanel'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
@@ -336,13 +337,20 @@ function hasMoneyValue(value) {
   return Number.isFinite(number) && number !== 0
 }
 
+const BALANCE_AMOUNT_FIELDS = ['dinar', 'usd', 'try', 'eur']
+const BALANCE_PAIR_INLINE_MAX_LENGTH = 5
+const BALANCE_CARD_INLINE_MAX_LENGTH = 13
+
+function longestBalanceAmountLength(value) {
+  return Math.max(...BALANCE_AMOUNT_FIELDS.map((field) => formatMoneyNumber(value?.[field]).length))
+}
+
+export function balanceAmountNeedsStack(value) {
+  return longestBalanceAmountLength(value) > BALANCE_PAIR_INLINE_MAX_LENGTH
+}
+
 export function balanceAmountIsWide(value) {
-  return Math.max(
-    formatMoneyNumber(value?.dinar).length,
-    formatMoneyNumber(value?.usd).length,
-    formatMoneyNumber(value?.try).length,
-    formatMoneyNumber(value?.eur).length,
-  ) > 13
+  return longestBalanceAmountLength(value) > BALANCE_CARD_INLINE_MAX_LENGTH
 }
 
 export function money(value, currency = CURRENCIES.DINAR) {
@@ -1239,7 +1247,7 @@ export function CurrencyAmountGrid({ value, className = 'ml3-balance-pair' }) {
     <span className={className}>
       {cells.map((cell, index) => {
         const Tag = index === 0 ? 'strong' : 'small'
-        return <Tag key={cell.value}><b>{formatInteger(cell.amount)}</b><span>{cell.label}</span></Tag>
+        return <Tag key={cell.value} className={cell.amount === 0 ? 'is-zero' : undefined}><b>{formatInteger(cell.amount)}</b><span>{cell.label}</span></Tag>
       })}
     </span>
   )
@@ -1247,7 +1255,8 @@ export function CurrencyAmountGrid({ value, className = 'ml3-balance-pair' }) {
 
 function BalanceAmountPair({ value }) {
   const wide = balanceAmountIsWide(value)
-  return <CurrencyAmountGrid className={`ml3-balance-pair${wide ? ' is-wide' : ''}`} value={value} />
+  const stacked = balanceAmountNeedsStack(value)
+  return <CurrencyAmountGrid className={`ml3-balance-pair${wide ? ' is-wide' : ''}${stacked ? ' is-stacked' : ''}`} value={value} />
 }
 
 export function netContributionDisplayValues(item = {}) {

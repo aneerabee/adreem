@@ -1,0 +1,263 @@
+/* One visual hierarchy for descriptions, identities, and financial values. */
+.adreem-app {
+  --type-caption: 0.63rem;
+  --type-label: 0.67rem;
+  --type-name: 0.82rem;
+  --type-value: 0.9rem;
+  --type-key-value: 1.02rem;
+  --type-label-weight: 600;
+  --type-name-weight: 700;
+  --type-value-weight: 800;
+}
+
+@media screen {
+  .adreem-app :is(
+    .ml3-balance-pair strong,
+    .ml3-balance-pair small,
+    .adreem-net-raw strong,
+    .adreem-net-calc output strong,
+    .adreem-separate-currencies strong,
+    .adreem-separate-currencies small,
+    .ml3-account-values strong,
+    .ml3-account-values > span,
+    .adreem-counterparty-channel > b,
+    .adreem-counterparty-channels button b,
+    .adreem-separate-record-value b,
+    .ml3-effect b,
+    .ml3-effect strong,
+    .ml3-history-side > strong,
+    .ml3-profile-balance strong,
+    .ml3-profile-impact b,
+    .adreem-statement-summary article b,
+    .adreem-statement-row-value > strong,
+    .adreem-investment-summary strong,
+    .adreem-investment-platform-balances > b strong,
+    .adreem-investment-metrics-strip strong,
+    .adreem-investment-result-value strong,
+    .adreem-investment-holding-details strong,
+    .adreem-investment-history-values strong
+  ) {
+    font-family: var(--adreem-font-number);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Summary and net: captions recede, amounts carry the visual emphasis. */
+  .adreem-app .ml3-balance-ledger button > span > b,
+  .adreem-app .adreem-separate-summary small,
+  .adreem-app .adreem-net-raw small,
+  .adreem-app .adreem-net-calc output small {
+    font-size: var(--type-label);
+    font-weight: var(--type-label-weight);
+  }
+
+  .adreem-app .ml3-balance-ledger button .ml3-balance-pair strong,
+  .adreem-app .ml3-balance-ledger button .ml3-balance-pair small,
+  .adreem-app .adreem-net-raw strong,
+  .adreem-app .adreem-net-calc output strong {
+    font-size: var(--type-key-value);
+    font-weight: var(--type-value-weight);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+
+  .adreem-app .ml3-balance-pair.is-stacked {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .adreem-app .ml3-balance-pair.is-stacked > :not(.is-zero) {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .adreem-app .adreem-separate-summary strong,
+  .adreem-app .adreem-separate-summary b {
+    font-size: var(--type-value);
+    font-weight: var(--type-value-weight);
+  }
+
+  .adreem-app .adreem-net-raw {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adreem-app .adreem-net-raw strong {
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .adreem-app .ml3-balance-pair strong > span,
+  .adreem-app .ml3-balance-pair small > span,
+  .adreem-app .adreem-separate-currencies span {
+    font-size: var(--type-caption);
+    font-weight: var(--type-label-weight);
+  }
+
+  /* Account and person rows keep the name distinct from the balance. */
+  .adreem-app .ml3-balances-surface .ml3-account-copy > strong,
+  .adreem-app .adreem-counterparty-identity strong,
+  .adreem-app .adreem-separate-record-heading strong {
+    font-size: var(--type-name);
+    font-weight: var(--type-name-weight);
+  }
+
+  .adreem-app .ml3-balances-surface .ml3-account-context,
+  .adreem-app .adreem-counterparty-channel > small,
+  .adreem-app .adreem-counterparty-channels button span,
+  .adreem-app .adreem-separate-record-copy small,
+  .adreem-app .adreem-separate-record-value small {
+    font-size: var(--type-label);
+    font-weight: var(--type-label-weight);
+  }
+
+  .adreem-app .ml3-balances-surface .ml3-account-values strong,
+  .adreem-app .ml3-balances-surface .ml3-account-values > span,
+  .adreem-app .adreem-counterparty-channel > b,
+  .adreem-app .adreem-counterparty-channels button b,
+  .adreem-app .adreem-separate-record-value b {
+    font-size: var(--type-value);
+    font-weight: var(--type-value-weight);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+
+  /* The wizard, journal, review, and statements share the same value scale. */
+  .adreem-app .ml3-effect span,
+  .adreem-app .ml3-today-main span,
+  .adreem-app .ml3-history-main span,
+  .adreem-app .ml3-review-card-head span,
+  .adreem-app .ml3-profile-balance span,
+  .adreem-app .ml3-profile-facts span,
+  .adreem-app .adreem-statement-summary article small {
+    font-size: var(--type-label);
+    font-weight: var(--type-label-weight);
+  }
+
+  .adreem-app .ml3-today-main strong,
+  .adreem-app .ml3-history-main strong,
+  .adreem-app .ml3-review-ticket strong,
+  .adreem-app .ml3-review-card-head strong,
+  .adreem-app .ml3-profile-facts strong {
+    font-size: var(--type-name);
+    font-weight: var(--type-name-weight);
+  }
+
+  .adreem-app .ml3-effect b,
+  .adreem-app .ml3-effect strong,
+  .adreem-app .ml3-history-side > strong,
+  .adreem-app .ml3-review-card-head > b,
+  .adreem-app .ml3-review-usd,
+  .adreem-app .ml3-profile-balance strong,
+  .adreem-app .ml3-profile-impact b,
+  .adreem-app .adreem-statement-summary article b,
+  .adreem-app .adreem-statement-row-value > strong {
+    font-size: var(--type-value);
+    font-weight: var(--type-value-weight);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+
+  .adreem-app .ml3-effect b {
+    color: var(--finance-muted);
+    font-size: var(--type-name);
+    font-weight: var(--type-label-weight);
+  }
+
+  .adreem-app .ml3-effect strong {
+    font-size: var(--type-key-value);
+  }
+
+  .adreem-app .adreem-statement-summary article small {
+    font-size: 0.61rem;
+  }
+
+  .adreem-app .adreem-statement-summary article b,
+  .adreem-app .adreem-statement-row-value > strong {
+    font-size: 0.78rem;
+  }
+
+  .adreem-app .adreem-statement-summary article small,
+  .adreem-app .adreem-statement-row-note,
+  .adreem-app .ml3-history-rate,
+  .adreem-app .ml3-history-conversion {
+    color: var(--finance-muted);
+  }
+
+  .adreem-app .ml3-history-rate,
+  .adreem-app .ml3-history-conversion {
+    font-size: var(--type-label);
+    font-weight: var(--type-label-weight);
+  }
+
+  /* Market labels stay quiet; live prices, totals, and results remain scannable. */
+  .adreem-app .adreem-investment-summary small,
+  .adreem-app .adreem-investment-platform-balances > b small,
+  .adreem-app .adreem-investment-metrics-strip small,
+  .adreem-app .adreem-investment-holding-details small,
+  .adreem-app .adreem-investment-history-values small {
+    font-size: var(--type-label);
+    font-weight: var(--type-label-weight);
+  }
+
+  .adreem-app .adreem-investment-summary strong {
+    font-size: var(--type-key-value);
+    font-weight: var(--type-value-weight);
+  }
+
+  .adreem-app .adreem-investment-platform > header strong,
+  .adreem-app .adreem-investment-name strong,
+  .adreem-app .adreem-investment-history-main > header strong {
+    font-size: var(--type-name);
+    font-weight: var(--type-name-weight);
+  }
+
+  .adreem-app .adreem-investment-platform-balances > b strong,
+  .adreem-app .adreem-investment-metrics-strip strong,
+  .adreem-app .adreem-investment-result-value strong,
+  .adreem-app .adreem-investment-holding-details strong,
+  .adreem-app .adreem-investment-history-values strong {
+    font-size: var(--type-value);
+    font-weight: var(--type-value-weight);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+
+  .adreem-app .adreem-investment-metrics-strip em,
+  .adreem-app .adreem-investment-result-value em {
+    font-size: var(--type-caption);
+    font-weight: var(--type-label-weight);
+  }
+
+  .adreem-app .adreem-investment-metrics-strip > .is-current-value strong,
+  .adreem-app .adreem-investment-result-value strong {
+    font-size: var(--type-key-value);
+  }
+}
+
+@media screen and (max-width: 720px) {
+  .adreem-app {
+    --type-caption: 0.61rem;
+    --type-label: 0.65rem;
+    --type-name: 0.79rem;
+    --type-value: 0.84rem;
+    --type-key-value: 0.92rem;
+  }
+
+  .adreem-app .adreem-investment-metrics-strip strong,
+  .adreem-app .adreem-investment-result-value strong { overflow-wrap: anywhere; }
+
+  .adreem-app .adreem-net-raw {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .adreem-app .adreem-statement-summary article b,
+  .adreem-app .adreem-statement-row-value > strong { font-size: 0.73rem; }
+}
+
+@media screen and (max-width: 360px) {
+  .adreem-app {
+    --type-value: 0.8rem;
+    --type-key-value: 0.86rem;
+  }
+}

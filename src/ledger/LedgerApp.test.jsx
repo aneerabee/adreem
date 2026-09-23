@@ -38,6 +38,7 @@ import {
   CurrencyAmountGrid,
   buildAccountStatement,
   balanceAmountIsWide,
+  balanceAmountNeedsStack,
   buildExpenseBalanceRows,
   buildPeopleAccountViews,
   canEditMovement,
@@ -229,9 +230,18 @@ describe('LedgerApp account statements', () => {
 })
 
 describe('LedgerApp large balance layout', () => {
-  it('reserves a full mobile row only for balances that need the extra width', () => {
+  it('stacks long values and reserves a full mobile row only for extreme balances', () => {
     expect(balanceAmountIsWide({ dinar: 1_250_000, usd: 900 })).toBe(false)
+    expect(balanceAmountNeedsStack({ dinar: 9_999, usd: 0 })).toBe(false)
+    expect(balanceAmountNeedsStack({ dinar: 10_000, usd: 0 })).toBe(true)
+    expect(balanceAmountNeedsStack({ dinar: 0, usd: 23_456 })).toBe(true)
     expect(balanceAmountIsWide({ dinar: 999_999_999_999_999, usd: 0 })).toBe(true)
+  })
+
+  it('marks zero currencies so they can remain compact beside stacked values', () => {
+    const markup = renderToStaticMarkup(<CurrencyAmountGrid value={{ dinar: 10_000, usd: 0, try: 0, eur: 0 }} />)
+    expect(markup).toContain('class="is-zero"')
+    expect(markup).toContain('10,000')
   })
 })
 
