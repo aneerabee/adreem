@@ -832,7 +832,6 @@
 @media (max-width: 540px) {
   .ml3-recurring-start { grid-template-columns: 1fr; }
   .ml3-recurring-start small { grid-column: auto; }
-  .ml3-recurring-day { grid-template-columns: 1fr; }
 }
 
 .ml3-account-switcher button::after { content: none; }
@@ -910,8 +909,6 @@
 }
 .ml3-account-toolbar:focus-within { border-color: var(--balance-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--balance-focus) 12%, transparent); }
 .ml3-account-toolbar input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--finance-ink); font-size: 0.75rem; outline: 0; box-shadow: none; }
-
-.ml3-account-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .ml3-balances-surface .ml3-list-block {
   min-width: 0;
   overflow: hidden;
@@ -1555,7 +1552,6 @@
 .adreem-counterparty-opening .ml3-number-compact input { min-width: 0; height: 35px; border-color: var(--finance-line); background: var(--finance-paper); font-size: 0.86rem; }
 .ml3-opening-direction.is-compact { gap: 4px; }
 .ml3-opening-direction.is-compact button { min-height: var(--finance-control-compact); border-radius: var(--finance-control-radius); padding: 4px; font-size: 0.6rem; font-weight: 790; }
-.adreem-opening-zero { min-height: 31px; display: grid; place-items: center; color: var(--finance-muted); font-size: 0.59rem; }
 .adreem-counterparty-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 6px; }
 .adreem-counterparty-summary > span { min-width: 0; display: grid; gap: 2px; padding: 6px; border: 1px solid color-mix(in srgb, var(--finance-green) 18%, var(--finance-line)); border-radius: 6px; background: var(--finance-paper); }
 
@@ -1569,8 +1565,7 @@
 .ml3-undo-banner button,
 .ml3-edit-banner button,
 .ml3-mini-action,
-.ml3-row-actions button,
-.ml3-ops-actions button { min-height: var(--finance-control-compact); border-radius: var(--finance-control-radius); }
+.ml3-row-actions button { min-height: var(--finance-control-compact); border-radius: var(--finance-control-radius); }
 .adreem-counterparty-summary b { overflow: hidden; color: var(--finance-ink); font-size: 0.63rem; text-overflow: ellipsis; white-space: nowrap; }
 .adreem-counterparty-summary small { overflow: hidden; color: var(--finance-muted); font-size: 0.56rem; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1671,7 +1666,6 @@
   .adreem-separate-record-value { grid-area: value; justify-items: start; grid-template-columns: auto auto; align-items: baseline; gap: 6px; }
   .adreem-separate-record-actions { grid-area: actions; }
   .adreem-separate-record-actions button { width: 36px; height: 36px; }
-  .ml3-account-sections { grid-template-columns: 1fr; gap: 7px; }
   .adreem-people-controls { grid-template-columns: 1fr; gap: 5px; margin-bottom: 7px; }
   .adreem-counterparty-filters { gap: 2px; padding: 2px; }
   .adreem-counterparty-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1742,9 +1736,7 @@
   .adreem-counterparty-opening > header { grid-area: opening-label; align-self: center; }
   .adreem-counterparty-opening > header strong { overflow: visible; line-height: 1.15; text-overflow: clip; white-space: normal; }
   .adreem-counterparty-opening > .ml3-number-compact { grid-area: opening-value; min-width: 0; }
-  .adreem-counterparty-opening > .ml3-opening-direction,
-  .adreem-counterparty-opening > .adreem-opening-zero { grid-area: opening-direction; }
-  .adreem-counterparty-opening .adreem-opening-zero { min-height: var(--finance-control-compact); }
+  .adreem-counterparty-opening > .ml3-opening-direction { grid-area: opening-direction; }
   .adreem-counterparty-summary { grid-template-columns: 1fr; }
   .adreem-counterparty-summary > span { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
   .ml3-today-panel { padding: 7px; }
@@ -3048,6 +3040,5 @@
   .adreem-investments *,
   .adreem-investment-dialog-layer *,
   .adreem-investment-dialog { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
-  .is-spinning,
-  .adreem-investment-market-dot { animation: none; }
+  .is-spinning { animation: none; }
 }

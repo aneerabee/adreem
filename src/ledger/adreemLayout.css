@@ -1,0 +1,236 @@
+/* Shared density and hierarchy; operational colors remain attached to state. */
+.adreem-app {
+  --canvas: #f2f5f3;
+  --paper: #fbfcfb;
+  --line: #d6dfdb;
+  --shadow-soft: 0 2px 8px rgb(30 50 44 / 4%);
+}
+
+.adreem-app--investments {
+  --canvas: #eef2ef;
+  --section-accent: #536c61;
+  --section-soft: #e8eeea;
+  --section-ink: #344b40;
+  --section-line: #c9d5ce;
+}
+
+.adreem-app--investments .adreem-view {
+  position: relative;
+  isolation: isolate;
+  background: #eef2ef;
+}
+
+.adreem-app--investments .adreem-view::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 290px;
+  background: url('./market-watermark.svg') no-repeat center top / min(960px, 100%) auto;
+  content: '';
+  opacity: 0.19;
+  pointer-events: none;
+}
+
+.adreem-app--investments .adreem-view > * { position: relative; }
+
+/* The outer frame is quiet; controls communicate their priority. */
+.adreem-app .adreem-header { height: 58px; padding-block: 6px; box-shadow: none; }
+.adreem-app .adreem-frame { min-height: calc(100dvh - 58px); grid-template-columns: minmax(0, 1fr) 78px; }
+.adreem-app[dir='ltr'] .adreem-frame { grid-template-columns: 78px minmax(0, 1fr); }
+.adreem-app .adreem-nav { top: 58px; width: 78px; height: calc(100dvh - 58px); gap: 3px; padding: 10px 6px; box-shadow: none; }
+.adreem-app .adreem-nav button { height: 55px; gap: 2px; border-radius: 5px; }
+.adreem-app .adreem-nav button.is-active { box-shadow: none; }
+.adreem-app .adreem-nav-icon { width: 27px; height: 24px; }
+.adreem-app .adreem-view { height: calc(100dvh - 58px); padding: 11px 13px 20px; }
+.adreem-app .adreem-header-actions button { width: 32px; height: 32px; border-radius: 5px; }
+
+.adreem-app :is(
+  .ml3-entry-card, .ml3-add-account, .ml3-today-panel,
+  .ml3-list-block, .ml3-history-day, .ml3-review-queue,
+  .ml3-review-card, .adreem-money-group, .adreem-counterparty-card
+) {
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.adreem-app :is(.ml3-entry-card, .ml3-add-account) { border-top-width: 2px; }
+.adreem-app .ml3-today-panel { background: #f8faf9; }
+.adreem-app .ml3-entry-mode { width: min(300px, 100%); min-height: 38px; padding: 3px; }
+.adreem-app .ml3-entry-mode button { min-height: 30px; font-size: 0.72rem; }
+.adreem-app :is(.adreem-flow-head, .ml3-entry-head) { min-height: 59px; padding: 8px 11px; }
+.adreem-app .adreem-flow-progress { padding: 6px 11px 0; }
+.adreem-app .adreem-flow-progress-meta { min-height: 32px; }
+.adreem-app .ml3-step { padding-inline: 11px; }
+.adreem-app .ml3-step-controls { margin-inline: -11px; padding: 7px 11px; box-shadow: none; }
+.adreem-app .ml3-account-stage-actions { padding: 7px 11px; box-shadow: none; }
+.adreem-app :is(.ml3-step-back, .ml3-step-next, .ml3-save, .ml3-account-stage-actions button) {
+  min-height: 34px;
+  border-radius: 5px;
+  font-size: 0.7rem;
+  box-shadow: none;
+}
+.adreem-app .ml3-step-controls { grid-template-columns: minmax(82px, 0.26fr) minmax(130px, 1fr); }
+.adreem-app .ml3-action-catalog { gap: 7px; }
+.adreem-app .ml3-action-lane { padding: 7px; background: #f8faf9; }
+.adreem-app .ml3-action-choice { min-height: 47px; grid-template-columns: 27px minmax(0, 1fr) 14px; gap: 6px; padding: 5px 7px; border-radius: 5px; box-shadow: none; }
+.adreem-app .ml3-action-choice > svg:first-child { width: 26px; height: 26px; padding: 5px; border-radius: 5px; }
+.adreem-app .ml3-account-choice-list button {
+  height: auto;
+  min-height: 51px;
+  grid-template-columns: 28px minmax(0, 1fr) 14px;
+  grid-template-rows: auto;
+  gap: 6px;
+  padding-block: 6px;
+  border-radius: 5px;
+}
+.adreem-app .ml3-account-choice-list button strong,
+.adreem-app .ml3-account-choice-list button small {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.3;
+}
+.adreem-app .ml3-account-choice-list button i { width: 27px; height: 27px; border-radius: 5px; }
+.adreem-app :is(.ml3-more-actions > summary, .ml3-filter-disclosure > summary) { min-height: 35px; }
+.adreem-app .ml3-picker-results > button:not(.ml3-picker-more) { min-height: 40px; }
+
+/* Balances are a table of positions, not a grid of floating cards. */
+.adreem-app .ml3-balance-ledger { gap: 6px; padding: 0; border: 0; background: transparent; }
+.adreem-app .ml3-balance-ledger button {
+  min-height: 60px;
+  grid-template-columns: 27px minmax(0, 1fr);
+  gap: 6px;
+  padding: 5px 7px;
+  border-color: var(--line);
+  border-radius: 6px;
+  box-shadow: none;
+}
+.adreem-app .ml3-balance-ledger button i { width: 26px; height: 26px; border-radius: 5px; box-shadow: none; }
+.adreem-app .ml3-balance-ledger button:hover,
+.adreem-app .ml3-balance-ledger button.is-active { box-shadow: none; transform: none; }
+.adreem-app .ml3-balance-ledger button:hover i { transform: none; box-shadow: none; }
+.adreem-app .ml3-balances-workspace { grid-template-columns: 112px minmax(0, 1fr); gap: 9px; }
+.adreem-app .ml3-account-switcher { gap: 2px; padding: 0; border: 0; background: transparent; }
+.adreem-app .ml3-account-switcher button { min-height: 37px; border-radius: 5px; padding: 3px 5px; }
+.adreem-app .ml3-account-switcher button.is-active { background: #e7edeb; box-shadow: none; }
+.adreem-app .ml3-balance-pane-head { min-height: 39px; margin-bottom: 6px; padding-bottom: 5px; }
+.adreem-app .ml3-account-toolbar { min-height: 32px; }
+.adreem-app .ml3-account-toolbar input { min-height: 30px; }
+.adreem-app .ml3-list-block > .ml3-panel-head { min-height: 31px; padding: 5px 8px; }
+.adreem-app .ml3-account-row { min-height: 48px; }
+.adreem-app .adreem-money-group { padding: 6px; }
+.adreem-app .adreem-tracking-item { border-radius: 5px; }
+
+/* Journal and review use restrained section framing and compact actions. */
+.adreem-app .ml3-history-list { gap: 7px; }
+.adreem-app .ml3-history-day-head { min-height: 33px; padding: 5px 9px; }
+.adreem-app .ml3-history-row { min-height: 48px; padding-block: 5px; }
+.adreem-app .ml3-history-more { min-height: 34px; font-size: 0.72rem; }
+.adreem-app .ml3-review-queue { padding: 5px; }
+.adreem-app .ml3-review-ticket { min-height: 43px; }
+.adreem-app .ml3-review-ticket.is-active { box-shadow: none; }
+.adreem-app :is(.ml3-mini-action, .ml3-row-actions button, .ml3-history-side > button, .ml3-decision-actions button) { min-height: 30px; box-shadow: none; }
+
+/* The portfolio has one strong value, quiet controls and clearly separated venues. */
+.adreem-app .adreem-investments { gap: 9px; }
+.adreem-app .adreem-investment-hero {
+  padding: 4px 0 9px;
+  border: 0;
+  border-bottom: 1px solid #cbd7d0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.adreem-app .adreem-investment-title > span { width: 32px; height: 32px; border-radius: 5px; }
+.adreem-app .adreem-investment-actions button { min-height: 31px; padding-inline: 8px; border-radius: 5px; font-size: 0.66rem; }
+.adreem-app .adreem-investment-summary { gap: 6px; }
+.adreem-app .adreem-investment-summary article { min-height: 58px; gap: 3px; padding: 7px 9px; border-radius: 6px; }
+.adreem-app .adreem-investment-summary article:not(.is-total) { background: #fafcfb; }
+.adreem-app .adreem-investment-platforms { gap: 11px; }
+.adreem-app .adreem-investment-platform { border-radius: 6px; box-shadow: none; }
+.adreem-app .adreem-investment-platform > header { min-height: 44px; padding: 5px 8px; }
+.adreem-app .adreem-investment-platform-logo { height: 32px; }
+.adreem-app .adreem-investment-platform-balances > b { min-width: 98px; padding: 4px 7px; }
+.adreem-app .adreem-investment-platform-actions > button { min-height: 28px; padding-inline: 6px; border-radius: 5px; }
+.adreem-app .adreem-investment-holdings { gap: 0; padding: 0; background: #fff; }
+.adreem-app .adreem-investment-holding {
+  min-height: 52px;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 0;
+  border-inline-start: 3px solid #aeb8b2;
+  border-block-end: 1px solid #dce4e0;
+  border-radius: 0;
+  background: transparent;
+}
+.adreem-app .adreem-investment-holding.is-profit-positive { border-inline-start-color: var(--investment-positive); }
+.adreem-app .adreem-investment-holding.is-profit-negative { border-inline-start-color: var(--investment-negative); }
+.adreem-app .adreem-investment-holding:last-child { border-block-end: 0; }
+.adreem-app .adreem-investment-metrics-strip { min-height: 41px; border: 0; border-radius: 0; background: transparent; }
+.adreem-app .adreem-investment-metrics-strip > * { padding: 3px 6px; }
+.adreem-app .adreem-investment-row-actions button { min-height: 28px; min-width: 38px; padding-inline: 5px; }
+.adreem-app .adreem-investment-small-toggle { min-height: 30px; }
+.adreem-app .adreem-investment-dialog > footer button { min-height: 34px; }
+
+@media (max-width: 720px) {
+  .adreem-app .adreem-header { height: 54px; padding-block: 6px; }
+  .adreem-app .adreem-frame,
+  .adreem-app[dir='ltr'] .adreem-frame { height: auto; min-height: calc(100svh - 54px); display: block; }
+  .adreem-app .adreem-nav,
+  .adreem-app[dir='ltr'] .adreem-nav {
+    top: auto;
+    width: 100%;
+    height: calc(60px + env(safe-area-inset-bottom));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .adreem-app .adreem-nav button { height: 51px; gap: 1px; padding: 3px 1px; }
+  .adreem-app .adreem-nav strong { font-size: 0.62rem; }
+  .adreem-app .adreem-view,
+  .adreem-app[dir='ltr'] .adreem-view { height: auto; min-height: calc(100svh - 54px); padding: 7px 7px calc(72px + env(safe-area-inset-bottom)); }
+  .adreem-app .ml3-entry-mode { width: 100%; }
+  .adreem-app :is(.ml3-entry-card, .ml3-add-account) {
+    height: clamp(290px, 52svh, 400px);
+    min-height: 0;
+    max-height: calc(100dvh - 180px - env(safe-area-inset-bottom));
+  }
+  .adreem-app :is(.ml3-step-back, .ml3-step-next, .ml3-save, .ml3-account-stage-actions button) { min-height: 40px; }
+  .adreem-app .ml3-account-choice-list button { min-height: 51px; }
+  .adreem-app .ml3-action-choice { min-height: 43px; }
+  .adreem-app .ml3-today-panel { height: auto; min-height: 0; max-height: min(220px, 34dvh); }
+  .adreem-app .ml3-balance-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .adreem-app .ml3-balance-ledger button { min-height: 64px; padding: 5px; }
+  .adreem-app .ml3-balances-workspace { grid-template-columns: 1fr; gap: 7px; }
+  .adreem-app .ml3-account-switcher { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
+  .adreem-app .ml3-account-switcher button { min-height: 42px; padding: 3px 1px; }
+  .adreem-app .adreem-investment-hero { gap: 7px; padding: 2px 0 8px; }
+  .adreem-app .adreem-investment-actions button { min-height: 41px; }
+  .adreem-app .adreem-investment-summary article { min-height: 54px; padding: 6px 7px; }
+  .adreem-app .adreem-investment-holding { padding: 6px; }
+  .adreem-app .adreem-investment-metrics-strip > * { min-height: 39px; }
+  .adreem-app .adreem-investment-platform-actions > button,
+  .adreem-app .adreem-investment-row-actions button,
+  .adreem-app .adreem-investment-small-toggle,
+  .adreem-app .adreem-investment-dialog > footer button { min-height: 42px; }
+}
+
+@media (max-width: 480px) {
+  .adreem-app .adreem-investment-holding-identity { grid-template-columns: auto minmax(0, 1fr); gap: 6px; }
+  .adreem-app .adreem-investment-name { order: 0; }
+  .adreem-app .adreem-investment-row-actions { justify-content: flex-end; }
+  .adreem-app .adreem-investment-row-actions button { flex: 0 0 auto; min-width: 66px; }
+  .adreem-app .ml3-history-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .adreem-app .ml3-history-main,
+  .adreem-app .ml3-history-side { grid-column: 1; }
+  .adreem-app .ml3-history-side { justify-content: space-between; padding-inline-start: 32px; }
+  .adreem-app .ml3-history-route b { overflow: visible; text-overflow: clip; white-space: normal; }
+}
+
+@media (hover: none) {
+  .adreem-app :is(.adreem-nav button, .ml3-action-choice, .ml3-balance-ledger button):hover { transform: none; box-shadow: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adreem-app--investments .adreem-view::before { opacity: 0.15; }
+}
