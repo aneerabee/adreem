@@ -17,6 +17,8 @@
     "ops:migrate-v3": "node server/ops/migrateAdreemV3.js",
     "ops:backup": "node server/ops/backupAdreem.js",
     "ops:backup:execute": "node server/ops/backupAdreem.js --execute",
+    "ops:daily-backup": "node --env-file=adreem.env server/ops/dailyLedgerBackup.js",
+    "ops:daily-backup:verify": "node server/ops/dailyLedgerBackup.js --verify",
     "ops:restore-drill": "node server/ops/restoreAdreem.js"
   },
   "dependencies": {
