@@ -1,10 +1,11 @@
-import { burkutSymbolForHolding, dexReferenceSymbol, freeReferenceSymbol, isAutoPricedHolding, isTgmEodHolding, tgmEodSymbolForHolding } from '../../src/ledger/investmentMarketPolicy.js'
+import { REFERENCE_CRYPTO_SYMBOLS, burkutSymbolForHolding, coinGeckoIdForHolding, coinGeckoProviderSymbol, dexReferenceSymbol, freeReferenceSymbol, isAutoPricedHolding, isTgmEodHolding, tgmEodSymbolForHolding } from '../../src/ledger/investmentMarketPolicy.js'
 
 const DEFAULT_TWELVE_DATA_URL = 'https://api.twelvedata.com'
 const DEFAULT_GOLD_DATA_URL = 'https://api.gold-api.com'
 const DEFAULT_TGM_DATA_URL = 'https://tgmcharts.com'
 const DEFAULT_DEX_DATA_URL = 'https://api.dexscreener.com'
 const DEFAULT_BURKUT_DATA_URL = 'https://api.burkutportfoy.com/api/public/v1'
+const DEFAULT_COINGECKO_URL = 'https://api.coingecko.com/api/v3'
 const ECB_FX_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+TRY.EUR.SP00.A?lastNObservations=1&format=jsondata'
 const DEFAULT_CACHE_MS = 5 * 60 * 1000
 const MAX_QUOTE_CLOCK_SKEW_MS = 5 * 60 * 1000
@@ -18,6 +19,8 @@ const MIN_DEX_PRIMARY_LIQUIDITY_USD = 500_000
 const MIN_DEX_SECONDARY_LIQUIDITY_USD = 100_000
 const MIN_DEX_DAILY_VOLUME_USD = 10_000
 const MAX_DEX_PRICE_DEVIATION = 0.03
+const MIN_CRYPTO_DAILY_VOLUME_USD = 10_000
+const LATIN_SEARCH_PATTERN = /^[\p{Script=Latin}0-9 .'_-]+$/u
 const DEX_TOKENS = {
   FET: { chain: 'ethereum', contract: '0xaea46a60368a7bd060eec7df8cba43b7ef41ad85', symbol: 'FET' },
   AVAX: { chain: 'avalanche', contract: '0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7', symbol: 'WAVAX' },
@@ -74,6 +77,7 @@ function providerSymbolForHolding(holding = {}) {
   const exchange = cleanSymbol(holding.exchange)
   const burkutSymbol = burkutSymbolForHolding(holding)
   if (burkutSymbol) return burkutSymbol
+  if (/:CG-/.test(cleanSymbol(holding.providerSymbol))) return coinGeckoIdForHolding(holding) ? cleanSymbol(holding.providerSymbol) : ''
   if (isTgmEodHolding(holding)) return tgmEodSymbolForHolding(holding)
   if (holding.assetType === 'metal' || ['COMMODITY', 'FOREX', 'FX'].includes(exchange)) return symbol || cleanSymbol(holding.providerSymbol).split(':')[0]
   if (symbol && exchange && !symbol.includes(':')) return `${symbol}:${exchange}`
@@ -243,6 +247,105 @@ export function createMarketPriceService(env = process.env, options = {}) {
 
   function providerHeaders(apiKey) {
     return { accept: 'application/json', authorization: `apikey ${apiKey}` }
+  }
+
+  const coinGeckoKey = String(env.COINGECKO_API_KEY || '').trim()
+
+  function coinGeckoEndpoint(path) {
+    return new URL(`${String(env.ADREEM_COINGECKO_API_URL || DEFAULT_COINGECKO_URL).replace(/\/+$/, '')}${path}`)
+  }
+
+  function coinGeckoHeaders() {
+    return coinGeckoKey ? { accept: 'application/json', 'x-cg-demo-api-key': coinGeckoKey } : { accept: 'application/json' }
+  }
+
+  async function fetchCoinGeckoPrices(items) {
+    const coinIdByItem = new Map(items.map((item) => [item.id, coinGeckoIdForHolding(item)]))
+    const endpoint = coinGeckoEndpoint('/simple/price')
+    endpoint.searchParams.set('ids', [...new Set(coinIdByItem.values())].join(','))
+    endpoint.searchParams.set('vs_currencies', 'usd')
+    endpoint.searchParams.set('include_last_updated_at', 'true')
+    endpoint.searchParams.set('include_24hr_vol', 'true')
+    endpoint.searchParams.set('precision', 'full')
+    let payload
+    try {
+      const response = await fetchImpl(endpoint, { headers: coinGeckoHeaders(), signal: AbortSignal.timeout(8_000) })
+      if (!response.ok) return items.map((item) => failedPrice(item, priceFailureMessage({ code: response.status })))
+      payload = await response.json()
+    } catch {
+      return items.map((item) => failedPrice(item, 'مصدر أسعار العملات الرقمية غير متاح الآن. بقي السعر السابق محفوظًا.'))
+    }
+    return items.map((item) => {
+      const quote = payload?.[coinIdByItem.get(item.id)]
+      const price = Number(quote?.usd)
+      const dailyVolume = Number(quote?.usd_24h_vol)
+      const quotedAt = quoteTime({ timestamp: quote?.last_updated_at }, now())
+      if (!Number.isFinite(price) || price <= 0) return failedPrice(item, 'السعر غير متاح لهذه العملة. بقي السعر السابق محفوظًا.')
+      if (quoteIsStale({ quotedAt }, now(), MAX_CRYPTO_QUOTE_AGE_MS)) return failedPrice(item, 'سعر العملة قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.')
+      if (!Number.isFinite(dailyVolume) || dailyVolume < MIN_CRYPTO_DAILY_VOLUME_USD) {
+        return failedPrice(item, 'تداول العملة ضعيف جدًا لتأكيد سعرها. بقي السعر السابق محفوظًا.')
+      }
+      const priceUsdMicros = usdMicros(price)
+      if (!priceUsdMicros) return failedPrice(item, 'سعر العملة أصغر من دقة الحفظ. أدخل السعر يدويًا.')
+      const result = {
+        id: item.id,
+        symbol: item.symbol,
+        quoteCurrency: item.quoteCurrency,
+        nativePriceMicros: priceUsdMicros,
+        priceUsdMicros,
+        refreshedAt: new Date(now()).toISOString(),
+        quotedAt,
+        fxQuotedAt: null,
+        marketOpen: true,
+        source: 'coingecko',
+        cached: false,
+        ok: true,
+      }
+      cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
+      return result
+    })
+  }
+
+  async function searchCoinGecko(request) {
+    const endpoint = coinGeckoEndpoint('/search')
+    endpoint.searchParams.set('query', request.query)
+    let response
+    try {
+      response = await fetchImpl(endpoint, { headers: coinGeckoHeaders(), signal: AbortSignal.timeout(8_000) })
+    } catch {
+      throw new MarketPriceError('تعذر البحث عن العملات الرقمية الآن.', 502, 'crypto-search-network')
+    }
+    if (!response.ok) {
+      const busy = response.status === 429
+      throw new MarketPriceError(busy ? 'بحث العملات الرقمية مشغول الآن. حاول بعد دقيقة.' : 'لم يرجع مصدر العملات الرقمية نتائج مؤكدة.', busy ? 429 : 502, 'crypto-search-provider')
+    }
+    const payload = await response.json().catch(() => ({}))
+    const seen = new Set()
+    return (Array.isArray(payload?.coins) ? payload.coins : [])
+      .filter((coin) => Number.isSafeInteger(coin?.market_cap_rank) && coin.market_cap_rank > 0)
+      .sort((left, right) => left.market_cap_rank - right.market_cap_rank)
+      .flatMap((coin) => {
+        const providerSymbol = coinGeckoProviderSymbol(coin?.symbol, coin?.id)
+        const name = cleanSearchText(coin?.name)
+        if (!providerSymbol || !name || seen.has(providerSymbol)) return []
+        const symbol = providerSymbol.split(':')[0]
+        if (REFERENCE_CRYPTO_SYMBOLS.has(symbol.split('/')[0])) return []
+        seen.add(providerSymbol)
+        return [{
+          id: providerSymbol,
+          symbol,
+          providerSymbol,
+          name,
+          exchange: '',
+          micCode: '',
+          instrumentType: 'Digital Currency',
+          assetType: 'crypto',
+          country: '',
+          quoteCurrency: 'USD',
+          marketCapRank: coin.market_cap_rank,
+        }]
+      })
+      .slice(0, MAX_SEARCH_RESULTS)
   }
 
   async function fetchBurkutCatalog(assetType, force = false) {
@@ -622,6 +725,11 @@ export function createMarketPriceService(env = process.env, options = {}) {
       const group = await Promise.all(dexItems.slice(offset, offset + 4).map((item) => fetchDexReferencePrice(item)))
       group.forEach((result) => results.set(result.id, result))
     }
+    const coinGeckoItems = items.filter((item) => !results.has(item.id) && isAutoPricedHolding(item, licensedStocksEnabled) && coinGeckoIdForHolding(item))
+    for (let offset = 0; offset < coinGeckoItems.length; offset += MAX_PRICE_ITEMS) {
+      const group = typeof fetchImpl === 'function' ? await fetchCoinGeckoPrices(coinGeckoItems.slice(offset, offset + MAX_PRICE_ITEMS)) : []
+      group.forEach((result) => results.set(result.id, result))
+    }
     const usEodItems = items.filter((item) => !results.has(item.id) && isTgmEodHolding(item))
     for (let offset = 0; offset < usEodItems.length; offset += 4) {
       const group = await Promise.all(usEodItems.slice(offset, offset + 4).map((item) => fetchTgmEodPrice(item)))
@@ -770,6 +878,24 @@ export function createMarketPriceService(env = process.env, options = {}) {
           && `${asset.symbol} ${asset.name} ${asset.aliases}`.toLocaleLowerCase('en').includes(request.query.toLocaleLowerCase('en')))
           .map((asset) => ({ symbol: asset.symbol, name: asset.name, assetType: asset.assetType, id: asset.symbol, providerSymbol: asset.symbol, exchange: '', quoteCurrency: 'USD' }))
         : []
+      if (request.assetType === 'crypto' && request.quoteCurrency === 'USD' && LATIN_SEARCH_PATTERN.test(request.query) && typeof fetchImpl === 'function') {
+        let marketResults = []
+        let marketFailed = false
+        try {
+          marketResults = await searchCoinGecko(request)
+        } catch (error) {
+          if (!localResults.length) throw error
+          marketFailed = true
+        }
+        const result = {
+          results: [...localResults, ...marketResults].slice(0, MAX_SEARCH_RESULTS),
+          mode: localResults.length ? 'reference' : 'crypto-market',
+          searchedAt: new Date(currentTime).toISOString(),
+          cached: false,
+        }
+        if (!marketFailed) cacheSet(searchCache, key, { expiresAt: currentTime + cacheMs, result }, 200)
+        return result
+      }
       const usEodSearch = !licensedStocksEnabled && request.quoteCurrency === 'USD' && ['stock', 'fund'].includes(request.assetType)
       const burkutSearch = Boolean(burkutKey) && request.quoteCurrency === 'TRY' && ['stock', 'fund'].includes(request.assetType)
       const result = {

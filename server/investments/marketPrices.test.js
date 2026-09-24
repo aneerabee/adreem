@@ -458,6 +458,91 @@ describe('investment market prices', () => {
     }
   })
 
+  it('finds ranked coins such as Polkadot from CoinGecko and keeps reference coins on their verified sources', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const endpoint = new URL(url)
+      expect(endpoint.pathname).toBe('/api/v3/search')
+      expect(endpoint.searchParams.get('query')).toBe('polkadot')
+      return response({ coins: [
+        { id: 'binance-peg-polkadot', name: 'Binance-Peg Polkadot', symbol: 'DOT', market_cap_rank: null },
+        { id: 'polkadot', name: 'Polkadot', symbol: 'DOT', market_cap_rank: 50 },
+        { id: 'wrapped-bitcoin', name: 'Wrapped Bitcoin', symbol: 'BTC', market_cap_rank: 20 },
+        { id: 'bad id', name: 'Broken', symbol: 'BAD', market_cap_rank: 90 },
+        { id: 'moonbeam', name: 'Moonbeam', symbol: 'GLMR', market_cap_rank: 300 },
+      ] })
+    })
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    const result = await service.search({ query: 'polkadot', assetType: 'crypto', quoteCurrency: 'USD' })
+    expect(result.mode).toBe('crypto-market')
+    expect(result.results).toEqual([
+      expect.objectContaining({ symbol: 'DOT/USD', providerSymbol: 'DOT/USD:CG-POLKADOT', name: 'Polkadot', assetType: 'crypto', quoteCurrency: 'USD', exchange: '', marketCapRank: 50 }),
+      expect.objectContaining({ symbol: 'GLMR/USD', providerSymbol: 'GLMR/USD:CG-MOONBEAM' }),
+    ])
+    await service.search({ query: 'polkadot', assetType: 'crypto', quoteCurrency: 'USD' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    await service.search({ query: 'بولكادوت', assetType: 'crypto', quoteCurrency: 'USD' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps local reference coins when crypto search is busy and reports a busy search otherwise', async () => {
+    const fetchImpl = vi.fn(async () => response({ status: { error_code: 429 } }, 429))
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    expect((await service.search({ query: 'avax', assetType: 'crypto', quoteCurrency: 'USD' })).results)
+      .toEqual([expect.objectContaining({ symbol: 'AVAX/USD' })])
+    await expect(service.search({ query: 'polkadot', assetType: 'crypto', quoteCurrency: 'USD' }))
+      .rejects.toMatchObject({ statusCode: 429, code: 'crypto-search-provider' })
+    await service.search({ query: 'avax', assetType: 'crypto', quoteCurrency: 'USD' })
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+  })
+
+  it('prices CoinGecko coins in one verified batch with freshness and liquidity checks', async () => {
+    const seconds = Math.floor(NOW / 1000)
+    const fetchImpl = vi.fn(async (url) => {
+      const endpoint = new URL(url)
+      expect(endpoint.pathname).toBe('/api/v3/simple/price')
+      expect(endpoint.searchParams.get('ids')).toBe('polkadot,solana,old-coin,thin-coin,tiny-coin,missing-coin')
+      expect(endpoint.searchParams.get('vs_currencies')).toBe('usd')
+      return response({
+        polkadot: { usd: 1.1653718, usd_24h_vol: 182_203_155, last_updated_at: seconds - 84 },
+        solana: { usd: 150.25, usd_24h_vol: 2_000_000_000, last_updated_at: seconds - 30 },
+        'old-coin': { usd: 2, usd_24h_vol: 50_000, last_updated_at: seconds - 16 * 60 },
+        'thin-coin': { usd: 3, usd_24h_vol: 900, last_updated_at: seconds - 30 },
+        'tiny-coin': { usd: 0.0000001, usd_24h_vol: 90_000, last_updated_at: seconds - 30 },
+      })
+    })
+    const coin = (id, base, coinId) => ({ id, symbol: `${base}/USD:CG-${coinId.toUpperCase()}`, quoteCurrency: 'USD', assetType: 'crypto' })
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    const { prices } = await service.refresh({ items: [
+      coin('dot', 'DOT', 'polkadot'), coin('sol', 'SOL', 'solana'), coin('old', 'OLD', 'old-coin'), coin('thin', 'THIN', 'thin-coin'), coin('tiny', 'TINY', 'tiny-coin'), coin('missing', 'MISS', 'missing-coin'),
+    ] })
+    expect(prices[0]).toMatchObject({ ok: true, source: 'coingecko', priceUsdMicros: 1_165_372, quotedAt: new Date((seconds - 84) * 1000).toISOString() })
+    expect(prices[1]).toMatchObject({ ok: true, priceUsdMicros: 150_250_000 })
+    expect(prices[2]).toMatchObject({ ok: false, error: expect.stringMatching(/قديم/) })
+    expect(prices[3]).toMatchObject({ ok: false, error: expect.stringMatching(/تداول/) })
+    expect(prices[4]).toMatchObject({ ok: false, error: expect.stringMatching(/دقة الحفظ/) })
+    expect(prices[5]).toMatchObject({ ok: false })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect((await service.refresh({ items: [coin('dot', 'DOT', 'polkadot')] })).prices[0]).toMatchObject({ ok: true, cached: true })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps previous coin prices when CoinGecko is busy or unreachable', async () => {
+    for (const fetchImpl of [vi.fn(async () => response({}, 429)), vi.fn(async () => { throw new Error('offline') })]) {
+      const { prices } = await createMarketPriceService({}, { fetchImpl, now: () => NOW })
+        .refresh({ items: [{ id: 'dot', symbol: 'DOT/USD:CG-POLKADOT', quoteCurrency: 'USD', assetType: 'crypto' }] })
+      expect(prices[0]).toMatchObject({ ok: false, error: expect.stringMatching(/بقي السعر السابق محفوظ/) })
+    }
+  })
+
+  it('uses the stored coin identity from the ledger and refuses a coin whose symbol disagrees', () => {
+    const state = { investmentHoldings: [
+      { id: 'dot', symbol: 'DOT/USD', providerSymbol: 'DOT/USD:CG-POLKADOT', quoteCurrency: 'USD', assetType: 'crypto', status: 'active' },
+      { id: 'mixed', symbol: 'SOL/USD', providerSymbol: 'DOT/USD:CG-POLKADOT', quoteCurrency: 'USD', assetType: 'crypto', status: 'active' },
+    ] }
+    expect(marketPriceItemsForHoldings({ ids: ['dot'] }, state)).toEqual([expect.objectContaining({ symbol: 'DOT/USD:CG-POLKADOT' })])
+    expect(() => marketPriceItemsForHoldings({ ids: ['mixed'] }, state)).toThrow(/مصدر سعر/)
+  })
+
   it('preserves failures separately from valid quotes in mixed batches', async () => {
     const fetchImpl = vi.fn(async (url) => {
       if (new URL(url).pathname === '/price/BTC') return response({ symbol: 'BTC', currency: 'USD', price: 80_000, updatedAt: '2027-01-15T08:00:00Z' })
