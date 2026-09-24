@@ -42,6 +42,12 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.1
         version: 6.0.5(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2))
+      '@web3icons/common':
+        specifier: ^0.11.51
+        version: 0.11.51
+      '@web3icons/core':
+        specifier: 4.0.56
+        version: 4.0.56
       eslint:
         specifier: ^9.39.4
         version: 9.39.5
@@ -54,6 +60,9 @@ importers:
       globals:
         specifier: ^17.4.0
         version: 17.11.0
+      simple-icons:
+        specifier: 16.32.0
+        version: 16.32.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -705,6 +714,12 @@ packages:
   '@vitest/utils@3.2.7':
     resolution: {integrity: sha512-x6BDOd7dyo3PFLY3I9/HJ25X/6OurhGXk2/B9gOZNPF7XDVjeBK4k01lQE5uvDpbuheErh91qYuE1E2OEjK3Rw==}
 
+  '@web3icons/common@0.11.51':
+    resolution: {integrity: sha512-ZXaTW/P6ReLHmkYQcxP8OcPoUrSmgPlsFKVboiG/cVSIkz0mHNP1tIFhf9zPOQaQm20yqTc+uuNuXb2ywHzI1A==}
+
+  '@web3icons/core@4.0.56':
+    resolution: {integrity: sha512-jyLkrMdfn6RTZ0+61Ap1AS2yeSG6WZ8mxZ61S3lu/CC0rJb4fgr2jw3W8aCDxhakEm/xqaEZqUmlZiTxCCs4yw==}
+
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
     peerDependencies:
@@ -1245,6 +1260,10 @@ packages:
 
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
+
+  simple-icons@16.32.0:
+    resolution: {integrity: sha512-BwqATHxAulx7X6kNdTkecy7PBjLkgtAHcgrwYLd9iA+cD2At9DzhJwdwaSELk2+aZe01IfiM/Wxtyp68Dvup2A==}
+    engines: {node: '>=0.12.18'}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -1974,6 +1993,12 @@ snapshots:
       loupe: 3.2.1
       tinyrainbow: 2.0.0
 
+  '@web3icons/common@0.11.51': {}
+
+  '@web3icons/core@4.0.56':
+    dependencies:
+      '@web3icons/common': 0.11.51
+
   acorn-jsx@5.3.2(acorn@8.18.0):
     dependencies:
       acorn: 8.18.0
@@ -2497,6 +2522,8 @@ snapshots:
   shebang-regex@3.0.0: {}
 
   siginfo@2.0.0: {}
+
+  simple-icons@16.32.0: {}
 
   source-map-js@1.2.1: {}
 

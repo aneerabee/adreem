@@ -10,6 +10,8 @@ import { investmentPlatformBrandStyle, resolveInvestmentPlatformBrand } from './
 import { getActiveUiLanguage, preserveUiData } from './uiTranslation.js'
 import { isAutoPricedHolding } from './investmentMarketPolicy.js'
 import { SearchField } from './SearchField.jsx'
+import { AssetMark } from './AssetMark'
+import { assetMarkFor, useAssetMarkIndex } from './assetMarks'
 import { accountLabel, activityActionLabel, activityDate, activityDay, ASSET_OPTIONS, assetTypeForMarketResult, assetUsesCurrencyMarket, symbolPlaceholderFor, blankHolding, blankPlatform, blankTrade, blankTradeEdit, blankTransfer, blankTryFx, decimal, holdingIsSmall, holdingPriceIsStale, holdingPriceLabel, holdingTypeLabel, MARKET_OPTIONS, platformLogoUrl, PRICE_SOURCE_LABELS, profitPercent, profitToneClass, tradeReviewImpact, tryMoneyMicros, tryUnitMicros, usdMicros, usdUnitMicros } from './investmentFormat'
 import { InvestmentDialog, InvestmentMarketPrice, TryExchangeRate } from './InvestmentParts'
 
@@ -59,6 +61,7 @@ export default function InvestmentsPanel({
   const [expandedSmallPlatforms, setExpandedSmallPlatforms] = useState({})
   const [expandedHoldingIds, setExpandedHoldingIds] = useState({})
   const prefersReducedMotion = useReducedMotion()
+  const assetMarkIndex = useAssetMarkIndex()
   const submissionRef = useRef(false)
   const assetSearchSequenceRef = useRef(0)
   const activePlatforms = useMemo(() => platforms.filter((platform) => platform.status !== 'inactive'), [platforms])
@@ -624,15 +627,18 @@ export default function InvestmentsPanel({
                     const HoldingTrendIcon = holdingProfitUsdMicros > 0 ? TrendingUp : holdingProfitUsdMicros < 0 ? TrendingDown : Minus
                     const nativeValueMicros = row.native?.marketValueMicros ?? null
                     const nativeProfitMicros = row.native?.profitMicros ?? null
+                    const holdingMark = assetMarkFor(row.holding, assetMarkIndex)
                     return (
                       <Motion.section
                         className={`adreem-investment-holding is-profit-${holdingProfitTone} ${holdingIsSmall(row) ? 'is-small' : ''}`.trim()}
+                        style={holdingMark ? { '--asset-color': holdingMark.color } : undefined}
                         key={row.holding.id}
                         initial={prefersReducedMotion ? false : { opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.14, ease: 'easeOut' }}
                       >
                         <div className="adreem-investment-holding-identity">
+                          <AssetMark mark={holdingMark} />
                           <div className="adreem-investment-identity-main">
                             <div className="adreem-investment-symbol"><b dir="ltr">{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
                             <span className="adreem-investment-quantity" aria-label={`الكمية: ${decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة`}><b dir="ltr">{decimal(unitsToQuantity(row.quantityUnits), 8)}</b><em>وحدة</em></span>
@@ -682,6 +688,7 @@ export default function InvestmentsPanel({
                       <small>مراكز مغلقة</small>
                       {platformRow.closedHoldings.map((closedRow) => (
                         <span key={closedRow.holding.id} className={profitToneClass(closedRow.realizedProfitUsdMicros)}>
+                          <AssetMark mark={assetMarkFor(closedRow.holding, assetMarkIndex)} size="sm" />
                           <b dir="ltr">{preserveUiData(closedRow.holding.symbol)}</b>
                           <strong dir="ltr">{usdMicros(closedRow.realizedProfitUsdMicros, true)}</strong>
                         </span>
@@ -727,10 +734,10 @@ export default function InvestmentsPanel({
             {assetSearchStatus === 'loading' ? <p className="adreem-investment-search-note">جاري البحث...</p> : null}
             {assetSearchError ? <p className="adreem-investment-search-note is-error">{assetSearchError}</p> : null}
             {assetSearchStatus === 'ready' && !assetResults.length ? <p className="adreem-investment-search-note">{emptyMarketSearchMessage}</p> : null}
-            {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([holdingTypeLabel(result.assetType), result.exchange, result.marketCapRank ? `#${result.marketCapRank}` : ''].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
+            {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><AssetMark mark={assetMarkFor(result, assetMarkIndex)} /><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([holdingTypeLabel(result.assetType), result.exchange, result.marketCapRank ? `#${result.marketCapRank}` : ''].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
             {assetResults.some((result) => result.providerSymbol?.endsWith(':TGM')) ? <p className="adreem-investment-search-note">إغلاق يومي من <a href="https://tgmcharts.com/" target="_blank" rel="noopener noreferrer">TGMCharts</a>.</p> : null}
             {assetResults.some((result) => result.providerSymbol?.includes(':CG-')) ? <p className="adreem-investment-search-note">أسعار العملات الرقمية من <a href="https://www.coingecko.com/" target="_blank" rel="noopener noreferrer">CoinGecko</a>.</p> : null}
-            {holdingDraft.marketDataMode === 'provider' && holdingDraft.providerSymbol ? <div className="adreem-investment-selected-asset"><Check aria-hidden="true" size={16} /><span><strong>{preserveUiData(holdingDraft.name)}</strong><small>{preserveUiData(`${holdingDraft.symbol} · ${holdingDraft.exchange || holdingDraft.quoteCurrency}`)}</small></span><div><b>{holdingTypeLabel(holdingDraft.assetType)}</b><button type="button" onClick={clearSelectedMarketAsset}><PencilLine aria-hidden="true" size={12} /> تغيير</button></div></div> : <div className="is-paired"><label><span>الاسم</span><input value={holdingDraft.name} maxLength={80} onChange={(event) => setHoldingDraft((current) => ({ ...current, name: event.target.value, marketDataMode: 'manual' }))} placeholder="اسم الاستثمار" /></label><label><span>الرمز</span><input dir="ltr" value={holdingDraft.symbol} maxLength={32} onChange={(event) => setHoldingDraft((current) => ({ ...current, symbol: event.target.value.toUpperCase(), marketDataMode: 'manual' }))} placeholder={symbolPlaceholderFor(holdingDraft.assetType)} /></label></div>}
+            {holdingDraft.marketDataMode === 'provider' && holdingDraft.providerSymbol ? <div className="adreem-investment-selected-asset"><AssetMark mark={assetMarkFor(holdingDraft, assetMarkIndex)} /><span><strong>{preserveUiData(holdingDraft.name)}</strong><small>{preserveUiData(`${holdingDraft.symbol} · ${holdingDraft.exchange || holdingDraft.quoteCurrency}`)}</small></span><div><b>{holdingTypeLabel(holdingDraft.assetType)}</b><button type="button" onClick={clearSelectedMarketAsset}><PencilLine aria-hidden="true" size={12} /> تغيير</button></div></div> : <div className="is-paired"><label><span>الاسم</span><input value={holdingDraft.name} maxLength={80} onChange={(event) => setHoldingDraft((current) => ({ ...current, name: event.target.value, marketDataMode: 'manual' }))} placeholder="اسم الاستثمار" /></label><label><span>الرمز</span><input dir="ltr" value={holdingDraft.symbol} maxLength={32} onChange={(event) => setHoldingDraft((current) => ({ ...current, symbol: event.target.value.toUpperCase(), marketDataMode: 'manual' }))} placeholder={symbolPlaceholderFor(holdingDraft.assetType)} /></label></div>}
             {holdingDraft.marketDataMode === 'manual' ? <p className="adreem-investment-search-note">{holdingDraft.quoteCurrency === 'USD' && import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED !== 'true' && ['stock', 'fund'].includes(holdingDraft.assetType) ? 'ابحث برمز السهم لسعر إغلاق يومي، أو أدخل السعر يدويًا.' : 'السعر يدوي حتى يتوفر مصدر معتمد.'}</p> : null}
             <div className="is-paired is-investment-numbers"><label><span>كمية سابقة</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialQuantity} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialQuantity: event.target.value }))} placeholder="0" /></label><label><span>{holdingDraft.quoteCurrency === 'TRY' ? 'سعر الشراء TRY' : 'متوسطها USD'}</span><input dir="ltr" inputMode="decimal" value={holdingDraft.quoteCurrency === 'TRY' ? holdingDraft.initialPriceNative : holdingDraft.initialPriceUsd} onChange={(event) => setHoldingDraft((current) => ({ ...current, [current.quoteCurrency === 'TRY' ? 'initialPriceNative' : 'initialPriceUsd']: event.target.value }))} placeholder="0" /></label></div>
             {holdingDraft.quoteCurrency === 'TRY' && holdingHasOpening ? <><TryExchangeRate fx={tryFx} onChange={changeTryFxRate} /><output className="adreem-investment-fx-result">تكلفة الوحدة: <strong>{openingPriceUsdMicros ? usdUnitMicros(openingPriceUsdMicros) : 'أدخل سعر الصرف'}</strong></output></> : null}
