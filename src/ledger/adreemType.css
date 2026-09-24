@@ -31,7 +31,9 @@
     .adreem-statement-summary article b,
     .adreem-statement-row-value > strong,
     .adreem-investment-summary strong,
+    .adreem-investment-composition strong,
     .adreem-investment-platform-balances > span strong,
+    .adreem-investment-price strong,
     .adreem-investment-metrics-strip strong,
     .adreem-investment-result-value strong,
     .adreem-investment-detail-measures strong,
@@ -206,6 +208,9 @@
     font-weight: var(--type-value-weight);
   }
 
+  .adreem-app .adreem-investment-summary .is-total strong { font-size: calc(var(--type-key-value) + 0.18rem); }
+  .adreem-app .adreem-investment-composition strong { font-size: var(--type-value); font-weight: var(--type-label-weight); }
+
   .adreem-app .adreem-investment-platform-identity > span strong,
   .adreem-app .adreem-investment-detail-heading strong,
   .adreem-app .adreem-investment-history-main > header strong {
@@ -214,6 +219,7 @@
   }
 
   .adreem-app .adreem-investment-metrics-strip strong,
+  .adreem-app .adreem-investment-price strong,
   .adreem-app .adreem-investment-result-value strong,
   .adreem-app .adreem-investment-history-values strong {
     font-size: var(--type-value);
@@ -232,6 +238,8 @@
   .adreem-app .adreem-investment-result-value strong {
     font-size: var(--type-key-value);
   }
+
+  .adreem-app .adreem-investment-price strong { font-size: var(--type-caption); font-weight: var(--type-label-weight); }
 }
 
 @media screen and (max-width: 720px) {

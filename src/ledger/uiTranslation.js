@@ -140,6 +140,7 @@ const ENGLISH_TEXT = Object.freeze({
   'ابدأ بمنصة واحدة': 'Start with one platform',
   'مصرف، محفظة، أو منصة تداول.': 'Bank, wallet, or trading platform.',
   'إضافة منصة': 'Add platform',
+  'إضافة استثمار': 'Add investment',
   'بدون موقع': 'No location',
   'لا توجد استثمارات هنا.': 'No investments here.',
   'أرصدة صغيرة': 'Small balances',
@@ -217,6 +218,7 @@ const ENGLISH_TEXT = Object.freeze({
   'حفظ الشراء': 'Save purchase',
   'حفظ البيع': 'Save sale',
   'تسجيل عملية': 'Record transaction',
+  'تسجيل': 'Record',
   'تسجيل شراء أو بيع': 'Record buy or sale',
   'تفاصيل الشراء': 'Purchase details',
   'إخفاء التفاصيل': 'Hide details',
@@ -224,6 +226,7 @@ const ENGLISH_TEXT = Object.freeze({
   'آخر تحديث': 'Last update',
   'آخر سعر': 'Last price',
   'آخر تحقق': 'Last check',
+  'تحديث تلقائي كل ساعتين': 'Automatic update every two hours',
   'وقت السعر': 'Price time',
   'وقت الإدخال': 'Entry time',
   'وقت الصرف': 'FX rate time',
@@ -1478,6 +1481,7 @@ const ENGLISH_TEXT = Object.freeze({
 })
 
 const ENGLISH_PATTERNS = [
+  [/^آخر تحقق (.+)$/u, 'Last check $1'],
   [/^فحص كل ساعتين أثناء الاستخدام · آخر تحقق (.+)$/u, 'Checks every two hours while in use · Last check $1'],
   [/^تلقائي كل ساعتين · آخر تحقق (.+)$/u, 'Automatic every two hours · Last check $1'],
   [/^تلقائي كل ساعتين · آخر سعر (.+)$/u, 'Automatic every two hours · Last price $1'],

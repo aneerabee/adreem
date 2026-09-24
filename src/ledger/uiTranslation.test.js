@@ -56,6 +56,10 @@ describe('ADREEM UI translation', () => {
     expect(translateUiText('قيمة بسعر سابق')).toBe('Value at previous price')
     expect(translateUiText('نتيجة تقديرية')).toBe('Estimated result')
     expect(translateUiText('مصدر السعر')).toBe('Price source')
+    expect(translateUiText('تحديث تلقائي كل ساعتين')).toBe('Automatic update every two hours')
+    expect(translateUiText('آخر تحقق 24/09/2026')).toBe('Last check 24/09/2026')
+    expect(translateUiText('إضافة استثمار')).toBe('Add investment')
+    expect(translateUiText('تسجيل')).toBe('Record')
   })
 
   it('translates formatted text without changing its markup', () => {

@@ -130,9 +130,7 @@
 }
 .adreem-app .adreem-investment-title > span { width: 32px; height: 32px; border-radius: 5px; }
 .adreem-app .adreem-investment-actions button { min-height: 31px; padding-inline: 8px; border-radius: 5px; font-size: 0.66rem; }
-.adreem-app .adreem-investment-summary { gap: 6px; }
-.adreem-app .adreem-investment-summary article { min-height: 58px; gap: 3px; padding: 7px 9px; border-radius: 6px; }
-.adreem-app .adreem-investment-summary article:not(.is-total) { background: #fafcfb; }
+.adreem-app .adreem-investment-summary article { min-height: 62px; }
 .adreem-app .adreem-investment-platforms { gap: 11px; }
 .adreem-app .adreem-investment-platform { border-radius: 6px; box-shadow: none; }
 .adreem-app .adreem-investment-platform > header { min-height: 44px; padding: 5px 8px; }
@@ -144,13 +142,10 @@
   gap: 6px;
   padding: 5px 8px;
   border: 0;
-  border-inline-start: 3px solid #aeb8b2;
   border-block-end: 1px solid #dce4e0;
   border-radius: 0;
   background: transparent;
 }
-.adreem-app .adreem-investment-holding.is-profit-positive { border-inline-start-color: var(--investment-positive); }
-.adreem-app .adreem-investment-holding.is-profit-negative { border-inline-start-color: var(--investment-negative); }
 .adreem-app .adreem-investment-holding:last-child { border-block-end: 0; }
 .adreem-app .adreem-investment-metrics-strip { min-height: 41px; border: 0; border-radius: 0; background: transparent; }
 .adreem-app .adreem-investment-metrics-strip > * { padding: 3px 6px; }
@@ -192,7 +187,7 @@
   .adreem-app .ml3-account-switcher button { min-height: 42px; padding: 3px 1px; }
   .adreem-app .adreem-investment-hero { gap: 7px; padding: 2px 0 8px; }
   .adreem-app .adreem-investment-actions button { min-height: 41px; }
-  .adreem-app .adreem-investment-summary article { min-height: 54px; padding: 6px 7px; }
+  .adreem-app .adreem-investment-summary article { min-height: 58px; padding: 7px 9px; }
   .adreem-app .adreem-investment-holding { padding: 6px; }
   .adreem-app .adreem-investment-metrics-strip > * { min-height: 39px; }
   .adreem-app .adreem-investment-platform-actions > button,
@@ -202,8 +197,7 @@
 }
 
 @media (max-width: 480px) {
-  .adreem-app .adreem-investment-row-actions { justify-content: flex-end; }
-  .adreem-app .adreem-investment-row-actions button { flex: 0 0 auto; min-width: 66px; }
+  .adreem-app .adreem-investment-row-actions button { flex: 0 0 auto; min-width: 42px; padding-inline: 0; }
   .adreem-app .ml3-history-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .adreem-app .ml3-history-main,
   .adreem-app .ml3-history-side { grid-column: 1; }

@@ -194,7 +194,7 @@ function InvestmentMarketPrice({ holding, error, onOpen }) {
       type="button"
       className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${stale ? 'is-stale' : ''}`.trim()}
       onClick={() => onOpen(holding)}
-      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : providerUpdate ? 'سعر المزود' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} USD` : 'إدخال السعر الحالي'}
+      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : providerUpdate ? 'سعر المزود' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} USD${direction !== 'neutral' ? ` · ${direction === 'up' ? '+' : '-'}${decimal(Math.abs(percent), 2)}%` : ''}` : 'إدخال السعر الحالي'}
       title={error || (sourceUnavailable ? 'مصدر التحديث غير متاح لهذا الرمز؛ السعر المعروض سابق.' : holding.lastPriceQuotedAt ? `${dailyClose ? 'تاريخ الإغلاق' : providerUpdate ? 'وقت تحديث المزود' : holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : 'وقت السعر'}: ${['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(holding.lastPriceSource) ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
     >
       <small>
@@ -780,27 +780,28 @@ export default function InvestmentsPanel({
           <div><small>USD</small><h2>محفظتي</h2></div>
         </div>
         <div className="adreem-investment-actions">
-          <button type="button" className="is-refresh" disabled={isRefreshing || !autoPricedHoldings.length} onClick={onRefreshPrices}>
+          <button type="button" className="is-refresh" aria-label={isRefreshing ? 'جاري تحديث الكل' : 'تحديث الكل'} title={isRefreshing ? 'جاري تحديث الكل' : 'تحديث الكل'} disabled={isRefreshing || !autoPricedHoldings.length} onClick={onRefreshPrices}>
             <RefreshCw aria-hidden="true" size={16} className={isRefreshing ? 'is-spinning' : ''} />
-            {isRefreshing ? 'جاري تحديث الكل' : 'تحديث الكل'}
           </button>
-          <button type="button" onClick={openPlatform}><Landmark aria-hidden="true" size={16} /> منصة</button>
-          <button type="button" disabled={!activePlatforms.length} onClick={openHolding}><Plus aria-hidden="true" size={16} /> استثمار</button>
-          <button type="button" disabled={activePlatforms.length < 2} onClick={openTransfer}><ArrowLeftRight aria-hidden="true" size={16} /> نقل</button>
+          <button type="button" className="is-platform" aria-label="إضافة منصة" title="إضافة منصة" onClick={openPlatform}><Landmark aria-hidden="true" size={16} /></button>
+          <button type="button" className="is-investment" aria-label="إضافة استثمار" title="إضافة استثمار" disabled={!activePlatforms.length} onClick={openHolding}><Plus aria-hidden="true" size={16} /><span>استثمار</span></button>
+          <button type="button" className="is-transfer" aria-label="نقل بين المنصات" title="نقل بين المنصات" disabled={activePlatforms.length < 2} onClick={openTransfer}><ArrowLeftRight aria-hidden="true" size={16} /></button>
         </div>
       </div>
 
       <div className="adreem-investment-summary">
         <article className="is-total"><small>إجمالي المحفظة</small><strong>{usdMicros(summary.totalValueUsdMicros)}</strong></article>
-        <article><small>الاستثمارات</small><strong>{usdMicros(portfolioInvestmentsUsdMicros)}</strong></article>
-        <article><small>السيولة</small><strong>{usdMicros(portfolioLiquidityUsdMicros)}</strong></article>
         <article className={profitTone}><small>الربح والخسارة</small><strong>{usdMicros(portfolioProfitUsdMicros, true)}</strong></article>
+        <div className="adreem-investment-composition">
+          <span><small>الاستثمارات</small><strong>{usdMicros(portfolioInvestmentsUsdMicros)}</strong></span>
+          <span><small>السيولة</small><strong>{usdMicros(portfolioLiquidityUsdMicros)}</strong></span>
+        </div>
       </div>
 
       <div className="adreem-investment-toolbar">
         <label><Search aria-hidden="true" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث باسم أو رمز" /></label>
         <small className={firstPriceError ? 'is-price-error' : undefined} role={firstPriceError ? 'status' : undefined}>
-          {firstPriceError ? <><AlertCircle aria-hidden="true" size={13} />{firstPriceError}</> : autoPricedHoldings.length ? latestPriceAt ? `فحص كل ساعتين أثناء الاستخدام · آخر تحقق ${new Date(latestPriceAt).toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'short', timeStyle: 'short' })}` : 'فحص كل ساعتين أثناء الاستخدام · ويمكن إدخال السعر يدويًا' : 'الأسعار اليدوية محفوظة حتى تغييرها'}
+          {firstPriceError ? <><AlertCircle aria-hidden="true" size={13} />{firstPriceError}</> : autoPricedHoldings.length ? latestPriceAt ? `آخر تحقق ${new Date(latestPriceAt).toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'short', timeStyle: 'short' })}` : 'تحديث تلقائي كل ساعتين' : 'الأسعار اليدوية محفوظة حتى تغييرها'}
         </small>
       </div>
 
@@ -842,12 +843,12 @@ export default function InvestmentsPanel({
                     </i>
                     <span>
                       <strong>{preserveUiData(brand.displayName || platformRow.platform.name)}</strong>
-                      <small>{platformRow.platform.location ? preserveUiData(platformRow.platform.location) : 'بدون موقع'}</small>
+                      {platformRow.platform.location ? <small>{preserveUiData(platformRow.platform.location)}</small> : null}
                     </span>
                   </div>
                   <div className="adreem-investment-platform-balances">
                     <span><small>رصيد المنصة</small><strong>{usdMicros(platformTotalUsdMicros)}</strong></span>
-                    <span><small>السيولة</small><strong>{usdMicros(platformLiquidityUsdMicros)}</strong></span>
+                    {platformLiquidityUsdMicros ? <span><small>السيولة</small><strong>{usdMicros(platformLiquidityUsdMicros)}</strong></span> : null}
                   </div>
                   <div className="adreem-investment-platform-actions">
                     <button type="button" className="is-history" aria-label="السجل" title="السجل" onClick={() => openPlatformHistory(platformRow.platform.id)}><History aria-hidden="true" size={14} /><span>السجل</span></button>
@@ -870,11 +871,13 @@ export default function InvestmentsPanel({
                         transition={{ duration: 0.14, ease: 'easeOut' }}
                       >
                         <div className="adreem-investment-holding-identity">
-                          <div className="adreem-investment-symbol"><b dir="ltr">{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
-                          <span className="adreem-investment-quantity" aria-label={`الكمية: ${decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة`}><b dir="ltr">{decimal(unitsToQuantity(row.quantityUnits), 8)}</b><em>وحدة</em></span>
+                          <div className="adreem-investment-identity-main">
+                            <div className="adreem-investment-symbol"><b dir="ltr">{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
+                            <span className="adreem-investment-quantity" aria-label={`الكمية: ${decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة`}><b dir="ltr">{decimal(unitsToQuantity(row.quantityUnits), 8)}</b><em>وحدة</em></span>
+                          </div>
+                          <InvestmentMarketPrice holding={row.holding} error={priceErrors[row.holding.id]} onOpen={openManualPrice} />
                         </div>
                         <div className="adreem-investment-metrics-strip" aria-label="تفاصيل الاستثمار">
-                          <InvestmentMarketPrice holding={row.holding} error={priceErrors[row.holding.id]} onOpen={openManualPrice} />
                           <div className="is-current-value"><small>{priceIsStale ? 'قيمة بسعر سابق' : 'القيمة الآن'}</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
                           <div className={`adreem-investment-result is-${holdingProfitTone}`}>
                             <span><HoldingTrendIcon aria-hidden="true" size={14} /><small>{priceIsStale ? 'نتيجة تقديرية' : 'النتيجة'}</small></span>
@@ -885,8 +888,8 @@ export default function InvestmentsPanel({
                           </div>
                         </div>
                         <div className="adreem-investment-row-actions">
-                          <button type="button" className="is-record" title="تسجيل شراء أو بيع" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.BUY, row.holding.id)}><ArrowLeftRight aria-hidden="true" size={14} /><span>تسجيل عملية</span></button>
-                          <button type="button" className="is-details" aria-expanded={detailsOpen} title={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} onClick={() => setExpandedHoldingIds((current) => ({ ...current, [row.holding.id]: !current[row.holding.id] }))}><ChevronDown aria-hidden="true" size={14} /><span>تفاصيل</span></button>
+                          <button type="button" className="is-record" aria-label="تسجيل شراء أو بيع" title="تسجيل شراء أو بيع" onClick={() => openTrade(INVESTMENT_TRADE_TYPES.BUY, row.holding.id)}><ArrowLeftRight aria-hidden="true" size={14} /><span>تسجيل</span></button>
+                          <button type="button" className="is-details" aria-label={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} aria-expanded={detailsOpen} title={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} onClick={() => setExpandedHoldingIds((current) => ({ ...current, [row.holding.id]: !current[row.holding.id] }))}><ChevronDown aria-hidden="true" size={14} /><span>تفاصيل</span></button>
                         </div>
                         {detailsOpen ? <div className="adreem-investment-holding-details">
                           <div className="adreem-investment-detail-heading">
