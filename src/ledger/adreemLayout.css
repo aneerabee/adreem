@@ -209,3 +209,19 @@
   .adreem-app :is(.adreem-nav button, .ml3-action-choice, .ml3-balance-ledger button):hover { transform: none; box-shadow: none; }
   .adreem-app .adreem-nav button:not(.is-active):hover { background: transparent; color: var(--nav-idle); }
 }
+
+/* Movement-type labels need their full width on phones: the trailing chevron is hidden there. */
+@media (max-width: 720px) {
+  .adreem-app .ml3-action-choice { grid-template-columns: 27px minmax(0, 1fr); }
+}
+
+@media (max-width: 380px) {
+  .adreem-app .ml3-action-lane--daily .ml3-option-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Step trail chips size to their words and wrap, instead of four fixed columns that truncate choices. */
+@media (max-width: 430px) {
+  .adreem-app .adreem-flow-trail { display: flex; flex-wrap: wrap; }
+  .adreem-app .adreem-flow-trail button { width: auto; max-width: 100%; flex: 0 1 auto; }
+  .adreem-app .adreem-flow-trail button strong { max-width: 100%; }
+}

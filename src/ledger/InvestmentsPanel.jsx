@@ -27,6 +27,7 @@ import { buildInvestmentPlatformActivity } from './investmentActivity.js'
 import { investmentPlatformBrandStyle, resolveInvestmentPlatformBrand } from './investmentPlatformBrands.js'
 import { getActiveUiLanguage, preserveUiData } from './uiTranslation.js'
 import { isAutoPricedHolding } from './investmentMarketPolicy.js'
+import { SearchField } from './SearchField.jsx'
 
 const ASSET_OPTIONS = [
   { value: INVESTMENT_ASSET_TYPES.STOCK, label: 'سهم مباشر' },
@@ -799,7 +800,7 @@ export default function InvestmentsPanel({
       </div>
 
       <div className="adreem-investment-toolbar">
-        <label><Search aria-hidden="true" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث باسم أو رمز" /></label>
+        <SearchField value={query} onChange={setQuery} placeholder="ابحث باسم أو رمز" ariaLabel="بحث في المحفظة" />
         <small className={firstPriceError ? 'is-price-error' : undefined} role={firstPriceError ? 'status' : undefined}>
           {firstPriceError ? <><AlertCircle aria-hidden="true" size={13} />{firstPriceError}</> : autoPricedHoldings.length ? latestPriceAt ? `آخر تحقق ${new Date(latestPriceAt).toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'short', timeStyle: 'short' })}` : 'تحديث تلقائي كل ساعتين' : 'الأسعار اليدوية محفوظة حتى تغييرها'}
         </small>

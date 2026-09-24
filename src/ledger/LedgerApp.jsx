@@ -3,7 +3,7 @@
 /* eslint-disable react-refresh/only-export-components -- Keep directly tested UI helpers in this owned module. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, ChartCandlestick, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Pin, Plus, ReceiptText, RotateCcw, Search, SlidersHorizontal, Star, Trash2, UserRound, WalletCards, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Banknote, Boxes, BriefcaseBusiness, Calculator, ChartCandlestick, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, EyeOff, Landmark, NotebookPen, Pencil, Pin, Plus, ReceiptText, RotateCcw, SlidersHorizontal, Star, Trash2, UserRound, WalletCards, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react'
 import './adreemDesk.css'
 import './adreemStudio.css'
@@ -13,6 +13,7 @@ import './adreemTracking.css'
 import './adreemLayout.css'
 import AdreemChrome from './AdreemChrome'
 import InvestmentsPanel from './InvestmentsPanel'
+import { SearchField } from './SearchField'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailDisplayName, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyGroupKey, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
@@ -365,32 +366,6 @@ export function signedMoney(value, currency = CURRENCIES.DINAR) {
   const displayValue = Math.round(number)
   const prefix = displayValue > 0 ? '+' : displayValue < 0 ? '-' : ''
   return `${prefix}${formatMoneyNumber(Math.abs(displayValue), currency)} ${currency}`
-}
-
-export function SearchField({ value = '', onChange, placeholder = 'بحث', ariaLabel = 'بحث', className = '' }) {
-  return (
-    <label className={`adreem-search-field ${className}`.trim()}>
-      <Search aria-hidden="true" size={16} />
-      <input
-        type="search"
-        aria-label={ariaLabel}
-        value={value}
-        onChange={(event) => onChange?.(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key !== 'Escape' || !value) return
-          event.preventDefault()
-          onChange?.('')
-        }}
-        placeholder={placeholder}
-        autoComplete="off"
-      />
-      {value ? (
-        <button type="button" aria-label="مسح البحث" title="مسح" onClick={() => onChange?.('')}>
-          <X aria-hidden="true" size={14} />
-        </button>
-      ) : <span aria-hidden="true" />}
-    </label>
-  )
 }
 
 function formatInteger(value) {

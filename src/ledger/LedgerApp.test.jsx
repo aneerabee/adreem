@@ -5,6 +5,7 @@ import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } 
 import { COUNTERPARTY_ACCOUNT_KINDS } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement } from './ledgerCore.js'
 import { MOVEMENT_ENTRY_STEPS } from './movementConfig.js'
+import { SearchField } from './SearchField.jsx'
 import {
   AccountProfile,
   AccountStatement,
@@ -13,7 +14,6 @@ import {
   NetPositionPanel,
   SeparateLedgerPanel,
   TrackingPanel,
-  SearchField,
   AccountRow,
   MoneyAccountList,
   AccountSearchSelect,
