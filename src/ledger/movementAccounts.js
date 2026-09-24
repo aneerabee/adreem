@@ -4,7 +4,7 @@ import {
   areTransferAccountsCompatible,
   sameLogicalAccount,
 } from './accountCompatibility.js'
-import { MOVEMENT_TYPES } from './ledgerCore.js'
+import { MOVEMENT_TYPES, currencyBalanceField } from './ledgerCore.js'
 
 export { sameLogicalAccount }
 
@@ -84,6 +84,25 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
   if (role === 'destination') return removeTransferMismatch(removeDuplicate(transferReadyAccounts, sourceAccount), sourceAccount)
   if (role === 'source') return removeTransferMismatch(removeDuplicate(transferReadyAccounts, destinationAccount), destinationAccount)
   return transferReadyAccounts
+}
+
+export function splitSourceAccountsByBalance(accounts = [], balancesByAccountId = new Map(), currency) {
+  const field = currencyBalanceField(currency)
+  const available = []
+  const searchOnly = []
+  for (const account of accounts) {
+    const amount = Number(balancesByAccountId.get(account.id)?.[field] || 0)
+    if (account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK) {
+      if (amount > 0) available.push(account)
+      continue
+    }
+    if (account.valueKind === VALUE_KINDS.RECEIVABLE && amount === 0) {
+      searchOnly.push(account)
+      continue
+    }
+    available.push(account)
+  }
+  return { available, searchOnly }
 }
 
 export function rankMovementAccounts(accounts = [], balancesByAccountId = new Map(), query = '', currency = '') {

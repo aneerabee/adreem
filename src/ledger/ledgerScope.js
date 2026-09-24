@@ -136,7 +136,10 @@ export function filterNetContributions(contributions = [], query = '') {
     .sort(compareNetContributions)
 }
 
-export function buildNetPosition(rows = [], excludedAccountIds = []) {
+export const NET_PORTFOLIO_ID = 'investment-portfolio'
+const USD_MICROS_PER_UNIT = 1_000_000
+
+export function buildNetPosition(rows = [], excludedAccountIds = [], options = {}) {
   const balanceRows = Array.isArray(rows) ? rows : []
   const excluded = excludedAccountIds instanceof Set
     ? excludedAccountIds
@@ -153,7 +156,7 @@ export function buildNetPosition(rows = [], excludedAccountIds = []) {
       eur: roundedNetAmount(row.eur),
     }))
     .filter((item) => item.dinar !== 0 || item.usd !== 0 || item.try !== 0 || item.eur !== 0)
-  return {
+  const position = {
     dinar: exactNetTotal(contributions, 'dinar'),
     usd: exactNetTotal(contributions, 'usd'),
     try: exactNetTotal(contributions, 'try'),
@@ -161,6 +164,9 @@ export function buildNetPosition(rows = [], excludedAccountIds = []) {
     accountCount: contributions.length,
     contributions,
   }
+  if (options?.portfolioUsdMicros === undefined) return position
+  const portfolioUsdMicros = Number.isSafeInteger(options.portfolioUsdMicros) ? options.portfolioUsdMicros : 0
+  return { ...position, portfolioUsdMicros: excluded.has(NET_PORTFOLIO_ID) ? 0 : portfolioUsdMicros }
 }
 
 export function convertNetPosition(position = {}, requestedRate, targetCurrency = 'LYD', requestedTryRate = 0, requestedEurRate = 0) {
@@ -169,12 +175,14 @@ export function convertNetPosition(position = {}, requestedRate, targetCurrency 
   const tryPerUsd = Number(requestedTryRate)
   const eurPerUsd = Number(requestedEurRate)
   const dinar = Number(position.dinar || 0)
-  const usd = Number(position.usd || 0)
+  const accountUsd = Number(position.usd || 0)
   const tryAmount = Number(position.try || 0)
   const eurAmount = Number(position.eur || 0)
-  if (![dinar, usd, tryAmount, eurAmount].every(Number.isSafeInteger)) {
+  const portfolioUsdMicros = Number(position.portfolioUsdMicros || 0)
+  if (![dinar, accountUsd, tryAmount, eurAmount, portfolioUsdMicros].every(Number.isSafeInteger)) {
     return { ok: false, error: 'نتيجة الصافي أكبر من الحد المسموح.' }
   }
+  const usd = accountUsd + portfolioUsdMicros / USD_MICROS_PER_UNIT
   const needsLydRate = currency === 'LYD' ? usd !== 0 || tryAmount !== 0 || eurAmount !== 0 : dinar !== 0
   const needsTryRate = currency === 'TRY' ? dinar !== 0 || usd !== 0 || eurAmount !== 0 : tryAmount !== 0
   const needsEurRate = currency === 'EUR' ? dinar !== 0 || usd !== 0 || tryAmount !== 0 : eurAmount !== 0

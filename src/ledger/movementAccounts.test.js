@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_STATUSES, VALUE_KINDS } from './accountCatalog.js'
 import { CURRENCIES, MOVEMENT_TYPES } from './ledgerCore.js'
-import { getMovementAccounts, rankMovementAccounts, rankMovementAccountsForRole } from './movementAccounts.js'
+import { getMovementAccounts, rankMovementAccounts, rankMovementAccountsForRole, splitSourceAccountsByBalance } from './movementAccounts.js'
 
 function account(id, valueKind, overrides = {}) {
   return {
@@ -26,6 +26,33 @@ describe('shared movement account choices', () => {
 
     expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.INVESTMENT_DEPOSIT, 'source', { currency: CURRENCIES.USD }).map((item) => item.id)).toEqual(['cash-usd', 'bank-multi', 'person-usd'])
     expect(getMovementAccounts(accounts, new Map(), MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL, 'destination', { currency: CURRENCIES.USD }).map((item) => item.id)).toEqual(['cash-usd', 'bank-multi'])
+  })
+
+  it('offers a source only when it can actually pay in the movement currency', () => {
+    const accounts = [
+      account('cash-empty', VALUE_KINDS.CASH, { ownerName: 'أنا' }),
+      account('bank-funded', VALUE_KINDS.BANK, { ownerName: 'أنا', subAccountName: 'مصرف' }),
+      account('cash-multi', VALUE_KINDS.CASH, { ownerName: 'أنا', currencyKind: 'multi' }),
+      account('person-owes-me', VALUE_KINDS.RECEIVABLE, { ownerName: 'سالم' }),
+      account('person-i-owe', VALUE_KINDS.RECEIVABLE, { ownerName: 'خالد' }),
+      account('person-settled', VALUE_KINDS.RECEIVABLE, { ownerName: 'سعيد' }),
+    ]
+    const balances = new Map([
+      ['cash-empty', { dinar: 0, usd: 0 }],
+      ['bank-funded', { dinar: 500, usd: 0 }],
+      ['cash-multi', { dinar: -1, usd: 300 }],
+      ['person-owes-me', { dinar: 1200, usd: 0 }],
+      ['person-i-owe', { dinar: -800, usd: 0 }],
+      ['person-settled', { dinar: 0, usd: 0 }],
+    ])
+
+    const dinar = splitSourceAccountsByBalance(accounts, balances, CURRENCIES.DINAR)
+    expect(dinar.available.map((item) => item.id)).toEqual(['bank-funded', 'person-owes-me', 'person-i-owe'])
+    expect(dinar.searchOnly.map((item) => item.id)).toEqual(['person-settled'])
+
+    const usd = splitSourceAccountsByBalance(accounts, balances, CURRENCIES.USD)
+    expect(usd.available.map((item) => item.id)).toEqual(['cash-multi'])
+    expect(usd.searchOnly.map((item) => item.id)).toEqual(['person-owes-me', 'person-i-owe', 'person-settled'])
   })
 
   it('ranks arbitrary own money accounts before people without fixed ids', () => {

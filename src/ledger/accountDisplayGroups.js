@@ -78,3 +78,16 @@ export function groupBalanceRowsForDisplay(rows = []) {
         .sort((left, right) => compareDisplayChannels(left.account, right.account)),
     }))
 }
+
+export function accountsWithLedgerActivity(accounts = [], balancesByAccountId = new Map(), movements = [], selectedAccountId = '') {
+  const usedIds = new Set()
+  for (const movement of movements) {
+    if (movement?.sourceAccountId) usedIds.add(movement.sourceAccountId)
+    if (movement?.destinationAccountId) usedIds.add(movement.destinationAccountId)
+  }
+  return accounts.filter((account) => {
+    if (account.id === selectedAccountId || usedIds.has(account.id)) return true
+    const bucket = balancesByAccountId.get(account.id)
+    return ['dinar', 'usd', 'try', 'eur'].some((field) => Number(bucket?.[field] || 0) !== 0)
+  })
+}

@@ -17,7 +17,7 @@ import { SearchField } from './SearchField'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, ACCOUNT_TYPES, VALUE_KINDS, getActivePostingAccounts, knownExternalAccounts } from './accountCatalog'
 import { ACCOUNT_OPENING_DIRECTIONS, COUNTERPARTY_ACCOUNT_KINDS, accountChoiceKind, accountChoiceKindLabel, accountClassificationOptions, accountContextLabel, accountDetailDisplayName, accountDetailName, accountDisplayName, accountDraftSummary, accountKindLabel, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountOpeningAmounts, accountOpeningDraftErrors, accountPresetGroups, accountPresetFor, accountPresets, accountPresetStepCopy, accountPrimaryName, accountSupportsOpeningBalance, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, counterpartyAccountChannels, counterpartyGroupKey, counterpartyOpeningDraftErrors, counterpartyOpeningFor, emptyAccountDraft, emptyCounterpartyOpenings, isCounterpartyBundleDraft, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountCurrencyLabel } from './accountCompatibility'
-import { accountDisplayGroupKey, groupAccountsForDisplay, groupBalanceRowsForDisplay } from './accountDisplayGroups'
+import { accountDisplayGroupKey, accountsWithLedgerActivity, groupAccountsForDisplay, groupBalanceRowsForDisplay } from './accountDisplayGroups'
 import { buildFinancialAccountCurrencyBundle, completeAccountCurrencies } from './accountCurrencyUpgrade'
 import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot, accountStructureUsage, accountUpdateCurrency, accountUpdateMovementErrors, prepareAccountUpdate } from './accountEditing'
 import { buildCounterpartyAccountBundle, buildCounterpartyBalanceViews, buildCounterpartyOpeningMovements } from './counterpartyAccounts'
@@ -26,10 +26,10 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, buildPostingEntries, can
 import { ADREEM_API_TOKEN_PERSIST_KEY, ADREEM_API_TOKEN_SESSION_KEY, cleanupAdreemUploadedAttachments, deleteAdreemUnusedAccount, deleteAdreemUploadedAttachment, getLedgerPersistenceMode, loadAdreemInvestmentTryUsdRate, loadAdreemMovementPage, loadPersistedLedgerState, loadMoreAdreemMovements, logoutAdreemCloudSession, mergeAdreemAttachmentPages, refreshAdreemInvestmentPrices, resolveAdreemAttachmentUrl, savePersistedLedgerState, searchAdreemInvestmentAssets, updateAdreemUserProfile, uploadAdreemAttachmentFile } from './ledgerPersistence'
 import { createLatestSaveCoordinator } from './cloudSaveCoordinator'
 import { createEmptyAdreemState, normalizeLedgerState, normalizeLedgerAccounts, sameRecordVersions, sameSerializableContent } from './ledgerState'
-import { buildNetPosition, convertNetPosition, filterNetContributions, isAccountIncludedInNet } from './ledgerScope'
+import { NET_PORTFOLIO_ID, buildNetPosition, convertNetPosition, filterNetContributions, isAccountIncludedInNet } from './ledgerScope'
 import { ledgerNavigationSearch, readLedgerNavigation } from './ledgerNavigation'
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension, movementTone, movementTypeOptions } from './movementConfig'
-import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccountsForRole, sameLogicalAccount } from './movementAccounts'
+import { getMovementAccounts, normalizeAccountSearchText, rankMovementAccountsForRole, sameLogicalAccount, splitSourceAccountsByBalance } from './movementAccounts'
 import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateRecords, isMainLedgerMovement, normalizeSeparateRecordDirection, normalizeSeparateRecordName, separateRecordCancellationDraft, separateRecordDirectionOptions, separateRecordNames, separateRecordPinRevisionDraft, separateRecordTotals } from './separateRecords'
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
@@ -1218,10 +1218,12 @@ export function buildBalanceOverview(rows = []) {
 }
 
 export function CurrencyAmountGrid({ value, className = 'ml3-balance-pair' }) {
-  const cells = CURRENCY_OPTIONS.map((option) => ({
+  const allCells = CURRENCY_OPTIONS.map((option) => ({
     ...option,
     amount: Number(value?.[option.field] || 0),
   }))
+  const heldCells = allCells.filter((cell) => cell.amount !== 0)
+  const cells = heldCells.length ? heldCells : allCells.slice(0, 1)
   return (
     <span className={className}>
       {cells.map((cell, index) => {
@@ -1262,9 +1264,14 @@ export function activeRecurringRuleForMovement(rules = [], movementId = '') {
   )) || null
 }
 
+function netUsdMicrosText(value) {
+  return `${(Number(value || 0) / 1_000_000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`
+}
+
 export function NetPositionPanel({
   position,
   allContributions = position?.contributions || [],
+  portfolioUsdMicros = 0,
   excludedAccountIds = [],
   query = '',
   rate,
@@ -1282,7 +1289,13 @@ export function NetPositionPanel({
 }) {
   const conversion = convertNetPosition(position, rate, targetCurrency, tryRate, eurRate)
   const excluded = new Set(excludedAccountIds)
+  const hasPortfolio = Number.isSafeInteger(portfolioUsdMicros) && portfolioUsdMicros !== 0
+  const portfolioIncluded = hasPortfolio && !excluded.has(NET_PORTFOLIO_ID)
+  const portfolioShare = portfolioIncluded && conversion.ok
+    ? convertNetPosition({ dinar: 0, usd: 0, try: 0, eur: 0, portfolioUsdMicros }, rate, conversion.currency, tryRate, eurRate)
+    : null
   const excludedCount = allContributions.reduce((count, item) => count + (excluded.has(item.accountId) ? 1 : 0), 0)
+    + (hasPortfolio && !portfolioIncluded ? 1 : 0)
   const visibleContributions = filterNetContributions(allContributions, query)
   const visibleContributionGroups = groupNetContributionsForDisplay(visibleContributions)
   return (
@@ -1296,6 +1309,13 @@ export function NetPositionPanel({
         <span><small>USD</small><strong>{money(position.usd, CURRENCIES.USD)}</strong></span>
         <span><small>TRY</small><strong>{money(position.try, CURRENCIES.TRY)}</strong></span>
         <span><small>EUR</small><strong>{money(position.eur, CURRENCIES.EUR)}</strong></span>
+        {hasPortfolio ? (
+          <button type="button" className={`adreem-net-portfolio${portfolioIncluded ? '' : ' is-excluded'}`} aria-pressed={portfolioIncluded} title={portfolioIncluded ? 'اضغط لاستبعاد المحفظة' : 'اضغط لإدخال المحفظة'} onClick={() => onToggleAccount(NET_PORTFOLIO_ID)}>
+            <small><ChartCandlestick aria-hidden="true" size={13} />محفظتي</small>
+            <strong>{netUsdMicrosText(portfolioUsdMicros)}</strong>
+            <em>{portfolioIncluded ? 'داخل الصافي' : 'مستبعدة'}</em>
+          </button>
+        ) : null}
       </div>
       <div className="adreem-net-calc">
         <NumericEntry compact label="1 USD = ? LYD" value={rate} onChange={onRateChange} placeholder="0" allowDecimal />
@@ -1312,6 +1332,7 @@ export function NetPositionPanel({
               <span>{conversion.currency}</span>
             </strong>
           ) : <strong className="adreem-net-result-error">{conversion.error || 'أدخل السعر'}</strong>}
+          {portfolioShare?.ok ? <small className="adreem-net-portfolio-share">منها محفظتي {money(portfolioShare.amount, portfolioShare.currency)}</small> : null}
         </output>
       </div>
       <details className="adreem-net-accounts">
@@ -1605,7 +1626,7 @@ export function MoneyAccountList({ rows = [], onOpen }) {
       <AnimatePresence initial={false}>
         {groups.map((group) => {
           const primaryAccount = group.accounts[0]
-          const channels = group.rows.flatMap((bucket) => {
+          const allChannels = group.rows.flatMap((bucket) => {
             const currencies = bucket.account.currencyKind === ACCOUNT_CURRENCY_KINDS.MULTI
               ? CURRENCY_OPTIONS
               : CURRENCY_OPTIONS.filter((option) => option.value === (bucket.account.currencyKind || CURRENCIES.DINAR))
@@ -1616,6 +1637,8 @@ export function MoneyAccountList({ rows = [], onOpen }) {
               amount: Number(bucket[field] || 0),
             }))
           })
+          const heldChannels = allChannels.filter((channel) => channel.amount !== 0)
+          const channels = heldChannels.length ? heldChannels : allChannels.slice(0, 1)
           return (
             <Motion.article key={group.id} className={`adreem-money-group is-${primaryAccount.valueKind}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={UI_MOTION_TRANSITION}>
               <div className="adreem-money-group-head">
@@ -2120,7 +2143,7 @@ function ClosedAccountReferenceGroup({ group }) {
   )
 }
 
-export function AccountSearchSelect({ label, value, accounts, referenceAccounts = [], initialQuery = '', onChange, allowEmpty = true, preferredAccountIds = [], balanceByAccountId = new Map(), balanceCurrency = '' }) {
+export function AccountSearchSelect({ label, value, accounts, referenceAccounts = [], initialQuery = '', onChange, allowEmpty = true, preferredAccountIds = [], balanceByAccountId = new Map(), balanceCurrency = '', searchOnlyAccountIds = [] }) {
   const [query, setQuery] = useState(initialQuery)
   const [isChanging, setIsChanging] = useState(false)
   const [quickFilter, setQuickFilter] = useState('')
@@ -2171,10 +2194,15 @@ export function AccountSearchSelect({ label, value, accounts, referenceAccounts 
     if (normalizedQuery && normalizeAccountSearchText(ownerName).startsWith(normalizedQuery)) return -480
     return 0
   }
+  const searchOnlyIdSet = new Set(searchOnlyAccountIds)
+  const hiddenUntilSearchCount = normalizedQuery ? 0 : new Set(accounts
+    .filter((account) => searchOnlyIdSet.has(account.id) && account.id !== value)
+    .map((account) => accountDisplayGroupKey(account))).size
   const filteredAccounts = accounts
     .filter((account) => {
       const haystack = normalizeAccountSearchText(`${account.ownerName} ${account.subAccountName} ${accountDetailName(account)} ${account.legacyName || ''}`)
       if (normalizedQuery) return haystack.includes(normalizedQuery)
+      if (searchOnlyIdSet.has(account.id) && account.id !== value) return false
       return matchesQuickFilter(account)
     })
     .sort((a, b) => rankAccount(a) - rankAccount(b) || accountLabel(a).localeCompare(accountLabel(b), 'ar'))
@@ -2289,6 +2317,7 @@ export function AccountSearchSelect({ label, value, accounts, referenceAccounts 
           ) : null}
           <div className="ml3-picker-results">
             {shownResultGroups.map((group) => <AccountPickerChoiceGroup key={group.id} group={group} value={value} balanceByAccountId={balanceByAccountId} balanceCurrency={balanceCurrency} hasVisibleBalance={hasVisibleBalance} onChoose={chooseAccount} />)}
+            {hiddenUntilSearchCount ? <p className="ml3-picker-search-hint">أشخاص بلا رصيد بهذه العملة: {formatCount(hiddenUntilSearchCount)}. يظهرون عند كتابة الاسم.</p> : null}
             {shouldLimitResults && listResultGroups.length > shownResultGroups.length ? (
               <button type="button" className="ml3-picker-more" onClick={() => setShowAllResults(true)}>
                 عرض الكل · {formatCount(listResultGroups.length)}
@@ -3865,13 +3894,13 @@ export default function LedgerApp() {
   }, [accountWizardStep, activeEntryMode, activeSection, movementStep])
 
   const activeAccounts = useMemo(() => getActivePostingAccounts(accounts), [accounts])
-  const historyAccountGroups = useMemo(() => groupAccountsForDisplay(activeAccounts), [activeAccounts])
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts])
   const activeDimensions = useMemo(() => dimensionsFromAccounts(accounts, ledgerExtras.dimensions), [accounts, ledgerExtras.dimensions])
   const dimensionById = useMemo(() => new Map(activeDimensions.map((dimension) => [dimension.id, dimension])), [activeDimensions])
   const activeExpenseCategories = useMemo(() => accounts.filter((account) => account.status === ACCOUNT_STATUSES.ACTIVE && account.valueKind === VALUE_KINDS.EXPENSE), [accounts])
   const balances = useMemo(() => summarizeBalances(accounts, movements), [accounts, movements])
   const balanceByAccountId = useMemo(() => new Map(balances.map((bucket) => [bucket.account.id, bucket])), [balances])
+  const historyAccountGroups = useMemo(() => groupAccountsForDisplay(accountsWithLedgerActivity(activeAccounts, balanceByAccountId, movements, historyAccountId)), [activeAccounts, balanceByAccountId, historyAccountId, movements])
   const selectedAccountPreset = accountPresetFor(accountDraft.type, accountDraft.valueKind)
   const selectedAccountPresetGroup = accountPresetGroups.find((group) => group.key === activeAccountPresetGroup) || accountPresetGroups[0]
   const selectedAccountPresetCopy = accountPresetStepCopy[selectedAccountPresetGroup.key] || accountPresetStepCopy.people
@@ -4128,7 +4157,7 @@ export default function LedgerApp() {
   const activeInvestmentPlatforms = useMemo(() => (ledgerExtras.investmentPlatforms || []).filter((platform) => platform.status !== INVESTMENT_RECORD_STATUSES.INACTIVE), [ledgerExtras.investmentPlatforms])
   const investmentPlatformById = useMemo(() => new Map((ledgerExtras.investmentPlatforms || []).map((platform) => [platform.id, platform])), [ledgerExtras.investmentPlatforms])
   const fullNetPosition = useMemo(() => buildNetPosition(balances), [balances])
-  const netPosition = useMemo(() => buildNetPosition(balances, netExcludedAccountIds), [balances, netExcludedAccountIds])
+  const netPosition = useMemo(() => buildNetPosition(balances, netExcludedAccountIds, { portfolioUsdMicros: investmentSummary.totalValueUsdMicros }), [balances, investmentSummary.totalValueUsdMicros, netExcludedAccountIds])
 
   const movementConfig = movementConfigFor(movementDraft.type)
   const movementSourceRequired = movementNeedsSource(movementDraft.type)
@@ -5142,7 +5171,16 @@ export default function LedgerApp() {
     }, direction)
   }
 
+  function movementSourceSplit() {
+    const candidates = getMovementAccounts(accounts, balanceByAccountId, movementDraft.type, 'source', movementDraft)
+    return splitSourceAccountsByBalance(candidates, balanceByAccountId, movementAccountCurrencyForRole(movementDraft.type, 'source', movementDraft.currency))
+  }
+
   function movementAccountsFor(role) {
+    if (role === 'source') {
+      const split = movementSourceSplit()
+      return [...split.available, ...split.searchOnly]
+    }
     return getMovementAccounts(accounts, balanceByAccountId, movementDraft.type, role, movementDraft)
   }
 
@@ -6760,6 +6798,7 @@ export default function LedgerApp() {
             <NetPositionPanel
               position={netPosition}
               allContributions={fullNetPosition.contributions}
+              portfolioUsdMicros={investmentSummary.totalValueUsdMicros}
               excludedAccountIds={netExcludedAccountIds}
               query={netAccountQuery}
               rate={netRate}
@@ -7380,7 +7419,7 @@ export default function LedgerApp() {
                 {movementSourceRequired && movementStep === MOVEMENT_ENTRY_STEPS.SOURCE ? (
                   <section className="ml3-step ml3-step--source is-open">
                     <div className="ml3-route-picker is-single">
-                      <AccountSearchSelect label={movementConfig.sourceLabel} value={movementDraft.sourceAccountId || ''} accounts={movementAccountsFor('source')} referenceAccounts={movementReferenceAccountsFor('source')} onChange={(value) => updateMovementDraft('sourceAccountId', value)} preferredAccountIds={preferredMovementAccountIds('source')} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'source', movementDraft.currency)} />
+                      <AccountSearchSelect label={movementConfig.sourceLabel} value={movementDraft.sourceAccountId || ''} accounts={movementAccountsFor('source')} referenceAccounts={movementReferenceAccountsFor('source')} onChange={(value) => updateMovementDraft('sourceAccountId', value)} preferredAccountIds={preferredMovementAccountIds('source')} balanceByAccountId={balanceByAccountId} balanceCurrency={movementAccountCurrencyForRole(movementDraft.type, 'source', movementDraft.currency)} searchOnlyAccountIds={movementSourceSplit().searchOnly.map((account) => account.id)} />
                     </div>
                     <div className="ml3-step-controls">
                       <button type="button" className="ml3-step-back" onClick={retreatMovementStep}>

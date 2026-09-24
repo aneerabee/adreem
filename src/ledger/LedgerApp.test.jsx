@@ -369,10 +369,11 @@ describe('LedgerApp large balance layout', () => {
     expect(balanceAmountIsWide({ dinar: 999_999_999_999_999, usd: 0 })).toBe(true)
   })
 
-  it('marks zero currencies so they can remain compact beside stacked values', () => {
-    const markup = renderToStaticMarkup(<CurrencyAmountGrid value={{ dinar: 10_000, usd: 0, try: 0, eur: 0 }} />)
+  it('shows a single zero dinar cell when a summary holds no balance at all', () => {
+    const markup = renderToStaticMarkup(<CurrencyAmountGrid value={{ dinar: 0, usd: 0, try: 0, eur: 0 }} />)
     expect(markup).toContain('class="is-zero"')
-    expect(markup).toContain('10,000')
+    expect(markup.match(/LYD|USD|TRY|EUR/g)).toEqual(['LYD'])
+    expect(markup).toContain('>0<')
   })
 })
 
@@ -1299,13 +1300,28 @@ describe('LedgerApp people account views', () => {
     expect(markup).toContain('40 EUR')
   })
 
-  it('shows all four currencies in balance summaries even when some are zero', () => {
+  it('shows only the currencies that hold a balance in summaries', () => {
     const markup = renderToStaticMarkup(<CurrencyAmountGrid value={{ dinar: 1_500, usd: 0, try: 0, eur: 25 }} />)
-
-    expect(markup.match(/LYD|USD|TRY|EUR/g)).toEqual(['LYD', 'USD', 'TRY', 'EUR'])
+    expect(markup.match(/LYD|USD|TRY|EUR/g)).toEqual(['LYD', 'EUR'])
     expect(markup).toContain('1,500')
     expect(markup).toContain('>25<')
-    expect(markup.match(/>0</g)).toHaveLength(2)
+    expect(markup).not.toContain('>0<')
+
+    const liraOnly = renderToStaticMarkup(<CurrencyAmountGrid value={{ dinar: 0, usd: 0, try: 12_000, eur: 0 }} />)
+    expect(liraOnly.match(/LYD|USD|TRY|EUR/g)).toEqual(['TRY'])
+    expect(liraOnly).toMatch(/<strong[^>]*><b>12,000<\/b>/)
+  })
+
+  it('hides empty currencies inside an own-money location and keeps one zero for an empty location', () => {
+    const multi = createAccount({ id: 'safe-multi', ownerName: 'أنا', subAccountName: 'الخزنة', type: ACCOUNT_TYPES.CASH, valueKind: VALUE_KINDS.CASH, currencyKind: ACCOUNT_CURRENCY_KINDS.MULTI })
+    const empty = createAccount({ id: 'bank-empty', ownerName: 'أنا', subAccountName: 'مصرف الوحدة', type: ACCOUNT_TYPES.BANK, valueKind: VALUE_KINDS.BANK, currencyKind: CURRENCIES.DINAR })
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <MoneyAccountList rows={[{ account: multi, dinar: 900, usd: 0, try: 0, eur: 0 }, { account: empty, dinar: 0, usd: 0, try: 0, eur: 0 }]} onOpen={() => {}} />,
+    ))
+    expect(markup).toContain('900 LYD')
+    expect(markup).not.toContain('>USD<')
+    expect(markup.match(/>صفر</g)).toHaveLength(1)
+    expect(markup).toContain('مصرف الوحدة')
   })
 
   it('keeps own money, receivables, and payables separated in both currencies', () => {
@@ -1864,6 +1880,61 @@ describe('LedgerApp English user data protection', () => {
     } finally {
       setActiveUiLanguage('ar')
     }
+  })
+})
+
+describe('net position portfolio line', () => {
+  it('shows the portfolio as a toggleable part of the net and its share of the converted result', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <NetPositionPanel
+        position={{ dinar: 10_000, usd: 100, try: 0, eur: 0, portfolioUsdMicros: 1_500_250_000, accountCount: 1, contributions: [] }}
+        portfolioUsdMicros={1_500_250_000}
+        rate="7"
+        targetCurrency={CURRENCIES.DINAR}
+        onRateChange={() => {}}
+        onTargetCurrencyChange={() => {}}
+        onClose={() => {}}
+      />,
+    ))
+    expect(markup).toContain('محفظتي')
+    expect(markup).toContain('1,500.25 USD')
+    expect(markup).toContain('aria-pressed="true"')
+    expect(markup).toContain('>21,202</b>')
+    expect(markup).toContain('منها محفظتي')
+    expect(markup).toContain('10,502 LYD')
+
+    const excluded = stripUiDataProtection(renderToStaticMarkup(
+      <NetPositionPanel
+        position={{ dinar: 10_000, usd: 100, try: 0, eur: 0, portfolioUsdMicros: 0, accountCount: 1, contributions: [] }}
+        portfolioUsdMicros={1_500_250_000}
+        excludedAccountIds={['investment-portfolio']}
+        rate="7"
+        targetCurrency={CURRENCIES.DINAR}
+        onRateChange={() => {}}
+        onTargetCurrencyChange={() => {}}
+        onClose={() => {}}
+      />,
+    ))
+    expect(excluded).toContain('مستبعدة')
+    expect(excluded).toContain('>10,700</b>')
+    expect(excluded).not.toContain('منها محفظتي')
+  })
+})
+
+describe('account picker source visibility', () => {
+  it('keeps people without a balance out of the list until their name is searched', () => {
+    const accounts = [
+      { id: 'bank', ownerName: 'أنا', subAccountName: 'مصرف', type: 'bank', valueKind: VALUE_KINDS.BANK, currencyKind: CURRENCIES.DINAR, status: ACCOUNT_STATUSES.ACTIVE },
+      { id: 'settled', ownerName: 'سعيد فرج', subAccountName: 'كاش بيننا', type: 'person', valueKind: VALUE_KINDS.RECEIVABLE, currencyKind: CURRENCIES.DINAR, status: ACCOUNT_STATUSES.ACTIVE },
+    ]
+    const common = { label: 'من', value: '', accounts, onChange: () => {}, balanceByAccountId: new Map([['bank', { dinar: 900 }], ['settled', { dinar: 0 }]]), balanceCurrency: CURRENCIES.DINAR, searchOnlyAccountIds: ['settled'] }
+
+    const idle = renderToStaticMarkup(<AccountSearchSelect {...common} />)
+    expect(idle).not.toContain('سعيد فرج')
+    expect(idle).toContain('يظهرون عند كتابة الاسم')
+
+    const searched = renderToStaticMarkup(<AccountSearchSelect {...common} initialQuery="سعيد" />)
+    expect(searched).toContain('سعيد فرج')
   })
 })
 

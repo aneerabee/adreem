@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog.js'
 import {
   ACCOUNT_SUMMARY_SCOPES,
+  NET_PORTFOLIO_ID,
   accountSummaryScope,
   buildNetPosition,
   convertNetPosition,
@@ -202,5 +203,33 @@ describe('ADREEM account summary scope', () => {
       error: 'نتيجة الصافي أكبر من الحد المسموح.',
     })
     expect(convertNetPosition({ dinar: 1, usd: 1 }, Number.MAX_VALUE, 'LYD')).toMatchObject({ ok: false })
+  })
+})
+
+describe('ADREEM net position with the investment portfolio', () => {
+  const rows = [bucket('cash', VALUE_KINDS.CASH, 10_000, 100)]
+
+  it('adds the live portfolio value as its own part of the net and lets it be excluded', () => {
+    const included = buildNetPosition(rows, [], { portfolioUsdMicros: 1_500_250_000 })
+    expect(included).toMatchObject({ dinar: 10_000, usd: 100, portfolioUsdMicros: 1_500_250_000, accountCount: 1 })
+
+    const excluded = buildNetPosition(rows, [NET_PORTFOLIO_ID], { portfolioUsdMicros: 1_500_250_000 })
+    expect(excluded.portfolioUsdMicros).toBe(0)
+    expect(buildNetPosition(rows)).not.toHaveProperty('portfolioUsdMicros')
+  })
+
+  it('converts accounts and portfolio together at the entered rates without losing cents before rounding', () => {
+    const position = buildNetPosition(rows, [], { portfolioUsdMicros: 1_500_250_000 })
+
+    expect(convertNetPosition(position, 7, 'LYD')).toMatchObject({ ok: true, currency: 'LYD', amount: 21_202 })
+    expect(convertNetPosition(position, 7, 'USD')).toMatchObject({ ok: true, currency: 'USD', amount: 3_029 })
+    expect(convertNetPosition(position, 7, 'TRY', 41)).toMatchObject({ ok: true, currency: 'TRY', amount: 124_182 })
+  })
+
+  it('asks for the dinar rate when only the portfolio needs converting', () => {
+    expect(convertNetPosition({ dinar: 0, usd: 0, portfolioUsdMicros: 1_000_000 }, '', 'LYD'))
+      .toEqual({ ok: false, error: 'أدخل سعر LYD مقابل USD.' })
+    expect(convertNetPosition({ dinar: 0, usd: 0, portfolioUsdMicros: 1_000_000 }, '', 'USD'))
+      .toMatchObject({ ok: true, amount: 1 })
   })
 })

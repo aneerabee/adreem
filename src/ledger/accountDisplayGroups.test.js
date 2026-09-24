@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOUNT_CURRENCY_KINDS, ACCOUNT_STATUSES, ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
 import { COUNTERPARTY_ACCOUNT_KINDS } from './accountConfig.js'
-import { accountDisplayGroupKey, groupAccountsForDisplay, groupBalanceRowsForDisplay } from './accountDisplayGroups.js'
+import { accountDisplayGroupKey, accountsWithLedgerActivity, groupAccountsForDisplay, groupBalanceRowsForDisplay } from './accountDisplayGroups.js'
 
 const activePerson = {
   ownerName: 'سعيد',
@@ -74,5 +74,20 @@ describe('account display groups', () => {
       ['safe-try', 0, 75, 0],
       ['safe-eur', 0, 0, 50],
     ])
+  })
+
+  it('lists only accounts that moved money or hold a balance, plus the current choice', () => {
+    const accounts = [
+      { ...activePerson, id: 'used' },
+      { ...activePerson, id: 'balance-only' },
+      { ...activePerson, id: 'empty' },
+      { ...activePerson, id: 'selected-empty' },
+      { ...activePerson, id: 'destination' },
+    ]
+    const balances = new Map([['balance-only', { dinar: 0, usd: 0, try: 250, eur: 0 }], ['empty', { dinar: 0, usd: 0, try: 0, eur: 0 }]])
+    const movements = [{ id: 'm1', sourceAccountId: 'used', destinationAccountId: 'destination' }]
+
+    expect(accountsWithLedgerActivity(accounts, balances, movements, 'selected-empty').map((account) => account.id))
+      .toEqual(['used', 'balance-only', 'selected-empty', 'destination'])
   })
 })

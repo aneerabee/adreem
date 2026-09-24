@@ -225,3 +225,13 @@
   .adreem-app .adreem-flow-trail button { width: auto; max-width: 100%; flex: 0 1 auto; }
   .adreem-app .adreem-flow-trail button strong { max-width: 100%; }
 }
+
+.adreem-app .ml3-picker-search-hint { margin: 6px 2px 0; color: var(--muted); font-size: 0.64rem; line-height: 1.5; }
+
+.adreem-app .adreem-net-portfolio { display: grid; gap: 1px; min-width: 0; padding: 6px 9px; border: 1px solid color-mix(in srgb, var(--green) 30%, var(--line)); border-radius: 6px; background: color-mix(in srgb, var(--green) 6%, #fff); color: var(--ink); text-align: start; cursor: pointer; }
+.adreem-app .adreem-net-portfolio small { display: inline-flex; align-items: center; gap: 4px; color: var(--green); font-size: 0.62rem; font-weight: 750; }
+.adreem-app .adreem-net-portfolio strong { text-align: start; font-variant-numeric: tabular-nums; }
+.adreem-app .adreem-net-portfolio em { color: var(--muted); font-size: 0.58rem; font-style: normal; font-weight: 700; }
+.adreem-app .adreem-net-portfolio.is-excluded { border-style: dashed; background: #fff; opacity: .72; }
+.adreem-app .adreem-net-portfolio.is-excluded strong { text-decoration: line-through; }
+.adreem-app .adreem-net-portfolio-share { display: block; margin-top: 2px; color: var(--muted); font-size: 0.62rem; font-weight: 700; unicode-bidi: isolate; }
