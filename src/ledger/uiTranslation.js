@@ -72,6 +72,7 @@ const ENGLISH_TEXT = Object.freeze({
   'تعذر حفظ النقل.': 'Could not save the transfer.',
   'تم تسجيل النقل بين المنصتين.': 'Transfer recorded between platforms.',
   'نقل بين المنصات': 'Transfer between platforms',
+  'نقل': 'Transfer',
   'راجع قبل التسجيل': 'Review before recording',
   'نقل صادر': 'Outgoing transfer',
   'نقل وارد': 'Incoming transfer',

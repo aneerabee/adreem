@@ -508,9 +508,9 @@ export default function InvestmentsPanel({
     setDialog('trade')
   }
 
-  function openTransfer(fromPlatformId = '') {
+  function openTransfer() {
     submissionRef.current = false
-    const sourceId = fromPlatformId || activePlatforms[0]?.id || ''
+    const sourceId = activePlatforms[0]?.id || ''
     setTransferDraft({
       ...blankTransfer,
       fromPlatformId: sourceId,
@@ -786,7 +786,7 @@ export default function InvestmentsPanel({
           </button>
           <button type="button" onClick={openPlatform}><Landmark aria-hidden="true" size={16} /> منصة</button>
           <button type="button" disabled={!activePlatforms.length} onClick={openHolding}><Plus aria-hidden="true" size={16} /> استثمار</button>
-          <button type="button" disabled={activePlatforms.length < 2} onClick={() => openTransfer()}><ArrowLeftRight aria-hidden="true" size={16} /> نقل</button>
+          <button type="button" disabled={activePlatforms.length < 2} onClick={openTransfer}><ArrowLeftRight aria-hidden="true" size={16} /> نقل</button>
         </div>
       </div>
 
@@ -852,7 +852,6 @@ export default function InvestmentsPanel({
                     </div>
                     <div className="adreem-investment-platform-actions">
                       <button type="button" className="is-history" aria-label="السجل" title="السجل" onClick={() => openPlatformHistory(platformRow.platform.id)}><History aria-hidden="true" size={14} /><span>السجل</span></button>
-                      <button type="button" disabled={activePlatforms.length < 2} aria-label="نقل إلى منصة" title="نقل إلى منصة" onClick={() => openTransfer(platformRow.platform.id)}><ArrowLeftRight aria-hidden="true" size={14} /><span>نقل</span></button>
                       <button type="button" aria-label="تمويل" title="تمويل" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /><span>تمويل</span></button>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import InvestmentsPanel from './InvestmentsPanel.jsx'
 import { createInvestmentHolding, createInvestmentPlatform, usdToMicros } from './investmentCore.js'
 import { setActiveUiLanguage } from './uiTranslation.js'
@@ -13,6 +13,9 @@ beforeAll(() => {
 
 afterAll(() => {
   globalThis.React = previousReact
+})
+
+afterEach(() => {
   setActiveUiLanguage('ar')
 })
 
@@ -199,6 +202,21 @@ describe('investments panel', () => {
     expect(html).toContain('is-brand-midas')
     expect(html).toContain('--platform-accent:#4c5cf0')
     expect(html).toContain('--platform-accent:#111111')
+  })
+
+  it('shows one translated transfer action above all platforms', () => {
+    setActiveUiLanguage('en')
+    const first = createInvestmentPlatform({ id: 'platform-first', name: 'First' })
+    const second = createInvestmentPlatform({ id: 'platform-second', name: 'Second' })
+    const html = renderToStaticMarkup(<InvestmentsPanel
+      summary={{ platforms: [first, second].map((platform) => ({ platform, freeCashUsdMicros: 0, holdings: [] })), totalValueUsdMicros: 0, costBasisUsdMicros: 0, unrealizedProfitUsdMicros: 0, freeCashUsdMicros: 0 }}
+      platforms={[first, second]}
+      {...callbacks()}
+    />)
+
+    expect(html.match(/Transfer<\/button>/gu)).toHaveLength(1)
+    expect(html).not.toContain('>نقل</button>')
+    expect(html).not.toContain('aria-label="Transfer to platform"')
   })
 
   it('hides sub-1 USD positions by default without deleting them from the platform', () => {
