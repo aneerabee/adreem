@@ -271,8 +271,12 @@ export function createInvestmentPlatform(draft = {}, createdAt = new Date().toIS
   }
 }
 
+export function newInvestmentHoldingId() {
+  return `investment-holding-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export function createInvestmentHolding(draft = {}, createdAt = new Date().toISOString()) {
-  const id = cleanText(draft.id, 160) || `investment-holding-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const id = cleanText(draft.id, 160) || newInvestmentHoldingId()
   const assetType = Object.values(INVESTMENT_ASSET_TYPES).includes(draft.assetType)
     ? draft.assetType
     : INVESTMENT_ASSET_TYPES.OTHER
