@@ -614,6 +614,8 @@ export async function loadPersistedLedgerState(fallbackState) {
         revision: cloudRevision,
         movementPage: cloudMovementPage,
         reports: cloudReports,
+        access: { canManageUsers: Boolean(data?.access?.canManageUsers) },
+        profile: data?.profile && typeof data.profile === 'object' ? data.profile : null,
         source: 'stale-api',
         stale: true,
       }

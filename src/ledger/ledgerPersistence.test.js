@@ -257,6 +257,24 @@ describe('ADREEM cloud-only persistence', () => {
     )
   })
 
+  it('keeps admin access and profile when an overlapping load finishes late', async () => {
+    const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
+    let releaseFirst
+    const payload = { state: { accounts: [], movements: [] }, updatedAt: 'version-1', access: { canManageUsers: true }, profile: { language: 'en' } }
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseFirst = () => resolve({ ok: true, json: async () => payload }) }))
+      .mockResolvedValueOnce({ ok: true, json: async () => payload })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const first = module.loadPersistedLedgerState({ accounts: [], movements: [] })
+    const second = await module.loadPersistedLedgerState({ accounts: [], movements: [] })
+    releaseFirst()
+    const late = await first
+
+    expect(second).toMatchObject({ access: { canManageUsers: true }, profile: { language: 'en' } })
+    expect(late).toMatchObject({ stale: true, access: { canManageUsers: true }, profile: { language: 'en' } })
+  })
+
   it('sends the cloud version received at load and advances it after save', async () => {
     const { module } = await persistenceWithApi({ 'adreem-ledger-api-login-token-v1': 'valid-token' })
     const fetchMock = vi.fn()
