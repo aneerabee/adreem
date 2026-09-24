@@ -53,6 +53,10 @@ describe('shared movement account choices', () => {
     const usd = splitSourceAccountsByBalance(accounts, balances, CURRENCIES.USD)
     expect(usd.available.map((item) => item.id)).toEqual(['cash-multi'])
     expect(usd.searchOnly.map((item) => item.id)).toEqual(['person-owes-me', 'person-i-owe', 'person-settled'])
+
+    const kept = splitSourceAccountsByBalance(accounts, balances, CURRENCIES.DINAR, ['cash-empty', 'person-settled', ''])
+    expect(kept.available.map((item) => item.id)).toEqual(['cash-empty', 'bank-funded', 'person-owes-me', 'person-i-owe', 'person-settled'])
+    expect(kept.searchOnly).toEqual([])
   })
 
   it('ranks arbitrary own money accounts before people without fixed ids', () => {

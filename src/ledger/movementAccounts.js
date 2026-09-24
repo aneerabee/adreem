@@ -86,11 +86,16 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
   return transferReadyAccounts
 }
 
-export function splitSourceAccountsByBalance(accounts = [], balancesByAccountId = new Map(), currency) {
+export function splitSourceAccountsByBalance(accounts = [], balancesByAccountId = new Map(), currency, keepAccountIds = []) {
   const field = currencyBalanceField(currency)
+  const keep = new Set(keepAccountIds.filter(Boolean))
   const available = []
   const searchOnly = []
   for (const account of accounts) {
+    if (keep.has(account.id)) {
+      available.push(account)
+      continue
+    }
     const amount = Number(balancesByAccountId.get(account.id)?.[field] || 0)
     if (account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK) {
       if (amount > 0) available.push(account)

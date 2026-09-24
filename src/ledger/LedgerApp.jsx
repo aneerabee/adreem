@@ -5173,7 +5173,8 @@ export default function LedgerApp() {
 
   function movementSourceSplit() {
     const candidates = getMovementAccounts(accounts, balanceByAccountId, movementDraft.type, 'source', movementDraft)
-    return splitSourceAccountsByBalance(candidates, balanceByAccountId, movementAccountCurrencyForRole(movementDraft.type, 'source', movementDraft.currency))
+    const keepAccountIds = [movementDraft.sourceAccountId, editingMovement?.sourceAccountId]
+    return splitSourceAccountsByBalance(candidates, balanceByAccountId, movementAccountCurrencyForRole(movementDraft.type, 'source', movementDraft.currency), keepAccountIds)
   }
 
   function movementAccountsFor(role) {
