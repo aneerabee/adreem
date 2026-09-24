@@ -3052,3 +3052,17 @@
   .adreem-investment-dialog { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
   .is-spinning { animation: none; }
 }
+
+.adreem-investment-profit-split { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 3px; }
+.adreem-investment-profit-split em { display: inline-flex; gap: 4px; align-items: baseline; color: #767069; font-size: 0.6rem; font-style: normal; font-weight: 700; }
+.adreem-investment-profit-split b { font-size: 0.66rem; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.adreem-investment-profit-split .is-positive b,
+.adreem-investment-detail-measures .is-positive strong,
+.adreem-investment-closed .is-positive strong { color: var(--investment-positive); }
+.adreem-investment-profit-split .is-negative b,
+.adreem-investment-detail-measures .is-negative strong,
+.adreem-investment-closed .is-negative strong { color: var(--investment-negative); }
+.adreem-investment-closed { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 10px; border-top: 1px dashed var(--investment-line); }
+.adreem-investment-closed > small { color: #767069; font-size: 0.6rem; font-weight: 750; }
+.adreem-investment-closed > span { display: inline-flex; gap: 5px; align-items: baseline; font-size: 0.66rem; }
+.adreem-investment-closed strong { font-variant-numeric: tabular-nums; unicode-bidi: isolate; }

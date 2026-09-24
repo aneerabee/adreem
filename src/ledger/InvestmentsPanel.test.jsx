@@ -44,6 +44,36 @@ describe('investments panel', () => {
     expect(html).toContain('USD')
   })
 
+  it('shows how much of the profit is open and how much came from sales', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'IBKR', location: 'Turkey' })
+    const holding = createInvestmentHolding({ id: 'holding-1', platformId: platform.id, name: 'Apple', symbol: 'AAPL', lastPriceUsdMicros: usdToMicros(120) })
+    const closedHolding = createInvestmentHolding({ id: 'holding-2', platformId: platform.id, name: 'Tesla', symbol: 'TSLA', lastPriceUsdMicros: usdToMicros(300) })
+    const row = { holding, quantityUnits: 300_000_000, averageCostUsdMicros: usdToMicros(100), costBasisUsdMicros: usdToMicros(300), marketValueUsdMicros: usdToMicros(360), unrealizedProfitUsdMicros: usdToMicros(60), realizedProfitUsdMicros: usdToMicros(29) }
+    const summary = {
+      platforms: [{
+        platform,
+        freeCashUsdMicros: 0,
+        holdings: [row],
+        closedHoldings: [{ holding: closedHolding, quantityUnits: 0, realizedProfitUsdMicros: -usdToMicros(20) }],
+      }],
+      totalValueUsdMicros: usdToMicros(360),
+      investmentProfitUsdMicros: usdToMicros(69),
+      openProfitUsdMicros: usdToMicros(60),
+      realizedInvestmentProfitUsdMicros: usdToMicros(9),
+      freeCashUsdMicros: 0,
+    }
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} holdings={[holding, closedHolding]} platforms={[platform]} {...callbacks()} />)
+
+    expect(html).toContain('+69.00 USD')
+    expect(html).toContain('مفتوح')
+    expect(html).toContain('+60.00 USD')
+    expect(html).toContain('من البيع')
+    expect(html).toContain('+9.00 USD')
+    expect(html).toContain('مراكز مغلقة')
+    expect(html).toContain('TSLA')
+    expect(html).toContain('-20.00 USD')
+  })
+
   it('keeps platform, holding, value, and profit visually distinct', () => {
     const platform = createInvestmentPlatform({ id: 'platform-1', name: 'IBKR', location: 'Turkey' })
     const holding = createInvestmentHolding({ id: 'holding-1', platformId: platform.id, name: 'Apple', symbol: 'AAPL', lastPriceUsdMicros: usdToMicros(120), previousPriceUsdMicros: usdToMicros(110), previousPriceAt: '2026-01-01T10:00:00.000Z' })
@@ -84,9 +114,9 @@ describe('investments panel', () => {
     expect(html).not.toContain('تأكيد الشراء')
     expect(html).not.toContain('تأكيد البيع')
     expect(html).toContain('is-market-price has-price is-up')
-    expect(html).toContain('500 USD')
-    expect(html).toContain('600 USD')
-    expect(html).toContain('+100 USD')
+    expect(html).toContain('500.00 USD')
+    expect(html).toContain('600.00 USD')
+    expect(html).toContain('+100.00 USD')
     expect(html).toContain('is-profit-positive')
     expect(html).toContain('الأسعار اليدوية محفوظة حتى تغييرها')
   })
@@ -141,7 +171,7 @@ describe('investments panel', () => {
 
     expect(html).toContain('إغلاق سابق')
     expect(html).not.toContain('03:00')
-    expect(html).toContain('السعر السابق 9 USD')
+    expect(html).toContain('السعر السابق 9.00 USD')
     expect(html).not.toContain('300 TRY')
   })
 
@@ -174,10 +204,10 @@ describe('investments panel', () => {
     expect(html).not.toContain('300 TRY')
     expect(html).not.toContain('20%')
     expect(html).toContain('is-market-price has-price is-neutral is-stale')
-    expect(html).toContain('9 USD')
+    expect(html).toContain('9.00 USD')
     expect(html).toContain('سعر السوق غير متاح')
     expect(html).toContain('لم يتحدث')
-    expect(html).toContain('السعر السابق 9 USD')
+    expect(html).toContain('السعر السابق 9.00 USD')
     expect(html).toContain('role="status"')
     expect(html).toContain('is-price-error')
   })

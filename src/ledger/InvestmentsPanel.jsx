@@ -62,23 +62,32 @@ const PRICE_SOURCE_LABELS = {
   'burkut+ecb-fx': { ar: 'Bürküt · صرف أوروبي', en: 'Bürküt · ECB FX' },
 }
 
-function decimal(value, digits = 6) {
+function decimal(value, digits = 6, minimumDigits = 0) {
   const number = Number(value || 0)
   if (!Number.isFinite(number)) return '0'
-  return number.toLocaleString('en-US', { maximumFractionDigits: digits })
+  return number.toLocaleString('en-US', { minimumFractionDigits: minimumDigits, maximumFractionDigits: digits })
+}
+
+function unitPrice(value) {
+  const number = Number(value || 0)
+  return decimal(number, Math.abs(number) >= 1 ? 2 : 6, 2)
+}
+
+function profitToneClass(value) {
+  return Number(value) > 0 ? 'is-positive' : Number(value) < 0 ? 'is-negative' : 'is-neutral'
 }
 
 function usdMicros(value, sign = false) {
   const number = microsToUsd(value)
-  return `${sign && number > 0 ? '+' : ''}${decimal(number, 2)} USD`
+  return `${sign && number > 0 ? '+' : ''}${decimal(number, 2, 2)} USD`
 }
 
 function usdUnitMicros(value) {
-  return `${decimal(microsToUsd(value), 6)} USD`
+  return `${unitPrice(microsToUsd(value))} USD`
 }
 
 function tryUnitMicros(value) {
-  return `${decimal(microsToUsd(value), 6)} TRY`
+  return `${unitPrice(microsToUsd(value))} TRY`
 }
 
 function TryExchangeRate({ fx, onChange }) {
@@ -195,7 +204,7 @@ function InvestmentMarketPrice({ holding, error, onOpen }) {
       type="button"
       className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${stale ? 'is-stale' : ''}`.trim()}
       onClick={() => onOpen(holding)}
-      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : providerUpdate ? 'سعر المزود' : 'السعر الحالي'} ${decimal(microsToUsd(priceMicros), 6)} USD${direction !== 'neutral' ? ` · ${direction === 'up' ? '+' : '-'}${decimal(Math.abs(percent), 2)}%` : ''}` : 'إدخال السعر الحالي'}
+      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : providerUpdate ? 'سعر المزود' : 'السعر الحالي'} ${usdUnitMicros(priceMicros)}${direction !== 'neutral' ? ` · ${direction === 'up' ? '+' : '-'}${decimal(Math.abs(percent), 2)}%` : ''}` : 'إدخال السعر الحالي'}
       title={error || (sourceUnavailable ? 'مصدر التحديث غير متاح لهذا الرمز؛ السعر المعروض سابق.' : holding.lastPriceQuotedAt ? `${dailyClose ? 'تاريخ الإغلاق' : providerUpdate ? 'وقت تحديث المزود' : holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : 'وقت السعر'}: ${['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(holding.lastPriceSource) ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
     >
       <small>
@@ -209,7 +218,7 @@ function InvestmentMarketPrice({ holding, error, onOpen }) {
           animate={prefersReducedMotion ? { opacity: 1, y: 0, scale: 1 } : { opacity: [0.45, 1, 0.72, 1], y: 0, scale: [0.985, 1.018, 1] }}
           transition={{ duration: 0.54, ease: [0.22, 1, 0.36, 1] }}
         >
-          {priceMicros ? `${decimal(microsToUsd(priceMicros), 6)} USD` : 'أدخل السعر'}
+          {priceMicros ? `${usdUnitMicros(priceMicros)}` : 'أدخل السعر'}
         </Motion.span>
       </strong>
     </button>
@@ -792,7 +801,16 @@ export default function InvestmentsPanel({
 
       <div className="adreem-investment-summary">
         <article className="is-total"><small>إجمالي المحفظة</small><strong>{usdMicros(summary.totalValueUsdMicros)}</strong></article>
-        <article className={profitTone}><small>الربح والخسارة</small><strong>{usdMicros(portfolioProfitUsdMicros, true)}</strong></article>
+        <article className={profitTone}>
+          <small>الربح والخسارة</small>
+          <strong>{usdMicros(portfolioProfitUsdMicros, true)}</strong>
+          {summary.realizedInvestmentProfitUsdMicros ? (
+            <span className="adreem-investment-profit-split">
+              <em className={profitToneClass(summary.openProfitUsdMicros)}>مفتوح <b dir="ltr">{usdMicros(summary.openProfitUsdMicros || 0, true)}</b></em>
+              <em className={profitToneClass(summary.realizedInvestmentProfitUsdMicros)}>من البيع <b dir="ltr">{usdMicros(summary.realizedInvestmentProfitUsdMicros, true)}</b></em>
+            </span>
+          ) : null}
+        </article>
         <div className="adreem-investment-composition">
           <span><small>الاستثمارات</small><strong>{usdMicros(portfolioInvestmentsUsdMicros)}</strong></span>
           <span><small>السيولة</small><strong>{usdMicros(portfolioLiquidityUsdMicros)}</strong></span>
@@ -900,6 +918,7 @@ export default function InvestmentsPanel({
                           <div className="adreem-investment-detail-measures">
                             <span><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
                             <span><small>تكلفة المتبقي</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
+                            {row.realizedProfitUsdMicros ? <span className={profitToneClass(row.realizedProfitUsdMicros)}><small>ربح محقق من البيع</small><strong>{usdMicros(row.realizedProfitUsdMicros, true)}</strong></span> : null}
                           </div>
                           <div className="adreem-investment-detail-provenance">
                             <span><small>{['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? 'تاريخ الإغلاق' : row.holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : row.holding.lastPriceQuotedAt ? 'وقت السعر' : ['manual', 'trade', 'opening'].includes(row.holding.lastPriceSource) ? 'وقت الإدخال' : 'آخر تحقق'}</small><strong>{row.holding.lastPriceQuotedAt || row.holding.lastPriceAt ? ['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceQuotedAt) : activityDate(row.holding.lastPriceQuotedAt || row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
@@ -912,6 +931,17 @@ export default function InvestmentsPanel({
                       </Motion.section>
                     )
                   }) : !smallRows.length ? <p className="adreem-investment-platform-empty">لا توجد استثمارات هنا.</p> : null}
+                  {platformRow.closedHoldings?.length && !normalizedQuery ? (
+                    <div className="adreem-investment-closed" aria-label="مراكز مغلقة">
+                      <small>مراكز مغلقة</small>
+                      {platformRow.closedHoldings.map((closedRow) => (
+                        <span key={closedRow.holding.id} className={profitToneClass(closedRow.realizedProfitUsdMicros)}>
+                          <b dir="ltr">{preserveUiData(closedRow.holding.symbol)}</b>
+                          <strong dir="ltr">{usdMicros(closedRow.realizedProfitUsdMicros, true)}</strong>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   {smallRows.length && !normalizedQuery ? (
                     <button type="button" className="adreem-investment-small-toggle" aria-expanded={showSmallRows} onClick={() => toggleSmallPlatform(platformRow.platform.id)}>
                       {showSmallRows ? <EyeOff aria-hidden="true" size={14} /> : <Eye aria-hidden="true" size={14} />}

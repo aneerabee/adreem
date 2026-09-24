@@ -394,6 +394,27 @@ describe('investment portfolio core', () => {
     expect(microsToUsd(summary.totalValueUsdMicros)).toBe(1_100)
   })
 
+  it('splits portfolio profit into open and realized parts that add up exactly', () => {
+    const { platform, holding, deposit } = fixture()
+    const closed = createInvestmentHolding({ id: 'holding-closed', platformId: platform.id, name: 'Tesla', symbol: 'TSLA', assetType: INVESTMENT_ASSET_TYPES.STOCK, lastPriceUsdMicros: usdToMicros(300) }, '2026-01-01T00:00:00.000Z')
+    const trades = [
+      createInvestmentTrade({ id: 't-buy', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(4), priceUsdMicros: usdToMicros(100) }, '2026-01-02T00:00:00.000Z'),
+      createInvestmentTrade({ id: 't-sell-part', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.SELL, quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(130), feeUsdMicros: usdToMicros(1) }, '2026-01-03T00:00:00.000Z'),
+      createInvestmentTrade({ id: 't-buy-closed', platformId: platform.id, holdingId: closed.id, type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(200) }, '2026-01-02T00:00:00.000Z'),
+      createInvestmentTrade({ id: 't-sell-closed', platformId: platform.id, holdingId: closed.id, type: INVESTMENT_TRADE_TYPES.SELL, quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(180) }, '2026-01-04T00:00:00.000Z'),
+    ]
+
+    const summary = summarizeInvestmentPortfolio({ platforms: [platform], holdings: [holding, closed], trades, movements: [deposit] })
+    const [platformRow] = summary.platforms
+
+    expect(microsToUsd(platformRow.holdings[0].realizedProfitUsdMicros)).toBe(29)
+    expect(microsToUsd(summary.openProfitUsdMicros)).toBe(60)
+    expect(microsToUsd(summary.realizedInvestmentProfitUsdMicros)).toBe(9)
+    expect(summary.openProfitUsdMicros + summary.realizedInvestmentProfitUsdMicros).toBe(summary.investmentProfitUsdMicros)
+    expect(platformRow.openProfitUsdMicros + platformRow.realizedInvestmentProfitUsdMicros).toBe(platformRow.investmentProfitUsdMicros)
+    expect(platformRow.closedHoldings.map((row) => [row.holding.symbol, microsToUsd(row.realizedProfitUsdMicros)])).toEqual([['TSLA', -20]])
+  })
+
   it('closes a confirmed sub-5 USD position with a full sale and preserves its history', () => {
     const { platform, holding, deposit } = fixture()
     const smallHolding = { ...holding, lastPriceUsdMicros: usdToMicros(2) }

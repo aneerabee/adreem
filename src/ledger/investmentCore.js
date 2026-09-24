@@ -559,6 +559,9 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
       .reduce((sum, row) => sum + row.marketValueUsdMicros, 0)
     const freeCashUsdMicros = cashFromLedgerUsdMicros + cashFromTransfersUsdMicros + tradeCashUsdMicros
     const marketValueUsdMicros = stablecoinUsdMicros + investedMarketValueUsdMicros
+    const investmentRows = allHoldingRows.filter((row) => !investmentHoldingIsLiquidity(row.holding))
+    const openProfitUsdMicros = investmentRows.reduce((sum, row) => sum + row.unrealizedProfitUsdMicros, 0)
+    const realizedInvestmentProfitUsdMicros = investmentRows.reduce((sum, row) => sum + row.realizedProfitUsdMicros, 0)
     return {
       platform,
       freeCashUsdMicros,
@@ -570,9 +573,10 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
       totalValueUsdMicros: freeCashUsdMicros + marketValueUsdMicros,
       costBasisUsdMicros: holdingRows.reduce((sum, row) => sum + row.costBasisUsdMicros, 0),
       realizedProfitUsdMicros: allHoldingRows.reduce((sum, row) => sum + row.realizedProfitUsdMicros, 0),
-      investmentProfitUsdMicros: allHoldingRows
-        .filter((row) => !investmentHoldingIsLiquidity(row.holding))
-        .reduce((sum, row) => sum + row.totalProfitUsdMicros, 0),
+      investmentProfitUsdMicros: openProfitUsdMicros + realizedInvestmentProfitUsdMicros,
+      openProfitUsdMicros,
+      realizedInvestmentProfitUsdMicros,
+      closedHoldings: investmentRows.filter((row) => row.quantityUnits === 0 && row.realizedProfitUsdMicros !== 0),
     }
   })
 
@@ -584,6 +588,8 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
   const costBasisUsdMicros = platformRows.reduce((sum, row) => sum + row.costBasisUsdMicros, 0)
   const realizedProfitUsdMicros = platformRows.reduce((sum, row) => sum + row.realizedProfitUsdMicros, 0)
   const investmentProfitUsdMicros = platformRows.reduce((sum, row) => sum + row.investmentProfitUsdMicros, 0)
+  const openProfitUsdMicros = platformRows.reduce((sum, row) => sum + row.openProfitUsdMicros, 0)
+  const realizedInvestmentProfitUsdMicros = platformRows.reduce((sum, row) => sum + row.realizedInvestmentProfitUsdMicros, 0)
   const unrealizedProfitUsdMicros = marketValueUsdMicros - costBasisUsdMicros
   return {
     platforms: platformRows,
@@ -597,6 +603,8 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     unrealizedProfitUsdMicros,
     realizedProfitUsdMicros,
     investmentProfitUsdMicros,
+    openProfitUsdMicros,
+    realizedInvestmentProfitUsdMicros,
     totalProfitUsdMicros: unrealizedProfitUsdMicros + realizedProfitUsdMicros,
   }
 }
