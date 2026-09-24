@@ -161,12 +161,12 @@
   }
 
   .adreem-app .adreem-statement-summary article small {
-    font-size: 0.61rem;
+    font-size: var(--text-xs);
   }
 
   .adreem-app .adreem-statement-summary article b,
   .adreem-app .adreem-statement-row-value > strong {
-    font-size: 0.78rem;
+    font-size: var(--text-lg);
   }
 
   .adreem-app .adreem-statement-summary article small,
@@ -234,11 +234,11 @@
 
 @media screen and (max-width: 720px) {
   .adreem-app {
-    --type-caption: 0.61rem;
-    --type-label: 0.65rem;
-    --type-name: 0.79rem;
-    --type-value: 0.84rem;
-    --type-key-value: 0.92rem;
+    --type-caption: 0.6rem;
+    --type-label: 0.64rem;
+    --type-name: 0.82rem;
+    --type-value: 0.82rem;
+    --type-key-value: 0.9rem;
   }
 
   .adreem-app .adreem-investment-metrics-strip strong,
@@ -249,12 +249,12 @@
   }
 
   .adreem-app .adreem-statement-summary article b,
-  .adreem-app .adreem-statement-row-value > strong { font-size: 0.73rem; }
+  .adreem-app .adreem-statement-row-value > strong { font-size: var(--text-base); }
 }
 
 @media screen and (max-width: 360px) {
   .adreem-app {
-    --type-value: 0.8rem;
-    --type-key-value: 0.86rem;
+    --type-value: 0.82rem;
+    --type-key-value: 0.9rem;
   }
 }

@@ -24,7 +24,7 @@
   .ml3-add-account,
   .ml3-today-panel { width: 100%; box-shadow: none; }
   .ml3-entry-head { min-height: 49px; padding: 7px 9px; }
-  .ml3-entry-head h2 { font-size: 0.96rem; }
+  .ml3-entry-head h2 { font-size: var(--text-3xl); }
   .ml3-step { margin: 0 8px; }
   .ml3-step.is-done { grid-template-columns: minmax(0, 1fr) auto; }
   .ml3-option-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -130,7 +130,7 @@
   flex: 0 0 auto;
   border-radius: 5px;
   padding: 5px 8px;
-  font-size: 0.68rem;
+  font-size: var(--text-md);
 }
 .adreem-flow-progress-line { width: 100%; display: block; overflow: hidden; border: 0; appearance: none; }
 .adreem-flow-progress-line::-webkit-progress-bar { border-radius: inherit; }
@@ -138,7 +138,7 @@
 .adreem-flow-progress-line::-moz-progress-bar { border-radius: inherit; background: var(--green); transition: inline-size 220ms ease; }
 .adreem-flow-progress-meta { min-width: 0; display: flex; align-items: center; }
 .adreem-flow-progress-meta > span { flex: 0 0 auto; font-weight: 700; }
-.adreem-flow-progress-meta > small { color: var(--muted); font-size: 0.66rem; }
+.adreem-flow-progress-meta > small { color: var(--muted); font-size: var(--text-md); }
 .adreem-flow-trail { min-width: 0; display: flex; overflow-x: auto; padding-block: 5px; scrollbar-width: none; }
 .adreem-flow-trail::-webkit-scrollbar { display: none; }
 .adreem-flow-trail button {
@@ -149,8 +149,8 @@
   padding: 0 7px;
   cursor: pointer;
 }
-.adreem-flow-trail button span { font-size: 0.6rem; }
-.adreem-flow-trail button strong { max-width: 126px; overflow: hidden; font-size: 0.66rem; text-overflow: ellipsis; white-space: nowrap; }
+.adreem-flow-trail button span { font-size: var(--text-xs); }
+.adreem-flow-trail button strong { max-width: 126px; overflow: hidden; font-size: var(--text-md); text-overflow: ellipsis; white-space: nowrap; }
 
 .ml3-step {
   width: 100%;
@@ -166,11 +166,11 @@
 .ml3-route-picker { margin: 4px 0 10px; }
 .ml3-action-lane-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .ml3-action-choice > span { min-width: 0; display: grid; gap: 1px; color: inherit; }
-.ml3-action-choice > span strong { font-size: 0.78rem; }
+.ml3-action-choice > span strong { font-size: var(--text-lg); }
 .ml3-action-choice > span small {
   overflow: visible;
   color: var(--muted);
-  font-size: 0.61rem;
+  font-size: var(--text-xs);
   line-height: 1.35;
   text-overflow: clip;
   white-space: normal;
@@ -188,9 +188,9 @@
   list-style: none;
 }
 .ml3-more-actions > summary::-webkit-details-marker { display: none; }
-.ml3-more-actions > summary span { display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; font-weight: 700; }
+.ml3-more-actions > summary span { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-lg); font-weight: 700; }
 .ml3-more-actions > summary svg { color: var(--green); }
-.ml3-more-actions > summary small { color: var(--muted); font-size: 0.64rem; }
+.ml3-more-actions > summary small { color: var(--muted); font-size: var(--text-sm); }
 .ml3-more-actions[open] > summary { border-color: #bdd0c8; background: #f2f7f5; }
 .ml3-more-actions-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; padding-top: 7px; }
 .ml3-step-controls,
@@ -219,15 +219,15 @@
 }
 .ml3-account-choice-list button i { grid-row: auto; }
 .ml3-account-choice-list button > span { min-width: 0; display: grid; gap: 1px; color: inherit; }
-.ml3-account-choice-list button > span strong { font-size: 0.76rem; }
-.ml3-account-choice-list button > span small { overflow: hidden; color: var(--muted); font-size: 0.62rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-account-choice-list button > span strong { font-size: var(--text-lg); }
+.ml3-account-choice-list button > span small { overflow: hidden; color: var(--muted); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
 .ml3-account-choice-list button > svg { color: #9ca8a3; }
 .ml3-account-choice-list.is-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ml3-account-choice-list.is-compact button { grid-template-columns: 1fr; min-height: 58px; }
 .ml3-account-field { margin: 8px 14px; }
 .ml3-account-summary { margin: 8px 14px; }
-.ml3-number-compact { display: grid; gap: 5px; color: #4a5953; font-size: 0.72rem; font-weight: 600; }
-.ml3-number-compact input { direction: ltr; font-size: 1rem; font-weight: 700; text-align: end; }
+.ml3-number-compact { display: grid; gap: 5px; color: #4a5953; font-size: var(--text-base); font-weight: 600; }
+.ml3-number-compact input { direction: ltr; font-size: var(--text-3xl); font-weight: 700; text-align: end; }
 
 .ml3-today-panel {
   overflow-y: auto;
@@ -251,7 +251,7 @@
 .ml3-panel > .ml3-panel-head {
   border-bottom: 1px solid var(--line);
 }
-.ml3-panel-head h2 { font-size: 1rem; }
+.ml3-panel-head h2 { font-size: var(--text-3xl); }
 .ml3-account-toolbar label > span { display: inline-flex; align-items: center; gap: 5px; }
 .ml3-account-switcher {
   overflow-x: auto;
@@ -259,7 +259,7 @@
 }
 .ml3-account-switcher::-webkit-scrollbar { display: none; }
 .ml3-list-block > .ml3-panel-head { margin-bottom: 3px; }
-.ml3-list-block .ml3-panel-head h2 { font-size: 0.8rem; }
+.ml3-list-block .ml3-panel-head h2 { font-size: var(--text-xl); }
 .ml3-filter-disclosure > summary {
   min-height: 38px;
   display: flex;
@@ -270,19 +270,19 @@
   border-radius: 6px;
   padding: 0 10px;
   background: #fff;
-  font-size: 0.72rem;
+  font-size: var(--text-base);
   font-weight: 700;
   cursor: pointer;
   list-style: none;
 }
 .ml3-filter-disclosure > summary::-webkit-details-marker { display: none; }
 .ml3-filter-disclosure > summary span { display: flex; align-items: center; gap: 6px; }
-.ml3-filter-disclosure > summary b { border-radius: 4px; padding: 2px 5px; font-size: 0.62rem; }
+.ml3-filter-disclosure > summary b { border-radius: 4px; padding: 2px 5px; font-size: var(--text-sm); }
 .ml3-history-filters { margin: 6px 0 0; }
 .ml3-history-day { border: 1px solid var(--line); }
 .ml3-history-day-head { display: flex; align-items: center; justify-content: space-between; }
-.ml3-history-day-head strong { font-size: 0.74rem; }
-.ml3-history-day-head span { font-size: 0.66rem; font-weight: 700; }
+.ml3-history-day-head strong { font-size: var(--text-lg); }
+.ml3-history-day-head span { font-size: var(--text-md); font-weight: 700; }
 .ml3-history-row {
   border: 0;
   border-top: 1px solid #e5eae8;
@@ -331,7 +331,7 @@
   .ml3-account-stage { min-height: 285px; }
   .ml3-account-field,
   .ml3-account-summary { margin-inline: 10px; }
-  .ml3-balance-ledger button strong { font-size: 0.74rem; }
+  .ml3-balance-ledger button strong { font-size: var(--text-lg); }
   .ml3-list-block { padding: 6px; }
   .ml3-history-filters > input,
   .ml3-history-filters > select:last-child { grid-column: auto; }

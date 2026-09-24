@@ -35,7 +35,7 @@
 .adreem-app :is(.ml3-entry-card, .ml3-add-account) { border-top-width: 2px; }
 .adreem-app .ml3-today-panel { background: #f8faf9; }
 .adreem-app .ml3-entry-mode { width: min(300px, 100%); min-height: 38px; padding: 3px; }
-.adreem-app .ml3-entry-mode button { min-height: 30px; font-size: 0.72rem; }
+.adreem-app .ml3-entry-mode button { min-height: 30px; font-size: var(--text-base); }
 .adreem-app :is(.adreem-flow-head, .ml3-entry-head) { min-height: 59px; padding: 8px 11px; }
 .adreem-app .adreem-flow-progress { padding: 6px 11px 0; }
 .adreem-app .adreem-flow-progress-meta { min-height: 32px; }
@@ -45,7 +45,7 @@
 .adreem-app :is(.ml3-step-back, .ml3-step-next, .ml3-save, .ml3-account-stage-actions button) {
   min-height: 34px;
   border-radius: 5px;
-  font-size: 0.7rem;
+  font-size: var(--text-base);
   box-shadow: none;
 }
 .adreem-app .ml3-step-controls { grid-template-columns: minmax(82px, 0.26fr) minmax(130px, 1fr); }
@@ -105,7 +105,7 @@
 .adreem-app .ml3-history-list { gap: 7px; }
 .adreem-app .ml3-history-day-head { min-height: 33px; padding: 5px 9px; }
 .adreem-app .ml3-history-row { min-height: 48px; padding-block: 5px; }
-.adreem-app .ml3-history-more { min-height: 34px; font-size: 0.72rem; }
+.adreem-app .ml3-history-more { min-height: 34px; font-size: var(--text-base); }
 .adreem-app .ml3-review-queue { padding: 5px; }
 .adreem-app .ml3-review-ticket { min-height: 43px; }
 .adreem-app .ml3-review-ticket.is-active { box-shadow: none; }
@@ -122,7 +122,7 @@
   box-shadow: none;
 }
 .adreem-app .adreem-investment-title > span { width: 32px; height: 32px; border-radius: 5px; }
-.adreem-app .adreem-investment-actions button { min-height: 31px; padding-inline: 8px; border-radius: 5px; font-size: 0.66rem; }
+.adreem-app .adreem-investment-actions button { min-height: 31px; padding-inline: 8px; border-radius: 5px; font-size: var(--text-md); }
 .adreem-app .adreem-investment-summary article { min-height: 62px; }
 .adreem-app .adreem-investment-platforms { gap: 11px; }
 .adreem-app .adreem-investment-platform { border-radius: 6px; box-shadow: none; }
@@ -160,7 +160,7 @@
     padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
   }
   .adreem-app .adreem-nav button { height: 51px; gap: 1px; padding: 3px 1px; }
-  .adreem-app .adreem-nav strong { font-size: 0.62rem; }
+  .adreem-app .adreem-nav strong { font-size: var(--text-sm); }
   .adreem-app .adreem-view,
   .adreem-app[dir='ltr'] .adreem-view { height: auto; min-height: calc(100svh - 54px); padding: 7px 7px calc(72px + env(safe-area-inset-bottom)); }
   .adreem-app .ml3-entry-mode { width: 100%; }
@@ -219,12 +219,12 @@
   .adreem-app .adreem-flow-trail button strong { max-width: 100%; }
 }
 
-.adreem-app .ml3-picker-search-hint { margin: 6px 2px 0; color: var(--muted); font-size: 0.64rem; line-height: 1.5; }
+.adreem-app .ml3-picker-search-hint { margin: 6px 2px 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
 
 .adreem-app .adreem-net-portfolio { display: grid; gap: 1px; min-width: 0; padding: 6px 9px; border: 1px solid color-mix(in srgb, var(--green) 30%, var(--line)); border-radius: 6px; background: color-mix(in srgb, var(--green) 6%, #fff); color: var(--ink); text-align: start; cursor: pointer; }
-.adreem-app .adreem-net-portfolio small { display: inline-flex; align-items: center; gap: 4px; color: var(--green); font-size: 0.62rem; font-weight: 750; }
+.adreem-app .adreem-net-portfolio small { display: inline-flex; align-items: center; gap: 4px; color: var(--green); font-size: var(--text-sm); font-weight: 750; }
 .adreem-app .adreem-net-portfolio strong { text-align: start; font-variant-numeric: tabular-nums; }
-.adreem-app .adreem-net-portfolio em { color: var(--muted); font-size: 0.58rem; font-style: normal; font-weight: 700; }
+.adreem-app .adreem-net-portfolio em { color: var(--muted); font-size: var(--text-xs); font-style: normal; font-weight: 700; }
 .adreem-app .adreem-net-portfolio.is-excluded { border-style: dashed; background: #fff; opacity: .72; }
 .adreem-app .adreem-net-portfolio.is-excluded strong { text-decoration: line-through; }
-.adreem-app .adreem-net-portfolio-share { display: block; margin-top: 2px; color: var(--muted); font-size: 0.62rem; font-weight: 700; unicode-bidi: isolate; }
+.adreem-app .adreem-net-portfolio-share { display: block; margin-top: 2px; color: var(--muted); font-size: var(--text-sm); font-weight: 700; unicode-bidi: isolate; }

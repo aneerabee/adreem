@@ -7,7 +7,7 @@
   background: color-mix(in srgb, var(--history) 7%, #fff);
   color: var(--history);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: var(--text-lg);
   font-weight: 800;
   cursor: pointer;
 }
@@ -50,13 +50,13 @@
 .ml3-history-route b {
   min-width: 0;
   overflow: hidden;
-  font-size: 0.64rem;
+  font-size: var(--text-sm);
   font-weight: 650;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ml3-history-route span { flex: 0 0 auto; color: var(--movement-tone); font-size: 0.68rem; }
+.ml3-history-route span { flex: 0 0 auto; color: var(--movement-tone); font-size: var(--text-md); }
 [dir='ltr'] .ml3-history-arrow { transform: rotate(180deg); }
 .ml3-history-side {
   min-width: 0;
@@ -66,10 +66,10 @@
   justify-content: flex-end;
   gap: 4px 6px;
 }
-.ml3-history-side > strong { color: var(--ink); font-size: 0.76rem; white-space: nowrap; }
+.ml3-history-side > strong { color: var(--ink); font-size: var(--text-lg); white-space: nowrap; }
 .ml3-history-conversion,
-.ml3-history-rate { color: var(--muted); font-size: 0.59rem; font-weight: 750; white-space: nowrap; }
-.ml3-history-status { border-radius: 4px; padding: 1px 5px; background: var(--history-soft); color: var(--history); font-size: 0.58rem; font-weight: 800; }
+.ml3-history-rate { color: var(--muted); font-size: var(--text-xs); font-weight: 750; white-space: nowrap; }
+.ml3-history-status { border-radius: 4px; padding: 1px 5px; background: var(--history-soft); color: var(--history); font-size: var(--text-xs); font-weight: 800; }
 .ml3-history-status--voided { background: var(--review-soft); color: var(--review); }
 .ml3-history-side > button {
   min-height: 25px;
@@ -79,7 +79,7 @@
   background: var(--review-soft);
   color: var(--review);
   font: inherit;
-  font-size: 0.61rem;
+  font-size: var(--text-xs);
   font-weight: 800;
   cursor: pointer;
 }
@@ -97,12 +97,12 @@
   padding: 5px 7px;
   background: color-mix(in srgb, var(--movement-soft) 58%, white);
   color: var(--ink-soft);
-  font-size: 0.65rem;
+  font-size: var(--text-sm);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.ml3-history-note span { flex: 0 0 auto; color: var(--movement-tone); font-size: 0.45rem; line-height: 1.9; }
-.ml3-history-details > small { flex: 0 0 auto; border-radius: 4px; padding: 2px 5px; background: var(--history-soft); color: var(--history); font-size: 0.59rem; }
+.ml3-history-note span { flex: 0 0 auto; color: var(--movement-tone); font-size: var(--text-2xs); line-height: 1.9; }
+.ml3-history-details > small { flex: 0 0 auto; border-radius: 4px; padding: 2px 5px; background: var(--history-soft); color: var(--history); font-size: var(--text-xs); }
 .ml3-history-details > small.is-error { flex: 1 1 100%; background: var(--review-soft); color: var(--review); }
 .ml3-history-day > .ml3-history-row:last-child { border-bottom: 0; }
 
@@ -130,7 +130,7 @@
   border-color: var(--review);
   border-inline-start: 4px solid var(--review);
   background: #fff;
-  box-shadow: 0 5px 14px rgba(184, 68, 61, 0.1);
+  box-shadow: 0 5px 16px rgba(184, 68, 61, 0.1);
 }
 .ml3-review-active { min-width: 0; }
 .ml3-review-card {
@@ -197,13 +197,11 @@
 }
 .adreem-nav button.is-active:focus-visible {
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--tab-accent) 8%, transparent),
-    0 0 0 3px color-mix(in srgb, var(--tab-accent) 25%, transparent);
+    inset 0 0 0 1px color-mix(in srgb, var(--tab-accent) 8%, transparent), 0 0 0 3px color-mix(in srgb, var(--tab-accent) 25%, transparent);
 }
 .ml3-review-ticket.is-active:focus-visible {
   box-shadow:
-    0 5px 14px rgba(184, 68, 61, 0.1),
-    0 0 0 3px color-mix(in srgb, var(--review) 22%, transparent);
+    0 5px 16px rgba(184, 68, 61, 0.1), 0 0 0 3px color-mix(in srgb, var(--review) 22%, transparent);
 }
 .ml3-step.is-open .ml3-action-choice,
 .ml3-account-stage .ml3-account-choice-list button { animation: adreem-studio-item 190ms cubic-bezier(0.25, 1, 0.5, 1) both; }
@@ -263,7 +261,7 @@
     padding: 7px 9px;
   }
   .adreem-mark { width: 34px; height: 34px; flex-basis: 34px; }
-  .adreem-brand h1 { font-size: 0.9rem; }
+  .adreem-brand h1 { font-size: var(--text-2xl); }
   .adreem-brand > div > span { display: none; }
   .adreem-cloud-state { max-width: 105px; }
   .adreem-header-actions button { width: 34px; height: 34px; }
@@ -284,7 +282,7 @@
     border: 0;
     border-top: 1px solid var(--line);
     background: rgba(251, 253, 252, 0.98);
-    box-shadow: 0 -10px 26px rgba(23, 43, 37, 0.1);
+    box-shadow: var(--elevation-up);
     backdrop-filter: blur(16px);
   }
   .adreem-nav button {
@@ -305,7 +303,7 @@
     border-color: var(--tab-accent);
     background: var(--tab-accent);
     color: #fff;
-    box-shadow: 0 5px 13px color-mix(in srgb, var(--tab-accent) 22%, transparent);
+    box-shadow: 0 5px 16px color-mix(in srgb, var(--tab-accent) 22%, transparent);
   }
   .adreem-nav button.is-active .adreem-nav-icon { background: rgba(255, 255, 255, 0.16); }
   .adreem-nav button.is-active .adreem-nav-icon b { border-color: var(--tab-accent); background: #fff; color: var(--tab-accent); }
@@ -339,7 +337,7 @@
   .adreem-flow-head,
   .ml3-entry-head { min-height: 64px; padding: 8px 10px; }
   .adreem-flow-head h2,
-  .ml3-entry-head h2 { font-size: 0.94rem; }
+  .ml3-entry-head h2 { font-size: var(--text-2xl); }
   .adreem-flow-head p { max-width: 235px; }
   .adreem-flow-progress-meta { align-items: flex-start; }
   .adreem-flow-trail {
@@ -374,20 +372,20 @@
   .ml3-balance-ledger button i { width: 27px; height: 27px; display: grid; }
   .ml3-balance-ledger button > span > b { white-space: normal; }
   .ml3-balance-pair strong,
-  .ml3-balance-pair small { padding-inline: 3px; font-size: 0.62rem; }
+  .ml3-balance-pair small { padding-inline: 3px; font-size: var(--text-sm); }
   .ml3-balances-workspace { gap: 7px; }
   .ml3-account-switcher {
     position: static;
     overflow: visible;
   }
   .ml3-account-switcher button svg { width: 16px; height: 16px; }
-  .ml3-account-switcher button strong { font-size: 0.65rem; }
+  .ml3-account-switcher button strong { font-size: var(--text-sm); }
   .ml3-account-switcher button.is-active,
-  [dir='rtl'] .ml3-account-switcher button.is-active { box-shadow: inset 0 -3px 0 var(--group-tone), 0 2px 8px rgba(23, 43, 37, 0.06); }
+  [dir='rtl'] .ml3-account-switcher button.is-active { box-shadow: inset 0 -3px 0 var(--group-tone), var(--elevation-1); }
   .ml3-balance-pane-title i { width: 27px; height: 27px; }
   .ml3-account-toolbar { min-height: 35px; }
   .ml3-account-toolbar input { min-height: 33px; }
-  .adreem-nav strong { font-size: 0.65rem; }
+  .adreem-nav strong { font-size: var(--text-sm); }
   .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(88px, auto); padding-inline: 7px; }
   .ml3-account-row-icon { width: 25px; height: 25px; }
   .adreem-money-group { grid-template-columns: 1fr; gap: 5px; padding: 6px; }
@@ -416,12 +414,12 @@
   .ml3-history-filters > select:last-child { grid-column: 1; }
   .ml3-review-queue { grid-template-columns: 1fr; }
   .ml3-balance-ledger button { padding-inline: 5px; }
-  .ml3-balance-ledger button > span > b { font-size: 0.58rem; }
+  .ml3-balance-ledger button > span > b { font-size: var(--text-xs); }
   .ml3-balance-pair strong,
-  .ml3-balance-pair small { font-size: 0.58rem; }
+  .ml3-balance-pair small { font-size: var(--text-xs); }
   .ml3-balance-pair strong > span,
-  .ml3-balance-pair small > span { font-size: 0.48rem; }
-  .ml3-account-switcher button strong { font-size: 0.6rem; }
+  .ml3-balance-pair small > span { font-size: var(--text-2xs); }
+  .ml3-account-switcher button strong { font-size: var(--text-xs); }
   .ml3-account-row { grid-template-columns: minmax(0, 1fr) minmax(80px, auto); gap: 5px; }
 }
 

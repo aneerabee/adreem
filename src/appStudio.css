@@ -41,7 +41,7 @@
   border: 1px solid #bdd1c9;
   border-radius: 6px;
   background: var(--ad-paper);
-  box-shadow: 0 8px 28px rgba(23, 43, 37, 0.08);
+  box-shadow: var(--elevation-3);
   animation: adreem-shell-rise 220ms cubic-bezier(0.25, 1, 0.5, 1) both;
 }
 .adreem-login-brand {
@@ -70,17 +70,17 @@
 .adreem-login-brand > span,
 .adreem-admin-head > div > span {
   color: #7ad1b6;
-  font-size: 0.68rem;
+  font-size: var(--text-md);
   font-weight: 800;
 }
 .adreem-login-brand h1,
 .adreem-admin-head h1,
 .adreem-admin-card h2 { margin: 0; line-height: 1.25; }
-.adreem-login-brand h1 { font-size: 1.35rem; }
+.adreem-login-brand h1 { font-size: var(--text-5xl); }
 .adreem-login-brand p {
   margin: 0;
   color: #bfd0ca;
-  font-size: 0.72rem;
+  font-size: var(--text-base);
   line-height: 1.5;
 }
 .adreem-login-card label,
@@ -88,7 +88,7 @@
   display: grid;
   gap: 5px;
   color: var(--ad-ink-soft);
-  font-size: 0.76rem;
+  font-size: var(--text-lg);
   font-weight: 650;
 }
 .adreem-login-card input,
@@ -122,7 +122,7 @@
   color: #fff;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 6px 14px rgba(8, 120, 95, 0.17);
+  box-shadow: 0 5px 16px rgba(8, 120, 95, 0.17);
 }
 .adreem-login-card > button:hover,
 .adreem-admin-card > button:hover { filter: brightness(0.95); }
@@ -140,7 +140,7 @@
   border-radius: 6px;
   background: var(--ad-red-soft);
   color: #96362f;
-  font-size: 0.77rem;
+  font-size: var(--text-lg);
 }
 
 .adreem-admin-shell {
@@ -160,10 +160,10 @@
   padding: 10px 12px;
   border-bottom: 1px solid #afc9bd;
   background: rgba(242, 246, 244, 0.97);
-  box-shadow: 0 5px 18px rgba(23, 43, 37, 0.055);
+  box-shadow: var(--elevation-2);
   backdrop-filter: blur(14px);
 }
-.adreem-admin-head h1 { font-size: 1.2rem; }
+.adreem-admin-head h1 { font-size: var(--text-4xl); }
 .adreem-admin-head-actions { display: flex; align-items: center; gap: 6px; }
 .adreem-admin-head-actions button,
 .adreem-admin-card-head button,
@@ -174,7 +174,7 @@
   padding: 0 10px;
   background: #fff;
   color: var(--ad-ink-soft);
-  font-size: 0.73rem;
+  font-size: var(--text-base);
   font-weight: 700;
   cursor: pointer;
 }
@@ -189,7 +189,7 @@
   padding: 0 10px;
   background: var(--ad-ink);
   color: #fff;
-  font-size: 0.68rem;
+  font-size: var(--text-md);
 }
 .adreem-admin-grid {
   display: grid;
@@ -217,8 +217,8 @@
   gap: 10px;
   margin-bottom: 11px;
 }
-.adreem-admin-card-head h2 { font-size: 1rem; }
-.adreem-admin-card-head span { direction: ltr; color: var(--ad-charcoal); font-size: 0.7rem; font-weight: 750; }
+.adreem-admin-card-head h2 { font-size: var(--text-3xl); }
+.adreem-admin-card-head span { direction: ltr; color: var(--ad-charcoal); font-size: var(--text-base); font-weight: 750; }
 .adreem-admin-card label + label { margin-top: 8px; }
 .adreem-admin-card > button { width: 100%; margin-top: 10px; }
 .adreem-admin-users { display: grid; gap: 6px; }
@@ -238,8 +238,8 @@
 .adreem-admin-user > div { min-width: 0; display: grid; gap: 2px; }
 .adreem-admin-user strong,
 .adreem-admin-user span { overflow-wrap: anywhere; }
-.adreem-admin-user span { color: var(--ad-muted); font-size: 0.71rem; }
-.adreem-admin-user b { color: var(--ad-green); font-size: 0.7rem; }
+.adreem-admin-user span { color: var(--ad-muted); font-size: var(--text-base); }
+.adreem-admin-user b { color: var(--ad-green); font-size: var(--text-base); }
 .adreem-admin-user-actions { display: flex; gap: 5px; }
 .adreem-admin-user-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
 .adreem-admin-user-actions button:last-child:not(:disabled) { color: var(--ad-red); }
@@ -255,7 +255,7 @@
   border-radius: 6px;
   background: var(--ad-ink);
   color: #fff;
-  font-size: 0.76rem;
+  font-size: var(--text-lg);
   font-weight: 650;
 }
 

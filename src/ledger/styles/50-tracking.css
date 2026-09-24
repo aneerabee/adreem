@@ -44,7 +44,7 @@
 }
 
 .adreem-tracking-identity > div { min-width: 0; display: grid; gap: 2px; }
-.adreem-tracking-identity span { color: #65736f; font-size: 0.64rem; font-weight: 650; }
+.adreem-tracking-identity span { color: #65736f; font-size: var(--text-sm); font-weight: 650; }
 .adreem-tracking-name,
 .adreem-tracking-identity strong {
   max-width: 100%;
@@ -53,7 +53,7 @@
   border: 0;
   background: transparent;
   color: #182d29;
-  font-size: 0.9rem;
+  font-size: var(--text-2xl);
   font-weight: 800;
   line-height: 1.3;
   text-align: start;
@@ -73,7 +73,7 @@
   border-radius: 5px;
   background: #fff;
   color: #36564e;
-  font-size: 0.68rem;
+  font-size: var(--text-md);
   font-weight: 750;
   cursor: pointer;
 }
@@ -87,18 +87,18 @@
   gap: 6px;
 }
 .adreem-tracking-currency + .adreem-tracking-currency { border-top: 1px solid #edf0ef; padding-top: 5px; }
-.adreem-tracking-currency > b { font-size: 0.68rem; color: #465752; }
-.adreem-tracking-currency > span { min-width: 0; display: grid; gap: 2px; color: #5c6b66; font-size: 0.68rem; }
+.adreem-tracking-currency > b { font-size: var(--text-md); color: #465752; }
+.adreem-tracking-currency > span { min-width: 0; display: grid; gap: 2px; color: #5c6b66; font-size: var(--text-md); }
 .adreem-tracking-currency strong {
   min-width: 0;
   color: #203731;
-  font-size: 0.82rem;
+  font-size: var(--text-xl);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 .adreem-tracking-currency .is-positive strong { color: #147552; }
 .adreem-tracking-currency .is-negative strong { color: #bb3534; }
-.adreem-tracking-empty { margin: 0; padding: 10px 11px; color: #667570; font-size: 0.7rem; }
+.adreem-tracking-empty { margin: 0; padding: 10px 11px; color: #667570; font-size: var(--text-base); }
 .adreem-tracking-rule-list { border-top: 1px solid #e5eae8; }
 .adreem-tracking-recurring {
   min-width: 0;
@@ -113,12 +113,12 @@
 .adreem-tracking-recurring + .adreem-tracking-recurring { border-top: 1px solid #e5eae8; }
 .adreem-tracking-recurring.is-due { background: #fff9ed; }
 .adreem-tracking-recurring > div:first-child { min-width: 0; display: grid; gap: 2px; }
-.adreem-tracking-recurring strong { font-size: 0.75rem; color: #294039; overflow-wrap: anywhere; }
-.adreem-tracking-recurring span { font-size: 0.68rem; color: #53645e; font-variant-numeric: tabular-nums; }
+.adreem-tracking-recurring strong { font-size: var(--text-lg); color: #294039; overflow-wrap: anywhere; }
+.adreem-tracking-recurring span { font-size: var(--text-md); color: #53645e; font-variant-numeric: tabular-nums; }
 .adreem-tracking-recurring-actions { display: flex; align-items: end; flex-wrap: wrap; gap: 5px; }
-.adreem-tracking-recurring-actions label { display: grid; gap: 2px; font-size: 0.58rem; color: #65736f; }
+.adreem-tracking-recurring-actions label { display: grid; gap: 2px; font-size: var(--text-xs); color: #65736f; }
 .adreem-tracking-recurring-actions input,
-.adreem-tracking-recurring-actions button { min-height: 31px; border: 1px solid #cbd5d2; border-radius: 5px; background: #fff; color: #294039; font-size: 0.68rem; font-weight: 700; }
+.adreem-tracking-recurring-actions button { min-height: 31px; border: 1px solid #cbd5d2; border-radius: 5px; background: #fff; color: #294039; font-size: var(--text-md); font-weight: 700; }
 .adreem-tracking-recurring-actions input { padding: 3px 6px; }
 .adreem-tracking-recurring-actions button { padding: 4px 8px; cursor: pointer; }
 .adreem-tracking-recurring-actions button:disabled { opacity: 0.45; cursor: default; }
@@ -131,7 +131,7 @@
   padding-top: 6px;
   border-top: 1px solid #dfe6e2;
 }
-.adreem-tracking-confirm strong { flex: 1 1 170px; font-size: 0.7rem; }
+.adreem-tracking-confirm strong { flex: 1 1 170px; font-size: var(--text-base); }
 .adreem-tracking-confirm button {
   min-height: 31px;
   padding: 4px 9px;
@@ -139,16 +139,16 @@
   border-radius: 5px;
   background: #fff;
   color: #294039;
-  font-size: 0.68rem;
+  font-size: var(--text-md);
   font-weight: 750;
   cursor: pointer;
 }
 .adreem-tracking-confirm button:first-of-type { border-color: #226c55; background: #226c55; color: #fff; }
 .adreem-tracking-unlinked { padding: 0; overflow: hidden; }
-.adreem-tracking-unlinked h3 { margin: 0; padding: 9px 11px; border-bottom: 1px solid #e5eae8; font-size: 0.75rem; }
+.adreem-tracking-unlinked h3 { margin: 0; padding: 9px 11px; border-bottom: 1px solid #e5eae8; font-size: var(--text-lg); }
 .adreem-profile-tracking-balance { display: grid; gap: 3px; }
 .adreem-profile-tracking-balance span { display: flex; flex-wrap: wrap; gap: 5px; }
-.adreem-profile-tracking-balance span b { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.adreem-profile-tracking-balance span b { font-size: var(--text-base); font-variant-numeric: tabular-nums; }
 
 .adreem-motion-fallback.adreem-section-forward .ml3-layout,
 .adreem-motion-fallback.adreem-section-back .ml3-layout { animation: none !important; }
@@ -167,7 +167,7 @@
   .adreem-tracking-history { margin-top: 1px; }
   .adreem-tracking-values { padding: 7px 8px; }
   .adreem-tracking-currency { grid-template-columns: 38px repeat(3, minmax(0, 1fr)); gap: 4px; }
-  .adreem-tracking-currency strong { font-size: 0.75rem; }
+  .adreem-tracking-currency strong { font-size: var(--text-lg); }
   .adreem-tracking-recurring { padding: 7px 8px; }
   .adreem-tracking-recurring-actions { width: 100%; }
 }

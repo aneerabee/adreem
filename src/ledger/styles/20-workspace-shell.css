@@ -55,7 +55,7 @@
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--section-accent) 24%, var(--line));
   background: rgba(251, 253, 252, 0.96);
-  box-shadow: 0 5px 18px rgba(23, 43, 37, 0.055);
+  box-shadow: var(--elevation-2);
   backdrop-filter: blur(16px);
   transition: border-color 180ms ease-out;
 }
@@ -73,12 +73,12 @@
 .adreem-brand > div { gap: 1px; }
 .adreem-brand > div > span {
   color: var(--section-accent);
-  font-size: 0.62rem;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 .adreem-brand h1 {
   color: var(--ink);
-  font-size: 1rem;
+  font-size: var(--text-3xl);
   font-weight: 750;
 }
 
@@ -91,7 +91,7 @@
   padding-inline: 9px;
   background: var(--section-soft);
   color: var(--section-ink);
-  font-size: 0.7rem;
+  font-size: var(--text-base);
   font-weight: 700;
 }
 .adreem-cloud-state { background: var(--entry-soft); color: var(--entry); }
@@ -120,7 +120,7 @@
   border: 1px solid color-mix(in srgb, var(--entry) 24%, var(--line));
   border-radius: 8px;
   background: var(--paper-strong);
-  box-shadow: 0 18px 48px rgb(24 36 45 / 18%);
+  box-shadow: var(--elevation-4);
 }
 
 .adreem-save-shield--failed > section,
@@ -129,7 +129,7 @@
 .adreem-save-shield--failed .adreem-save-shield-icon,
 .adreem-save-shield--local-only .adreem-save-shield-icon { color: var(--review); }
 .adreem-save-shield strong { display: block; font-size: 16px; }
-.adreem-save-shield p { margin: 3px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.adreem-save-shield p { margin: 3px 0 0; color: var(--muted); font-size: var(--text-xl); line-height: 1.55; }
 .adreem-save-shield-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
 .adreem-save-shield-actions button {
   display: inline-flex;
@@ -262,7 +262,7 @@
   background: var(--tab-accent);
   color: #fff;
 }
-.adreem-nav strong { font-size: 0.67rem; font-weight: 750; }
+.adreem-nav strong { font-size: var(--text-md); font-weight: 750; }
 
 .adreem-view {
   grid-column: 1;

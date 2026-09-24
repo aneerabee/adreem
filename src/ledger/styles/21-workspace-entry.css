@@ -42,7 +42,7 @@
   width: calc((100% - 12px) / 2);
   border-radius: 6px;
   background: var(--paper-strong);
-  box-shadow: 0 3px 10px rgba(23, 43, 37, 0.09);
+  box-shadow: var(--elevation-2);
   transform: translateX(0);
   transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
 }
@@ -81,9 +81,9 @@
   background: var(--section-soft);
 }
 .adreem-flow-head span,
-.ml3-entry-head > div > span { color: var(--section-accent); font-size: 0.65rem; font-weight: 800; }
+.ml3-entry-head > div > span { color: var(--section-accent); font-size: var(--text-sm); font-weight: 800; }
 .adreem-flow-head h2,
-.ml3-entry-head h2 { color: var(--ink); font-size: 1.04rem; line-height: 1.35; }
+.ml3-entry-head h2 { color: var(--ink); font-size: var(--text-3xl); line-height: 1.35; }
 .adreem-flow-head > b,
 .ml3-entry-head > b {
   border: 1px solid color-mix(in srgb, var(--warning) 22%, transparent);
@@ -129,7 +129,7 @@
   border: 1px solid var(--line);
 }
 .ml3-action-lane--daily { grid-column: 1 / -1; }
-.ml3-action-lane-head span { color: var(--muted); font-size: 0.62rem; }
+.ml3-action-lane-head span { color: var(--muted); font-size: var(--text-sm); }
 .ml3-action-lane--daily .ml3-option-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ml3-option-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
@@ -160,7 +160,7 @@
   color: var(--action-tone);
 }
 .ml3-action-choice > svg:last-child { color: #98a8a1; }
-.ml3-action-choice strong { font-size: 0.78rem; }
+.ml3-action-choice strong { font-size: var(--text-lg); }
 .ml3-action-choice:hover {
   background: var(--action-soft);
   transform: translateY(-1px);
@@ -182,7 +182,7 @@
 .ml3-number-display {
   border: 1px solid var(--section-line);
 }
-.ml3-number-display strong { color: var(--ink); font-size: 1.65rem; }
+.ml3-number-display strong { color: var(--ink); font-size: var(--text-6xl); }
 .ml3-number-reset { border-color: transparent; }
 .ml3-number-action.is-clear { background: var(--ink); color: #fff; }
 
@@ -193,7 +193,7 @@
   z-index: 5;
   flex: 0 0 auto;
   background: rgba(248, 251, 249, 0.97);
-  box-shadow: 0 -8px 18px rgba(23, 43, 37, 0.045);
+  box-shadow: var(--elevation-up);
   backdrop-filter: blur(10px);
 }
 .ml3-step-next:hover,
@@ -282,7 +282,7 @@
   background: var(--section-accent);
 }
 .ml3-today-head h2,
-.ml3-panel-head h2 { font-size: 0.96rem; }
+.ml3-panel-head h2 { font-size: var(--text-3xl); }
 .ml3-today-head > span,
 .ml3-panel-head > span { background: var(--section-soft); color: var(--section-ink); }
 
@@ -337,8 +337,8 @@
 }
 .ml3-movement-icon svg { width: 16px; height: 16px; }
 .ml3-movement-copy { min-width: 0; display: grid; gap: 1px; }
-.ml3-movement-copy strong { overflow: hidden; color: var(--ink); font-size: 0.77rem; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-movement-copy small { overflow: hidden; color: var(--muted); font-size: 0.63rem; text-overflow: ellipsis; white-space: nowrap; }
+.ml3-movement-copy strong { overflow: hidden; color: var(--ink); font-size: var(--text-lg); text-overflow: ellipsis; white-space: nowrap; }
+.ml3-movement-copy small { overflow: hidden; color: var(--muted); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
 .ml3-today-effects span { color: var(--movement-tone); }
 
 .ml3-panel { padding: 0; border: 0; background: transparent; }
@@ -348,4 +348,4 @@
   padding: 0 2px 9px;
   border-bottom: 1px solid color-mix(in srgb, var(--section-accent) 22%, var(--line));
 }
-.ml3-panel-head p { margin-top: 2px; color: var(--muted); font-size: 0.67rem; }
+.ml3-panel-head p { margin-top: 2px; color: var(--muted); font-size: var(--text-md); }

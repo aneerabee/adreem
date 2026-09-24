@@ -12,7 +12,7 @@
 .ml3-picker-context > span {
   flex: 0 0 auto;
   color: var(--muted);
-  font-size: 0.64rem;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 .ml3-picker-context > div {
@@ -27,7 +27,7 @@
   align-items: center;
   gap: 3px;
   color: var(--muted);
-  font-size: 0.63rem;
+  font-size: var(--text-sm);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -126,7 +126,7 @@
 }
 .ml3-picker-choice-group-head strong {
   min-width: 0;
-  font-size: 0.76rem;
+  font-size: var(--text-lg);
   overflow-wrap: anywhere;
   white-space: normal;
 }
@@ -188,7 +188,7 @@
   border-radius: 999px;
   color: var(--section-ink);
   background: var(--section-soft);
-  font-size: 0.52rem;
+  font-size: var(--text-2xs);
   font-weight: 800;
   line-height: 1.15;
   white-space: nowrap;
@@ -238,7 +238,7 @@
   .ml3-picker-context > div { gap: 3px 7px; }
   .ml3-picker-favorites .ml3-balance-chip,
   .ml3-picker-results .ml3-balance-chip {
-    font-size: 0.61rem;
+    font-size: var(--text-xs);
   }
   .ml3-picker-results .ml3-balance-chip { max-width: 112px; }
   .ml3-picker-results > button:not(.ml3-picker-more) { grid-template-columns: 28px minmax(0, 1fr) auto; }

@@ -150,15 +150,15 @@ describe('mobile form sizing', () => {
     expect(financeStylesheet).toContain('grid-template-columns: minmax(190px, 0.62fr) minmax(0, 1.38fr);')
     expect(financeStylesheet).toContain('grid-template-areas: "icon label value";')
     expect(financeStylesheet).toContain('.adreem-counterparty-channel > b { grid-area: value;')
-    expect(financeStylesheet).toContain('font-size: 0.86rem;')
+    expect(financeStylesheet).toContain('font-size: var(--text-2xl);')
     expect(financeStylesheet).toContain('.adreem-counterparty-card { grid-template-columns: minmax(0, 1fr); }')
     expect(financeStylesheet).toContain('.adreem-counterparty-channel-preview { grid-column: 1; grid-template-columns: minmax(0, 1fr);')
   })
 
   it('keeps comparable financial values on one numeric scale across every balance view', () => {
     expect(financeStylesheet).toContain('--finance-number-compact: 0.72rem;')
-    expect(financeStylesheet).toContain('--finance-number-value: 0.78rem;')
-    expect(financeStylesheet).toContain('--finance-number-summary: 0.84rem;')
+    expect(financeStylesheet).toContain('--finance-number-value: 0.76rem;')
+    expect(financeStylesheet).toContain('--finance-number-summary: 0.82rem;')
     expect(financeStylesheet).toContain('.adreem-separate-summary strong,\n.adreem-separate-summary b')
     expect(financeStylesheet).not.toContain('.adreem-separate-summary b { font-size: 0.7rem;')
     expect(financeStylesheet).toContain('.ml3-profile-balance strong,\n.ml3-profile-balance span')

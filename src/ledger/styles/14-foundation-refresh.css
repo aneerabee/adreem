@@ -75,7 +75,7 @@
 
 .ml3-step-controls,
 .ml3-account-stage-actions {
-  box-shadow: 0 -7px 14px rgba(24, 35, 31, 0.035);
+  box-shadow: var(--elevation-up);
 }
 
 .ml3-account-stage {
@@ -158,8 +158,8 @@
     flex: initial;
     padding-inline: 2px;
   }
-  .ml3-account-switcher strong { font-size: 0.64rem; }
-  .ml3-account-switcher span { font-size: 0.6rem; }
+  .ml3-account-switcher strong { font-size: var(--text-sm); }
+  .ml3-account-switcher span { font-size: var(--text-xs); }
   .ml3-today-row,
   .ml3-history-row,
   .ml3-account-row { contain: layout paint; }
@@ -173,8 +173,8 @@
     min-height: 52px;
     padding-inline: 5px;
   }
-  .ml3-balance-ledger button span { font-size: 0.61rem; }
-  .ml3-balance-ledger button strong { font-size: 0.68rem; }
+  .ml3-balance-ledger button span { font-size: var(--text-xs); }
+  .ml3-balance-ledger button strong { font-size: var(--text-md); }
 }
 
 /* Fresh, unified visual system */
@@ -233,7 +233,7 @@
 .ml3-review-card {
   border-color: color-mix(in srgb, var(--section-accent) 15%, var(--line));
   background: var(--paper);
-  box-shadow: 0 8px 22px rgba(23, 51, 45, 0.055);
+  box-shadow: var(--elevation-3);
 }
 .adreem-flow-head span,
 .ml3-account-stage-head > span { color: var(--section-accent); }
@@ -251,7 +251,7 @@
 .ml3-account-switcher button.is-active {
   background: #fff;
   color: var(--section-accent);
-  box-shadow: 0 3px 10px rgba(23, 51, 45, 0.09);
+  box-shadow: var(--elevation-2);
 }
 
 .ml3-panel > .ml3-panel-head,
@@ -329,7 +329,7 @@
 .ml3-profile-editor > button {
   border-color: var(--section-accent);
   background: var(--section-accent);
-  box-shadow: 0 5px 12px color-mix(in srgb, var(--section-accent) 19%, transparent);
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--section-accent) 19%, transparent);
 }
 
 .ml3-step-back:hover,
@@ -411,10 +411,10 @@
 }
 
 @media (max-width: 720px) {
-  .adreem-header { box-shadow: 0 4px 14px rgba(23, 51, 45, 0.055); }
+  .adreem-header { box-shadow: var(--elevation-2); }
   .adreem-nav {
     z-index: 90;
-    box-shadow: 0 -9px 24px rgba(23, 51, 45, 0.09);
+    box-shadow: var(--elevation-up);
   }
   .adreem-nav button.is-active::after { background: #fff; }
   .ml3-entry-card,
@@ -423,7 +423,7 @@
   .ml3-list-block,
   .ml3-history-day,
   .ml3-review-queue,
-  .ml3-review-card { box-shadow: 0 5px 16px rgba(23, 51, 45, 0.055); }
+  .ml3-review-card { box-shadow: var(--elevation-2); }
   .ml3-step.is-open { background: color-mix(in srgb, var(--section-soft) 34%, white); }
   .ml3-number-pad { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
 }

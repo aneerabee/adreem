@@ -39,9 +39,9 @@
   padding: 20px;
   background: var(--paper);
 }
-.adreem-cloud-gate span { color: var(--green); font-size: 0.72rem; font-weight: 700; }
-.adreem-cloud-gate h1 { font-size: 1.15rem; }
-.adreem-cloud-gate p { color: var(--muted); font-size: 0.82rem; line-height: 1.7; }
+.adreem-cloud-gate span { color: var(--green); font-size: var(--text-base); font-weight: 700; }
+.adreem-cloud-gate h1 { font-size: var(--text-4xl); }
+.adreem-cloud-gate p { color: var(--muted); font-size: var(--text-xl); line-height: 1.7; }
 .adreem-cloud-gate > section > div { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .adreem-cloud-gate button {
   min-height: 42px;
@@ -141,7 +141,7 @@
   border-radius: 8px;
   padding: 14px;
   background: var(--paper);
-  box-shadow: 0 24px 70px rgba(18, 31, 27, 0.2);
+  box-shadow: var(--elevation-4);
 }
 
 .adreem-profile-dialog > header {
@@ -152,8 +152,8 @@
 }
 
 .adreem-profile-dialog > header > div { display: grid; gap: 1px; }
-.adreem-profile-dialog > header span { color: var(--green); font-size: 0.62rem; font-weight: 700; }
-.adreem-profile-dialog > header h2 { font-size: 1rem; }
+.adreem-profile-dialog > header span { color: var(--green); font-size: var(--text-sm); font-weight: 700; }
+.adreem-profile-dialog > header h2 { font-size: var(--text-3xl); }
 .adreem-profile-dialog > header button {
   width: 32px;
   height: 32px;
@@ -173,14 +173,14 @@
   border-block: 1px solid var(--line);
   padding-block: 10px;
 }
-.adreem-profile-identity strong { font-size: 0.86rem; }
-.adreem-profile-identity span { color: var(--muted); font-size: 0.72rem; direction: ltr; text-align: start; }
+.adreem-profile-identity strong { font-size: var(--text-2xl); }
+.adreem-profile-identity span { color: var(--muted); font-size: var(--text-base); direction: ltr; text-align: start; }
 
 .adreem-profile-language { display: grid; gap: 10px; }
 .adreem-profile-language > div:first-child { display: grid; gap: 2px; }
-.adreem-profile-language > div:first-child strong { font-size: 0.82rem; }
-.adreem-profile-language p { color: var(--muted); font-size: 0.7rem; line-height: 1.6; }
-.adreem-profile-language > small { color: var(--green); font-size: 0.68rem; font-weight: 500; }
+.adreem-profile-language > div:first-child strong { font-size: var(--text-xl); }
+.adreem-profile-language p { color: var(--muted); font-size: var(--text-base); line-height: 1.6; }
+.adreem-profile-language > small { color: var(--green); font-size: var(--text-md); font-weight: 500; }
 .adreem-profile-language > small.is-error { color: var(--red); }
 
 .adreem-language-options {
@@ -210,10 +210,10 @@
   border-radius: 5px;
   background: var(--soft);
   color: var(--muted);
-  font-size: 0.66rem;
+  font-size: var(--text-md);
   font-weight: 700;
 }
-.adreem-language-options button strong { font-size: 0.78rem; }
+.adreem-language-options button strong { font-size: var(--text-lg); }
 .adreem-language-options button.is-active > span { color: #fff; }
 .adreem-language-options button:disabled { cursor: wait; opacity: 0.65; }
 
@@ -241,7 +241,7 @@
   border: 2px solid #fff;
   border-radius: 999px;
   padding: 0 3px;
-  font-size: 0.55rem;
+  font-size: var(--text-2xs);
   line-height: 1;
 }
 .adreem-nav strong { line-height: 1.2; }

@@ -17,16 +17,16 @@
   text-align: start;
   cursor: pointer;
 }
-.ml3-balance-ledger button span { color: var(--muted); font-size: 0.68rem; }
-.ml3-balance-ledger button strong { font-size: 0.86rem; }
+.ml3-balance-ledger button span { color: var(--muted); font-size: var(--text-md); }
+.ml3-balance-ledger button strong { font-size: var(--text-2xl); }
 .ml3-balance-ledger .is-positive { border-inline-start: 4px solid var(--green); }
 .ml3-balance-ledger .is-negative { border-inline-start: 4px solid var(--red); }
 .ml3-balance-ledger .is-money { border-inline-start: 4px solid var(--ink); }
 .ml3-balance-ledger .is-review { border-inline-start: 4px solid #a57b2d; }
 
 .ml3-account-toolbar { margin-bottom: 8px; }
-.ml3-account-toolbar label { display: grid; gap: 4px; color: var(--muted); font-size: 0.68rem; font-weight: 500; }
-.ml3-account-toolbar button { min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; background: #fff; color: var(--muted); font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+.ml3-account-toolbar label { display: grid; gap: 4px; color: var(--muted); font-size: var(--text-md); font-weight: 500; }
+.ml3-account-toolbar button { min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; background: #fff; color: var(--muted); font-size: var(--text-base); font-weight: 600; cursor: pointer; }
 .ml3-account-toolbar button.is-active { border-color: var(--green); background: #eaf5f1; color: var(--green); }
 
 .ml3-account-switcher {
@@ -37,9 +37,9 @@
   justify-content: center;
   cursor: pointer;
 }
-.ml3-account-switcher button.is-active { box-shadow: 0 2px 8px rgba(23, 38, 34, 0.08); }
-.ml3-account-switcher strong { font-size: 0.72rem; }
-.ml3-account-switcher span { color: var(--green); font-size: 0.66rem; font-weight: 700; }
+.ml3-account-switcher button.is-active { box-shadow: var(--elevation-1); }
+.ml3-account-switcher strong { font-size: var(--text-base); }
+.ml3-account-switcher span { color: var(--green); font-size: var(--text-md); font-weight: 700; }
 .ml3-list-block { border-inline-start: 1px solid var(--line); }
 
 .ml3-account-row {
@@ -55,8 +55,8 @@
 .ml3-account-row--cash,
 .ml3-account-row--bank { border-inline-start-color: var(--ink); }
 .ml3-account-main { min-width: 0; display: grid; border: 0; padding: 0; background: transparent; color: var(--ink); text-align: start; cursor: pointer; }
-.ml3-account-main > strong { overflow: hidden; font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-account-meta { min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden; color: var(--muted); font-size: 0.66rem; white-space: nowrap; }
+.ml3-account-main > strong { overflow: hidden; font-size: var(--text-lg); text-overflow: ellipsis; white-space: nowrap; }
+.ml3-account-meta { min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden; color: var(--muted); font-size: var(--text-md); white-space: nowrap; }
 .ml3-account-meta small { font-size: inherit; }
 .ml3-account-context { min-width: 0; overflow: hidden; color: var(--muted); font-weight: 650; text-overflow: ellipsis; }
 .ml3-account-row--cash .ml3-account-context,
@@ -65,10 +65,10 @@
 .ml3-account-row--review .ml3-account-context { color: var(--red); }
 .ml3-account-main b { color: var(--red); }
 .ml3-account-values { min-width: 0; text-align: end; }
-.ml3-account-values strong { display: block; font-size: 0.72rem; }
+.ml3-account-values strong { display: block; font-size: var(--text-base); }
 .ml3-account-values.is-positive strong { color: var(--green); }
 .ml3-account-values.is-negative strong { color: var(--red); }
-.ml3-account-values span { color: var(--muted); font-size: 0.68rem; }
+.ml3-account-values span { color: var(--muted); font-size: var(--text-md); }
 .ml3-row-actions,
 .ml3-decision-actions { display: flex; flex-wrap: wrap; gap: 5px; }
 .ml3-mini-action,
@@ -79,7 +79,7 @@
   padding: 0 9px;
   background: #fff;
   color: var(--ink);
-  font-size: 0.68rem;
+  font-size: var(--text-md);
   font-weight: 700;
   cursor: pointer;
 }
@@ -104,33 +104,33 @@
 }
 .ml3-review-ticket--danger { border-inline-start-color: var(--red); }
 .ml3-review-ticket--info { border-inline-start-color: var(--green); }
-.ml3-review-ticket > span { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 5px; font-size: 0.66rem; font-weight: 700; }
-.ml3-review-ticket strong { overflow: hidden; font-size: 0.73rem; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-review-ticket b { color: var(--muted); font-size: 0.65rem; text-align: end; }
+.ml3-review-ticket > span { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 5px; font-size: var(--text-md); font-weight: 700; }
+.ml3-review-ticket strong { overflow: hidden; font-size: var(--text-base); text-overflow: ellipsis; white-space: nowrap; }
+.ml3-review-ticket b { color: var(--muted); font-size: var(--text-sm); text-align: end; }
 .ml3-review-card { min-width: 0; border: 1px solid var(--line); overflow: hidden; }
 .ml3-review-card-head { min-width: 0; display: flex; justify-content: space-between; gap: 10px; padding: 10px; border-bottom: 1px solid var(--line); }
 .ml3-review-card-head > div { min-width: 0; display: grid; gap: 2px; }
-.ml3-review-card-head strong { font-size: 0.86rem; }
-.ml3-review-card-head span { color: var(--muted); font-size: 0.7rem; }
-.ml3-review-card-head > b { flex: 0 0 auto; color: var(--red); font-size: 0.74rem; }
+.ml3-review-card-head strong { font-size: var(--text-2xl); }
+.ml3-review-card-head span { color: var(--muted); font-size: var(--text-base); }
+.ml3-review-card-head > b { flex: 0 0 auto; color: var(--red); font-size: var(--text-lg); }
 .ml3-review-usd { margin: 8px 10px 0; color: var(--green); font-weight: 700; }
 .ml3-decision-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px; }
 .ml3-decision-wide,
 .ml3-decision-actions { grid-column: 1 / -1; }
 .ml3-decision-grid--movement { align-items: start; }
 .ml3-issue-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px 0; }
-.ml3-issue-chips span { border-radius: 5px; padding: 3px 6px; background: #fff0ee; color: var(--red); font-size: 0.64rem; font-weight: 700; }
+.ml3-issue-chips span { border-radius: 5px; padding: 3px 6px; background: #fff0ee; color: var(--red); font-size: var(--text-sm); font-weight: 700; }
 .ml3-merge-box { padding: 0 10px 10px; }
-.ml3-merge-box label { display: grid; gap: 5px; color: var(--muted); font-size: 0.7rem; font-weight: 600; }
+.ml3-merge-box label { display: grid; gap: 5px; color: var(--muted); font-size: var(--text-base); font-weight: 600; }
 .ml3-account-stage { animation: adreem-step-in 180ms ease-out both; }
-.ml3-account-stage-head > span { font-size: 0.64rem; font-weight: 700; }
+.ml3-account-stage-head > span { font-size: var(--text-sm); font-weight: 700; }
 .ml3-account-stage-head h3 { margin-top: 2px; }
-.ml3-account-choice-list button i { display: grid; place-items: center; font-size: 0.65rem; font-style: normal; font-weight: 700; }
+.ml3-account-choice-list button i { display: grid; place-items: center; font-size: var(--text-sm); font-style: normal; font-weight: 700; }
 .ml3-account-choice-list.is-compact button { display: grid; text-align: center; }
-.ml3-account-field small { color: var(--muted); font-size: 0.65rem; }
+.ml3-account-field small { color: var(--muted); font-size: var(--text-sm); }
 .ml3-account-summary { display: grid; gap: 3px; padding: 14px; border: 1px solid #b5d8cb; border-radius: 7px; background: #eef8f4; }
-.ml3-account-summary span { color: var(--muted); font-size: 0.68rem; }
-.ml3-account-summary strong { color: var(--green); font-size: 0.9rem; }
+.ml3-account-summary span { color: var(--muted); font-size: var(--text-md); }
+.ml3-account-summary strong { color: var(--green); font-size: var(--text-2xl); }
 
 .ml3-profile-layer {
   position: fixed;
@@ -148,11 +148,11 @@
   animation: adreem-drawer-in 180ms ease-out both;
 }
 .ml3-profile-head { top: 0; z-index: 3; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(12px); }
-.ml3-profile-head button { min-height: 34px; border: 1px solid var(--line); border-radius: 6px; padding: 0 9px; background: #fff; color: var(--ink); font-size: 0.72rem; font-weight: 700; cursor: pointer; }
+.ml3-profile-head button { min-height: 34px; border: 1px solid var(--line); border-radius: 6px; padding: 0 9px; background: #fff; color: var(--ink); font-size: var(--text-base); font-weight: 700; cursor: pointer; }
 .ml3-profile-head > div { min-width: 0; }
-.ml3-profile-head span { color: var(--green); font-size: 0.66rem; font-weight: 700; }
-.ml3-profile-head h2 { overflow: hidden; font-size: 1rem; text-overflow: ellipsis; white-space: nowrap; }
-.ml3-profile-head p { color: var(--muted); font-size: 0.66rem; }
+.ml3-profile-head span { color: var(--green); font-size: var(--text-md); font-weight: 700; }
+.ml3-profile-head h2 { overflow: hidden; font-size: var(--text-3xl); text-overflow: ellipsis; white-space: nowrap; }
+.ml3-profile-head p { color: var(--muted); font-size: var(--text-md); }
 .ml3-profile-balance { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 12px; border-inline-start: 4px solid #9aa8a2; background: #f7f9f8; }
 .ml3-profile-balance span { color: var(--muted); }
 .ml3-profile-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 12px 10px; }
@@ -164,26 +164,26 @@
 .ml3-profile-movements { margin: 0 12px 9px; padding: 10px; border: 1px solid var(--line); border-radius: 7px; }
 .ml3-profile-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ml3-profile-editor-grid label:last-child:nth-child(odd) { grid-column: 1 / -1; }
-.ml3-profile-lock-note { grid-column: 1 / -1; margin: 0; padding: 7px 9px; border-inline-start: 3px solid var(--amber); background: #fff8e8; color: #604914; font-size: 0.66rem; line-height: 1.55; }
+.ml3-profile-lock-note { grid-column: 1 / -1; margin: 0; padding: 7px 9px; border-inline-start: 3px solid var(--amber); background: #fff8e8; color: #604914; font-size: var(--text-md); line-height: 1.55; }
 .ml3-profile-editor-grid input:disabled,
 .ml3-profile-editor-grid select:disabled,
 .ml3-profile-editor-grid textarea:disabled { border-color: #dfe5e2; background: #f1f4f2; color: #6d7974; cursor: not-allowed; opacity: 1; }
 .ml3-profile-reconcile > button,
-.ml3-profile-editor > button { border: 1px solid var(--green); border-radius: 6px; padding: 0 11px; background: var(--green); color: #fff; font-size: 0.72rem; font-weight: 700; cursor: pointer; }
+.ml3-profile-editor > button { border: 1px solid var(--green); border-radius: 6px; padding: 0 11px; background: var(--green); color: #fff; font-size: var(--text-base); font-weight: 700; cursor: pointer; }
 .ml3-profile-reconcile > button:disabled,
 .ml3-profile-editor > button:disabled { opacity: 0.45; cursor: not-allowed; }
 .ml3-profile-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.ml3-profile-section-head > span { color: var(--green); font-size: 0.68rem; font-weight: 700; }
+.ml3-profile-section-head > span { color: var(--green); font-size: var(--text-md); font-weight: 700; }
 .ml3-account-edit-history > .ml3-profile-disclosure-body > article { display: grid; gap: 6px; padding: 7px; border: 1px solid #e7ece9; border-radius: 6px; background: #fbfcfc; }
 .ml3-account-edit-history > .ml3-profile-disclosure-body > article + article { margin-top: 4px; }
-.ml3-account-edit-history time { color: var(--muted); font-size: 0.62rem; }
+.ml3-account-edit-history time { color: var(--muted); font-size: var(--text-sm); }
 .ml3-account-edit-history article > div { min-width: 0; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 7px; align-items: center; }
-.ml3-account-edit-history article > div > strong { color: var(--muted); font-size: 0.65rem; }
+.ml3-account-edit-history article > div > strong { color: var(--muted); font-size: var(--text-sm); }
 .ml3-account-edit-values { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .ml3-account-edit-values > span { min-width: 0; display: grid; gap: 1px; }
-.ml3-account-edit-values small { color: var(--muted); font-size: 0.58rem; }
+.ml3-account-edit-values small { color: var(--muted); font-size: var(--text-xs); }
 .ml3-account-edit-history b,
-.ml3-account-edit-history em { min-width: 0; overflow-wrap: anywhere; font-size: 0.68rem; font-style: normal; line-height: 1.35; }
+.ml3-account-edit-history em { min-width: 0; overflow-wrap: anywhere; font-size: var(--text-md); font-style: normal; line-height: 1.35; }
 .ml3-account-edit-history b { color: var(--muted); font-weight: 500; }
 .ml3-account-edit-history em { color: var(--green); font-weight: 700; }
 .ml3-profile-movement { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid #e7ece9; }
@@ -192,7 +192,7 @@
 .ml3-profile-movement small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .ml3-profile-impact { display: grid; justify-items: end; gap: 3px; }
 .ml3-profile-impact b { min-width: 0; direction: ltr; color: var(--green); overflow-wrap: anywhere; unicode-bidi: isolate; }
-.ml3-profile-impact button { min-height: 27px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--green); font-size: 0.65rem; font-weight: 700; cursor: pointer; }
+.ml3-profile-impact button { min-height: 27px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--green); font-size: var(--text-sm); font-weight: 700; cursor: pointer; }
 
 ::view-transition-old(root),
 ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }

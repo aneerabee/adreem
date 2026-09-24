@@ -31,7 +31,7 @@
   --section-soft: var(--entry-soft);
   --section-ink: #075c4a;
   --section-line: #9dcebd;
-  --shadow-float: 0 18px 50px rgba(23, 43, 37, 0.15);
+  --shadow-float: var(--elevation-4);
 
   /* from adreemFinance.css */
   --finance-ink: oklch(0.25 0.025 174);
@@ -65,19 +65,19 @@
   --finance-tab: 44px;
   --finance-summary: 76px;
   --finance-number-compact: 0.72rem;
-  --finance-number-value: 0.78rem;
-  --finance-number-summary: 0.84rem;
+  --finance-number-value: 0.76rem;
+  --finance-number-summary: 0.82rem;
   --finance-number-weight: 820;
   --finance-control-radius: 7px;
-  --finance-shadow: 0 12px 34px color-mix(in srgb, var(--finance-ink) 8%, transparent);
-  --finance-shadow-small: 0 5px 16px color-mix(in srgb, var(--finance-ink) 7%, transparent);
+  --finance-shadow: var(--elevation-3);
+  --finance-shadow-small: var(--elevation-2);
 
   /* from adreemType.css */
-  --type-caption: 0.63rem;
-  --type-label: 0.67rem;
+  --type-caption: 0.64rem;
+  --type-label: 0.68rem;
   --type-name: 0.82rem;
   --type-value: 0.9rem;
-  --type-key-value: 1.02rem;
+  --type-key-value: 1rem;
   --type-label-weight: 600;
   --type-name-weight: 700;
   --type-value-weight: 800;
@@ -87,5 +87,5 @@
   --paper: #fbfcfb;
   --line: #d6dfdb;
   --nav-idle: #71817b;
-  --shadow-soft: 0 2px 8px rgb(30 50 44 / 4%);
+  --shadow-soft: var(--elevation-1);
 }
