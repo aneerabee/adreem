@@ -91,6 +91,24 @@ describe('investments panel', () => {
     expect(html).toContain('الأسعار اليدوية محفوظة حتى تغييرها')
   })
 
+  it('uses a branded logo alone and retains the name for an unbranded platform', () => {
+    const branded = createInvestmentPlatform({ id: 'midas', name: 'Midas Kripto', location: 'Turkey' })
+    const custom = createInvestmentPlatform({ id: 'custom', name: 'My new platform', location: 'Libya' })
+    const summary = {
+      platforms: [branded, custom].map((platform) => ({ platform, freeCashUsdMicros: 0, holdings: [] })),
+      totalValueUsdMicros: 0,
+    }
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[branded, custom]} holdings={[]} {...callbacks()} />)
+    const identities = [...html.matchAll(/<div class="adreem-investment-platform-identity">([\s\S]*?)<\/div>/gu)].map((match) => match[1])
+
+    expect(identities).toHaveLength(2)
+    expect(identities[0]).toContain('alt="Midas Kripto"')
+    expect(identities[0]).not.toContain('<strong>')
+    expect(identities[0]).not.toContain('Turkey')
+    expect(identities[1]).toContain('<strong>My new platform</strong>')
+    expect(identities[1]).toContain('Libya')
+  })
+
   it('labels a closed-market quote without presenting the request time as the trade time', () => {
     const platform = createInvestmentPlatform({ id: 'platform-1', name: 'Midas' })
     const holding = createInvestmentHolding({

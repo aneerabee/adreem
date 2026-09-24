@@ -838,13 +838,13 @@ export default function InvestmentsPanel({
               >
                 <header>
                   <div className="adreem-investment-platform-identity">
-                    <i className="adreem-investment-platform-logo">
-                      {logoUrl ? <img src={logoUrl} alt="" /> : <Landmark aria-hidden="true" size={18} />}
-                    </i>
-                    <span>
-                      <strong>{preserveUiData(brand.displayName || platformRow.platform.name)}</strong>
-                      {platformRow.platform.location ? <small>{preserveUiData(platformRow.platform.location)}</small> : null}
+                    <span className={`adreem-investment-platform-logo ${logoUrl ? 'has-logo' : ''}`.trim()} title={logoUrl ? preserveUiData(brand.displayName) : undefined}>
+                      {logoUrl ? <img src={logoUrl} alt={preserveUiData(brand.displayName)} /> : <Landmark aria-hidden="true" size={18} />}
                     </span>
+                    {!logoUrl ? <span className="adreem-investment-platform-name">
+                      <strong>{preserveUiData(platformRow.platform.name)}</strong>
+                      {platformRow.platform.location ? <small>{preserveUiData(platformRow.platform.location)}</small> : null}
+                    </span> : null}
                   </div>
                   <div className="adreem-investment-platform-balances">
                     <span><small>رصيد المنصة</small><strong>{usdMicros(platformTotalUsdMicros)}</strong></span>
@@ -1031,8 +1031,8 @@ export default function InvestmentsPanel({
           return (
             <InvestmentDialog title="سجل المحفظة" subtitle={brand.displayName || historyPlatform.name} icon={History} tone="history" onClose={() => setDialog('')} hideSubmit className="is-history">
               <div className={`adreem-investment-history-head is-brand-${brand.key}`} style={investmentPlatformBrandStyle(brand)}>
-                <i className="adreem-investment-history-logo">{logoUrl ? <img src={logoUrl} alt="" /> : <Landmark aria-hidden="true" size={20} />}</i>
-                <span><strong>{preserveUiData(brand.displayName || historyPlatform.name)}</strong><small>{decimal(historyRows.length, 0)} {historyRows.length === 1 ? 'عملية محفوظة' : 'عمليات محفوظة'}</small></span>
+                <span className={`adreem-investment-history-logo ${logoUrl ? 'has-logo' : ''}`.trim()} title={logoUrl ? preserveUiData(brand.displayName) : undefined}>{logoUrl ? <img src={logoUrl} alt={preserveUiData(brand.displayName)} /> : <Landmark aria-hidden="true" size={20} />}</span>
+                <span>{!logoUrl ? <strong>{preserveUiData(historyPlatform.name)}</strong> : null}<small>{decimal(historyRows.length, 0)} {historyRows.length === 1 ? 'عملية محفوظة' : 'عمليات محفوظة'}</small></span>
                 <b>{usdMicros(historyPlatformSummary?.totalValueUsdMicros ?? ((historyPlatformSummary?.freeCashUsdMicros || 0) + (historyPlatformSummary?.marketValueUsdMicros || 0)))}<small>رصيد المنصة</small></b>
               </div>
               {historyRows.length ? (

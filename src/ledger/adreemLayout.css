@@ -134,7 +134,7 @@
 .adreem-app .adreem-investment-platforms { gap: 11px; }
 .adreem-app .adreem-investment-platform { border-radius: 6px; box-shadow: none; }
 .adreem-app .adreem-investment-platform > header { min-height: 44px; padding: 5px 8px; }
-.adreem-app .adreem-investment-platform-logo { height: 32px; }
+.adreem-app .adreem-investment-platform-logo { height: 36px; }
 .adreem-app .adreem-investment-platform-actions > button { min-height: 28px; padding-inline: 6px; border-radius: 5px; }
 .adreem-app .adreem-investment-holdings { gap: 0; padding: 0; background: #fff; }
 .adreem-app .adreem-investment-holding {
