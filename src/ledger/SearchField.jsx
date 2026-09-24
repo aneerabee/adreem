@@ -1,4 +1,5 @@
 /** @jsxImportSource ./i18nRuntime */
+/** @jsxRuntime automatic */
 import { Search, X } from 'lucide-react'
 
 export function SearchField({ value = '', onChange, placeholder = 'بحث', ariaLabel = 'بحث', className = '' }) {
