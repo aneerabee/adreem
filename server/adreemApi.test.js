@@ -333,7 +333,8 @@ describe('ADREEM web API auth helpers', () => {
     await api({ method: 'GET', url: '/ready', headers: {} }, response)
 
     expect(response.statusCode).toBe(200)
-    expect(JSON.parse(response.body)).toMatchObject({ ok: true, storage: 'reachable', updatedAt: 'cloud-version' })
+    expect(JSON.parse(response.body)).toMatchObject({ ok: true, storage: 'reachable' })
+    expect(JSON.parse(response.body)).not.toHaveProperty('updatedAt')
   })
 
   it('revokes the current cloud session on logout', async () => {
@@ -839,6 +840,33 @@ describe('ADREEM web API auth helpers', () => {
 
     expect(response.statusCode).toBe(409)
     expect(JSON.parse(response.body).error).toContain('جهاز آخر')
+  })
+
+  it('reports a save the storage layer rejected instead of confirming it', async () => {
+    const file = tempRegistry([
+      registryPasswordUser({ userId: 'main', displayName: 'Main', email: 'main@example.com', password: 'main-pass-123', ledgerId: 'main' }),
+    ])
+    const api = createAdreemApiHandler({
+      ADREEM_USERS_FILE: file,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    })
+    const token = await loginForToken(api, 'main@example.com', 'main-pass-123')
+    const currentState = { accounts: [], movements: [], savedAt: '2026-01-01T10:00:00.000Z', version: 2 }
+    api.__setRepositoryForTest?.({
+      ledgerConfig: { identity: { ledgerId: 'main' } },
+      async update(callback) {
+        await callback(currentState)
+        return { ok: false, rejected: true, state: currentState, updatedAt: '2026-01-01T10:00:00.000Z', validation: { errors: [{ message: 'normalized state failed' }] } }
+      },
+    })
+    const request = createJsonRequest({ baseUpdatedAt: '2026-01-01T10:00:00.000Z', state: currentState }, { token })
+    const response = createMockResponse()
+    const promise = api(request, response)
+    request.emitBody()
+    await promise
+    expect(response.statusCode).toBe(422)
+    expect(JSON.parse(response.body).error).toContain('normalized state failed')
   })
 
   it('rejects posted web movements that violate ledger integrity', async () => {

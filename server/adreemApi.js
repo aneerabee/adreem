@@ -33,7 +33,9 @@ const RATE_LIMITS = {
   attachment: { limit: 30, windowMs: 60 * 1000 },
   marketSearch: { limit: 30, windowMs: 60 * 1000 },
   marketPrice: { limit: 12, windowMs: 60 * 1000 },
+  readiness: { limit: 30, windowMs: 60 * 1000 },
 }
+const READINESS_CACHE_MS = 30 * 1000
 const MOVEMENT_AUDIT_FIELDS = [
   'id',
   'type',
@@ -57,6 +59,11 @@ class ApiRequestError extends Error {
     this.name = 'ApiRequestError'
     this.statusCode = statusCode
   }
+}
+
+function rejectedSaveError(result = {}) {
+  const reason = result.validation?.errors?.[0]?.message || result.message || 'invalid state'
+  return new ApiRequestError(`Ledger integrity check failed: ${reason}`, 422)
 }
 
 export function parseLedgerTokenMap(value = '') {
@@ -374,6 +381,7 @@ export function createAdreemApiHandler(env = process.env) {
   let testRepository = null
   let testRepositoryFactory = null
   let readinessRepository = null
+  let readinessCache = null
 
   function ledgerIdForToken(token) {
     const hash = tokenHash(token)
@@ -424,21 +432,20 @@ export function createAdreemApiHandler(env = process.env) {
       return sendJson(res, 200, { ok: true, service: 'adreem-api' }, allowedOrigin)
     }
     if (url.pathname === '/ready') {
+      const readyLimit = rateLimiter.check(rateKey(req, 'readiness'), RATE_LIMITS.readiness)
+      if (!readyLimit.ok) return rejectRateLimited(res, allowedOrigin, readyLimit)
+      if (readinessCache?.expiresAt > Date.now()) return sendJson(res, readinessCache.statusCode, readinessCache.body, allowedOrigin)
       try {
         readinessRepository ||= testRepository || createLedgerRepository(env, {
           ledgerId: env.ADREEM_HEALTH_LEDGER_ID || env.ADREEM_LEDGER_ID || 'main',
         })
-        const result = await readinessRepository.load()
-        return sendJson(res, 200, {
-          ok: true,
-          service: 'adreem-api',
-          storage: 'reachable',
-          updatedAt: result.updatedAt || null,
-        }, allowedOrigin)
+        await readinessRepository.load()
+        readinessCache = { statusCode: 200, body: { ok: true, service: 'adreem-api', storage: 'reachable' }, expiresAt: Date.now() + READINESS_CACHE_MS }
       } catch (error) {
         console.error('[adreem-api-ready]', error?.message || error)
-        return sendJson(res, 503, { ok: false, service: 'adreem-api', storage: 'unreachable' }, allowedOrigin)
+        readinessCache = { statusCode: 503, body: { ok: false, service: 'adreem-api', storage: 'unreachable' }, expiresAt: Date.now() + READINESS_CACHE_MS }
       }
+      return sendJson(res, readinessCache.statusCode, readinessCache.body, allowedOrigin)
     }
     if (url.pathname === '/api/auth/login') {
       try {
@@ -725,6 +732,7 @@ export function createAdreemApiHandler(env = process.env) {
           expectedUpdatedAt: body.baseUpdatedAt || null,
           allowUnusedAccountDeletion: true,
         })
+        if (result.rejected) throw rejectedSaveError(result)
         audit(env, {
           action: 'account.deleted',
           ledgerId,
@@ -777,6 +785,7 @@ export function createAdreemApiHandler(env = process.env) {
           movementUpdates = movementUpdateAuditEntries(currentState, state)
           return { state }
         }, updateOptions)
+        if (result.rejected) throw rejectedSaveError(result)
         audit(env, { action: 'ledger.saved', ledgerId, source: 'web-api', movementUpdates })
         return sendJson(res, 200, { state: result.state, source: 'api-save', updatedAt: result.updatedAt || null }, allowedOrigin)
       }
@@ -807,6 +816,7 @@ export function createAdreemApiHandler(env = process.env) {
   adreemApiHandler.__setRepositoryForTest = (repository) => {
     testRepository = repository
     readinessRepository = null
+    readinessCache = null
   }
   adreemApiHandler.__setRepositoryFactoryForTest = (factory) => {
     testRepositoryFactory = factory

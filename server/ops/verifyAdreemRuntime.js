@@ -89,6 +89,12 @@ async function main() {
         authorization: `Bearer ${token}`,
       },
     })
+    await requestJson(`${apiBase}/api/auth/logout`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    })
   } else {
     checks.ledgerRead = { ok: false, skipped: true, reason: 'Runtime login failed or missing test credentials.' }
   }
