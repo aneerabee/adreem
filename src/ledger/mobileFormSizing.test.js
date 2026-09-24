@@ -1,11 +1,21 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const stylesheet = readFileSync(new URL('./adreemStudio.css', import.meta.url), 'utf8')
-const financeStylesheet = readFileSync(new URL('./adreemFinance.css', import.meta.url), 'utf8')
-const deskStylesheet = readFileSync(new URL('./adreemDesk.css', import.meta.url), 'utf8')
+const stylesDirectory = new URL('./styles/', import.meta.url)
+const ledgerStylesheet = readdirSync(stylesDirectory)
+  .filter((fileName) => fileName.endsWith('.css') && fileName !== 'index.css')
+  .sort()
+  .map((fileName) => readFileSync(new URL(fileName, stylesDirectory), 'utf8'))
+  .join('\n')
+const stylesheet = ledgerStylesheet
+const financeStylesheet = ledgerStylesheet
+const deskStylesheet = ledgerStylesheet
 const appStylesheet = readFileSync(new URL('../appStudio.css', import.meta.url), 'utf8')
-const ledgerSource = readFileSync(new URL('./LedgerApp.jsx', import.meta.url), 'utf8')
+const ledgerSource = readdirSync(new URL('.', import.meta.url))
+  .filter((fileName) => /\.jsx?$/.test(fileName) && !fileName.includes('.test.'))
+  .sort()
+  .map((fileName) => readFileSync(new URL(fileName, import.meta.url), 'utf8'))
+  .join('\n')
 
 describe('mobile form sizing', () => {
   it('keeps every editable field at the iPhone no-zoom font size', () => {

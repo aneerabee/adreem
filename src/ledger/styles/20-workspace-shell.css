@@ -1,0 +1,278 @@
+/* ADREEM Studio: one visual system, four purpose-built workspaces. */
+.adreem-app {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.adreem-app--accounts {
+  --section-accent: var(--accounts);
+  --section-soft: var(--accounts-soft);
+  --section-ink: #30343a;
+  --section-line: #c6c9cd;
+}
+
+.adreem-app--history {
+  --section-accent: var(--history);
+  --section-soft: var(--history-soft);
+  --section-ink: #825108;
+  --section-line: #e7c47d;
+}
+
+.adreem-app--review {
+  --section-accent: var(--review);
+  --section-soft: var(--review-soft);
+  --section-ink: #96362f;
+  --section-line: #e9b2ad;
+}
+
+.adreem-app *,
+.adreem-app *::before,
+.adreem-app *::after { box-sizing: border-box; }
+
+.adreem-app button,
+.adreem-app input,
+.adreem-app select,
+.adreem-app textarea { letter-spacing: 0; }
+
+.adreem-shell {
+  width: min(1500px, 100%);
+  min-height: 100dvh;
+  margin: 0 auto;
+  border-inline: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  background: var(--paper);
+}
+
+.adreem-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  height: 64px;
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) auto minmax(100px, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--section-accent) 24%, var(--line));
+  background: rgba(251, 253, 252, 0.96);
+  box-shadow: 0 5px 18px rgba(23, 43, 37, 0.055);
+  backdrop-filter: blur(16px);
+  transition: border-color 180ms ease-out;
+}
+
+.adreem-brand { gap: 10px; }
+.adreem-mark {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #f7fbf9;
+  box-shadow: inset 0 -4px 0 var(--section-accent);
+}
+.adreem-brand > div { gap: 1px; }
+.adreem-brand > div > span {
+  color: var(--section-accent);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+.adreem-brand h1 {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.adreem-header-context { gap: 6px; }
+.adreem-header-context > span,
+.adreem-cloud-state {
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding-inline: 9px;
+  background: var(--section-soft);
+  color: var(--section-ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.adreem-cloud-state { background: var(--entry-soft); color: var(--entry); }
+.adreem-cloud-state--failed,
+.adreem-cloud-state--retrying,
+.adreem-cloud-state--local-only { background: var(--review-soft); color: var(--review); }
+
+.adreem-save-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: color-mix(in srgb, var(--canvas) 82%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.adreem-save-shield > section {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: min(430px, 100%);
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--entry) 24%, var(--line));
+  border-radius: 8px;
+  background: var(--paper-strong);
+  box-shadow: 0 18px 48px rgb(24 36 45 / 18%);
+}
+
+.adreem-save-shield--failed > section,
+.adreem-save-shield--local-only > section { border-color: color-mix(in srgb, var(--review) 42%, var(--line)); }
+.adreem-save-shield-icon { display: grid; place-items: center; color: var(--entry); }
+.adreem-save-shield--failed .adreem-save-shield-icon,
+.adreem-save-shield--local-only .adreem-save-shield-icon { color: var(--review); }
+.adreem-save-shield strong { display: block; font-size: 16px; }
+.adreem-save-shield p { margin: 3px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.adreem-save-shield-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+.adreem-save-shield-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--entry);
+  color: white;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.adreem-save-shield-actions button.is-secondary { background: var(--canvas); color: var(--ink); }
+.adreem-save-shield:not(.adreem-save-shield--failed):not(.adreem-save-shield--local-only) .adreem-save-shield-icon svg { animation: adreem-cloud-breathe 1.1s ease-in-out infinite; }
+
+@media (max-width: 560px) {
+  .adreem-save-shield { padding: 12px; }
+  .adreem-save-shield > section { padding: 14px; }
+  .adreem-save-shield-actions { flex-direction: column; }
+}
+.adreem-header-context > span:nth-of-type(1) { background: var(--history-soft); color: var(--history); }
+.adreem-header-context > span:nth-of-type(2) { background: var(--review-soft); color: var(--review); }
+
+.adreem-header-actions { justify-content: flex-start; gap: 5px; }
+.adreem-header-actions button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: #edf3f0;
+  color: var(--ink-soft);
+}
+.adreem-header-actions button:hover {
+  border-color: var(--section-line);
+  background: var(--section-soft);
+  color: var(--section-accent);
+}
+
+.adreem-frame {
+  min-height: calc(100dvh - 64px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+}
+
+.adreem-nav {
+  position: sticky;
+  top: 64px;
+  z-index: 40;
+  grid-column: 2;
+  grid-row: 1;
+  width: 88px;
+  height: calc(100dvh - 64px);
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 7px;
+  padding: 12px 8px;
+  border: 0;
+  border-inline-start: 1px solid var(--line);
+  background: #f8fbf9;
+  box-shadow: none;
+}
+
+.adreem-app[dir="ltr"] .adreem-frame { grid-template-columns: 88px minmax(0, 1fr); }
+.adreem-app[dir="ltr"] .adreem-nav {
+  grid-column: 1;
+  border-inline-start: 0;
+  border-inline-end: 1px solid var(--line);
+}
+.adreem-app[dir="ltr"] .adreem-view { grid-column: 2; }
+
+.adreem-nav button[data-section="entry"] { --tab-accent: var(--entry); --tab-soft: var(--entry-soft); }
+.adreem-nav button[data-section="accounts"] { --tab-accent: var(--accounts); --tab-soft: var(--accounts-soft); }
+.adreem-nav button[data-section="history"] { --tab-accent: var(--history); --tab-soft: var(--history-soft); }
+.adreem-nav button[data-section="review"] { --tab-accent: var(--review); --tab-soft: var(--review-soft); }
+
+.adreem-nav button {
+  position: relative;
+  width: 100%;
+  height: 68px;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 5px 2px;
+  background: transparent;
+  color: var(--nav-idle);
+  overflow: hidden;
+}
+.adreem-nav button::before {
+  content: "";
+  position: absolute;
+  inset-block: 12px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--tab-accent);
+  opacity: 0;
+  transform: scaleY(0.35);
+  transition: opacity 150ms ease-out, transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+.adreem-nav button::after { content: none; }
+.adreem-nav button:hover { background: var(--tab-soft); color: var(--tab-accent); }
+.adreem-nav button.is-active {
+  border-color: color-mix(in srgb, var(--tab-accent) 22%, transparent);
+  background: var(--tab-soft);
+  color: var(--tab-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tab-accent) 7%, transparent);
+}
+.adreem-nav button.is-active::before { opacity: 1; transform: scaleY(1); }
+.adreem-nav-icon {
+  width: 30px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+}
+.adreem-nav button.is-active .adreem-nav-icon { background: color-mix(in srgb, var(--tab-accent) 13%, transparent); }
+.adreem-nav-icon b {
+  top: -6px;
+  inset-inline-start: -9px;
+  border-color: #f8fbf9;
+  background: var(--tab-accent);
+  color: #fff;
+}
+.adreem-nav strong { font-size: 0.67rem; font-weight: 750; }
+
+.adreem-view {
+  grid-column: 1;
+  grid-row: 1;
+  height: calc(100dvh - 64px);
+  min-height: 0;
+  padding: 14px 16px 28px;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  background: color-mix(in srgb, var(--section-soft) 20%, var(--canvas));
+}

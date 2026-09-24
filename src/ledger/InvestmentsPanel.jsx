@@ -1,312 +1,17 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { AlertCircle, ArrowDownToLine, ArrowLeft, ArrowLeftRight, ArrowUpFromLine, ChartCandlestick, Check, ChevronDown, CircleDollarSign, Clock3, Eye, EyeOff, History, Landmark, LockKeyhole, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, ShieldCheck, TrendingDown, TrendingUp, Trash2, WalletCards, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertCircle, ArrowDownToLine, ArrowLeft, ArrowLeftRight, ArrowUpFromLine, ChartCandlestick, Check, ChevronDown, CircleDollarSign, Clock3, Eye, EyeOff, History, Landmark, LockKeyhole, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, ShieldCheck, TrendingDown, TrendingUp, Trash2, WalletCards } from 'lucide-react'
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'motion/react'
 import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
-import {
-  INVESTMENT_ASSET_TYPES,
-  MIN_VISIBLE_INVESTMENT_USD_MICROS,
-  SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS,
-  INVESTMENT_TRADE_TYPES,
-  INVESTMENT_TRANSFER_ASSETS,
-  convertTryPriceToUsdMicros,
-  convertUsdToTryMicros,
-  investmentFxRateIsFresh,
-  investmentHoldingIsLiquidity,
-  investmentDecimalInputIsValid,
-  investmentOpeningTradeIsLocked,
-  investmentPriceChange,
-  investmentTradeValueMicros,
-  microsToUsd,
-  parseInvestmentDecimal,
-  quantityToUnits,
-  unitsToQuantity,
-  usdToMicros,
-} from './investmentCore.js'
+import { INVESTMENT_ASSET_TYPES, SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS, INVESTMENT_TRADE_TYPES, INVESTMENT_TRANSFER_ASSETS, convertTryPriceToUsdMicros, convertUsdToTryMicros, investmentFxRateIsFresh, investmentHoldingIsLiquidity, investmentDecimalInputIsValid, investmentOpeningTradeIsLocked, investmentTradeValueMicros, microsToUsd, parseInvestmentDecimal, quantityToUnits, unitsToQuantity, usdToMicros } from './investmentCore.js'
 import { buildInvestmentPlatformActivity } from './investmentActivity.js'
 import { investmentPlatformBrandStyle, resolveInvestmentPlatformBrand } from './investmentPlatformBrands.js'
 import { getActiveUiLanguage, preserveUiData } from './uiTranslation.js'
 import { isAutoPricedHolding } from './investmentMarketPolicy.js'
 import { SearchField } from './SearchField.jsx'
-
-const ASSET_OPTIONS = [
-  { value: INVESTMENT_ASSET_TYPES.STOCK, label: 'سهم مباشر' },
-  { value: INVESTMENT_ASSET_TYPES.CRYPTO, label: 'عملة رقمية' },
-  { value: INVESTMENT_ASSET_TYPES.METAL, label: 'معدن' },
-  { value: INVESTMENT_ASSET_TYPES.FUND, label: 'صندوق' },
-  { value: INVESTMENT_ASSET_TYPES.OTHER, label: 'أخرى' },
-]
-
-const MARKET_OPTIONS = [
-  { value: 'USD', label: 'أمريكا' },
-  { value: 'TRY', label: 'تركيا' },
-]
-
-const blankPlatform = { name: '', kind: 'platform', location: '' }
-const blankHolding = { platformId: '', name: '', symbol: '', providerSymbol: '', marketDataMode: 'manual', assetType: INVESTMENT_ASSET_TYPES.STOCK, exchange: '', quoteCurrency: 'USD', initialQuantity: '', initialPriceUsd: '', initialPriceNative: '' }
-const blankTrade = { holdingId: '', type: INVESTMENT_TRADE_TYPES.BUY, quantity: '', priceUsd: '', priceNative: '', feeUsd: '', feeNative: '', note: '' }
-const blankTradeEdit = { quantity: '', priceUsd: '', priceNative: '', feeUsd: '', feeNative: '', feeNativeInitial: '', note: '' }
-const blankTransfer = { asset: INVESTMENT_TRANSFER_ASSETS.USD, fromPlatformId: '', toPlatformId: '', sourceHoldingId: '', amount: '', note: '' }
-const blankTryFx = { status: 'idle', rate: '', quotedAt: '', loadedAt: '', source: '', error: '' }
-const PRICE_SOURCE_LABELS = {
-  coinbase: { ar: 'Coinbase', en: 'Coinbase' },
-  'gold-api': { ar: 'Gold API', en: 'Gold API' },
-  'gold-api-reference': { ar: 'سعر مرجعي', en: 'Reference price' },
-  'dexscreener-reference': { ar: 'سعر مرجعي · DEX Screener', en: 'Reference price · DEX Screener' },
-  'binance-usdt+coinbase-usdt-usd': { ar: 'Binance · تحويل Coinbase', en: 'Binance · Coinbase FX' },
-  'binance-usdt+twelve-data-usdt-usd': { ar: 'Binance · تحويل Twelve Data', en: 'Binance · Twelve Data FX' },
-  'twelve-data': { ar: 'Twelve Data', en: 'Twelve Data' },
-  'twelve-data-eod+ecb-fx': { ar: 'إغلاق يومي · صرف أوروبي', en: 'Daily close · ECB FX' },
-  'twelve-data+ecb-fx': { ar: 'Twelve Data · صرف أوروبي يومي', en: 'Twelve Data · ECB daily FX' },
-  'tgmcharts-eod': { ar: 'TGMCharts · إغلاق يومي', en: 'TGMCharts · Daily close' },
-  'burkut+ecb-fx': { ar: 'Bürküt · صرف أوروبي', en: 'Bürküt · ECB FX' },
-}
-
-function decimal(value, digits = 6, minimumDigits = 0) {
-  const number = Number(value || 0)
-  if (!Number.isFinite(number)) return '0'
-  return number.toLocaleString('en-US', { minimumFractionDigits: minimumDigits, maximumFractionDigits: digits })
-}
-
-function unitPrice(value) {
-  const number = Number(value || 0)
-  return decimal(number, Math.abs(number) >= 1 ? 2 : 6, 2)
-}
-
-function profitToneClass(value) {
-  return Number(value) > 0 ? 'is-positive' : Number(value) < 0 ? 'is-negative' : 'is-neutral'
-}
-
-function usdMicros(value, sign = false) {
-  const number = microsToUsd(value)
-  return `${sign && number > 0 ? '+' : ''}${decimal(number, 2, 2)} USD`
-}
-
-function tryMoneyMicros(value, sign = false) {
-  const number = microsToUsd(value)
-  return `${sign && number > 0 ? '+' : ''}${decimal(number, 2, 2)} TRY`
-}
-
-function usdUnitMicros(value) {
-  return `${unitPrice(microsToUsd(value))} USD`
-}
-
-function tryUnitMicros(value) {
-  return `${unitPrice(microsToUsd(value))} TRY`
-}
-
-function TryExchangeRate({ fx, onChange }) {
-  const source = fx.source === 'twelve-data' ? 'سعر السوق'
-    : fx.source === 'ecb-reference' ? 'سعر مرجعي يومي' : fx.source === 'manual' ? 'سعر أدخلته' : ''
-  return (
-    <div className="adreem-investment-fx">
-      <label><span><bdi>1 USD = ? TRY</bdi></span><input dir="ltr" inputMode="decimal" value={fx.rate} onChange={(event) => onChange(event.target.value)} placeholder={fx.status === 'loading' ? 'جاري الجلب' : 'سعر الصرف'} /></label>
-      <small role="status" className={fx.status === 'error' ? 'is-error' : ''}>
-        {fx.status === 'loading' ? 'نجلب سعر الصرف' : fx.status === 'error' ? fx.error : fx.status === 'updated' ? 'تحدث سعر الصرف. راجع القيمة ثم احفظ.' : source ? `${source} · ${fx.quotedAt ? activityDate(fx.quotedAt) : 'الآن'}` : 'اكتب السعر الفعلي إذا لم يتوفر سعر تلقائي'}
-      </small>
-    </div>
-  )
-}
-
-function assetTypeForMarketResult(result = {}) {
-  const type = String(result.instrumentType || '').toLocaleLowerCase('en')
-  if (type.includes('crypto')) return INVESTMENT_ASSET_TYPES.CRYPTO
-  if (type.includes('metal') || type.includes('commodity')) return INVESTMENT_ASSET_TYPES.METAL
-  if (type.includes('fund') || type.includes('etf')) return INVESTMENT_ASSET_TYPES.FUND
-  if (type.includes('stock') || type.includes('equity') || type.includes('share')) return INVESTMENT_ASSET_TYPES.STOCK
-  return INVESTMENT_ASSET_TYPES.OTHER
-}
-
-function holdingTypeLabel(value) {
-  return ASSET_OPTIONS.find((option) => option.value === value)?.label || 'أخرى'
-}
-
-function profitPercent(profitUsdMicros, costBasisUsdMicros) {
-  if (!costBasisUsdMicros) return ''
-  return `${profitUsdMicros > 0 ? '+' : ''}${decimal((profitUsdMicros / costBasisUsdMicros) * 100, 2)}%`
-}
-
-function holdingIsSmall(row = {}) {
-  if (!Number(row.quantityUnits || 0)) return true
-  return Number(row.holding?.lastPriceUsdMicros || 0) > 0
-    && Number(row.marketValueUsdMicros || 0) < MIN_VISIBLE_INVESTMENT_USD_MICROS
-}
-
-function platformLogoUrl(brand) {
-  return brand.logo ? `${import.meta.env.BASE_URL}${brand.logo}` : ''
-}
-
-function activityActionLabel(row) {
-  if (row.action === INVESTMENT_TRADE_TYPES.OPENING) return 'رصيد افتتاحي'
-  if (row.action === INVESTMENT_TRADE_TYPES.BUY) return 'شراء'
-  if (row.action === INVESTMENT_TRADE_TYPES.SELL) return 'بيع'
-  if (row.action === MOVEMENT_TYPES.INVESTMENT_DEPOSIT) return 'إيداع'
-  if (row.action === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL) return 'سحب'
-  if (row.action === 'transfer_out') return 'نقل صادر'
-  if (row.action === 'transfer_in') return 'نقل وارد'
-  return 'عملية'
-}
-
-function activityDate(value) {
-  const date = new Date(value || 0)
-  if (!Number.isFinite(date.getTime())) return 'بدون تاريخ'
-  return date.toLocaleString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'medium', timeStyle: 'short' })
-}
-
-function activityDay(value) {
-  const date = new Date(value || 0)
-  if (!Number.isFinite(date.getTime())) return 'بدون تاريخ'
-  return date.toLocaleDateString(getActiveUiLanguage() === 'en' ? 'en-GB' : 'ar-LY', { dateStyle: 'medium', timeZone: 'UTC' })
-}
-
-function accountLabel(account) {
-  if (!account) return ''
-  return [account.ownerName, account.subAccountName].filter(Boolean).join(' · ')
-}
-
-function tradeReviewImpact(trade = {}) {
-  if (!trade) return { label: 'أثر النقد', valueUsdMicros: 0 }
-  const valueUsdMicros = investmentTradeValueMicros(trade)
-  const feeUsdMicros = Math.max(0, Number(trade.feeUsdMicros || 0))
-  if (trade.type === INVESTMENT_TRADE_TYPES.OPENING) {
-    return { label: 'التكلفة', valueUsdMicros: valueUsdMicros + feeUsdMicros }
-  }
-  if (trade.type === INVESTMENT_TRADE_TYPES.BUY) {
-    return { label: 'أثر النقد', valueUsdMicros: -(valueUsdMicros + feeUsdMicros) }
-  }
-  return { label: 'أثر النقد', valueUsdMicros: valueUsdMicros - feeUsdMicros }
-}
-
-function holdingPriceIsStale(holding) {
-  if (Number(holding.lastPriceUsdMicros || 0) <= 0) return false
-  const automated = isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true')
-  const sourceUnavailable = Boolean(holding.lastPriceSource && !['manual', 'trade', 'opening'].includes(holding.lastPriceSource) && !automated)
-  if (sourceUnavailable) return true
-  if (!automated) return false
-  const quotedAge = Date.now() - Date.parse(String(holding.lastPriceQuotedAt || ''))
-  const dailyClose = ['tgmcharts-eod', 'twelve-data-eod+ecb-fx', 'burkut+ecb-fx'].includes(holding.lastPriceSource)
-  const maxQuoteAge = holding.assetType === 'crypto' ? 15 * 60 * 1000 : dailyClose || holding.lastPriceMarketOpen === false ? 7 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000
-  return !Number.isFinite(quotedAge) || quotedAge > maxQuoteAge
-}
-
-function holdingPriceLabel(holding) {
-  const nativeMicros = Number(holding.lastPriceNativeMicros || 0)
-  return holding.quoteCurrency === 'TRY' && nativeMicros > 0 ? tryUnitMicros(nativeMicros) : usdUnitMicros(holding.lastPriceUsdMicros)
-}
-
-function InvestmentMarketPrice({ holding, error, onOpen }) {
-  const priceMicros = Number(holding.lastPriceUsdMicros || 0)
-  const showsLira = holding.quoteCurrency === 'TRY' && Number(holding.lastPriceNativeMicros || 0) > 0
-  const priceTimestamp = String(holding.lastPriceQuotedAt || '')
-  const dailyClose = holding.lastPriceSource === 'tgmcharts-eod'
-  const providerUpdate = holding.lastPriceSource === 'burkut+ecb-fx'
-  const sourceUnavailable = Boolean(holding.lastPriceSource && !['manual', 'trade', 'opening'].includes(holding.lastPriceSource)
-    && !isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true'))
-  const stale = Boolean(error || holdingPriceIsStale(holding))
-  const priceStatus = error ? 'لم يتحدث'
-    : stale ? (dailyClose || holding.lastPriceSource === 'twelve-data-eod+ecb-fx' ? 'إغلاق سابق' : 'سعر سابق')
-      : dailyClose ? 'إغلاق يومي' : providerUpdate ? 'سعر المزود' : holding.lastPriceMarketOpen === false ? 'إغلاق السوق' : 'آخر سعر'
-  const { direction, percent } = stale ? { direction: 'neutral', percent: 0 } : investmentPriceChange(holding)
-  const DirectionIcon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus
-  const prefersReducedMotion = useReducedMotion()
-
-  return (
-    <button
-      type="button"
-      className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${stale ? 'is-stale' : ''}`.trim()}
-      onClick={() => onOpen(holding)}
-      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : providerUpdate ? 'سعر المزود' : 'السعر الحالي'} ${holdingPriceLabel(holding)}${showsLira ? ` (${usdUnitMicros(priceMicros)})` : ''}${direction !== 'neutral' ? ` · ${direction === 'up' ? '+' : '-'}${decimal(Math.abs(percent), 2)}%` : ''}` : 'إدخال السعر الحالي'}
-      title={error || (sourceUnavailable ? 'مصدر التحديث غير متاح لهذا الرمز؛ السعر المعروض سابق.' : holding.lastPriceQuotedAt ? `${dailyClose ? 'تاريخ الإغلاق' : providerUpdate ? 'وقت تحديث المزود' : holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : 'وقت السعر'}: ${['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(holding.lastPriceSource) ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
-    >
-      <small>
-        <span>{priceStatus} {stale ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
-        {direction !== 'neutral' ? <em><DirectionIcon aria-hidden="true" size={11} />{Math.abs(percent).toLocaleString('en-US', { maximumFractionDigits: 2 })}%</em> : null}
-      </small>
-      <strong aria-live="polite" dir="ltr">
-        <Motion.span
-          key={`${priceTimestamp}-${priceMicros}`}
-          initial={prefersReducedMotion ? false : { opacity: 0.42, y: 3, scale: 0.985 }}
-          animate={prefersReducedMotion ? { opacity: 1, y: 0, scale: 1 } : { opacity: [0.45, 1, 0.72, 1], y: 0, scale: [0.985, 1.018, 1] }}
-          transition={{ duration: 0.54, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {priceMicros ? holdingPriceLabel(holding) : 'أدخل السعر'}
-        </Motion.span>
-      </strong>
-      {showsLira ? <small className="adreem-investment-price-usd" dir="ltr">≈ {usdUnitMicros(priceMicros)}</small> : null}
-    </button>
-  )
-}
-
-function InvestmentDialog({ title, subtitle, onClose, onSecondary = onClose, children, onSubmit, canSubmit = true, submitLabel = 'حفظ', secondaryLabel = 'رجوع', hideSubmit = false, className = '', icon: DialogIcon = ChartCandlestick, tone = 'neutral' }) {
-  const titleId = useId()
-  const dialogRef = useRef(null)
-  const closeRef = useRef(onClose)
-  const prefersReducedMotion = useReducedMotion()
-  const IconComponent = DialogIcon
-
-  useEffect(() => {
-    closeRef.current = onClose
-  }, [onClose])
-
-  useEffect(() => {
-    const root = document.documentElement
-    const focusBeforeOpen = document.activeElement
-    const focusTimer = window.requestAnimationFrame(() => {
-      if (dialogRef.current?.contains(document.activeElement)) return
-      const preferredControl = dialogRef.current?.querySelector('[autofocus]')
-      const firstControl = preferredControl || dialogRef.current?.querySelector('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])')
-      ;(firstControl || dialogRef.current)?.focus({ preventScroll: true })
-    })
-    function handleDialogKeys(event) {
-      if (event.key === 'Escape') {
-        closeRef.current()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const controls = Array.from(dialogRef.current?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])') || [])
-      if (!controls.length) {
-        event.preventDefault()
-        dialogRef.current?.focus({ preventScroll: true })
-        return
-      }
-      const first = controls[0]
-      const last = controls[controls.length - 1]
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    root.classList.add('adreem-overlay-open')
-    document.addEventListener('keydown', handleDialogKeys)
-    return () => {
-      window.cancelAnimationFrame(focusTimer)
-      root.classList.remove('adreem-overlay-open')
-      document.removeEventListener('keydown', handleDialogKeys)
-      focusBeforeOpen?.focus?.({ preventScroll: true })
-    }
-  }, [])
-
-  return (
-    <Motion.div className="adreem-investment-dialog-layer" role="presentation" initial={prefersReducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={prefersReducedMotion ? undefined : { opacity: 0 }} transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <Motion.form ref={dialogRef} tabIndex={-1} className={`adreem-investment-dialog is-tone-${tone} ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={onSubmit} initial={prefersReducedMotion ? false : { opacity: 0, y: 14, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={prefersReducedMotion ? undefined : { opacity: 0, y: 8, scale: 0.99 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
-        <header>
-          <span><IconComponent aria-hidden="true" size={19} /></span>
-          <div><h2 id={titleId}>{title}</h2>{subtitle ? <small>{subtitle}</small> : null}</div>
-          <button type="button" onClick={onClose} aria-label="إغلاق" title="إغلاق"><X aria-hidden="true" size={18} /></button>
-        </header>
-        <div className="adreem-investment-dialog-body">{children}</div>
-        <footer className={hideSubmit ? 'is-single' : ''}>
-          <button type="button" className="is-secondary" onClick={onSecondary}>{hideSubmit ? 'إغلاق' : secondaryLabel}</button>
-          {!hideSubmit ? <button type="submit" className="is-primary" disabled={!canSubmit}><Check aria-hidden="true" size={16} />{submitLabel}</button> : null}
-        </footer>
-      </Motion.form>
-    </Motion.div>
-  )
-}
+import { accountLabel, activityActionLabel, activityDate, activityDay, ASSET_OPTIONS, assetTypeForMarketResult, assetUsesCurrencyMarket, symbolPlaceholderFor, blankHolding, blankPlatform, blankTrade, blankTradeEdit, blankTransfer, blankTryFx, decimal, holdingIsSmall, holdingPriceIsStale, holdingPriceLabel, holdingTypeLabel, MARKET_OPTIONS, platformLogoUrl, PRICE_SOURCE_LABELS, profitPercent, profitToneClass, tradeReviewImpact, tryMoneyMicros, tryUnitMicros, usdMicros, usdUnitMicros } from './investmentFormat'
+import { InvestmentDialog, InvestmentMarketPrice, TryExchangeRate } from './InvestmentParts'
 
 export default function InvestmentsPanel({
   summary,
@@ -390,7 +95,9 @@ export default function InvestmentsPanel({
         : holdingDraft.quoteCurrency === 'USD' && import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED !== 'true' && ['stock', 'fund'].includes(holdingDraft.assetType)
           ? 'رمز السهم مثل AAPL'
         : 'الاسم أو الرمز'
-  const emptyMarketSearchMessage = 'لا توجد نتيجة. اكتب الاسم والرمز يدويًا.'
+  const emptyMarketSearchMessage = holdingDraft.assetType === INVESTMENT_ASSET_TYPES.CRYPTO && /[\u0600-\u06ff]/u.test(assetQuery)
+    ? 'اكتب اسم العملة بالإنجليزية، مثل Polkadot.'
+    : 'لا توجد نتيجة. اكتب الاسم والرمز يدويًا.'
 
   useEffect(() => {
     const sequence = ++assetSearchSequenceRef.current
@@ -1010,9 +717,9 @@ export default function InvestmentsPanel({
             <div className="is-paired">
               <label><span>النوع</span><select value={holdingDraft.assetType} onChange={(event) => changeHoldingAssetType(event.target.value)}>{ASSET_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
               <div className="adreem-investment-market-choice">
-                <span>سوق التداول</span>
-                <div role="radiogroup" aria-label="سوق التداول">
-                  {MARKET_OPTIONS.map((market) => <button type="button" role="radio" aria-checked={holdingDraft.quoteCurrency === market.value} className={holdingDraft.quoteCurrency === market.value ? 'is-active' : ''} key={market.value} onClick={() => changeHoldingMarket(market.value)}><strong>{market.label}</strong><small>{market.value}</small></button>)}
+                <span>{assetUsesCurrencyMarket(holdingDraft.assetType) ? 'عملة السعر' : 'سوق التداول'}</span>
+                <div role="radiogroup" aria-label={assetUsesCurrencyMarket(holdingDraft.assetType) ? 'عملة السعر' : 'سوق التداول'}>
+                  {MARKET_OPTIONS.map((market) => <button type="button" role="radio" aria-checked={holdingDraft.quoteCurrency === market.value} className={holdingDraft.quoteCurrency === market.value ? 'is-active' : ''} key={market.value} onClick={() => changeHoldingMarket(market.value)}><strong>{assetUsesCurrencyMarket(holdingDraft.assetType) ? market.currencyLabel : market.label}</strong><small>{market.value}</small></button>)}
                 </div>
               </div>
             </div>
@@ -1020,9 +727,10 @@ export default function InvestmentsPanel({
             {assetSearchStatus === 'loading' ? <p className="adreem-investment-search-note">جاري البحث...</p> : null}
             {assetSearchError ? <p className="adreem-investment-search-note is-error">{assetSearchError}</p> : null}
             {assetSearchStatus === 'ready' && !assetResults.length ? <p className="adreem-investment-search-note">{emptyMarketSearchMessage}</p> : null}
-            {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([holdingTypeLabel(result.assetType), result.exchange].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
+            {assetResults.length ? <div className="adreem-investment-search-results" role="listbox" aria-label="نتائج السوق">{assetResults.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => selectMarketAsset(result)}><span><strong>{preserveUiData(result.name)}</strong><small>{preserveUiData([holdingTypeLabel(result.assetType), result.exchange, result.marketCapRank ? `#${result.marketCapRank}` : ''].filter(Boolean).join(' · '))}</small></span><b>{preserveUiData(result.symbol)}<small>{result.quoteCurrency}</small></b></button>)}</div> : null}
             {assetResults.some((result) => result.providerSymbol?.endsWith(':TGM')) ? <p className="adreem-investment-search-note">إغلاق يومي من <a href="https://tgmcharts.com/" target="_blank" rel="noopener noreferrer">TGMCharts</a>.</p> : null}
-            {holdingDraft.marketDataMode === 'provider' && holdingDraft.providerSymbol ? <div className="adreem-investment-selected-asset"><Check aria-hidden="true" size={16} /><span><strong>{preserveUiData(holdingDraft.name)}</strong><small>{preserveUiData(`${holdingDraft.symbol} · ${holdingDraft.exchange || holdingDraft.quoteCurrency}`)}</small></span><div><b>{holdingTypeLabel(holdingDraft.assetType)}</b><button type="button" onClick={clearSelectedMarketAsset}><PencilLine aria-hidden="true" size={12} /> تغيير</button></div></div> : <div className="is-paired"><label><span>الاسم</span><input value={holdingDraft.name} maxLength={80} onChange={(event) => setHoldingDraft((current) => ({ ...current, name: event.target.value, marketDataMode: 'manual' }))} placeholder="اسم الاستثمار" /></label><label><span>الرمز</span><input dir="ltr" value={holdingDraft.symbol} maxLength={32} onChange={(event) => setHoldingDraft((current) => ({ ...current, symbol: event.target.value.toUpperCase(), marketDataMode: 'manual' }))} placeholder="THYAO" /></label></div>}
+            {assetResults.some((result) => result.providerSymbol?.includes(':CG-')) ? <p className="adreem-investment-search-note">أسعار العملات الرقمية من <a href="https://www.coingecko.com/" target="_blank" rel="noopener noreferrer">CoinGecko</a>.</p> : null}
+            {holdingDraft.marketDataMode === 'provider' && holdingDraft.providerSymbol ? <div className="adreem-investment-selected-asset"><Check aria-hidden="true" size={16} /><span><strong>{preserveUiData(holdingDraft.name)}</strong><small>{preserveUiData(`${holdingDraft.symbol} · ${holdingDraft.exchange || holdingDraft.quoteCurrency}`)}</small></span><div><b>{holdingTypeLabel(holdingDraft.assetType)}</b><button type="button" onClick={clearSelectedMarketAsset}><PencilLine aria-hidden="true" size={12} /> تغيير</button></div></div> : <div className="is-paired"><label><span>الاسم</span><input value={holdingDraft.name} maxLength={80} onChange={(event) => setHoldingDraft((current) => ({ ...current, name: event.target.value, marketDataMode: 'manual' }))} placeholder="اسم الاستثمار" /></label><label><span>الرمز</span><input dir="ltr" value={holdingDraft.symbol} maxLength={32} onChange={(event) => setHoldingDraft((current) => ({ ...current, symbol: event.target.value.toUpperCase(), marketDataMode: 'manual' }))} placeholder={symbolPlaceholderFor(holdingDraft.assetType)} /></label></div>}
             {holdingDraft.marketDataMode === 'manual' ? <p className="adreem-investment-search-note">{holdingDraft.quoteCurrency === 'USD' && import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED !== 'true' && ['stock', 'fund'].includes(holdingDraft.assetType) ? 'ابحث برمز السهم لسعر إغلاق يومي، أو أدخل السعر يدويًا.' : 'السعر يدوي حتى يتوفر مصدر معتمد.'}</p> : null}
             <div className="is-paired is-investment-numbers"><label><span>كمية سابقة</span><input dir="ltr" inputMode="decimal" value={holdingDraft.initialQuantity} onChange={(event) => setHoldingDraft((current) => ({ ...current, initialQuantity: event.target.value }))} placeholder="0" /></label><label><span>{holdingDraft.quoteCurrency === 'TRY' ? 'سعر الشراء TRY' : 'متوسطها USD'}</span><input dir="ltr" inputMode="decimal" value={holdingDraft.quoteCurrency === 'TRY' ? holdingDraft.initialPriceNative : holdingDraft.initialPriceUsd} onChange={(event) => setHoldingDraft((current) => ({ ...current, [current.quoteCurrency === 'TRY' ? 'initialPriceNative' : 'initialPriceUsd']: event.target.value }))} placeholder="0" /></label></div>
             {holdingDraft.quoteCurrency === 'TRY' && holdingHasOpening ? <><TryExchangeRate fx={tryFx} onChange={changeTryFxRate} /><output className="adreem-investment-fx-result">تكلفة الوحدة: <strong>{openingPriceUsdMicros ? usdUnitMicros(openingPriceUsdMicros) : 'أدخل سعر الصرف'}</strong></output></> : null}

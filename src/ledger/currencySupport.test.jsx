@@ -9,7 +9,9 @@ import { buildDimensionReports, buildExpenseCategoryReports } from './ledgerOper
 import { createEmptyAdreemState, mergeLedgerStates } from './ledgerState.js'
 import { validateLedgerStateTransition } from '../../server/ledger/stateValidation.js'
 import { accountDeletionEligibility } from './accountEditing.js'
-import { AccountRow, NetPositionPanel, buildBalanceOverview, filterCounterpartyGroups, accountBalanceChip } from './LedgerApp.jsx'
+import { accountBalanceChip } from './accountPresentation.js'
+import { AccountRow, NetPositionPanel } from './BalancePanels.jsx'
+import { buildBalanceOverview, filterCounterpartyGroups } from './balanceViews.js'
 import { getMovementAccounts } from './movementAccounts.js'
 
 const at = '2026-09-05T12:00:00.000Z'

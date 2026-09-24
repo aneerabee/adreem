@@ -156,7 +156,6 @@
 .adreem-section-back .ml3-content { animation: adreem-content-enter 130ms ease-out both; }
 .ml3-balance-ledger button { animation: none !important; }
 .ml3-balance-ledger button:active,
-.ml3-home-card:active,
 .ml3-account-switcher button:active,
 .ml3-account-main:active,
 .adreem-counterparty-focus:active,

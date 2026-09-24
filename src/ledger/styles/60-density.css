@@ -1,11 +1,4 @@
 /* Shared density and hierarchy; operational colors remain attached to state. */
-.adreem-app {
-  --canvas: #f2f5f3;
-  --paper: #fbfcfb;
-  --line: #d6dfdb;
-  --nav-idle: #71817b;
-  --shadow-soft: 0 2px 8px rgb(30 50 44 / 4%);
-}
 
 .adreem-app--investments {
   --canvas: #f4f5f6;

@@ -1,0 +1,274 @@
+/* Account choices use one shared legend and one scroll surface per step. */
+.ml3-account-picker { min-height: 0; }
+.ml3-picker-context {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 2px 1px 5px;
+  border-bottom: 1px solid var(--line);
+}
+.ml3-picker-context > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+.ml3-picker-context > div {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 8px;
+}
+.ml3-picker-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 0.63rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ml3-picker-kind svg,
+.ml3-picker-type-icon { color: var(--section-accent); }
+.ml3-picker-kind--person-cash svg { color: var(--entry); }
+.ml3-picker-kind--person-bank svg { color: var(--accounts); }
+.ml3-picker-kind--person-usd svg,
+.ml3-picker-kind--person-try svg,
+.ml3-picker-kind--person-eur svg { color: var(--history); }
+.ml3-picker-type-icon--person-cash {
+  color: var(--entry);
+  background: var(--entry-soft);
+}
+.ml3-picker-type-icon--person-bank {
+  color: var(--accounts);
+  background: var(--accounts-soft);
+}
+.ml3-picker-type-icon--person-usd,
+.ml3-picker-type-icon--person-try,
+.ml3-picker-type-icon--person-eur {
+  color: var(--history);
+  background: var(--history-soft);
+}
+.ml3-picker-kind--expense svg,
+.ml3-picker-type-icon--expense { color: var(--review); }
+.ml3-picker-type-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--section-soft);
+}
+.ml3-picker-favorites {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(148px, 100%), 1fr));
+  gap: 5px;
+}
+.ml3-picker-favorites > button {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-areas:
+    "icon identity"
+    "balance balance";
+  gap: 4px 6px;
+  align-items: center;
+  align-content: center;
+  padding: 5px 6px;
+}
+.ml3-picker-favorites > button > .ml3-picker-type-icon { grid-area: icon; }
+.ml3-picker-favorite-copy {
+  grid-area: identity;
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+.ml3-picker-favorite-copy strong {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ml3-picker-favorites .ml3-balance-chip {
+  grid-area: balance;
+  width: 100%;
+  max-width: none;
+  justify-content: center;
+  text-align: center;
+}
+.ml3-picker-results {
+  overscroll-behavior: auto;
+  padding-bottom: 3px;
+}
+.ml3-picker-choice-group {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px;
+  background: #fff;
+}
+.ml3-picker-choice-group.is-favorite {
+  background: color-mix(in srgb, var(--section-soft) 42%, #fff);
+}
+.ml3-picker-choice-group-head {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+.ml3-picker-choice-group-head strong {
+  min-width: 0;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.ml3-picker-choice-channels {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(118px, 100%), 1fr));
+  gap: 4px;
+}
+.ml3-picker-choice-channels button {
+  min-width: 0;
+  min-height: 32px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 5px;
+  background: #f8faf9;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ml3-picker-choice-channels button:hover { border-color: #8fb3a6; background: #f2f8f5; }
+.ml3-picker-choice-channels button.is-selected { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
+.ml3-picker-choice-channels .ml3-balance-chip {
+  width: 100%;
+  max-width: none;
+  justify-content: center;
+  padding-inline: 4px;
+  text-align: center;
+}
+.ml3-picker-results > button:not(.ml3-picker-more) {
+  min-height: 48px;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  gap: 7px;
+  padding: 5px 7px;
+}
+.ml3-picker-option-copy {
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+.ml3-picker-option-copy strong {
+  width: 100%;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ml3-picker-channel-tag {
+  width: max-content;
+  max-width: 100%;
+  min-height: 15px;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: var(--section-ink);
+  background: var(--section-soft);
+  font-size: 0.52rem;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.ml3-picker-channel-tag.is-person-cash {
+  color: #075c4a;
+  background: var(--entry-soft);
+}
+.ml3-picker-channel-tag.is-person-bank {
+  color: #30343a;
+  background: var(--accounts-soft);
+}
+.ml3-picker-channel-tag.is-person-usd,
+.ml3-picker-channel-tag.is-person-try,
+.ml3-picker-channel-tag.is-person-eur {
+  color: #825108;
+  background: var(--history-soft);
+}
+
+.ml3-step--source.is-open,
+.ml3-step--destination.is-open { overflow: hidden; }
+.ml3-step--source .ml3-route-picker,
+.ml3-step--destination .ml3-route-picker {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
+  overscroll-behavior: contain;
+}
+.ml3-step--source .ml3-step-controls,
+.ml3-step--destination .ml3-step-controls {
+  position: static;
+  margin-top: 0;
+}
+
+@media (max-width: 430px) {
+  .adreem-flow-head { min-height: 58px; padding-block: 6px; }
+  .adreem-flow-progress { padding-top: 5px; }
+  .adreem-flow-progress-meta { min-height: 31px; }
+  .adreem-flow-progress-meta > span { display: none; }
+  .adreem-flow-trail {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+    padding-block: 2px;
+  }
+  .adreem-flow-trail button { height: 26px; padding-inline: 4px; }
+  .ml3-picker-context { align-items: flex-start; }
+  .ml3-picker-context > div { gap: 3px 7px; }
+  .ml3-picker-favorites .ml3-balance-chip,
+  .ml3-picker-results .ml3-balance-chip {
+    font-size: 0.61rem;
+  }
+  .ml3-picker-results .ml3-balance-chip { max-width: 112px; }
+  .ml3-picker-results > button:not(.ml3-picker-more) { grid-template-columns: 28px minmax(0, 1fr) auto; }
+  .ml3-picker-results > button em { display: none; }
+  .ml3-picker-favorites > button:last-child:nth-child(odd):not(:only-child) {
+    grid-column: 1 / -1;
+    width: calc(50% - 2.5px);
+    justify-self: center;
+  }
+  .ml3-picker-choice-group-head strong { white-space: normal; }
+  .ml3-picker-choice-channels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .adreem-app input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+  .adreem-app select,
+  .adreem-app textarea {
+    font-size: 16px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(adreem-entry-surface),
+  ::view-transition-new(adreem-entry-surface) { animation: none !important; }
+  .adreem-app *,
+  .adreem-app *::before,
+  .adreem-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

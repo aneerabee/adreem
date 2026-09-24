@@ -4,13 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { preserveUiData, setActiveUiLanguage, stripUiDataProtection, translateUiText } from './uiTranslation.js'
 
 const ARABIC_TEXT = /[\u0600-\u06ff]/u
-const UI_SOURCE_FILES = [
-  'LedgerApp.jsx',
-  'AdreemChrome.jsx',
-  'LoginPage.jsx',
-  'AdminUsersPage.jsx',
-  'ConfigurationErrorPage.jsx',
-]
+const UI_SOURCE_FILES = fs.readdirSync(new URL('.', import.meta.url))
+  .filter((fileName) => fileName.endsWith('.jsx') && !fileName.includes('.test.'))
+  .sort()
 
 function visibleArabicLiterals(fileName) {
   const fileUrl = new URL(fileName, import.meta.url)

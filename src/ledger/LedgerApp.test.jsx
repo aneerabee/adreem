@@ -6,84 +6,77 @@ import { COUNTERPARTY_ACCOUNT_KINDS } from './accountConfig.js'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES, createAccount, createOpeningMovements, postMovement } from './ledgerCore.js'
 import { MOVEMENT_ENTRY_STEPS } from './movementConfig.js'
 import { SearchField } from './SearchField.jsx'
+import { accountEditChanges } from './accountEditing.js'
+import { accountBalanceChip, compareBalanceBuckets } from './accountPresentation.js'
+import { AccountProfile, AccountClassificationEditorFields } from './AccountProfile.jsx'
+import { AccountSearchSelect } from './AccountSearchSelect.jsx'
+import { AccountStatement } from './AccountStatement.jsx'
+import { accountProfileMovements, buildAccountStatement, accountStatementAccountIds } from './accountStatementData.js'
+import { NetPositionPanel, AccountRow, MoneyAccountList, CurrencyAmountGrid } from './BalancePanels.jsx'
 import {
-  AccountProfile,
-  AccountStatement,
-  NumericEntry,
-  preventImplicitNumericSubmit,
-  NetPositionPanel,
-  SeparateLedgerPanel,
-  TrackingPanel,
-  AccountRow,
-  MoneyAccountList,
-  AccountSearchSelect,
-  AccountClassificationEditorFields,
-  ExternalAccountCard,
-  HistoryMovementRow,
-  MovementMiniRow,
-  MovementActionDialog,
-  ReviewAccountCard,
-  CounterpartyCard,
-  CounterpartyList,
-  ExpenseCategoryDialog,
-  ExpenseCategoryPicker,
-  ExpenseReportList,
-  accountBalanceChip,
-  accountProfileMovements,
-  areMergeAccountsCompatible,
-  accountClassificationMovementErrors,
-  accountEditChanges,
-  accountReviewSelection,
-  activeRecurringRuleForMovement,
   buildBalanceOverview,
-  CurrencyAmountGrid,
-  buildAccountStatement,
-  balanceAmountIsWide,
-  balanceAmountNeedsStack,
   buildExpenseBalanceRows,
   buildPeopleAccountViews,
-  canEditMovement,
-  cancelMovementConfirmation,
-  claimSubmission,
-  filterMovementHistory,
   filterCounterpartyGroups,
   filterCounterpartyGroupsByQuery,
   filterMoneyBalanceRows,
-  formatMoneyNumber,
   expenseCategoryTone,
   groupNetContributionsForDisplay,
-  compareBalanceBuckets,
   counterpartyMagnitudeForFilter,
   unifiedCounterpartyGroups,
+  netContributionDisplayValues,
+  prepareExpenseCategoryAccount,
+  projectCounterpartyGroupForFilter,
+  setCounterpartySettlementPin,
+} from './balanceViews.js'
+import { CounterpartyCard, CounterpartyList } from './CounterpartyViews.jsx'
+import { ExpenseCategoryPicker, ExpenseReportList } from './ExpenseViews.jsx'
+import {
+  areMergeAccountsCompatible,
+  accountClassificationMovementErrors,
+  accountReviewSelection,
+  activeRecurringRuleForMovement,
+  cancelMovementConfirmation,
+  claimSubmission,
+  filterMovementHistory,
   mergeAccountsConfirmation,
   mergeAccountReferenceErrors,
   mergeLedgerAccountState,
   mergeMovementHistoryPages,
   mergeMovementPageAttachments,
   mergeReviewMovementPage,
-  money,
-  netContributionDisplayValues,
-  movementStatusLabel,
   previewMovementEdit,
+  pendingUploadedOrphanPaths,
+  prepareAccountClassificationUpdate,
+  releaseSubmission,
+  saveFailureMessage,
+  storageTextForStatus,
+} from './ledgerAppState.js'
+import { MovementActionDialog, ExpenseCategoryDialog } from './LedgerDialogs.jsx'
+import {
+  balanceAmountIsWide,
+  balanceAmountNeedsStack,
+  formatMoneyNumber,
+  money,
+  normalizeLocalizedNumericInput,
+  parseMoneyAmount,
+  parseWholeAmount,
+  signedMoney,
+} from './ledgerFormat.js'
+import { TEMPORARY_NET_RESET_MS } from './ledgerUiConfig.js'
+import {
+  canEditMovement,
+  movementStatusLabel,
   movementChangedWhileOpen,
   movementEditChanges,
   movementRouteSteps,
   movementRecordVersion,
-  normalizeLocalizedNumericInput,
-  parseMoneyAmount,
-  parseWholeAmount,
-  pendingUploadedOrphanPaths,
-  prepareExpenseCategoryAccount,
-  prepareAccountClassificationUpdate,
-  projectCounterpartyGroupForFilter,
-  releaseSubmission,
-  saveFailureMessage,
-  setCounterpartySettlementPin,
-  signedMoney,
-  storageTextForStatus,
-  TEMPORARY_NET_RESET_MS,
-  accountStatementAccountIds,
-} from './LedgerApp.jsx'
+} from './movementPresentation.js'
+import { HistoryMovementRow, MovementMiniRow } from './MovementRows.jsx'
+import { NumericEntry, preventImplicitNumericSubmit } from './NumericEntry.jsx'
+import { ExternalAccountCard, ReviewAccountCard } from './ReviewCards.jsx'
+import { SeparateLedgerPanel } from './SeparateLedgerPanel.jsx'
+import { TrackingPanel } from './TrackingPanel.jsx'
 import { setActiveUiLanguage, stripUiDataProtection } from './uiTranslation.js'
 
 const previousReact = globalThis.React

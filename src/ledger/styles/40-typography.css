@@ -1,14 +1,4 @@
 /* One visual hierarchy for descriptions, identities, and financial values. */
-.adreem-app {
-  --type-caption: 0.63rem;
-  --type-label: 0.67rem;
-  --type-name: 0.82rem;
-  --type-value: 0.9rem;
-  --type-key-value: 1.02rem;
-  --type-label-weight: 600;
-  --type-name-weight: 700;
-  --type-value-weight: 800;
-}
 
 @media screen {
   .adreem-app :is(

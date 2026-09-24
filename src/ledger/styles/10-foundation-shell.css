@@ -1,0 +1,253 @@
+.adreem-app {
+  min-height: 100dvh;
+  overflow-x: clip;
+  font-family: var(--adreem-font-ar);
+}
+
+.adreem-app[lang="en"] { font-family: var(--adreem-font-en); }
+
+.adreem-app button,
+.adreem-app input,
+.adreem-app select,
+.adreem-app textarea { font: inherit; }
+.adreem-app button { touch-action: manipulation; }
+.adreem-app h1,
+.adreem-app h2,
+.adreem-app h3,
+.adreem-app p { margin: 0; letter-spacing: 0; }
+.adreem-app strong,
+.adreem-app span,
+.adreem-app b,
+.adreem-app small,
+.adreem-app p,
+.adreem-app h1,
+.adreem-app h2,
+.adreem-app h3 { overflow-wrap: anywhere; }
+
+.adreem-cloud-gate {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+.adreem-cloud-gate > section {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--green);
+  padding: 20px;
+  background: var(--paper);
+}
+.adreem-cloud-gate span { color: var(--green); font-size: 0.72rem; font-weight: 700; }
+.adreem-cloud-gate h1 { font-size: 1.15rem; }
+.adreem-cloud-gate p { color: var(--muted); font-size: 0.82rem; line-height: 1.7; }
+.adreem-cloud-gate > section > div { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.adreem-cloud-gate button {
+  min-height: 42px;
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--green);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.adreem-cloud-gate button.is-secondary { background: #fff; color: var(--ink); border-color: var(--line); }
+
+.adreem-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.adreem-brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.adreem-mark {
+  display: grid;
+  place-items: center;
+}
+
+.adreem-brand > div { min-width: 0; display: grid; }
+.adreem-brand > div > span {
+  line-height: 1;
+}
+.adreem-brand h1 {
+  overflow: hidden;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adreem-header-context {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.adreem-header-context > span,
+.adreem-cloud-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  white-space: nowrap;
+}
+.adreem-cloud-state--failed,
+.adreem-cloud-state--retrying,
+.adreem-cloud-state--local-only { border-color: #f0b5ae; }
+.adreem-cloud-state button {
+  width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: currentColor;
+  color: #fff;
+  cursor: pointer;
+}
+
+.adreem-header-actions {
+  display: flex;
+  align-items: center;
+}
+.adreem-header-actions button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.adreem-profile-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  background: rgba(18, 31, 27, 0.42);
+  backdrop-filter: blur(5px);
+}
+
+.adreem-profile-dialog {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--paper);
+  box-shadow: 0 24px 70px rgba(18, 31, 27, 0.2);
+}
+
+.adreem-profile-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adreem-profile-dialog > header > div { display: grid; gap: 1px; }
+.adreem-profile-dialog > header span { color: var(--green); font-size: 0.62rem; font-weight: 700; }
+.adreem-profile-dialog > header h2 { font-size: 1rem; }
+.adreem-profile-dialog > header button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.adreem-profile-identity {
+  display: grid;
+  gap: 2px;
+  border-block: 1px solid var(--line);
+  padding-block: 10px;
+}
+.adreem-profile-identity strong { font-size: 0.86rem; }
+.adreem-profile-identity span { color: var(--muted); font-size: 0.72rem; direction: ltr; text-align: start; }
+
+.adreem-profile-language { display: grid; gap: 10px; }
+.adreem-profile-language > div:first-child { display: grid; gap: 2px; }
+.adreem-profile-language > div:first-child strong { font-size: 0.82rem; }
+.adreem-profile-language p { color: var(--muted); font-size: 0.7rem; line-height: 1.6; }
+.adreem-profile-language > small { color: var(--green); font-size: 0.68rem; font-weight: 500; }
+.adreem-profile-language > small.is-error { color: var(--red); }
+
+.adreem-language-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.adreem-language-options button {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 9px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+}
+.adreem-language-options button > span {
+  width: 34px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+.adreem-language-options button strong { font-size: 0.78rem; }
+.adreem-language-options button.is-active > span { color: #fff; }
+.adreem-language-options button:disabled { cursor: wait; opacity: 0.65; }
+
+.adreem-app[dir="ltr"] .adreem-frame,
+.adreem-app[dir="ltr"] .adreem-nav { direction: ltr; }
+
+.adreem-nav {
+  direction: inherit;
+  align-self: start;
+}
+.adreem-nav button {
+  min-width: 0;
+  cursor: pointer;
+}
+.adreem-nav button.is-active {
+  border-color: rgba(11, 122, 90, 0.25);
+}
+.adreem-nav-icon { position: relative; }
+.adreem-nav-icon b {
+  position: absolute;
+  min-width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  padding: 0 3px;
+  font-size: 0.55rem;
+  line-height: 1;
+}
+.adreem-nav strong { line-height: 1.2; }
+
+.adreem-view {
+  direction: inherit;
+  min-width: 0;
+  background: var(--canvas);
+}

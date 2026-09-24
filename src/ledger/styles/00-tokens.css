@@ -1,0 +1,91 @@
+/* Design tokens for the ledger app, gathered in their original cascade order. */
+.adreem-app {
+  /* from adreemDesk.css */
+  --green: #087f68;
+  --charcoal: #4b5057;
+  --red: #dc2626;
+  --amber: #d18a18;
+  --soft: #eaf1ee;
+
+  /* from adreemStudio.css */
+  --ink: #172b25;
+  --ink-soft: #355048;
+  --muted: #657871;
+  --paper-strong: #ffffff;
+  --line-strong: #bfcfc8;
+  --entry: #08785f;
+  --entry-soft: #e6f5ef;
+  --accounts: #4b5057;
+  --accounts-soft: #f0f1f2;
+  --history: #9b650d;
+  --history-soft: #fff4dd;
+  --review: #b8443d;
+  --review-soft: #fff0ee;
+  --positive: #08785f;
+  --positive-soft: #e7f6ef;
+  --negative: #dc2626;
+  --negative-soft: #fef2f2;
+  --warning: #a86709;
+  --warning-soft: #fff4dd;
+  --section-accent: var(--entry);
+  --section-soft: var(--entry-soft);
+  --section-ink: #075c4a;
+  --section-line: #9dcebd;
+  --shadow-float: 0 18px 50px rgba(23, 43, 37, 0.15);
+
+  /* from adreemFinance.css */
+  --finance-ink: oklch(0.25 0.025 174);
+  --finance-muted: oklch(0.51 0.025 174);
+  --finance-line: oklch(0.89 0.018 174);
+  --finance-surface: oklch(0.985 0.006 174);
+  --finance-paper: oklch(1 0 0);
+  --finance-green: oklch(0.55 0.13 161);
+  --finance-green-dark: oklch(0.39 0.1 161);
+  --finance-green-soft: oklch(0.96 0.035 161);
+  --finance-charcoal: #4b5057;
+  --finance-charcoal-dark: #2f3338;
+  --finance-charcoal-soft: #f0f1f2;
+  --finance-neutral: #6c7177;
+  --finance-neutral-dark: #383c41;
+  --finance-neutral-soft: #f6f7f8;
+  --finance-coral: oklch(0.61 0.18 25);
+  --finance-coral-dark: oklch(0.44 0.15 25);
+  --finance-coral-soft: oklch(0.965 0.035 25);
+  --finance-debt: #dc2626;
+  --finance-debt-dark: #b91c1c;
+  --finance-debt-soft: #fef2f2;
+  --finance-debt-border: #fca5a5;
+  --finance-gold: oklch(0.58 0.13 72);
+  --finance-gold-soft: oklch(0.97 0.035 85);
+  --finance-control-compact: 32px;
+  --finance-control: 40px;
+  --finance-control-touch: 44px;
+  --finance-key: 38px;
+  --finance-choice: 52px;
+  --finance-tab: 44px;
+  --finance-summary: 76px;
+  --finance-number-compact: 0.72rem;
+  --finance-number-value: 0.78rem;
+  --finance-number-summary: 0.84rem;
+  --finance-number-weight: 820;
+  --finance-control-radius: 7px;
+  --finance-shadow: 0 12px 34px color-mix(in srgb, var(--finance-ink) 8%, transparent);
+  --finance-shadow-small: 0 5px 16px color-mix(in srgb, var(--finance-ink) 7%, transparent);
+
+  /* from adreemType.css */
+  --type-caption: 0.63rem;
+  --type-label: 0.67rem;
+  --type-name: 0.82rem;
+  --type-value: 0.9rem;
+  --type-key-value: 1.02rem;
+  --type-label-weight: 600;
+  --type-name-weight: 700;
+  --type-value-weight: 800;
+
+  /* from adreemLayout.css */
+  --canvas: #f2f5f3;
+  --paper: #fbfcfb;
+  --line: #d6dfdb;
+  --nav-idle: #71817b;
+  --shadow-soft: 0 2px 8px rgb(30 50 44 / 4%);
+}
