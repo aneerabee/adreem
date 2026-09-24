@@ -45,6 +45,7 @@ export const PRICE_SOURCE_LABELS = {
   'tgmcharts-eod': { ar: 'TGMCharts · إغلاق يومي', en: 'TGMCharts · Daily close' },
   'burkut+ecb-fx': { ar: 'Bürküt · صرف أوروبي', en: 'Bürküt · ECB FX' },
   coingecko: { ar: 'CoinGecko', en: 'CoinGecko' },
+  'kucoin-usdt+coingecko-usdt-usd': { ar: 'KuCoin · تحويل USDT', en: 'KuCoin · USDT FX' },
 }
 
 export function decimal(value, digits = 6, minimumDigits = 0) {

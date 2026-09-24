@@ -543,6 +543,97 @@ describe('investment market prices', () => {
     expect(() => marketPriceItemsForHoldings({ ids: ['mixed'] }, state)).toThrow(/مصدر سعر/)
   })
 
+  it('prices a coin held on KuCoin from KuCoin itself and a wallet coin from the global average', async () => {
+    const seconds = Math.floor(NOW / 1000)
+    const fetchImpl = vi.fn(async (url) => {
+      const endpoint = new URL(url)
+      if (endpoint.hostname === 'api.kucoin.com') {
+        expect(endpoint.pathname).toBe('/api/v1/market/stats')
+        expect(endpoint.searchParams.get('symbol')).toBe('ONE-USDT')
+        return response({ code: '200000', data: { time: NOW - 2_000, symbol: 'ONE-USDT', last: '0.001629', buy: '0.001603', sell: '0.00163', volValue: '3712571.57' } })
+      }
+      expect(endpoint.searchParams.get('ids')).toBe('harmony,tether')
+      return response({
+        harmony: { usd: 0.0022647, usd_24h_vol: 43_048_902, last_updated_at: seconds - 60 },
+        tether: { usd: 1.0002, last_updated_at: seconds - 60 },
+      })
+    })
+    const state = {
+      investmentPlatforms: [{ id: 'kucoin', name: 'Kucoin' }, { id: 'wallet', name: 'Exidus' }],
+      investmentHoldings: [
+        { id: 'one-kucoin', symbol: 'ONE/USD', providerSymbol: 'ONE/USD:CG-HARMONY', platformId: 'kucoin', assetType: 'crypto', quoteCurrency: 'USD', status: 'active' },
+        { id: 'one-wallet', symbol: 'ONE/USD', providerSymbol: 'ONE/USD:CG-HARMONY', platformId: 'wallet', assetType: 'crypto', quoteCurrency: 'USD', status: 'active' },
+      ],
+    }
+    const items = marketPriceItemsForHoldings({ ids: ['one-kucoin', 'one-wallet'] }, state)
+    expect(items).toEqual([expect.objectContaining({ venue: 'kucoin' }), expect.not.objectContaining({ venue: expect.anything() })])
+    const service = createMarketPriceService({}, { fetchImpl, now: () => NOW })
+    const { prices } = await service.refresh({ items })
+    expect(prices[0]).toMatchObject({ ok: true, source: 'kucoin-usdt+coingecko-usdt-usd', priceUsdMicros: 1_629, marketReferenceUsdMicros: 2_265, quotedAt: new Date(NOW - 2_000).toISOString() })
+    expect(prices[1]).toMatchObject({ ok: true, source: 'coingecko', priceUsdMicros: 2_265 })
+    const again = await service.refresh({ items })
+    expect(again.prices.map((price) => [price.priceUsdMicros, price.cached])).toEqual([[1_629, true], [2_265, true]])
+  })
+
+  it('uses the middle of the KuCoin book when the last trade is outside it, and the global price when KuCoin does not list the coin', async () => {
+    const seconds = Math.floor(NOW / 1000)
+    const kucoin = {
+      ONE: { code: '200000', data: { time: NOW, symbol: 'ONE-USDT', last: '0.0019', buy: '0.0016', sell: '0.0016', volValue: '50000' } },
+      RARE: { code: '200000', data: { time: NOW, symbol: 'RARE-USDT', last: null, buy: null, sell: null, volValue: null } },
+    }
+    const fetchImpl = vi.fn(async (url) => {
+      const endpoint = new URL(url)
+      if (endpoint.hostname === 'api.kucoin.com') return response(kucoin[endpoint.searchParams.get('symbol').split('-')[0]])
+      return response({
+        harmony: { usd: 0.0017, usd_24h_vol: 5_000_000, last_updated_at: seconds },
+        'rare-coin': { usd: 2.5, usd_24h_vol: 90_000, last_updated_at: seconds },
+        tether: { usd: 1, last_updated_at: seconds },
+      })
+    })
+    const coin = (id, base, coinId) => ({ id, symbol: `${base}/USD:CG-${coinId.toUpperCase()}`, quoteCurrency: 'USD', assetType: 'crypto', venue: 'kucoin' })
+    const { prices } = await createMarketPriceService({}, { fetchImpl, now: () => NOW }).refresh({ items: [coin('one', 'ONE', 'harmony'), coin('rare', 'RARE', 'rare-coin')] })
+    expect(prices[0]).toMatchObject({ ok: true, priceUsdMicros: 1_600 })
+    expect(prices[1]).toMatchObject({ ok: true, source: 'coingecko', priceUsdMicros: 2_500_000 })
+  })
+
+  it('keeps the previous price when KuCoin fails, has a thin or wide book, or disagrees with the coin identity', async () => {
+    const seconds = Math.floor(NOW / 1000)
+    const book = (fields) => ({ code: '200000', data: { time: NOW, symbol: 'ONE-USDT', last: '0.0016', buy: '0.0016', sell: '0.00161', volValue: '50000', ...fields } })
+    const cases = [
+      [async () => { throw new Error('offline') }, /تعذر الوصول إلى أسعار KuCoin/],
+      [async () => response({}, 429), /حد الطلبات/],
+      [async () => response(book({ buy: '0.0014', sell: '0.0018' })), /الفرق بين عروض البيع والشراء/],
+      [async () => response(book({ volValue: '120' })), /تداول العملة في KuCoin ضعيف/],
+      [async () => response(book({ time: NOW - 20 * 60_000 })), /سعر KuCoin قديم/],
+      [async () => response(book({ last: '0.02', buy: '0.02', sell: '0.0201' })), /بعيد جدًا عن سعر السوق العام/],
+    ]
+    for (const [kucoinResponse, message] of cases) {
+      const fetchImpl = vi.fn(async (url) => new URL(url).hostname === 'api.kucoin.com'
+        ? kucoinResponse()
+        : response({ harmony: { usd: 0.0017, usd_24h_vol: 5_000_000, last_updated_at: seconds }, tether: { usd: 1, last_updated_at: seconds } }))
+      const { prices } = await createMarketPriceService({}, { fetchImpl, now: () => NOW })
+        .refresh({ items: [{ id: 'one', symbol: 'ONE/USD:CG-HARMONY', quoteCurrency: 'USD', assetType: 'crypto', venue: 'kucoin' }] })
+      expect(prices[0]).toMatchObject({ ok: false, error: expect.stringMatching(message) })
+    }
+  })
+
+  it('refuses a KuCoin price when the USDT to USD rate is missing or out of range', async () => {
+    const seconds = Math.floor(NOW / 1000)
+    for (const tether of [undefined, { usd: 0.9, last_updated_at: seconds }, { usd: 1, last_updated_at: seconds - 3_600 }]) {
+      const fetchImpl = vi.fn(async (url) => new URL(url).hostname === 'api.kucoin.com'
+        ? response({ code: '200000', data: { time: NOW, symbol: 'ONE-USDT', last: '0.0016', buy: '0.0016', sell: '0.00161', volValue: '50000' } })
+        : response({ harmony: { usd: 0.0017, usd_24h_vol: 5_000_000, last_updated_at: seconds }, ...(tether ? { tether } : {}) }))
+      const { prices } = await createMarketPriceService({}, { fetchImpl, now: () => NOW })
+        .refresh({ items: [{ id: 'one', symbol: 'ONE/USD:CG-HARMONY', quoteCurrency: 'USD', assetType: 'crypto', venue: 'kucoin' }] })
+      expect(prices[0]).toMatchObject({ ok: false, error: expect.stringMatching(/USDT/) })
+    }
+  })
+
+  it('accepts a market venue only from the ledger, never from an unknown value', () => {
+    expect(normalizeMarketPriceRequest({ items: [{ id: 'a', symbol: 'ONE/USD:CG-HARMONY', venue: 'kucoin' }] })[0].venue).toBe('kucoin')
+    expect(normalizeMarketPriceRequest({ items: [{ id: 'a', symbol: 'ONE/USD:CG-HARMONY', venue: 'fake-exchange' }] })[0]).not.toHaveProperty('venue')
+  })
+
   it('preserves failures separately from valid quotes in mixed batches', async () => {
     const fetchImpl = vi.fn(async (url) => {
       if (new URL(url).pathname === '/price/BTC') return response({ symbol: 'BTC', currency: 'USD', price: 80_000, updatedAt: '2027-01-15T08:00:00Z' })

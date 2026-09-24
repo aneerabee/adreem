@@ -188,11 +188,14 @@ export function investmentPriceDirection(holding = {}) {
 export function applyInvestmentMarketPrice(holding = {}, price = {}) {
   const changed = Number(holding.lastPriceUsdMicros || 0) !== price.priceUsdMicros
     || Number(holding.lastPriceNativeMicros || 0) !== price.nativePriceMicros
+  // A move between two market sources is not a market move, so it must not show as a price change.
+  const sourceChanged = Boolean(holding.lastPriceSource) && holding.lastPriceSource !== 'manual'
+    && Boolean(price.source) && holding.lastPriceSource !== price.source
   return {
     ...holding,
-    previousPriceUsdMicros: changed ? Number(holding.lastPriceUsdMicros || 0) : holding.previousPriceUsdMicros,
-    previousPriceNativeMicros: changed ? Number(holding.lastPriceNativeMicros || 0) : holding.previousPriceNativeMicros,
-    previousPriceAt: changed ? holding.lastPriceAt || null : holding.previousPriceAt,
+    previousPriceUsdMicros: sourceChanged ? 0 : changed ? Number(holding.lastPriceUsdMicros || 0) : holding.previousPriceUsdMicros,
+    previousPriceNativeMicros: sourceChanged ? 0 : changed ? Number(holding.lastPriceNativeMicros || 0) : holding.previousPriceNativeMicros,
+    previousPriceAt: sourceChanged ? null : changed ? holding.lastPriceAt || null : holding.previousPriceAt,
     lastPriceUsdMicros: price.priceUsdMicros,
     lastPriceNativeMicros: price.nativePriceMicros,
     lastPriceAt: price.refreshedAt,

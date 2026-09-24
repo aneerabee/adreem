@@ -770,4 +770,15 @@ describe('investment portfolio core', () => {
     expect(investmentPriceRefreshDelay([{ ...older, marketDataMode: 'manual' }], now)).toBeNull()
     expect(investmentPriceRefreshDelay([inactive], now)).toBeNull()
   })
+
+  it('does not show a switch between price sources as a market move', () => {
+    const holding = { lastPriceUsdMicros: 2_267, lastPriceNativeMicros: 2_267, lastPriceAt: '2026-09-24T21:38:00.000Z', lastPriceSource: 'coingecko', previousPriceUsdMicros: 2_269, previousPriceNativeMicros: 2_269, quoteCurrency: 'USD' }
+    const switched = applyInvestmentMarketPrice(holding, { priceUsdMicros: 1_602, nativePriceMicros: 1_602, refreshedAt: '2026-09-24T22:00:00.000Z', source: 'kucoin-usdt+coingecko-usdt-usd' })
+    expect(switched).toMatchObject({ lastPriceUsdMicros: 1_602, previousPriceUsdMicros: 0, previousPriceAt: null })
+    expect(investmentPriceChange(switched)).toEqual({ direction: 'neutral', percent: 0 })
+    const next = applyInvestmentMarketPrice(switched, { priceUsdMicros: 1_650, nativePriceMicros: 1_650, refreshedAt: '2026-09-24T22:05:00.000Z', source: 'kucoin-usdt+coingecko-usdt-usd' })
+    expect(investmentPriceChange(next).direction).toBe('up')
+    const fromManual = applyInvestmentMarketPrice({ ...holding, lastPriceSource: 'manual' }, { priceUsdMicros: 1_602, nativePriceMicros: 1_602, refreshedAt: '2026-09-24T22:00:00.000Z', source: 'coingecko' })
+    expect(fromManual.previousPriceUsdMicros).toBe(2_267)
+  })
 })

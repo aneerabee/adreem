@@ -1,3 +1,4 @@
+import { resolveInvestmentPlatformBrand } from '../../src/ledger/investmentPlatformBrands.js'
 import { REFERENCE_CRYPTO_SYMBOLS, burkutSymbolForHolding, coinGeckoIdForHolding, coinGeckoProviderSymbol, dexReferenceSymbol, freeReferenceSymbol, isAutoPricedHolding, isTgmEodHolding, tgmEodSymbolForHolding } from '../../src/ledger/investmentMarketPolicy.js'
 
 const DEFAULT_TWELVE_DATA_URL = 'https://api.twelvedata.com'
@@ -6,6 +7,7 @@ const DEFAULT_TGM_DATA_URL = 'https://tgmcharts.com'
 const DEFAULT_DEX_DATA_URL = 'https://api.dexscreener.com'
 const DEFAULT_BURKUT_DATA_URL = 'https://api.burkutportfoy.com/api/public/v1'
 const DEFAULT_COINGECKO_URL = 'https://api.coingecko.com/api/v3'
+const DEFAULT_KUCOIN_URL = 'https://api.kucoin.com'
 const ECB_FX_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD+TRY.EUR.SP00.A?lastNObservations=1&format=jsondata'
 const DEFAULT_CACHE_MS = 5 * 60 * 1000
 const MAX_QUOTE_CLOCK_SKEW_MS = 5 * 60 * 1000
@@ -20,6 +22,13 @@ const MIN_DEX_SECONDARY_LIQUIDITY_USD = 100_000
 const MIN_DEX_DAILY_VOLUME_USD = 10_000
 const MAX_DEX_PRICE_DEVIATION = 0.03
 const MIN_CRYPTO_DAILY_VOLUME_USD = 10_000
+const MARKET_VENUES = new Set(['kucoin'])
+const MAX_VENUE_SPREAD = 0.05
+const MIN_VENUE_DAILY_VOLUME_USDT = 1_000
+const MAX_VENUE_TO_MARKET_RATIO = 3
+const TETHER_COINGECKO_ID = 'tether'
+const MIN_USDT_USD = 0.97
+const MAX_USDT_USD = 1.03
 const LATIN_SEARCH_PATTERN = /^[\p{Script=Latin}0-9 .'_-]+$/u
 const DEX_TOKENS = {
   FET: { chain: 'ethereum', contract: '0xaea46a60368a7bd060eec7df8cba43b7ef41ad85', symbol: 'FET' },
@@ -182,6 +191,15 @@ function usdMicros(value) {
   return Number.isSafeInteger(micros) && micros > 0 ? micros : 0
 }
 
+function priceCacheKey(item) {
+  return `${item.symbol}:${item.quoteCurrency}${item.venue ? `:${item.venue}` : ''}`
+}
+
+export function marketVenueForPlatform(platform) {
+  const key = platform?.name ? resolveInvestmentPlatformBrand(platform.name).key : ''
+  return MARKET_VENUES.has(key) ? key : ''
+}
+
 export function normalizeMarketPriceRequest(body = {}) {
   const rawItems = Array.isArray(body.items) ? body.items : []
   if (!rawItems.length) throw new MarketPriceError('اختر استثمارًا واحدًا على الأقل.', 400, 'empty-price-request')
@@ -196,7 +214,8 @@ export function normalizeMarketPriceRequest(body = {}) {
     if (!quoteCurrency) throw new MarketPriceError('عملة السوق غير مدعومة.', 400, 'invalid-market-currency')
     ids.add(id)
     const assetType = cleanAssetType(item?.assetType)
-    return { id, symbol, quoteCurrency, ...(assetType ? { assetType } : {}), ...(item?.marketDataMode === 'manual' ? { marketDataMode: 'manual' } : {}) }
+    const venue = MARKET_VENUES.has(item?.venue) ? item.venue : ''
+    return { id, symbol, quoteCurrency, ...(assetType ? { assetType } : {}), ...(item?.marketDataMode === 'manual' ? { marketDataMode: 'manual' } : {}), ...(venue ? { venue } : {}) }
   })
 }
 
@@ -209,11 +228,15 @@ export function marketPriceItemsForHoldings(body = {}, state = {}) {
   const holdings = new Map((Array.isArray(state.investmentHoldings) ? state.investmentHoldings : [])
     .filter((holding) => holding?.id && holding.status !== 'inactive')
     .map((holding) => [String(holding.id), holding]))
+  const platforms = new Map((Array.isArray(state.investmentPlatforms) ? state.investmentPlatforms : [])
+    .filter((platform) => platform?.id)
+    .map((platform) => [String(platform.id), platform]))
   const items = ids.map((id) => {
     const holding = holdings.get(id)
     const providerSymbol = providerSymbolForHolding(holding)
     if (!holding || !providerSymbol) throw new MarketPriceError('أحد الاستثمارات غير موجود أو لا يملك مصدر سعر.', 400, 'unknown-price-item')
-    return { id, providerSymbol, quoteCurrency: holding.quoteCurrency, assetType: holding.assetType, ...(holding.marketDataMode === 'manual' ? { marketDataMode: 'manual' } : {}) }
+    const venue = marketVenueForPlatform(platforms.get(String(holding.platformId)))
+    return { id, providerSymbol, quoteCurrency: holding.quoteCurrency, assetType: holding.assetType, ...(holding.marketDataMode === 'manual' ? { marketDataMode: 'manual' } : {}), ...(venue ? { venue } : {}) }
   })
   return normalizeMarketPriceRequest({ items })
 }
@@ -259,10 +282,88 @@ export function createMarketPriceService(env = process.env, options = {}) {
     return coinGeckoKey ? { accept: 'application/json', 'x-cg-demo-api-key': coinGeckoKey } : { accept: 'application/json' }
   }
 
+  async function fetchKucoinQuote(base) {
+    const endpoint = new URL(`${String(env.ADREEM_KUCOIN_API_URL || DEFAULT_KUCOIN_URL).replace(/\/+$/, '')}/api/v1/market/stats`)
+    endpoint.searchParams.set('symbol', `${base}-USDT`)
+    let payload
+    try {
+      const response = await fetchImpl(endpoint, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8_000) })
+      if (!response.ok) return { status: 'error', message: priceFailureMessage({ code: response.status }) }
+      payload = await response.json()
+    } catch {
+      return { status: 'error', message: 'تعذر الوصول إلى أسعار KuCoin الآن. بقي السعر السابق محفوظًا.' }
+    }
+    const data = payload?.data
+    if (payload?.code !== '200000' || !data || data.symbol !== `${base}-USDT`) {
+      return { status: 'error', message: 'رد KuCoin غير صالح. بقي السعر السابق محفوظًا.' }
+    }
+    if (data.last == null && data.buy == null && data.sell == null) return { status: 'not-listed' }
+    const last = Number(data.last)
+    const bid = Number(data.buy)
+    const ask = Number(data.sell)
+    const dailyVolume = Number(data.volValue)
+    const quotedAt = quoteTime({ timestamp: data.time }, now())
+    if (![last, bid, ask].every((value) => Number.isFinite(value) && value > 0) || ask < bid) {
+      return { status: 'error', message: 'سوق العملة في KuCoin بلا عروض مؤكدة. بقي السعر السابق محفوظًا.' }
+    }
+    if ((ask - bid) / ((ask + bid) / 2) > MAX_VENUE_SPREAD) {
+      return { status: 'error', message: 'الفرق بين عروض البيع والشراء في KuCoin كبير جدًا الآن. بقي السعر السابق محفوظًا.' }
+    }
+    if (!Number.isFinite(dailyVolume) || dailyVolume < MIN_VENUE_DAILY_VOLUME_USDT) {
+      return { status: 'error', message: 'تداول العملة في KuCoin ضعيف جدًا لتأكيد سعرها. بقي السعر السابق محفوظًا.' }
+    }
+    if (quoteIsStale({ quotedAt }, now(), MAX_CRYPTO_QUOTE_AGE_MS)) {
+      return { status: 'error', message: 'سعر KuCoin قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.' }
+    }
+    return { status: 'ok', priceUsdt: last >= bid && last <= ask ? last : (bid + ask) / 2, quotedAt }
+  }
+
+  function coinGeckoMarketPrice(item, quote) {
+    const price = Number(quote?.usd)
+    const dailyVolume = Number(quote?.usd_24h_vol)
+    const quotedAt = quoteTime({ timestamp: quote?.last_updated_at }, now())
+    if (!Number.isFinite(price) || price <= 0) return failedPrice(item, 'السعر غير متاح لهذه العملة. بقي السعر السابق محفوظًا.')
+    if (quoteIsStale({ quotedAt }, now(), MAX_CRYPTO_QUOTE_AGE_MS)) return failedPrice(item, 'سعر العملة قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.')
+    if (!Number.isFinite(dailyVolume) || dailyVolume < MIN_CRYPTO_DAILY_VOLUME_USD) {
+      return failedPrice(item, 'تداول العملة ضعيف جدًا لتأكيد سعرها. بقي السعر السابق محفوظًا.')
+    }
+    const priceUsdMicros = usdMicros(price)
+    if (!priceUsdMicros) return failedPrice(item, 'سعر العملة أصغر من دقة الحفظ. أدخل السعر يدويًا.')
+    return confirmedCryptoPrice(item, priceUsdMicros, quotedAt, null, 'coingecko')
+  }
+
+  function confirmedCryptoPrice(item, priceUsdMicros, quotedAt, fxQuotedAt, source, marketReferenceUsdMicros = null) {
+    const result = {
+      id: item.id,
+      symbol: item.symbol,
+      quoteCurrency: item.quoteCurrency,
+      nativePriceMicros: priceUsdMicros,
+      priceUsdMicros,
+      refreshedAt: new Date(now()).toISOString(),
+      quotedAt,
+      fxQuotedAt,
+      marketOpen: true,
+      source,
+      ...(marketReferenceUsdMicros ? { marketReferenceUsdMicros } : {}),
+      cached: false,
+      ok: true,
+    }
+    cacheSet(cache, priceCacheKey(item), { expiresAt: now() + cacheMs, result })
+    return result
+  }
+
+  function usdtUsdRate(quote) {
+    const rate = Number(quote?.usd)
+    const quotedAt = quoteTime({ timestamp: quote?.last_updated_at }, now())
+    if (!Number.isFinite(rate) || rate < MIN_USDT_USD || rate > MAX_USDT_USD || quoteIsStale({ quotedAt }, now(), MAX_CRYPTO_QUOTE_AGE_MS)) return null
+    return { rate, quotedAt }
+  }
+
   async function fetchCoinGeckoPrices(items) {
     const coinIdByItem = new Map(items.map((item) => [item.id, coinGeckoIdForHolding(item)]))
+    const venueItems = items.filter((item) => item.venue === 'kucoin')
     const endpoint = coinGeckoEndpoint('/simple/price')
-    endpoint.searchParams.set('ids', [...new Set(coinIdByItem.values())].join(','))
+    endpoint.searchParams.set('ids', [...new Set([...coinIdByItem.values(), ...(venueItems.length ? [TETHER_COINGECKO_ID] : [])])].join(','))
     endpoint.searchParams.set('vs_currencies', 'usd')
     endpoint.searchParams.set('include_last_updated_at', 'true')
     endpoint.searchParams.set('include_24hr_vol', 'true')
@@ -275,34 +376,28 @@ export function createMarketPriceService(env = process.env, options = {}) {
     } catch {
       return items.map((item) => failedPrice(item, 'مصدر أسعار العملات الرقمية غير متاح الآن. بقي السعر السابق محفوظًا.'))
     }
+    const venueQuotes = new Map()
+    for (let offset = 0; offset < venueItems.length; offset += 4) {
+      const group = venueItems.slice(offset, offset + 4)
+      const quotes = await Promise.all(group.map((item) => fetchKucoinQuote(item.symbol.split('/')[0])))
+      group.forEach((item, index) => venueQuotes.set(item.id, quotes[index]))
+    }
+    const usdt = venueItems.length ? usdtUsdRate(payload?.[TETHER_COINGECKO_ID]) : null
     return items.map((item) => {
       const quote = payload?.[coinIdByItem.get(item.id)]
-      const price = Number(quote?.usd)
-      const dailyVolume = Number(quote?.usd_24h_vol)
-      const quotedAt = quoteTime({ timestamp: quote?.last_updated_at }, now())
-      if (!Number.isFinite(price) || price <= 0) return failedPrice(item, 'السعر غير متاح لهذه العملة. بقي السعر السابق محفوظًا.')
-      if (quoteIsStale({ quotedAt }, now(), MAX_CRYPTO_QUOTE_AGE_MS)) return failedPrice(item, 'سعر العملة قديم أو بلا توقيت مؤكد. بقي السعر السابق محفوظًا.')
-      if (!Number.isFinite(dailyVolume) || dailyVolume < MIN_CRYPTO_DAILY_VOLUME_USD) {
-        return failedPrice(item, 'تداول العملة ضعيف جدًا لتأكيد سعرها. بقي السعر السابق محفوظًا.')
-      }
-      const priceUsdMicros = usdMicros(price)
+      const venueQuote = venueQuotes.get(item.id)
+      if (!venueQuote || venueQuote.status === 'not-listed') return coinGeckoMarketPrice(item, quote)
+      if (venueQuote.status !== 'ok') return failedPrice(item, venueQuote.message)
+      if (!usdt) return failedPrice(item, 'سعر تحويل USDT إلى USD غير مؤكد الآن. بقي السعر السابق محفوظًا.')
+      const priceUsdMicros = usdMicros(venueQuote.priceUsdt * usdt.rate)
       if (!priceUsdMicros) return failedPrice(item, 'سعر العملة أصغر من دقة الحفظ. أدخل السعر يدويًا.')
-      const result = {
-        id: item.id,
-        symbol: item.symbol,
-        quoteCurrency: item.quoteCurrency,
-        nativePriceMicros: priceUsdMicros,
-        priceUsdMicros,
-        refreshedAt: new Date(now()).toISOString(),
-        quotedAt,
-        fxQuotedAt: null,
-        marketOpen: true,
-        source: 'coingecko',
-        cached: false,
-        ok: true,
+      const marketReferenceUsdMicros = usdMicros(Number(quote?.usd))
+      if (!marketReferenceUsdMicros) return failedPrice(item, 'تعذر التحقق من هوية العملة في السوق العام. بقي السعر السابق محفوظًا.')
+      const ratio = priceUsdMicros / marketReferenceUsdMicros
+      if (ratio > MAX_VENUE_TO_MARKET_RATIO || ratio < 1 / MAX_VENUE_TO_MARKET_RATIO) {
+        return failedPrice(item, 'سعر KuCoin بعيد جدًا عن سعر السوق العام؛ قد يكون الرمز لعملة أخرى. راجع العملة أو أدخل السعر يدويًا.')
       }
-      cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
-      return result
+      return confirmedCryptoPrice(item, priceUsdMicros, venueQuote.quotedAt, usdt.quotedAt, 'kucoin-usdt+coingecko-usdt-usd', marketReferenceUsdMicros)
     })
   }
 
@@ -451,7 +546,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
         cached: false,
         ok: true,
       }
-      cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
+      cacheSet(cache, priceCacheKey(item), { expiresAt: now() + cacheMs, result })
       return result
     } catch {
       return null
@@ -496,7 +591,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
       const result = { id: item.id, symbol: item.symbol, quoteCurrency: item.quoteCurrency,
         nativePriceMicros: priceUsdMicros, priceUsdMicros, refreshedAt: observedAt, quotedAt: observedAt,
         fxQuotedAt: null, marketOpen: true, source: 'dexscreener-reference', cached: false, ok: true }
-      cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + cacheMs, result })
+      cacheSet(cache, priceCacheKey(item), { expiresAt: now() + cacheMs, result })
       return result
     } catch {
       return failedPrice(item, 'تعذر الوصول إلى السعر المرجعي. بقي السعر السابق محفوظًا.')
@@ -559,7 +654,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
       cached: false,
       ok: true,
     }
-    cacheSet(cache, `${item.symbol}:${item.quoteCurrency}`, { expiresAt: now() + (source === 'tgmcharts-eod' ? TGM_EOD_CACHE_MS : cacheMs), result })
+    cacheSet(cache, priceCacheKey(item), { expiresAt: now() + (source === 'tgmcharts-eod' ? TGM_EOD_CACHE_MS : cacheMs), result })
     return result
   }
 
@@ -853,7 +948,7 @@ export function createMarketPriceService(env = process.env, options = {}) {
       const results = new Map()
       for (const item of items) {
         const cached = isAutoPricedHolding(item, licensedStocksEnabled)
-          ? cache.get(`${item.symbol}:${item.quoteCurrency}`) : null
+          ? cache.get(priceCacheKey(item)) : null
         if (!force && cached && cached.expiresAt > now()) results.set(item.id, { ...cached.result, id: item.id, cached: true })
         else fresh.push(item)
       }
