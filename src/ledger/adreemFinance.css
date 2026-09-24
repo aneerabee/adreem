@@ -3066,3 +3066,10 @@
 .adreem-investment-closed > small { color: #767069; font-size: 0.6rem; font-weight: 750; }
 .adreem-investment-closed > span { display: inline-flex; gap: 5px; align-items: baseline; font-size: 0.66rem; }
 .adreem-investment-closed strong { font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+
+.adreem-investment-usd-equivalent { display: block; color: #767069; font-size: 0.6rem; font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.adreem-investment-price-usd { display: block; color: #767069; font-size: 0.56rem; font-weight: 700; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.adreem-investment-native-result { display: block; font-size: 0.6rem; font-weight: 750; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.adreem-investment-native-result.is-positive { color: var(--investment-positive); }
+.adreem-investment-native-result.is-negative { color: var(--investment-negative); }
+.adreem-investment-native-note { margin: 0; color: #767069; font-size: 0.6rem; }

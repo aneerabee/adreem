@@ -128,6 +128,10 @@ export function convertTryPriceToUsdMicros(priceTryMicros, tryPerUsdMicros) {
   return result > 0n && result <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(result) : 0
 }
 
+export function convertUsdToTryMicros(usdMicros, tryPerUsdMicros) {
+  return safeScaledProduct(usdMicros, tryPerUsdMicros, INVESTMENT_PRICE_SCALE)
+}
+
 export const INVESTMENT_FX_FORM_MAX_AGE_MS = 5 * 60 * 1000
 
 export function investmentFxRateIsFresh(fx = {}, now = Date.now()) {
@@ -163,9 +167,16 @@ export function createInvestmentTransfer(draft = {}, createdAt = new Date().toIS
   }
 }
 
+function holdingUsesNativePrice(holding = {}) {
+  return holding.quoteCurrency === CURRENCIES.TRY
+    && safePositiveInteger(holding.lastPriceNativeMicros) > 0
+    && safePositiveInteger(holding.previousPriceNativeMicros) > 0
+}
+
 export function investmentPriceChange(holding = {}) {
-  const current = safePositiveInteger(holding.lastPriceUsdMicros)
-  const previous = safePositiveInteger(holding.previousPriceUsdMicros)
+  const native = holdingUsesNativePrice(holding)
+  const current = safePositiveInteger(native ? holding.lastPriceNativeMicros : holding.lastPriceUsdMicros)
+  const previous = safePositiveInteger(native ? holding.previousPriceNativeMicros : holding.previousPriceUsdMicros)
   if (!current || !previous || current === previous) return { direction: 'neutral', percent: 0 }
   return { direction: current > previous ? 'up' : 'down', percent: ((current - previous) / previous) * 100 }
 }
@@ -190,6 +201,32 @@ export function applyInvestmentMarketPrice(holding = {}, price = {}) {
     lastPriceMarketOpen: typeof price.marketOpen === 'boolean' ? price.marketOpen : null,
     lastPriceSource: price.source,
     updatedAt: price.refreshedAt,
+  }
+}
+
+export function applyManualInvestmentPrice(holding = {}, { priceUsd, priceNative, tryPerUsd } = {}, updatedAt = new Date().toISOString()) {
+  const isTurkish = holding.quoteCurrency === CURRENCIES.TRY
+  const nativeMicros = isTurkish ? usdToMicros(priceNative) : 0
+  const rateMicros = isTurkish ? usdToMicros(tryPerUsd) : 0
+  const priceUsdMicros = isTurkish ? convertTryPriceToUsdMicros(nativeMicros, rateMicros) : usdToMicros(priceUsd)
+  if (isTurkish && (!nativeMicros || !rateMicros)) return { ok: false, message: 'أدخل سعر الليرة وسعر الصرف.' }
+  if (!priceUsdMicros) return { ok: false, message: 'السعر يجب أن يكون أكبر من صفر.' }
+  return {
+    ok: true,
+    holding: {
+      ...holding,
+      previousPriceUsdMicros: Number(holding.lastPriceUsdMicros || 0),
+      previousPriceNativeMicros: Number(holding.lastPriceNativeMicros || 0),
+      previousPriceAt: holding.lastPriceAt || null,
+      lastPriceUsdMicros: priceUsdMicros,
+      lastPriceNativeMicros: isTurkish ? nativeMicros : holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : 0,
+      lastPriceAt: updatedAt,
+      lastPriceQuotedAt: updatedAt,
+      lastPriceFxQuotedAt: isTurkish ? updatedAt : null,
+      lastPriceMarketOpen: null,
+      lastPriceSource: 'manual',
+      updatedAt,
+    },
   }
 }
 
@@ -467,10 +504,33 @@ function holdingEvents(holdingId, trades = [], transfers = []) {
     || String(left.record.id).localeCompare(String(right.record.id)))
 }
 
+function nativeTradeCostMicros(trade, quantity) {
+  const priceNativeMicros = safePositiveInteger(trade.priceNativeMicros)
+  const rateMicros = safePositiveInteger(trade.fxTryPerUsdMicros)
+  if (!priceNativeMicros || !rateMicros) return null
+  const feeNativeMicros = convertUsdToTryMicros(Math.max(0, safeInteger(trade.feeUsdMicros)), rateMicros)
+  return safeScaledProduct(quantity, priceNativeMicros, INVESTMENT_QUANTITY_SCALE) + feeNativeMicros
+}
+
+function summarizeNativeHolding(holding, quantityUnits, nativeCostMicros) {
+  if (holding.quoteCurrency !== CURRENCIES.TRY) return null
+  const lastPriceNativeMicros = safePositiveInteger(holding.lastPriceNativeMicros)
+  const marketValueMicros = lastPriceNativeMicros ? safeScaledProduct(quantityUnits, lastPriceNativeMicros, INVESTMENT_QUANTITY_SCALE) : null
+  const costKnown = nativeCostMicros !== null
+  return {
+    currency: CURRENCIES.TRY,
+    costBasisMicros: costKnown ? nativeCostMicros : null,
+    averageCostMicros: costKnown && quantityUnits > 0 ? safeScaledProduct(nativeCostMicros, INVESTMENT_QUANTITY_SCALE, quantityUnits) : null,
+    marketValueMicros,
+    profitMicros: costKnown && marketValueMicros !== null ? marketValueMicros - nativeCostMicros : null,
+  }
+}
+
 function summarizeHolding(holding, trades = [], transfers = []) {
   let quantityUnits = 0
   let costBasisUsdMicros = 0
   let realizedProfitUsdMicros = 0
+  let nativeCostMicros = 0
   for (const event of holdingEvents(holding.id, trades, transfers)) {
     if (event.kind === 'transfer') {
       const transfer = event.record
@@ -491,6 +551,8 @@ function summarizeHolding(holding, trades = [], transfers = []) {
     const fee = Math.max(0, safeInteger(trade.feeUsdMicros))
     if (!quantity || !value) continue
     if (trade.type === INVESTMENT_TRADE_TYPES.OPENING || trade.type === INVESTMENT_TRADE_TYPES.BUY) {
+      const lotNativeCost = nativeCostMicros === null ? null : nativeTradeCostMicros(trade, quantity)
+      nativeCostMicros = lotNativeCost === null ? null : nativeCostMicros + lotNativeCost
       quantityUnits += quantity
       costBasisUsdMicros += value + fee
       continue
@@ -499,6 +561,7 @@ function summarizeHolding(holding, trades = [], transfers = []) {
       const removedCost = quantityUnits > 0
         ? safeScaledProduct(costBasisUsdMicros, quantity, quantityUnits)
         : 0
+      if (nativeCostMicros !== null && quantityUnits > 0) nativeCostMicros -= safeScaledProduct(nativeCostMicros, quantity, quantityUnits)
       quantityUnits -= quantity
       costBasisUsdMicros -= removedCost
       realizedProfitUsdMicros += value - fee - removedCost
@@ -522,6 +585,7 @@ function summarizeHolding(holding, trades = [], transfers = []) {
     unrealizedProfitUsdMicros,
     realizedProfitUsdMicros,
     totalProfitUsdMicros: unrealizedProfitUsdMicros + realizedProfitUsdMicros,
+    native: summarizeNativeHolding(holding, quantityUnits, nativeCostMicros),
   }
 }
 

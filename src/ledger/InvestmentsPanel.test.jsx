@@ -171,8 +171,42 @@ describe('investments panel', () => {
 
     expect(html).toContain('إغلاق سابق')
     expect(html).not.toContain('03:00')
-    expect(html).toContain('السعر السابق 9.00 USD')
-    expect(html).not.toContain('300 TRY')
+    expect(html).toContain('السعر السابق 300.00 TRY (9.00 USD)')
+    expect(html).toContain('≈ 9.00 USD')
+  })
+
+  it('shows a Turkish holding in lira with its USD value, lira result and lira average cost', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'Midas' })
+    const holding = createInvestmentHolding({
+      id: 'thyao', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO', assetType: 'stock',
+      quoteCurrency: 'TRY', lastPriceUsdMicros: usdToMicros(8), lastPriceNativeMicros: usdToMicros(320),
+    })
+    const row = {
+      holding, quantityUnits: 500_000_000, averageCostUsdMicros: usdToMicros(7.1), costBasisUsdMicros: usdToMicros(35.5), marketValueUsdMicros: usdToMicros(40), unrealizedProfitUsdMicros: usdToMicros(4.5),
+      native: { currency: 'TRY', costBasisMicros: usdToMicros(1_420), averageCostMicros: usdToMicros(284), marketValueMicros: usdToMicros(1_600), profitMicros: usdToMicros(180) },
+    }
+    const summary = { platforms: [{ platform, freeCashUsdMicros: 0, holdings: [row] }], totalValueUsdMicros: usdToMicros(40) }
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
+
+    expect(html).toContain('320.00 TRY')
+    expect(html).toContain('1,600.00 TRY')
+    expect(html).toContain('≈ 40.00 USD')
+    expect(html).toContain('+4.50 USD')
+    expect(html).toContain('+180.00 TRY · +12.68%')
+  })
+
+  it('explains when a Turkish holding has no lira cost instead of inventing one', () => {
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'Midas' })
+    const holding = createInvestmentHolding({ id: 'thyao', platformId: platform.id, name: 'THY', symbol: 'THYAO', quoteCurrency: 'TRY', lastPriceUsdMicros: usdToMicros(8), lastPriceNativeMicros: usdToMicros(320) })
+    const row = {
+      holding, quantityUnits: 500_000_000, averageCostUsdMicros: usdToMicros(7), costBasisUsdMicros: usdToMicros(35), marketValueUsdMicros: usdToMicros(40), unrealizedProfitUsdMicros: usdToMicros(5),
+      native: { currency: 'TRY', costBasisMicros: null, averageCostMicros: null, marketValueMicros: usdToMicros(1_600), profitMicros: null },
+    }
+    const summary = { platforms: [{ platform, freeCashUsdMicros: 0, holdings: [row] }], totalValueUsdMicros: usdToMicros(40) }
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
+
+    expect(html).toContain('1,600.00 TRY')
+    expect(html).not.toContain('adreem-investment-native-result')
   })
 
   it('attributes a US daily close on the holding and labels it as an end-of-day price', () => {
@@ -191,7 +225,7 @@ describe('investments panel', () => {
     expect(html).not.toContain('03:00')
   })
 
-  it('shows the USD market price and a specific refresh failure without changing the valuation', () => {
+  it('shows the lira market price, its USD equivalent and a specific refresh failure without changing the valuation', () => {
     const platform = createInvestmentPlatform({ id: 'platform-try', name: 'Midas' })
     const holding = createInvestmentHolding({
       id: 'holding-try', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO', quoteCurrency: 'TRY',
@@ -201,13 +235,13 @@ describe('investments panel', () => {
     const summary = { platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 100_000_000, costBasisUsdMicros: usdToMicros(8), marketValueUsdMicros: usdToMicros(9), unrealizedProfitUsdMicros: usdToMicros(1) }] }], totalValueUsdMicros: usdToMicros(9) }
     const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} priceErrors={{ 'holding-try': 'سعر السوق غير متاح' }} {...callbacks()} />)
 
-    expect(html).not.toContain('300 TRY')
+    expect(html).toContain('300.00 TRY')
     expect(html).not.toContain('20%')
     expect(html).toContain('is-market-price has-price is-neutral is-stale')
-    expect(html).toContain('9.00 USD')
+    expect(html).toContain('≈ 9.00 USD')
     expect(html).toContain('سعر السوق غير متاح')
     expect(html).toContain('لم يتحدث')
-    expect(html).toContain('السعر السابق 9.00 USD')
+    expect(html).toContain('السعر السابق 300.00 TRY (9.00 USD)')
     expect(html).toContain('role="status"')
     expect(html).toContain('is-price-error')
   })

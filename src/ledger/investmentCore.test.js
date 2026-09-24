@@ -6,6 +6,7 @@ import {
   INVESTMENT_TRANSFER_ASSETS,
   INVESTMENT_FX_FORM_MAX_AGE_MS,
   applyInvestmentMarketPrice,
+  applyManualInvestmentPrice,
   applyInvestmentTradeEditPriceFallback,
   applyInvestmentTradePriceFallback,
   buildSmallInvestmentClosure,
@@ -413,6 +414,63 @@ describe('investment portfolio core', () => {
     expect(summary.openProfitUsdMicros + summary.realizedInvestmentProfitUsdMicros).toBe(summary.investmentProfitUsdMicros)
     expect(platformRow.openProfitUsdMicros + platformRow.realizedInvestmentProfitUsdMicros).toBe(platformRow.investmentProfitUsdMicros)
     expect(platformRow.closedHoldings.map((row) => [row.holding.symbol, microsToUsd(row.realizedProfitUsdMicros)])).toEqual([['TSLA', -20]])
+  })
+
+  it('tracks a Turkish holding in lira alongside its USD cost when every lot has a lira price', () => {
+    const { platform, deposit } = fixture()
+    const thy = createInvestmentHolding({ id: 'thyao', platformId: platform.id, name: 'THY', symbol: 'THYAO', assetType: INVESTMENT_ASSET_TYPES.STOCK, quoteCurrency: 'TRY', lastPriceUsdMicros: usdToMicros(8), lastPriceNativeMicros: usdToMicros(320) }, '2026-01-01T00:00:00.000Z')
+    const fx = usdToMicros(40)
+    const lira = (tryPrice) => ({ priceNativeMicros: usdToMicros(tryPrice), priceUsdMicros: convertTryPriceToUsdMicros(usdToMicros(tryPrice), fx), fxTryPerUsdMicros: fx, fxQuotedAt: '2026-01-02T00:00:00.000Z', fxSource: 'manual' })
+    const trades = [
+      createInvestmentTrade({ id: 'b1', platformId: platform.id, holdingId: thy.id, type: INVESTMENT_TRADE_TYPES.BUY, quantityUnits: quantityToUnits(10), feeUsdMicros: usdToMicros(1), ...lira(280) }, '2026-01-02T00:00:00.000Z'),
+      createInvestmentTrade({ id: 's1', platformId: platform.id, holdingId: thy.id, type: INVESTMENT_TRADE_TYPES.SELL, quantityUnits: quantityToUnits(5), ...lira(300) }, '2026-01-03T00:00:00.000Z'),
+    ]
+    const row = summarizeInvestmentPortfolio({ platforms: [platform], holdings: [thy], trades, movements: [deposit] }).platforms[0].holdings[0]
+
+    expect(row.native).toEqual({
+      currency: 'TRY',
+      costBasisMicros: usdToMicros(1_420),
+      averageCostMicros: usdToMicros(284),
+      marketValueMicros: usdToMicros(1_600),
+      profitMicros: usdToMicros(180),
+    })
+    expect(microsToUsd(row.costBasisUsdMicros)).toBe(35.5)
+  })
+
+  it('does not invent a lira cost when an older Turkish lot was recorded only in USD', () => {
+    const { platform, deposit } = fixture()
+    const thy = createInvestmentHolding({ id: 'thyao', platformId: platform.id, name: 'THY', symbol: 'THYAO', assetType: INVESTMENT_ASSET_TYPES.STOCK, quoteCurrency: 'TRY', lastPriceUsdMicros: usdToMicros(8), lastPriceNativeMicros: usdToMicros(320) }, '2026-01-01T00:00:00.000Z')
+    const opening = createInvestmentTrade({ id: 'o1', platformId: platform.id, holdingId: thy.id, type: INVESTMENT_TRADE_TYPES.OPENING, quantityUnits: quantityToUnits(10), priceUsdMicros: usdToMicros(7) }, '2026-01-02T00:00:00.000Z')
+    const row = summarizeInvestmentPortfolio({ platforms: [platform], holdings: [thy], trades: [opening], movements: [deposit] }).platforms[0].holdings[0]
+
+    expect(row.native).toEqual({ currency: 'TRY', costBasisMicros: null, averageCostMicros: null, marketValueMicros: usdToMicros(3_200), profitMicros: null })
+    const usdRow = summarizeInvestmentPortfolio({ platforms: [platform], holdings: [fixture().holding], trades: [], movements: [deposit] }).platforms[0].holdings[0]
+    expect(usdRow.native).toBeNull()
+  })
+
+  it('measures a Turkish price change in lira so exchange-rate moves do not fake a trend', () => {
+    const holding = { quoteCurrency: 'TRY', lastPriceUsdMicros: usdToMicros(7.9), previousPriceUsdMicros: usdToMicros(8), lastPriceNativeMicros: usdToMicros(330), previousPriceNativeMicros: usdToMicros(320) }
+    expect(investmentPriceChange(holding).direction).toBe('up')
+    expect(investmentPriceChange(holding).percent).toBeCloseTo(3.125, 6)
+  })
+
+  it('stores a manual Turkish price in lira with its USD value and keeps USD holdings unchanged', () => {
+    const thy = createInvestmentHolding({ id: 'thyao', platformId: 'p', name: 'THY', symbol: 'THYAO', quoteCurrency: 'TRY', lastPriceUsdMicros: usdToMicros(8), lastPriceNativeMicros: usdToMicros(320) }, '2026-01-01T00:00:00.000Z')
+    const updated = applyManualInvestmentPrice(thy, { priceNative: '330', tryPerUsd: '41.25' }, '2026-02-01T00:00:00.000Z')
+    expect(updated.ok).toBe(true)
+    expect(updated.holding).toMatchObject({
+      lastPriceNativeMicros: usdToMicros(330),
+      lastPriceUsdMicros: convertTryPriceToUsdMicros(usdToMicros(330), usdToMicros(41.25)),
+      previousPriceNativeMicros: usdToMicros(320),
+      lastPriceSource: 'manual',
+      lastPriceFxQuotedAt: '2026-02-01T00:00:00.000Z',
+    })
+    expect(applyManualInvestmentPrice(thy, { priceNative: '330', tryPerUsd: '' }).ok).toBe(false)
+
+    const { holding } = fixture()
+    const usd = applyManualInvestmentPrice(holding, { priceUsd: '125.5' }, '2026-02-01T00:00:00.000Z')
+    expect(usd.holding).toMatchObject({ lastPriceUsdMicros: usdToMicros(125.5), lastPriceNativeMicros: usdToMicros(125.5) })
+    expect(applyManualInvestmentPrice(holding, { priceUsd: '0' }).ok).toBe(false)
   })
 
   it('closes a confirmed sub-5 USD position with a full sale and preserves its history', () => {

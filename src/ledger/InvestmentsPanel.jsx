@@ -11,6 +11,7 @@ import {
   INVESTMENT_TRADE_TYPES,
   INVESTMENT_TRANSFER_ASSETS,
   convertTryPriceToUsdMicros,
+  convertUsdToTryMicros,
   investmentFxRateIsFresh,
   investmentHoldingIsLiquidity,
   investmentDecimalInputIsValid,
@@ -44,8 +45,8 @@ const MARKET_OPTIONS = [
 
 const blankPlatform = { name: '', kind: 'platform', location: '' }
 const blankHolding = { platformId: '', name: '', symbol: '', providerSymbol: '', marketDataMode: 'manual', assetType: INVESTMENT_ASSET_TYPES.STOCK, exchange: '', quoteCurrency: 'USD', initialQuantity: '', initialPriceUsd: '', initialPriceNative: '' }
-const blankTrade = { holdingId: '', type: INVESTMENT_TRADE_TYPES.BUY, quantity: '', priceUsd: '', priceNative: '', feeUsd: '', note: '' }
-const blankTradeEdit = { quantity: '', priceUsd: '', priceNative: '', feeUsd: '', note: '' }
+const blankTrade = { holdingId: '', type: INVESTMENT_TRADE_TYPES.BUY, quantity: '', priceUsd: '', priceNative: '', feeUsd: '', feeNative: '', note: '' }
+const blankTradeEdit = { quantity: '', priceUsd: '', priceNative: '', feeUsd: '', feeNative: '', feeNativeInitial: '', note: '' }
 const blankTransfer = { asset: INVESTMENT_TRANSFER_ASSETS.USD, fromPlatformId: '', toPlatformId: '', sourceHoldingId: '', amount: '', note: '' }
 const blankTryFx = { status: 'idle', rate: '', quotedAt: '', loadedAt: '', source: '', error: '' }
 const PRICE_SOURCE_LABELS = {
@@ -82,6 +83,11 @@ function usdMicros(value, sign = false) {
   return `${sign && number > 0 ? '+' : ''}${decimal(number, 2, 2)} USD`
 }
 
+function tryMoneyMicros(value, sign = false) {
+  const number = microsToUsd(value)
+  return `${sign && number > 0 ? '+' : ''}${decimal(number, 2, 2)} TRY`
+}
+
 function usdUnitMicros(value) {
   return `${unitPrice(microsToUsd(value))} USD`
 }
@@ -95,7 +101,7 @@ function TryExchangeRate({ fx, onChange }) {
     : fx.source === 'ecb-reference' ? 'سعر مرجعي يومي' : fx.source === 'manual' ? 'سعر أدخلته' : ''
   return (
     <div className="adreem-investment-fx">
-      <label><span>1 USD = ? TRY</span><input dir="ltr" inputMode="decimal" value={fx.rate} onChange={(event) => onChange(event.target.value)} placeholder={fx.status === 'loading' ? 'جاري الجلب' : 'سعر الصرف'} /></label>
+      <label><span><bdi>1 USD = ? TRY</bdi></span><input dir="ltr" inputMode="decimal" value={fx.rate} onChange={(event) => onChange(event.target.value)} placeholder={fx.status === 'loading' ? 'جاري الجلب' : 'سعر الصرف'} /></label>
       <small role="status" className={fx.status === 'error' ? 'is-error' : ''}>
         {fx.status === 'loading' ? 'نجلب سعر الصرف' : fx.status === 'error' ? fx.error : fx.status === 'updated' ? 'تحدث سعر الصرف. راجع القيمة ثم احفظ.' : source ? `${source} · ${fx.quotedAt ? activityDate(fx.quotedAt) : 'الآن'}` : 'اكتب السعر الفعلي إذا لم يتوفر سعر تلقائي'}
       </small>
@@ -184,8 +190,14 @@ function holdingPriceIsStale(holding) {
   return !Number.isFinite(quotedAge) || quotedAge > maxQuoteAge
 }
 
+function holdingPriceLabel(holding) {
+  const nativeMicros = Number(holding.lastPriceNativeMicros || 0)
+  return holding.quoteCurrency === 'TRY' && nativeMicros > 0 ? tryUnitMicros(nativeMicros) : usdUnitMicros(holding.lastPriceUsdMicros)
+}
+
 function InvestmentMarketPrice({ holding, error, onOpen }) {
   const priceMicros = Number(holding.lastPriceUsdMicros || 0)
+  const showsLira = holding.quoteCurrency === 'TRY' && Number(holding.lastPriceNativeMicros || 0) > 0
   const priceTimestamp = String(holding.lastPriceQuotedAt || '')
   const dailyClose = holding.lastPriceSource === 'tgmcharts-eod'
   const providerUpdate = holding.lastPriceSource === 'burkut+ecb-fx'
@@ -204,23 +216,24 @@ function InvestmentMarketPrice({ holding, error, onOpen }) {
       type="button"
       className={`adreem-investment-price is-market-price ${priceMicros ? 'has-price' : 'is-unpriced'} is-${direction} ${stale ? 'is-stale' : ''}`.trim()}
       onClick={() => onOpen(holding)}
-      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : providerUpdate ? 'سعر المزود' : 'السعر الحالي'} ${usdUnitMicros(priceMicros)}${direction !== 'neutral' ? ` · ${direction === 'up' ? '+' : '-'}${decimal(Math.abs(percent), 2)}%` : ''}` : 'إدخال السعر الحالي'}
+      aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : providerUpdate ? 'سعر المزود' : 'السعر الحالي'} ${holdingPriceLabel(holding)}${showsLira ? ` (${usdUnitMicros(priceMicros)})` : ''}${direction !== 'neutral' ? ` · ${direction === 'up' ? '+' : '-'}${decimal(Math.abs(percent), 2)}%` : ''}` : 'إدخال السعر الحالي'}
       title={error || (sourceUnavailable ? 'مصدر التحديث غير متاح لهذا الرمز؛ السعر المعروض سابق.' : holding.lastPriceQuotedAt ? `${dailyClose ? 'تاريخ الإغلاق' : providerUpdate ? 'وقت تحديث المزود' : holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : 'وقت السعر'}: ${['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(holding.lastPriceSource) ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
     >
       <small>
         <span>{priceStatus} {stale ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
         {direction !== 'neutral' ? <em><DirectionIcon aria-hidden="true" size={11} />{Math.abs(percent).toLocaleString('en-US', { maximumFractionDigits: 2 })}%</em> : null}
       </small>
-      <strong aria-live="polite">
+      <strong aria-live="polite" dir="ltr">
         <Motion.span
           key={`${priceTimestamp}-${priceMicros}`}
           initial={prefersReducedMotion ? false : { opacity: 0.42, y: 3, scale: 0.985 }}
           animate={prefersReducedMotion ? { opacity: 1, y: 0, scale: 1 } : { opacity: [0.45, 1, 0.72, 1], y: 0, scale: [0.985, 1.018, 1] }}
           transition={{ duration: 0.54, ease: [0.22, 1, 0.36, 1] }}
         >
-          {priceMicros ? `${usdUnitMicros(priceMicros)}` : 'أدخل السعر'}
+          {priceMicros ? holdingPriceLabel(holding) : 'أدخل السعر'}
         </Motion.span>
       </strong>
+      {showsLira ? <small className="adreem-investment-price-usd" dir="ltr">≈ {usdUnitMicros(priceMicros)}</small> : null}
     </button>
   )
 }
@@ -403,6 +416,7 @@ export default function InvestmentsPanel({
   useEffect(() => {
     const needsTryRate = (dialog === 'holding' && holdingDraft.quoteCurrency === 'TRY')
       || (dialog === 'trade' && holdingById.get(tradeDraft.holdingId)?.quoteCurrency === 'TRY')
+      || (dialog === 'price' && holdingById.get(manualHoldingId)?.quoteCurrency === 'TRY')
     if (!needsTryRate) return undefined
     let active = true
     setTryFx({ ...blankTryFx, status: 'loading' })
@@ -426,7 +440,7 @@ export default function InvestmentsPanel({
     }
     void loadRate()
     return () => { active = false }
-  }, [dialog, holdingById, holdingDraft.quoteCurrency, onLoadTryUsdRate, tradeDraft.holdingId, tryFxReloadKey])
+  }, [dialog, holdingById, holdingDraft.quoteCurrency, manualHoldingId, onLoadTryUsdRate, tradeDraft.holdingId, tryFxReloadKey])
 
   function changeTryFxRate(rate) {
     setTryFx({ status: 'ready', rate, quotedAt: new Date().toISOString(), loadedAt: '', source: 'manual', error: '' })
@@ -567,6 +581,8 @@ export default function InvestmentsPanel({
       priceUsd: String(microsToUsd(trade.priceUsdMicros)),
       priceNative: trade.priceNativeMicros ? String(microsToUsd(trade.priceNativeMicros)) : '',
       feeUsd: String(microsToUsd(trade.feeUsdMicros || 0)),
+      feeNative: trade.priceNativeMicros ? String(microsToUsd(convertUsdToTryMicros(trade.feeUsdMicros || 0, trade.fxTryPerUsdMicros))) : '',
+      feeNativeInitial: trade.priceNativeMicros ? String(microsToUsd(convertUsdToTryMicros(trade.feeUsdMicros || 0, trade.fxTryPerUsdMicros))) : '',
       note: trade.note || '',
     })
     setTradeEditStage('fields')
@@ -617,7 +633,7 @@ export default function InvestmentsPanel({
     if (selectedTradeHolding?.quoteCurrency === 'TRY' && !tryFxIsReadyForSave()) return
     submissionRef.current = true
     const pricedDraft = selectedTradeHolding?.quoteCurrency === 'TRY'
-      ? { ...tradeDraft, priceUsd: String(microsToUsd(tradePriceUsdMicros)), fxTryPerUsdMicros: tryRateMicros, fxQuotedAt: tryFx.quotedAt, fxSource: tryFx.source }
+      ? { ...tradeDraft, priceUsd: String(microsToUsd(tradePriceUsdMicros)), feeUsd: String(microsToUsd(tradeFeeUsdMicros)), fxTryPerUsdMicros: tryRateMicros, fxQuotedAt: tryFx.quotedAt, fxSource: tryFx.source }
       : tradeDraft
     if (onAddTrade(pricedDraft) === false) {
       submissionRef.current = false
@@ -630,15 +646,18 @@ export default function InvestmentsPanel({
   function openManualPrice(holding) {
     submissionRef.current = false
     setManualHoldingId(holding.id)
-    setManualPrice(holding.lastPriceUsdMicros ? String(microsToUsd(holding.lastPriceUsdMicros)) : '')
+    const priceMicros = holding.quoteCurrency === 'TRY' ? holding.lastPriceNativeMicros : holding.lastPriceUsdMicros
+    setManualPrice(priceMicros ? String(microsToUsd(priceMicros)) : '')
     setDialog('price')
   }
 
   function submitManualPrice(event) {
     event.preventDefault()
-    if (!manualHoldingId || parseInvestmentDecimal(manualPrice) <= 0 || submissionRef.current) return
+    if (!manualHoldingId || !manualPriceIsValid || submissionRef.current) return
+    if (manualIsTurkish && !tryFxIsReadyForSave()) return
     submissionRef.current = true
-    if (onManualPrice(manualHoldingId, manualPrice) === false) {
+    const priceInput = manualIsTurkish ? { priceNative: manualPrice, tryPerUsd: tryFx.rate } : { priceUsd: manualPrice }
+    if (onManualPrice(manualHoldingId, priceInput) === false) {
       submissionRef.current = false
       return
     }
@@ -665,7 +684,7 @@ export default function InvestmentsPanel({
       return
     }
     submissionRef.current = true
-    if (onEditTrade?.(editingTradeBaseline, tradeEditDraft) === false) {
+    if (onEditTrade?.(editingTradeBaseline, { ...tradeEditDraft, feeUsd: String(microsToUsd(editedFeeUsdMicros)) }) === false) {
       submissionRef.current = false
       return
     }
@@ -698,13 +717,23 @@ export default function InvestmentsPanel({
     : usdToMicros(tradeDraft.priceUsd)
   const manualHolding = holdingById.get(manualHoldingId)
   const manualPlatform = platformById.get(manualHolding?.platformId)
+  const manualIsTurkish = manualHolding?.quoteCurrency === 'TRY'
+  const manualPriceUsdPreview = manualIsTurkish ? convertTryPriceToUsdMicros(usdToMicros(manualPrice), tryRateMicros) : usdToMicros(manualPrice)
+  const manualPriceIsValid = parseInvestmentDecimal(manualPrice) > 0
+    && (!manualIsTurkish || (tryRateMicros > 0 && tryFx.quotedAt && !['loading', 'error'].includes(tryFx.status)))
   const tradeValueUsdMicros = investmentTradeValueMicros({
     quantityUnits: quantityToUnits(tradeDraft.quantity),
     priceUsdMicros: tradePriceUsdMicros,
   })
-  const tradeFeeUsdMicros = usdToMicros(tradeDraft.feeUsd || 0)
+  const tradeIsTurkish = selectedTradeHolding?.quoteCurrency === 'TRY'
+  const tradeFeeUsdMicros = tradeIsTurkish
+    ? convertTryPriceToUsdMicros(usdToMicros(tradeDraft.feeNative || 0), tryRateMicros)
+    : usdToMicros(tradeDraft.feeUsd || 0)
   const tradeDebitUsdMicros = tradeValueUsdMicros + tradeFeeUsdMicros
-  const tradeFeeInputValid = investmentDecimalInputIsValid(tradeDraft.feeUsd || 0)
+  const tradeFeeInputValid = investmentDecimalInputIsValid((tradeIsTurkish ? tradeDraft.feeNative : tradeDraft.feeUsd) || 0)
+  const tradeValueNativeMicros = tradeIsTurkish
+    ? investmentTradeValueMicros({ quantityUnits: quantityToUnits(tradeDraft.quantity), priceUsdMicros: usdToMicros(tradeDraft.priceNative) })
+    : 0
   const tradeHasValidInput = Boolean(
     tradeDraft.holdingId
     && investmentDecimalInputIsValid(tradeDraft.quantity, { allowZero: false })
@@ -721,8 +750,13 @@ export default function InvestmentsPanel({
   const editedPriceUsdMicros = editingTradeBaseline?.priceNativeMicros
     ? convertTryPriceToUsdMicros(usdToMicros(tradeEditDraft.priceNative), editingTradeBaseline.fxTryPerUsdMicros)
     : usdToMicros(tradeEditDraft.priceUsd)
-  const editedFeeUsdMicros = usdToMicros(tradeEditDraft.feeUsd || 0)
-  const tradeEditFeeInputValid = investmentDecimalInputIsValid(tradeEditDraft.feeUsd || 0)
+  const editIsTurkish = Boolean(editingTradeBaseline?.priceNativeMicros)
+  const editedFeeUsdMicros = !editIsTurkish
+    ? usdToMicros(tradeEditDraft.feeUsd || 0)
+    : tradeEditDraft.feeNative === tradeEditDraft.feeNativeInitial
+      ? Number(editingTradeBaseline.feeUsdMicros || 0)
+      : convertTryPriceToUsdMicros(usdToMicros(tradeEditDraft.feeNative || 0), editingTradeBaseline.fxTryPerUsdMicros)
+  const tradeEditFeeInputValid = investmentDecimalInputIsValid((editIsTurkish ? tradeEditDraft.feeNative : tradeEditDraft.feeUsd) || 0)
   const tradeEditHasValidInput = Boolean(
     editingTradeBaseline
     && investmentDecimalInputIsValid(tradeEditDraft.quantity, { allowZero: false })
@@ -881,6 +915,8 @@ export default function InvestmentsPanel({
                     const priceIsStale = Boolean(priceErrors[row.holding.id] || holdingPriceIsStale(row.holding))
                     const detailsOpen = Boolean(expandedHoldingIds[row.holding.id])
                     const HoldingTrendIcon = holdingProfitUsdMicros > 0 ? TrendingUp : holdingProfitUsdMicros < 0 ? TrendingDown : Minus
+                    const nativeValueMicros = row.native?.marketValueMicros ?? null
+                    const nativeProfitMicros = row.native?.profitMicros ?? null
                     return (
                       <Motion.section
                         className={`adreem-investment-holding is-profit-${holdingProfitTone} ${holdingIsSmall(row) ? 'is-small' : ''}`.trim()}
@@ -897,13 +933,14 @@ export default function InvestmentsPanel({
                           <InvestmentMarketPrice holding={row.holding} error={priceErrors[row.holding.id]} onOpen={openManualPrice} />
                         </div>
                         <div className="adreem-investment-metrics-strip" aria-label="تفاصيل الاستثمار">
-                          <div className="is-current-value"><small>{priceIsStale ? 'قيمة بسعر سابق' : 'القيمة الآن'}</small><strong>{usdMicros(row.marketValueUsdMicros)}</strong></div>
+                          <div className="is-current-value"><small>{priceIsStale ? 'قيمة بسعر سابق' : 'القيمة الآن'}</small>{nativeValueMicros !== null ? <><strong>{tryMoneyMicros(nativeValueMicros)}</strong><em className="adreem-investment-usd-equivalent" dir="ltr">≈ {usdMicros(row.marketValueUsdMicros)}</em></> : <strong>{usdMicros(row.marketValueUsdMicros)}</strong>}</div>
                           <div className={`adreem-investment-result is-${holdingProfitTone}`}>
                             <span><HoldingTrendIcon aria-hidden="true" size={14} /><small>{priceIsStale ? 'نتيجة تقديرية' : 'النتيجة'}</small></span>
                             <div className="adreem-investment-result-value">
                               <strong>{usdMicros(holdingProfitUsdMicros, true)}</strong>
                               {row.costBasisUsdMicros ? <em>{profitPercent(holdingProfitUsdMicros, row.costBasisUsdMicros)}</em> : null}
                             </div>
+                            {nativeProfitMicros !== null ? <small className={`adreem-investment-native-result ${profitToneClass(nativeProfitMicros)}`} dir="ltr">{tryMoneyMicros(nativeProfitMicros, true)}{row.native.costBasisMicros ? ` · ${profitPercent(nativeProfitMicros, row.native.costBasisMicros)}` : ''}</small> : null}
                           </div>
                         </div>
                         <div className="adreem-investment-row-actions">
@@ -916,7 +953,8 @@ export default function InvestmentsPanel({
                             <small dir="auto">{preserveUiData(row.holding.exchange || brand.displayName || platformRow.platform.name)} · <b dir="ltr">{preserveUiData(row.holding.symbol)}</b></small>
                           </div>
                           <div className="adreem-investment-detail-measures">
-                            <span><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
+                            {row.native?.averageCostMicros ? <span><small>متوسط الشراء TRY</small><strong>{tryUnitMicros(row.native.averageCostMicros)}</strong></span> : null}
+                            <span><small>{row.native ? 'متوسط الشراء USD' : 'متوسط الشراء'}</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
                             <span><small>تكلفة المتبقي</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
                             {row.realizedProfitUsdMicros ? <span className={profitToneClass(row.realizedProfitUsdMicros)}><small>ربح محقق من البيع</small><strong>{usdMicros(row.realizedProfitUsdMicros, true)}</strong></span> : null}
                           </div>
@@ -925,6 +963,7 @@ export default function InvestmentsPanel({
                             {row.holding.lastPriceFxQuotedAt ? <span><small>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? 'تاريخ الصرف' : 'وقت الصرف'}</small><strong>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceFxQuotedAt) : activityDate(row.holding.lastPriceFxQuotedAt)}</strong></span> : null}
                             {PRICE_SOURCE_LABELS[row.holding.lastPriceSource] ? <span><small>مصدر السعر</small><strong>{row.holding.lastPriceSource === 'tgmcharts-eod' ? <a href="https://tgmcharts.com/" target="_blank" rel="noopener noreferrer">{PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</a> : PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</strong></span> : null}
                           </div>
+                          {row.native && row.native.costBasisMicros === null && row.quantityUnits > 0 ? <p className="adreem-investment-native-note">نتيجة الليرة غير متاحة: شراء سابق سُجّل بالدولار دون سعر الليرة.</p> : null}
                           {priceErrors[row.holding.id] ? <p className="is-error"><AlertCircle aria-hidden="true" size={13} />{priceErrors[row.holding.id]}</p> : null}
                           {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
                         </div> : null}
@@ -994,17 +1033,18 @@ export default function InvestmentsPanel({
             <div className="adreem-investment-trade-toggle"><button type="button" aria-pressed={tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY} className={`is-buy ${tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? 'is-active' : ''}`.trim()} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.BUY }))}><ArrowDownToLine aria-hidden="true" size={15} />شراء</button><button type="button" aria-pressed={tradeDraft.type === INVESTMENT_TRADE_TYPES.SELL} className={`is-sell ${tradeDraft.type === INVESTMENT_TRADE_TYPES.SELL ? 'is-active' : ''}`.trim()} onClick={() => setTradeDraft((current) => ({ ...current, type: INVESTMENT_TRADE_TYPES.SELL }))}><ArrowUpFromLine aria-hidden="true" size={15} />بيع</button></div>
             <label><span>الاستثمار</span><select value={tradeDraft.holdingId} onChange={(event) => setTradeDraft((current) => ({ ...current, holdingId: event.target.value }))}>{activeHoldings.map((holding) => <option key={holding.id} value={holding.id}>{preserveUiData(`${holding.symbol} · ${holding.name} · ${platformById.get(holding.platformId)?.name || ''}`)}</option>)}</select></label>
             <div className="is-paired is-investment-numbers"><label><span>الكمية</span><input dir="ltr" inputMode="decimal" value={tradeDraft.quantity} onChange={(event) => setTradeDraft((current) => ({ ...current, quantity: event.target.value }))} placeholder="0" /></label><label><span>{selectedTradeHolding?.quoteCurrency === 'TRY' ? 'سعر الوحدة TRY' : 'سعر الوحدة USD'}</span><input dir="ltr" inputMode="decimal" value={selectedTradeHolding?.quoteCurrency === 'TRY' ? tradeDraft.priceNative : tradeDraft.priceUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, [selectedTradeHolding?.quoteCurrency === 'TRY' ? 'priceNative' : 'priceUsd']: event.target.value }))} placeholder="0" /></label></div>
-            {selectedTradeHolding?.quoteCurrency === 'TRY' ? <><TryExchangeRate fx={tryFx} onChange={changeTryFxRate} /><output className="adreem-investment-fx-result">تكلفة الوحدة: <strong>{tradePriceUsdMicros ? usdUnitMicros(tradePriceUsdMicros) : 'أدخل سعر الصرف'}</strong></output></> : null}
-            <label><span>الرسوم USD</span><input dir="ltr" inputMode="decimal" value={tradeDraft.feeUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, feeUsd: event.target.value }))} placeholder="0" /></label>
+            {tradeIsTurkish ? <><TryExchangeRate fx={tryFx} onChange={changeTryFxRate} /><output className="adreem-investment-fx-result">تكلفة الوحدة: <strong>{tradePriceUsdMicros ? usdUnitMicros(tradePriceUsdMicros) : 'أدخل سعر الصرف'}</strong>{tradeValueNativeMicros && tradePriceUsdMicros ? <> · الإجمالي <strong dir="ltr">{tryMoneyMicros(tradeValueNativeMicros)}</strong> ≈ <strong dir="ltr">{usdMicros(tradeValueUsdMicros)}</strong></> : null}</output></> : null}
+            <label><span>{tradeIsTurkish ? 'الرسوم TRY' : 'الرسوم USD'}</span><input dir="ltr" inputMode="decimal" value={tradeIsTurkish ? tradeDraft.feeNative : tradeDraft.feeUsd} onChange={(event) => setTradeDraft((current) => ({ ...current, [tradeIsTurkish ? 'feeNative' : 'feeUsd']: event.target.value }))} placeholder="0" /></label>
             {!tradeFeeInputValid ? <p className="adreem-investment-edit-warning">الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.</p> : null}
             <label><span>ملاحظة</span><input value={tradeDraft.note} onChange={(event) => setTradeDraft((current) => ({ ...current, note: event.target.value }))} placeholder="اختياري" /></label>
             {selectedTradeHolding ? <div className={`adreem-investment-trade-context ${!tradeHasEnoughCash || !tradeHasEnoughUnits ? 'is-error' : ''}`}><CircleDollarSign aria-hidden="true" size={15} /><span><strong>{preserveUiData(selectedTradePlatform?.platform.name || selectedTradeHolding.symbol)}</strong><small>{tradeDraft.type === INVESTMENT_TRADE_TYPES.BUY ? `المتاح ${usdMicros(selectedTradePlatform?.freeCashUsdMicros || 0)} · المطلوب ${usdMicros(tradeDebitUsdMicros)}` : `الموجود ${decimal(unitsToQuantity(selectedTradeRow?.quantityUnits || 0), 8)} وحدة`}</small></span>{!tradeHasEnoughCash && typeof onOpenFunding === 'function' ? <button type="button" onClick={() => { setDialog(''); onOpenFunding(selectedTradeHolding.platformId) }}>حوّل USD أولًا</button> : null}</div> : null}
           </InvestmentDialog>
         ) : null}
         {dialog === 'price' ? (
-          <InvestmentDialog title="سعر يدوي" subtitle={isAutoPricedHolding(manualHolding || {}, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true') ? 'يبقى حتى التحديث القادم' : 'يبقى حتى تغييره'} icon={PencilLine} tone="market" onClose={() => setDialog('')} onSubmit={submitManualPrice} canSubmit={parseInvestmentDecimal(manualPrice) > 0} submitLabel="حفظ السعر">
-            {manualHolding ? <div className="adreem-investment-dialog-context"><span><strong>{preserveUiData(`${manualHolding.symbol} · ${manualHolding.name}`)}</strong><small>{preserveUiData(manualPlatform?.name || '')}</small></span><b>{manualHolding.lastPriceUsdMicros ? usdUnitMicros(manualHolding.lastPriceUsdMicros) : 'بدون سعر'}</b></div> : null}
-            <label><span>السعر الحالي USD</span><input autoFocus dir="ltr" inputMode="decimal" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} placeholder="0" /></label>
+          <InvestmentDialog title="سعر يدوي" subtitle={isAutoPricedHolding(manualHolding || {}, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true') ? 'يبقى حتى التحديث القادم' : 'يبقى حتى تغييره'} icon={PencilLine} tone="market" onClose={() => setDialog('')} onSubmit={submitManualPrice} canSubmit={manualPriceIsValid} submitLabel="حفظ السعر">
+            {manualHolding ? <div className="adreem-investment-dialog-context"><span><strong>{preserveUiData(`${manualHolding.symbol} · ${manualHolding.name}`)}</strong><small>{preserveUiData(manualPlatform?.name || '')}</small></span><b>{manualHolding.lastPriceUsdMicros ? holdingPriceLabel(manualHolding) : 'بدون سعر'}</b></div> : null}
+            <label><span>{manualIsTurkish ? 'السعر الحالي TRY' : 'السعر الحالي USD'}</span><input autoFocus dir="ltr" inputMode="decimal" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} placeholder="0" /></label>
+            {manualIsTurkish ? <><TryExchangeRate fx={tryFx} onChange={changeTryFxRate} /><output className="adreem-investment-fx-result">بالدولار: <strong>{manualPriceUsdPreview ? usdUnitMicros(manualPriceUsdPreview) : 'أدخل سعر الصرف'}</strong></output></> : null}
           </InvestmentDialog>
         ) : null}
         {dialog === 'close' && closingRow ? (
@@ -1088,7 +1128,7 @@ export default function InvestmentsPanel({
                         <div className="adreem-investment-history-values">
                           {isTrade ? <small>{decimal(unitsToQuantity(row.trade.quantityUnits), 8)} × {row.trade.priceNativeMicros ? `${tryUnitMicros(row.trade.priceNativeMicros)} · ${usdUnitMicros(row.trade.priceUsdMicros)}` : usdUnitMicros(row.trade.priceUsdMicros)}</small> : null}
                           <strong>{isTransfer && row.transfer.asset === INVESTMENT_TRANSFER_ASSETS.USDT ? `${decimal(unitsToQuantity(row.transfer.quantityUnits), 8)} USDT` : usdMicros(row.amountUsdMicros)}</strong>
-                          {isTrade && row.trade.feeUsdMicros > 0 ? <em><span>رسوم</span> {usdMicros(row.trade.feeUsdMicros)}</em> : null}
+                          {isTrade && row.trade.feeUsdMicros > 0 ? <em><span>رسوم</span> {row.trade.priceNativeMicros ? `${tryMoneyMicros(convertUsdToTryMicros(row.trade.feeUsdMicros, row.trade.fxTryPerUsdMicros))} ≈ ${usdMicros(row.trade.feeUsdMicros)}` : usdMicros(row.trade.feeUsdMicros)}</em> : null}
                         </div>
                         {!isVoided && !isTransfer ? <button type="button" className="adreem-investment-history-edit" aria-label="تعديل العملية" title="تعديل العملية" onClick={() => isTrade ? openTradeEdit(row.trade) : editFundingMovement(row.movement)}><PencilLine aria-hidden="true" size={14} /><span>تعديل</span></button> : null}
                       </article>
@@ -1118,7 +1158,7 @@ export default function InvestmentsPanel({
               <>
                 <div className="is-paired is-investment-numbers"><label><span>الكمية</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked} value={tradeEditDraft.quantity} onChange={(event) => setTradeEditDraft((current) => ({ ...current, quantity: event.target.value }))} /></label><label><span>{editingTradeBaseline.priceNativeMicros ? 'سعر الوحدة TRY' : 'سعر الوحدة USD'}</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked} value={editingTradeBaseline.priceNativeMicros ? tradeEditDraft.priceNative : tradeEditDraft.priceUsd} onChange={(event) => setTradeEditDraft((current) => ({ ...current, [editingTradeBaseline.priceNativeMicros ? 'priceNative' : 'priceUsd']: event.target.value }))} /></label></div>
                 {editingTradeBaseline.priceNativeMicros ? <output className="adreem-investment-fx-result">1 USD = {decimal(microsToUsd(editingTradeBaseline.fxTryPerUsdMicros), 6)} TRY · <strong>{usdUnitMicros(editedPriceUsdMicros)}</strong></output> : null}
-                <label><span>الرسوم USD</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked || editingTradeBaseline.type === INVESTMENT_TRADE_TYPES.OPENING} value={tradeEditDraft.feeUsd} onChange={(event) => setTradeEditDraft((current) => ({ ...current, feeUsd: event.target.value }))} /></label>
+                <label><span>{editIsTurkish ? 'الرسوم TRY' : 'الرسوم USD'}</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked || editingTradeBaseline.type === INVESTMENT_TRADE_TYPES.OPENING} value={editIsTurkish ? tradeEditDraft.feeNative : tradeEditDraft.feeUsd} onChange={(event) => setTradeEditDraft((current) => ({ ...current, [editIsTurkish ? 'feeNative' : 'feeUsd']: event.target.value }))} /></label>
                 {!tradeEditFeeInputValid ? <p className="adreem-investment-edit-warning">الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.</p> : null}
                 <label><span>ملاحظة</span><input value={tradeEditDraft.note} onChange={(event) => setTradeEditDraft((current) => ({ ...current, note: event.target.value }))} placeholder="اختياري" /></label>
                 {openingTradeLocked ? <p className="adreem-investment-edit-warning"><ShieldCheck aria-hidden="true" size={16} />القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة. يمكنك تعديل الملاحظة فقط.</p> : null}

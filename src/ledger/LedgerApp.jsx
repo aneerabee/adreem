@@ -34,7 +34,7 @@ import { MAIN_LEDGER_MOVEMENT_TYPES, SEPARATE_RECORD_DIRECTIONS, filterSeparateR
 import { DIMENSION_TYPES, RECURRING_FREQUENCIES, attachmentsForRecord, buildDimensionReports, buildExpenseCategoryReports, buildLedgerAlerts, createAttachment, createAuditEvent, createRecurringRuleFromMovement, defaultRecurringFirstRunOn, disableRecurringRule, dimensionsFromAccounts, dueRecurringRules, executeRecurringRuleInState, findUnresolvedReconciliationDifferences, hideAttachment, normalizeRecurringDateKey, recurringRuleDueOn, syncRecurringRulesFromMovement, syncRecurringRulesFromSourceMovement, updateRecurringRule } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection, uiLanguageLocale } from './uiLanguage'
 import { getActiveUiLanguage, preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
-import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, INVESTMENT_TRANSFER_ASSETS, applyInvestmentMarketPrice, applyInvestmentTradeEditPriceFallback, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, convertTryPriceToUsdMicros, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, createInvestmentTransfer, investmentHoldingIsLiquidity, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, investmentTransferCostBasisUsdMicros, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
+import { INVESTMENT_PRICE_REFRESH_INTERVAL_MS, INVESTMENT_PRICE_REFRESH_START_DELAY_MS, INVESTMENT_RECORD_STATUSES, INVESTMENT_TRADE_TYPES, INVESTMENT_TRANSFER_ASSETS, applyInvestmentMarketPrice, applyInvestmentTradeEditPriceFallback, applyManualInvestmentPrice, applyInvestmentTradePriceFallback, buildInvestmentTradeEdit, buildSmallInvestmentClosure, convertTryPriceToUsdMicros, createInvestmentHolding, createInvestmentPlatform, createInvestmentTrade, createInvestmentTransfer, investmentHoldingIsLiquidity, investmentOpeningTradeIsLocked, investmentPriceRefreshDelay, investmentTradeMatchesBaseline, investmentTransferCostBasisUsdMicros, parseInvestmentDecimal, quantityToUnits, summarizeInvestmentPortfolio, usdToMicros, validateInvestmentState } from './investmentCore'
 import { isAutoPricedHolding } from './investmentMarketPolicy'
 
 const CANCEL_WINDOW_HOURS = 24
@@ -6597,29 +6597,22 @@ export default function LedgerApp() {
     switchSection('entry')
   }
 
-  function updateInvestmentManualPrice(holdingId, priceUsd) {
-    const priceUsdMicros = usdToMicros(priceUsd)
-    if (!priceUsdMicros) {
-      setFeedback('السعر يجب أن يكون أكبر من صفر.')
+  function updateInvestmentManualPrice(holdingId, priceInput) {
+    const input = typeof priceInput === 'object' && priceInput ? priceInput : { priceUsd: priceInput }
+    const updatedAt = new Date().toISOString()
+    const holding = (ledgerExtras.investmentHoldings || []).find((item) => item.id === holdingId)
+    const result = holding ? applyManualInvestmentPrice(holding, input, updatedAt) : { ok: false, message: 'الاستثمار غير موجود.' }
+    if (!result.ok) {
+      setFeedback(result.message)
       return false
     }
-    const updatedAt = new Date().toISOString()
     setLedgerExtras((current) => ({
       ...current,
-      investmentHoldings: (current.investmentHoldings || []).map((holding) => holding.id === holdingId ? {
-        ...holding,
-        previousPriceUsdMicros: Number(holding.lastPriceUsdMicros || 0),
-        previousPriceNativeMicros: Number(holding.lastPriceNativeMicros || 0),
-        previousPriceAt: holding.lastPriceAt || null,
-        lastPriceUsdMicros: priceUsdMicros,
-        lastPriceNativeMicros: holding.quoteCurrency === CURRENCIES.USD ? priceUsdMicros : 0,
-        lastPriceAt: updatedAt,
-        lastPriceQuotedAt: updatedAt,
-        lastPriceFxQuotedAt: null,
-        lastPriceMarketOpen: null,
-        lastPriceSource: 'manual',
-        updatedAt,
-      } : holding),
+      investmentHoldings: (current.investmentHoldings || []).map((item) => {
+        if (item.id !== holdingId) return item
+        const latest = applyManualInvestmentPrice(item, input, updatedAt)
+        return latest.ok ? latest.holding : item
+      }),
       auditEvents: [...(current.auditEvents || []), createAuditEvent('investment.price.manual', { holdingId })],
     }))
     setInvestmentPriceErrors((current) => {
