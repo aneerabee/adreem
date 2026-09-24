@@ -31,10 +31,10 @@
     .adreem-statement-summary article b,
     .adreem-statement-row-value > strong,
     .adreem-investment-summary strong,
-    .adreem-investment-platform-balances > b strong,
+    .adreem-investment-platform-balances > span strong,
     .adreem-investment-metrics-strip strong,
     .adreem-investment-result-value strong,
-    .adreem-investment-holding-details strong,
+    .adreem-investment-detail-measures strong,
     .adreem-investment-history-values strong
   ) {
     font-family: var(--adreem-font-number);
@@ -192,9 +192,10 @@
 
   /* Market labels stay quiet; live prices, totals, and results remain scannable. */
   .adreem-app .adreem-investment-summary small,
-  .adreem-app .adreem-investment-platform-balances > b small,
+  .adreem-app .adreem-investment-platform-balances > span small,
   .adreem-app .adreem-investment-metrics-strip small,
-  .adreem-app .adreem-investment-holding-details small,
+  .adreem-app .adreem-investment-detail-measures small,
+  .adreem-app .adreem-investment-detail-provenance small,
   .adreem-app .adreem-investment-history-values small {
     font-size: var(--type-label);
     font-weight: var(--type-label-weight);
@@ -205,17 +206,15 @@
     font-weight: var(--type-value-weight);
   }
 
-  .adreem-app .adreem-investment-platform > header strong,
-  .adreem-app .adreem-investment-name strong,
+  .adreem-app .adreem-investment-platform-identity > span strong,
+  .adreem-app .adreem-investment-detail-heading strong,
   .adreem-app .adreem-investment-history-main > header strong {
     font-size: var(--type-name);
     font-weight: var(--type-name-weight);
   }
 
-  .adreem-app .adreem-investment-platform-balances > b strong,
   .adreem-app .adreem-investment-metrics-strip strong,
   .adreem-app .adreem-investment-result-value strong,
-  .adreem-app .adreem-investment-holding-details strong,
   .adreem-app .adreem-investment-history-values strong {
     font-size: var(--type-value);
     font-weight: var(--type-value-weight);

@@ -52,6 +52,10 @@ describe('ADREEM UI translation', () => {
     expect(translateUiText('تلقائي كل ساعتين · ويمكن إدخال السعر يدويًا')).toBe('Automatic every two hours · Manual price is also available')
     expect(translateUiText('فحص كل ساعتين أثناء الاستخدام · ويمكن إدخال السعر يدويًا')).toBe('Checks every two hours while in use · Manual price is also available')
     expect(translateUiText('السعر الحالي 120 USD')).toBe('Current price 120 USD')
+    expect(translateUiText('إغلاق سابق')).toBe('Previous close')
+    expect(translateUiText('قيمة بسعر سابق')).toBe('Value at previous price')
+    expect(translateUiText('نتيجة تقديرية')).toBe('Estimated result')
+    expect(translateUiText('مصدر السعر')).toBe('Price source')
   })
 
   it('translates formatted text without changing its markup', () => {

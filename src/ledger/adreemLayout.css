@@ -137,7 +137,6 @@
 .adreem-app .adreem-investment-platform { border-radius: 6px; box-shadow: none; }
 .adreem-app .adreem-investment-platform > header { min-height: 44px; padding: 5px 8px; }
 .adreem-app .adreem-investment-platform-logo { height: 32px; }
-.adreem-app .adreem-investment-platform-balances > b { min-width: 98px; padding: 4px 7px; }
 .adreem-app .adreem-investment-platform-actions > button { min-height: 28px; padding-inline: 6px; border-radius: 5px; }
 .adreem-app .adreem-investment-holdings { gap: 0; padding: 0; background: #fff; }
 .adreem-app .adreem-investment-holding {
@@ -203,8 +202,6 @@
 }
 
 @media (max-width: 480px) {
-  .adreem-app .adreem-investment-holding-identity { grid-template-columns: auto minmax(0, 1fr); gap: 6px; }
-  .adreem-app .adreem-investment-name { order: 0; }
   .adreem-app .adreem-investment-row-actions { justify-content: flex-end; }
   .adreem-app .adreem-investment-row-actions button { flex: 0 0 auto; min-width: 66px; }
   .adreem-app .ml3-history-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }

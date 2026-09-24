@@ -845,15 +845,13 @@ export default function InvestmentsPanel({
                       <small>{platformRow.platform.location ? preserveUiData(platformRow.platform.location) : 'بدون موقع'}</small>
                     </span>
                   </div>
-                  <div className="adreem-investment-platform-cash">
-                    <div className="adreem-investment-platform-balances">
-                      <b><small>رصيد المنصة</small><strong>{usdMicros(platformTotalUsdMicros)}</strong></b>
-                      <b><small>السيولة</small><strong>{usdMicros(platformLiquidityUsdMicros)}</strong></b>
-                    </div>
-                    <div className="adreem-investment-platform-actions">
-                      <button type="button" className="is-history" aria-label="السجل" title="السجل" onClick={() => openPlatformHistory(platformRow.platform.id)}><History aria-hidden="true" size={14} /><span>السجل</span></button>
-                      <button type="button" aria-label="تمويل" title="تمويل" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /><span>تمويل</span></button>
-                    </div>
+                  <div className="adreem-investment-platform-balances">
+                    <span><small>رصيد المنصة</small><strong>{usdMicros(platformTotalUsdMicros)}</strong></span>
+                    <span><small>السيولة</small><strong>{usdMicros(platformLiquidityUsdMicros)}</strong></span>
+                  </div>
+                  <div className="adreem-investment-platform-actions">
+                    <button type="button" className="is-history" aria-label="السجل" title="السجل" onClick={() => openPlatformHistory(platformRow.platform.id)}><History aria-hidden="true" size={14} /><span>السجل</span></button>
+                    <button type="button" aria-label="تمويل" title="تمويل" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /><span>تمويل</span></button>
                   </div>
                 </header>
                 <div className="adreem-investment-holdings">
@@ -873,7 +871,7 @@ export default function InvestmentsPanel({
                       >
                         <div className="adreem-investment-holding-identity">
                           <div className="adreem-investment-symbol"><b dir="ltr">{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
-                          <div className="adreem-investment-name"><div className="adreem-investment-name-heading"><strong dir="auto">{preserveUiData(row.holding.name)}</strong><span className="adreem-investment-quantity" aria-label={`الكمية: ${decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة`}><b dir="ltr">{decimal(unitsToQuantity(row.quantityUnits), 8)}</b><em>وحدة</em></span></div><small dir="auto">{preserveUiData(row.holding.exchange || brand.displayName || platformRow.platform.name)}{row.holding.lastPriceSource === 'tgmcharts-eod' ? <> · <a href="https://tgmcharts.com/" target="_blank" rel="noopener noreferrer">TGMCharts</a></> : null}</small></div>
+                          <span className="adreem-investment-quantity" aria-label={`الكمية: ${decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة`}><b dir="ltr">{decimal(unitsToQuantity(row.quantityUnits), 8)}</b><em>وحدة</em></span>
                         </div>
                         <div className="adreem-investment-metrics-strip" aria-label="تفاصيل الاستثمار">
                           <InvestmentMarketPrice holding={row.holding} error={priceErrors[row.holding.id]} onOpen={openManualPrice} />
@@ -891,11 +889,19 @@ export default function InvestmentsPanel({
                           <button type="button" className="is-details" aria-expanded={detailsOpen} title={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} onClick={() => setExpandedHoldingIds((current) => ({ ...current, [row.holding.id]: !current[row.holding.id] }))}><ChevronDown aria-hidden="true" size={14} /><span>تفاصيل</span></button>
                         </div>
                         {detailsOpen ? <div className="adreem-investment-holding-details">
-                          <span><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
-                          <span><small>تكلفة المتبقي</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
-                          <span><small>{['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? 'تاريخ الإغلاق' : row.holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : row.holding.lastPriceQuotedAt ? 'وقت السعر' : ['manual', 'trade', 'opening'].includes(row.holding.lastPriceSource) ? 'وقت الإدخال' : 'آخر تحقق'}</small><strong>{row.holding.lastPriceQuotedAt || row.holding.lastPriceAt ? ['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceQuotedAt) : activityDate(row.holding.lastPriceQuotedAt || row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
-                          {row.holding.lastPriceFxQuotedAt ? <span><small>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? 'تاريخ الصرف' : 'وقت الصرف'}</small><strong>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceFxQuotedAt) : activityDate(row.holding.lastPriceFxQuotedAt)}</strong></span> : null}
-                          {PRICE_SOURCE_LABELS[row.holding.lastPriceSource] ? <span><small>مصدر السعر</small><strong>{row.holding.lastPriceSource === 'tgmcharts-eod' ? <a href="https://tgmcharts.com/" target="_blank" rel="noopener noreferrer">{PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</a> : PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</strong></span> : null}
+                          <div className="adreem-investment-detail-heading">
+                            <strong dir="auto">{preserveUiData(row.holding.name)}</strong>
+                            <small dir="auto">{preserveUiData(row.holding.exchange || brand.displayName || platformRow.platform.name)} · <b dir="ltr">{preserveUiData(row.holding.symbol)}</b></small>
+                          </div>
+                          <div className="adreem-investment-detail-measures">
+                            <span><small>متوسط الشراء</small><strong>{usdUnitMicros(row.averageCostUsdMicros)}</strong></span>
+                            <span><small>تكلفة المتبقي</small><strong>{usdMicros(row.costBasisUsdMicros)}</strong></span>
+                          </div>
+                          <div className="adreem-investment-detail-provenance">
+                            <span><small>{['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? 'تاريخ الإغلاق' : row.holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : row.holding.lastPriceQuotedAt ? 'وقت السعر' : ['manual', 'trade', 'opening'].includes(row.holding.lastPriceSource) ? 'وقت الإدخال' : 'آخر تحقق'}</small><strong>{row.holding.lastPriceQuotedAt || row.holding.lastPriceAt ? ['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceQuotedAt) : activityDate(row.holding.lastPriceQuotedAt || row.holding.lastPriceAt) : 'بدون سعر'}</strong></span>
+                            {row.holding.lastPriceFxQuotedAt ? <span><small>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? 'تاريخ الصرف' : 'وقت الصرف'}</small><strong>{['twelve-data+ecb-fx', 'twelve-data-eod+ecb-fx'].includes(row.holding.lastPriceSource) ? activityDay(row.holding.lastPriceFxQuotedAt) : activityDate(row.holding.lastPriceFxQuotedAt)}</strong></span> : null}
+                            {PRICE_SOURCE_LABELS[row.holding.lastPriceSource] ? <span><small>مصدر السعر</small><strong>{row.holding.lastPriceSource === 'tgmcharts-eod' ? <a href="https://tgmcharts.com/" target="_blank" rel="noopener noreferrer">{PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</a> : PRICE_SOURCE_LABELS[row.holding.lastPriceSource][getActiveUiLanguage() === 'en' ? 'en' : 'ar']}</strong></span> : null}
+                          </div>
                           {priceErrors[row.holding.id] ? <p className="is-error"><AlertCircle aria-hidden="true" size={13} />{priceErrors[row.holding.id]}</p> : null}
                           {(row.quantityUnits === 0 || (row.holding.lastPriceUsdMicros > 0 && row.marketValueUsdMicros < SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS)) ? <button type="button" className="is-remove" onClick={() => openSmallClosure(row)}><Trash2 aria-hidden="true" size={14} /> إزالة</button> : null}
                         </div> : null}

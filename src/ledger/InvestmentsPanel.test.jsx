@@ -62,6 +62,10 @@ describe('investments panel', () => {
 
     expect(html).toContain('IBKR')
     expect(html).toContain('AAPL')
+    expect(html).not.toContain('>Apple</strong>')
+    expect(html).toContain('class="adreem-investment-platform-balances"')
+    expect(html).toContain('رصيد المنصة')
+    expect(html).toContain('السيولة')
     expect(html).toContain('الكمية')
     expect(html).toContain('آخر سعر')
     expect(html).toContain('القيمة الآن')
@@ -130,7 +134,7 @@ describe('investments panel', () => {
     })
     const summary = { platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 100_000_000, costBasisUsdMicros: usdToMicros(180), marketValueUsdMicros: usdToMicros(190.25), unrealizedProfitUsdMicros: usdToMicros(10.25) }] }], totalValueUsdMicros: usdToMicros(190.25) }
     const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
-    expect(html).toContain('href="https://tgmcharts.com/"')
+    expect(html).not.toContain('href="https://tgmcharts.com/"')
     expect(html).toContain('إغلاق يومي')
     expect(html).not.toContain('03:00')
   })
@@ -242,7 +246,9 @@ describe('investments panel', () => {
 
     expect(html).toContain('تمويل')
     expect(html).toContain('أرصدة صغيرة')
-    expect(html).toContain('Large')
+    expect(html).toContain('LRG')
+    expect(html).not.toContain('DST')
+    expect(html).not.toContain('Large')
     expect(html).not.toContain('Dust')
   })
 
@@ -259,7 +265,8 @@ describe('investments panel', () => {
 
     const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
 
-    expect(html).toContain('Needs price')
+    expect(html).toContain('WAIT')
+    expect(html).not.toContain('Needs price')
     expect(html).toContain('أدخل السعر')
   })
 
