@@ -1870,6 +1870,7 @@ describe('LedgerApp English user data protection', () => {
 describe('LedgerApp cloud state', () => {
   it('reports terminal save failures without promising another automatic retry', () => {
     expect(storageTextForStatus('failed', 'api')).toBe('فشل الحفظ')
+    expect(saveFailureMessage({ status: 401, code: 'adreem-session-expired' }, null)).toContain('سجّل الدخول من جديد')
     expect(saveFailureMessage({ status: 409 }, null)).toContain('أعد تحميل الصفحة')
     expect(saveFailureMessage({ status: 409 }, null)).not.toContain('سيحاول النظام تلقائيًا')
     expect(saveFailureMessage({}, 3_000)).toContain('3 ث')

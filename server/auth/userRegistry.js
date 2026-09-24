@@ -7,7 +7,7 @@ import { DEFAULT_UI_LANGUAGE, normalizeUiLanguage } from '../../src/ledger/uiLan
 const HASH_PATTERN = /^[a-f0-9]{64}$/i
 const PASSWORD_ITERATIONS = 210_000
 const PASSWORD_KEYLEN = 32
-const SESSION_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000
+export const SESSION_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000
 const MAX_ACTIVE_SESSIONS = 12
 const REGISTRY_LOCK_TIMEOUT_MS = 1_000
 const REGISTRY_LOCK_RETRY_MS = 10
@@ -47,6 +47,13 @@ function normalizeEmail(value = '') {
 function normalizeOptionalHash(value = '') {
   const hash = String(value || '').trim().toLowerCase()
   return HASH_PATTERN.test(hash) ? hash : ''
+}
+
+export function sessionIsActive(session = {}, now = Date.now()) {
+  const expiresAt = Date.parse(String(session.expiresAt || ''))
+  const createdAt = Date.parse(String(session.createdAt || ''))
+  if (!Number.isFinite(expiresAt) || !Number.isFinite(createdAt)) return false
+  return Math.min(expiresAt, createdAt + SESSION_MAX_AGE_MS) > now
 }
 
 function normalizeSession(entry = {}) {
@@ -432,14 +439,14 @@ export function createUserAccess(env = process.env, filePath = defaultRegistryPa
         return null
       }
       const sessionToken = createPrivateWebToken()
-      const sessionExpiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
+      const sessionExpiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS).toISOString()
       const session = {
         tokenHash: webTokenHash(sessionToken),
         expiresAt: sessionExpiresAt,
         createdAt: new Date().toISOString(),
       }
       const nextSessions = [
-        ...(target.sessions || []).filter((item) => new Date(item.expiresAt || 0).getTime() > Date.now()),
+        ...(target.sessions || []).filter((item) => sessionIsActive(item)),
         session,
       ].slice(-MAX_ACTIVE_SESSIONS)
       const nextUsers = registry.users.map((user) => user.userId === target.userId
@@ -458,10 +465,9 @@ export function createUserAccess(env = process.env, filePath = defaultRegistryPa
     if (!normalizeOptionalHash(hash)) return null
     const registry = loadUserRegistry(filePath)
     const now = Date.now()
-    const target = registry.users.find((user) => (user.sessions || []).some((session) => {
-      const expiresAt = new Date(session.expiresAt || 0).getTime()
-      return session.tokenHash === hash && Number.isFinite(expiresAt) && expiresAt > now
-    }))
+    const target = registry.users.find((user) => (user.sessions || []).some((session) => (
+      session.tokenHash === hash && sessionIsActive(session, now)
+    )))
     return target || null
   }
 
@@ -514,8 +520,7 @@ export function registrySessionTokenMap(env = process.env, filePath = defaultReg
   const pairs = []
   for (const user of registry.users) {
     for (const session of user.sessions || []) {
-      const expiresAt = new Date(session.expiresAt || 0).getTime()
-      if (session.tokenHash && Number.isFinite(expiresAt) && expiresAt > now) {
+      if (session.tokenHash && sessionIsActive(session, now)) {
         pairs.push([session.tokenHash, user.ledgerId])
       }
     }

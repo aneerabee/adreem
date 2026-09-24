@@ -525,6 +525,27 @@ describe('ADREEM cloud-only persistence', () => {
     expect(browser.store.get('adreem-ledger-api-refresh-token-v1')).toBe('refresh-2')
   })
 
+  it('sends a legacy device without a refresh token straight to login when its session expires', async () => {
+    const { browser, module } = await persistenceWithApi({
+      'adreem-ledger-api-login-token-v1': 'expired-legacy-token',
+    })
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      headers: { get: () => null },
+      json: async () => ({ error: 'Invalid ledger token.' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await module.loadPersistedLedgerState({ accounts: [], movements: [] })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result.loadError).toBe(true)
+    expect(result.error).toMatchObject({ status: 401, code: 'adreem-session-expired', retryable: false })
+    expect(browser.store.has('adreem-ledger-api-login-token-v1')).toBe(false)
+    expect(browser.sessionStore.get(module.ADREEM_SESSION_EXPIRED_NOTICE_KEY)).toBe('1')
+  })
+
   it('remembers v3 with a non-secret marker and removes every browser-visible token', async () => {
     const { browser, module } = await persistenceWithApi({
       'adreem-ledger-api-login-token-v1': 'old-access-token',

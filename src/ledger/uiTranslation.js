@@ -562,6 +562,8 @@ const ENGLISH_TEXT = Object.freeze({
   'الإيداع ينتهي في حساب مصرفي.': 'A deposit ends in a bank account.',
   'الإيميل': 'Email',
   'الإيميل أو كلمة المرور غير صحيحة.': 'Email or password is incorrect.',
+  'انتهت صلاحية الدخول على هذا الجهاز. سجّل الدخول من جديد.': 'Your sign-in on this device has expired. Please sign in again.',
+  'انتهت صلاحية الدخول على هذا الجهاز. سجّل الدخول من جديد؛ آخر تغيير لم يُحفظ.': 'Your sign-in on this device has expired. Please sign in again; the last change was not saved.',
   'الإيميل غير صحيح.': 'Email is not valid.',
   'التصحيح': 'Adjustment',
   'التصحيح لا يحتاج مصدرًا.': 'An adjustment does not need a source.',

@@ -10,6 +10,7 @@ import {
   normalizeUserEntry,
   parseIdList,
   registrySessionTokenMap,
+  SESSION_MAX_AGE_MS,
   updateUserRegistry,
   validateUserLedgerAssignments,
   webTokenHash,
@@ -131,6 +132,51 @@ describe('user registry', () => {
     expect(access.revokeSessionToken(first.sessionToken)).toMatchObject({ ok: true, userId: 'rabee' })
     expect(access.userForSessionToken(first.sessionToken)).toBeNull()
     expect(access.userForSessionToken(second.sessionToken)).toMatchObject({ userId: 'rabee' })
+  })
+
+  it('issues device sessions that expire ninety days after login', () => {
+    const filePath = tempFile()
+    const access = createUserAccess({}, filePath)
+    access.addUser({ userId: 'rabee', email: 'rabee@example.com', password: 'secret-password', ledgerId: 'rabee' })
+    const before = Date.now()
+    const login = access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })
+    const lifetime = Date.parse(login.sessionExpiresAt) - before
+    expect(lifetime).toBeGreaterThan(SESSION_MAX_AGE_MS - 60_000)
+    expect(lifetime).toBeLessThanOrEqual(SESSION_MAX_AGE_MS + 60_000)
+    expect(SESSION_MAX_AGE_MS).toBe(90 * 24 * 60 * 60 * 1000)
+  })
+
+  it('rejects stored sessions older than the maximum age or without a login time', () => {
+    const filePath = tempFile()
+    const access = createUserAccess({}, filePath)
+    access.addUser({ userId: 'rabee', email: 'rabee@example.com', password: 'secret-password', ledgerId: 'rabee' })
+    const aged = access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })
+    const undated = access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })
+    const fresh = access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })
+    const farFuture = new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString()
+    const registry = JSON.parse(readFileSync(filePath, 'utf8'))
+    registry.users[0].sessions = registry.users[0].sessions.map((session) => {
+      if (session.tokenHash === webTokenHash(aged.sessionToken)) {
+        return { ...session, expiresAt: farFuture, createdAt: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString() }
+      }
+      if (session.tokenHash === webTokenHash(undated.sessionToken)) return { ...session, expiresAt: farFuture, createdAt: '' }
+      return session
+    })
+    writeFileSync(filePath, JSON.stringify(registry))
+
+    expect(access.userForSessionToken(aged.sessionToken)).toBeNull()
+    expect(access.userForSessionToken(undated.sessionToken)).toBeNull()
+    expect(access.userForSessionToken(fresh.sessionToken)).toMatchObject({ userId: 'rabee' })
+    const tokenMap = registrySessionTokenMap({}, filePath)
+    expect(tokenMap.has(webTokenHash(aged.sessionToken))).toBe(false)
+    expect(tokenMap.has(webTokenHash(undated.sessionToken))).toBe(false)
+    expect(tokenMap.get(webTokenHash(fresh.sessionToken))).toBe('rabee')
+
+    access.loginUser({ email: 'rabee@example.com', password: 'secret-password' })
+    const stored = JSON.parse(readFileSync(filePath, 'utf8')).users[0].sessions.map((session) => session.tokenHash)
+    expect(stored).not.toContain(webTokenHash(aged.sessionToken))
+    expect(stored).not.toContain(webTokenHash(undated.sessionToken))
+    expect(stored).toContain(webTokenHash(fresh.sessionToken))
   })
 
   it('preserves profile fields during a language-only update', () => {

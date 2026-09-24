@@ -2,7 +2,7 @@
 /** @jsxRuntime automatic */
 import { useState } from 'react'
 import { BookOpenCheck, LogIn, UsersRound } from 'lucide-react'
-import { rememberAdreemCloudSession } from './ledgerPersistence'
+import { ADREEM_SESSION_EXPIRED_NOTICE_KEY, rememberAdreemCloudSession } from './ledgerPersistence'
 import { normalizeUiLanguage, uiLanguageDirection } from './uiLanguage'
 import { readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage } from './uiTranslation'
 
@@ -19,6 +19,24 @@ async function loginRequest({ email, password }) {
   return data
 }
 
+export const SESSION_EXPIRED_LOGIN_MESSAGE = 'انتهت صلاحية الدخول على هذا الجهاز. سجّل الدخول من جديد.'
+
+function readSessionExpiredNotice() {
+  try {
+    return window.sessionStorage?.getItem(ADREEM_SESSION_EXPIRED_NOTICE_KEY) ? SESSION_EXPIRED_LOGIN_MESSAGE : ''
+  } catch {
+    return ''
+  }
+}
+
+function clearSessionExpiredNotice() {
+  try {
+    window.sessionStorage?.removeItem(ADREEM_SESSION_EXPIRED_NOTICE_KEY)
+  } catch {
+    // Storage can be blocked; the notice is informational only.
+  }
+}
+
 export default function LoginPage() {
   const [language] = useState(readRememberedUiLanguage)
   const normalizedLanguage = normalizeUiLanguage(language)
@@ -27,7 +45,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [status, setStatus] = useState('idle')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(readSessionExpiredNotice)
 
   async function submit(event) {
     event.preventDefault()
@@ -36,6 +54,7 @@ export default function LoginPage() {
     try {
       const data = await loginRequest({ email: email.trim(), password })
       rememberAdreemCloudSession(data)
+      clearSessionExpiredNotice()
       rememberUiLanguage(data.user?.language)
       window.location.assign(`${window.location.pathname}${window.location.search}`)
     } catch {

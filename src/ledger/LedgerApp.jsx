@@ -674,6 +674,7 @@ export function storageTextForStatus(saveStatus, storageMode) {
 }
 
 export function saveFailureMessage(error, retryDelay) {
+  if (error?.code === 'adreem-session-expired') return 'انتهت صلاحية الدخول على هذا الجهاز. سجّل الدخول من جديد؛ آخر تغيير لم يُحفظ.'
   if (retryDelay === null) {
     return error?.status === 409 ? 'تغيّرت البيانات في جهاز آخر. أوقفنا التعديل. أعد تحميل الصفحة.' : 'الحفظ لم يتم. أوقفنا التعديل لحماية بياناتك.'
   }
@@ -4230,6 +4231,10 @@ export default function LedgerApp() {
     async function hydrateLedger() {
       const result = await loadPersistedLedgerState(initialState)
       if (cancelled) return
+      if (result.error?.status === 401 && getLedgerPersistenceMode() !== 'api' && typeof window !== 'undefined') {
+        window.location.reload()
+        return
+      }
       const normalizedState = normalizeLedgerState(result.state, initialState)
       setStorageMode(result.mode)
       setLedgerStorageMode(result.storageMode || 'legacy')

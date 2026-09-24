@@ -11,6 +11,7 @@ export const ADREEM_API_TOKEN_PERSIST_KEY = 'adreem-ledger-api-login-token-v1'
 export const ADREEM_API_REFRESH_TOKEN_PERSIST_KEY = 'adreem-ledger-api-refresh-token-v1'
 export const ADREEM_API_COOKIE_SESSION_MARKER = 'cookie-v3'
 export const ADREEM_MIGRATION_MARKER_KEY = 'adreem-ledger-migration-v1'
+export const ADREEM_SESSION_EXPIRED_NOTICE_KEY = 'adreem-session-expired-notice-v1'
 
 const ADREEM_API_URL = String(import.meta.env.VITE_ADREEM_API_URL || '').replace(/\/+$/, '')
 const API_TIMEOUT_MS = 15_000
@@ -192,6 +193,15 @@ async function refreshAdreemCloudSession() {
     const error = new Error('Missing ADREEM refresh session.')
     error.status = 401
     error.retryable = false
+    throw error
+  }
+  if (api.mode !== 'cookie' && !browserStorageItem('localStorage', ADREEM_API_REFRESH_TOKEN_PERSIST_KEY)) {
+    clearAdreemCloudSession()
+    setBrowserStorageItem('sessionStorage', ADREEM_SESSION_EXPIRED_NOTICE_KEY, '1')
+    const error = new Error('انتهت صلاحية الدخول على هذا الجهاز.')
+    error.status = 401
+    error.retryable = false
+    error.code = 'adreem-session-expired'
     throw error
   }
   const generation = authSessionGeneration
