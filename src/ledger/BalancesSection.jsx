@@ -1,6 +1,6 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
-import { ArrowDownToLine, ArrowUpFromLine, Banknote, Calculator, Landmark, Plus, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, Banknote, Calculator, Landmark, X } from 'lucide-react'
 import { AnimatePresence, motion as Motion } from 'motion/react'
 import { SearchField } from './SearchField'
 import { accountDetailName } from './accountConfig'
@@ -9,7 +9,7 @@ import { normalizeAccountSearchText } from './movementAccounts'
 import { AccountList, BalanceAmountPair, MoneyAccountList, NetPositionPanel } from './BalancePanels'
 import { filterCounterpartyGroupsByQuery, filterMoneyBalanceRows, unifiedCounterpartyGroups } from './balanceViews'
 import { CounterpartyFilters, CounterpartyList } from './CounterpartyViews'
-import { ExpenseReportList } from './ExpenseViews'
+import { ExpenseActivityList } from './ExpenseViews'
 import { balanceAmountIsWide, formatCount } from './ledgerFormat'
 import { AccountGroupIcon } from './LedgerIcons'
 import { accountGroupTabs, BALANCE_FOCUS_LABELS, BALANCE_PANE_MOTION } from './ledgerUiConfig'
@@ -17,8 +17,11 @@ import { SeparateLedgerPanel } from './SeparateLedgerPanel'
 import { TrackingPanel } from './TrackingPanel'
 
 export function BalancesSection({
+  accountById,
   accountQuery,
   activeAccountGroup,
+  activeDimensions,
+  activeExpenseCategories,
   archiveSeparateRecord,
   balanceFocus,
   balanceOverview,
@@ -30,18 +33,26 @@ export function BalancesSection({
   dimensionReports,
   disableRecurring,
   dueRules,
+  deleteAttachment,
   editingSeparateRecordId,
+  editReviewMovement,
   editSeparateRecord,
-  expenseBalanceRows,
+  expenseCategoryFilter,
+  expenseHasMore,
+  expenseMovements,
   focusedCounterpartyId,
   fullNetPosition,
   handleAccountGroupKeyDown,
   investmentSummary,
+  investmentPlatformById,
+  isLoadingExpenses,
+  isLoadingOlderExpenses,
   isLoadingSeparateRecords,
   isNetOpen,
   isSavingSeparateRecord,
   isSeparateEditorOpen,
   ledgerExtras,
+  loadOlderExpenses,
   loadOlderSeparateRecords,
   netAccountQuery,
   netEurRate,
@@ -53,6 +64,7 @@ export function BalancesSection({
   openBalanceFocus,
   openDimensionHistory,
   openExpenseCategoryCreator,
+  requestMovementCancellation,
   resetTemporaryNet,
   runRecurring,
   saveSeparateRecord,
@@ -66,6 +78,7 @@ export function BalancesSection({
   setAccountQuery,
   setBalanceFocus,
   setCounterpartyBalanceFilter,
+  setExpenseCategoryFilter,
   setFocusedCounterpartyId,
   setIsSeparateEditorOpen,
   setNetAccountQuery,
@@ -91,11 +104,6 @@ export function BalancesSection({
     return haystack.includes(normalizedAccountQuery)
   }
   const filterRows = (rows) => rows.filter(accountMatchesQuery)
-  const filteredExpenseRows = expenseBalanceRows.filter((row) => {
-    if (!normalizedAccountQuery) return true
-    const haystack = normalizeAccountSearchText(`${row.name} ${row.account?.subAccountName || ''} ${row.account?.legacyName || ''}`)
-    return haystack.includes(normalizedAccountQuery)
-  })
   const peopleViews = buildCounterpartyBalanceViews(peopleRows)
   const peopleBalances = filterCounterpartyGroupsByQuery(peopleViews.withBalance, accountQuery)
   const visiblePeopleGroups = unifiedCounterpartyGroups(peopleViews, accountQuery, counterpartyBalanceFilter)
@@ -109,7 +117,7 @@ export function BalancesSection({
   const accountRowsByGroup = {
     people: peopleBalances,
     money: filterRows(filterMoneyBalanceRows(moneyRows, activeBalanceFocus)),
-    expenses: filteredExpenseRows,
+    expenses: [],
     separate: [],
   }
   const rows = accountRowsByGroup[activeGroup.key] || []
@@ -187,20 +195,22 @@ export function BalancesSection({
                   </button>
                 ) : null}
               </div>
-              <SearchField
-                className="ml3-account-toolbar"
-                value={activeGroup.key === 'separate' ? separateQuery : accountQuery}
-                onChange={(value) => {
-                  if (activeGroup.key === 'separate') {
-                    setSeparateQuery(value)
-                    return
-                  }
-                  setAccountQuery(value)
-                  setFocusedCounterpartyId('')
-                }}
-                placeholder={activeGroup.key === 'separate' ? 'اسم أو ملاحظة' : activeGroup.key === 'assets' ? 'اسم المشروع أو الأصل' : 'اسم الحساب'}
-                ariaLabel={activeGroup.key === 'separate' ? 'بحث في السجل المنفصل' : activeGroup.key === 'assets' ? 'بحث في التتبع' : 'بحث في الأرصدة'}
-              />
+              {activeGroup.key !== 'expenses' ? (
+                <SearchField
+                  className="ml3-account-toolbar"
+                  value={activeGroup.key === 'separate' ? separateQuery : accountQuery}
+                  onChange={(value) => {
+                    if (activeGroup.key === 'separate') {
+                      setSeparateQuery(value)
+                      return
+                    }
+                    setAccountQuery(value)
+                    setFocusedCounterpartyId('')
+                  }}
+                  placeholder={activeGroup.key === 'separate' ? 'اسم أو ملاحظة' : activeGroup.key === 'assets' ? 'اسم المشروع أو الأصل' : 'اسم الحساب'}
+                  ariaLabel={activeGroup.key === 'separate' ? 'بحث في السجل المنفصل' : activeGroup.key === 'assets' ? 'بحث في التتبع' : 'بحث في الأرصدة'}
+                />
+              ) : null}
             </div>
 
             {activeGroup.key === 'separate' ? (
@@ -248,12 +258,24 @@ export function BalancesSection({
             ) : activeGroup.key === 'money' ? (
               <MoneyAccountList rows={rows} onOpen={setSelectedAccountId} />
             ) : activeGroup.key === 'expenses' ? (
-              <>
-                <div className="adreem-expense-toolbar">
-                  <button type="button" aria-label="إدارة تصنيفات المصروف" onClick={() => openExpenseCategoryCreator('balances')}><Plus aria-hidden="true" size={14} /> تصنيف جديد</button>
-                </div>
-                <ExpenseReportList rows={rows} onOpen={setSelectedAccountId} />
-              </>
+              <ExpenseActivityList
+                movements={expenseMovements}
+                accountById={accountById}
+                categories={activeExpenseCategories}
+                categoryId={expenseCategoryFilter}
+                attachments={ledgerExtras.attachments || []}
+                dimensions={activeDimensions}
+                investmentPlatformById={investmentPlatformById}
+                isLoading={isLoadingExpenses}
+                isLoadingOlder={isLoadingOlderExpenses}
+                hasMore={expenseHasMore}
+                onCategoryChange={setExpenseCategoryFilter}
+                onCreateCategory={() => openExpenseCategoryCreator('balances')}
+                onEdit={editReviewMovement}
+                onCancel={requestMovementCancellation}
+                onDeleteAttachment={deleteAttachment}
+                onLoadOlder={loadOlderExpenses}
+              />
             ) : activeGroup.key === 'assets' ? (
               <TrackingPanel
                 reports={dimensionReports}

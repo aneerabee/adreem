@@ -49,6 +49,7 @@ export const BALANCE_FOCUS_LABELS = Object.freeze({
 })
 export const MOVEMENT_REQUEST_KEYS = Object.freeze({
   accountProfile: 'account-profile',
+  expenses: 'expenses',
   history: 'history',
   ledgerFeed: 'ledger-feed',
   review: 'review',

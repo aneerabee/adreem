@@ -30,7 +30,7 @@ import {
   setCounterpartySettlementPin,
 } from './balanceViews.js'
 import { CounterpartyCard, CounterpartyList } from './CounterpartyViews.jsx'
-import { ExpenseCategoryPicker, ExpenseReportList } from './ExpenseViews.jsx'
+import { ExpenseActivityList, ExpenseCategoryPicker, ExpenseReportList } from './ExpenseViews.jsx'
 import {
   areMergeAccountsCompatible,
   accountClassificationMovementErrors,
@@ -972,6 +972,29 @@ describe('LedgerApp expense balances', () => {
     expect(markup).toContain('3 حركة')
     expect(markup).toContain('1,200 LYD')
     expect(markup).toContain('35 USD')
+  })
+
+  it('shows expenses by date and time while category stays a filter', () => {
+    const accountById = new Map([
+      ['cash', { id: 'cash', ownerName: 'خزنة البيت', subAccountName: 'كاش' }],
+      ['fuel', expenseAccount],
+    ])
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <ExpenseActivityList
+        accountById={accountById}
+        categories={[expenseAccount]}
+        movements={[
+          { id: 'old', type: MOVEMENT_TYPES.EXPENSE, status: MOVEMENT_STATUSES.POSTED, amount: 100, currency: CURRENCIES.DINAR, sourceAccountId: 'cash', expenseCategoryId: 'fuel', note: 'أقدم', createdAt: '2026-09-23T09:00:00Z' },
+          { id: 'new', type: MOVEMENT_TYPES.EXPENSE, status: MOVEMENT_STATUSES.POSTED, amount: 200, currency: CURRENCIES.DINAR, sourceAccountId: 'cash', expenseCategoryId: 'fuel', note: 'أحدث', createdAt: '2026-09-24T18:30:00Z' },
+        ]}
+      />,
+    ))
+
+    expect(markup).toContain('تصفية المصروفات حسب التصنيف')
+    expect(markup).toContain('كل التصنيفات')
+    expect(markup.match(/ml3-history-day/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(markup).toContain('ml3-history-time')
+    expect(markup.indexOf('أحدث')).toBeLessThan(markup.indexOf('أقدم'))
   })
 
   it('shows the expense category once as a compact colored tag', () => {

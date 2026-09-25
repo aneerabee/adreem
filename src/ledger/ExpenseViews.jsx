@@ -8,6 +8,8 @@ import { protectedAccountPrimaryName } from './accountPresentation'
 import { expenseCategoryTone } from './balanceViews'
 import { formatCount, money } from './ledgerFormat'
 import { UI_MOTION_TRANSITION } from './ledgerUiConfig'
+import { HistoryMovementRow } from './MovementRows'
+import { expenseActivityMovements, groupExpenseActivityByDay } from './expenseActivity'
 
 export function ExpenseCategoryPicker({ value = '', categories = [], onChange, onCreate, compact = false }) {
   return (
@@ -66,6 +68,77 @@ export function ExpenseReportList({ rows = [], onOpen }) {
           )
         })}
       </AnimatePresence>
+    </div>
+  )
+}
+
+export function ExpenseActivityList({
+  movements = [],
+  accountById = new Map(),
+  categories = [],
+  categoryId = '',
+  query = '',
+  attachments = [],
+  dimensions = [],
+  investmentPlatformById = new Map(),
+  isLoading = false,
+  isLoadingOlder = false,
+  hasMore = false,
+  onCategoryChange,
+  onCreateCategory,
+  onEdit,
+  onCancel,
+  onDeleteAttachment,
+  onLoadOlder,
+}) {
+  const filteredMovements = expenseActivityMovements({ movements, accountById, categoryId, query })
+  const groups = groupExpenseActivityByDay(filteredMovements)
+
+  return (
+    <div className="adreem-expense-activity">
+      <div className="adreem-expense-toolbar">
+        <label>
+          <span>التصنيف</span>
+          <select aria-label="تصفية المصروفات حسب التصنيف" value={categoryId} onChange={(event) => onCategoryChange?.(event.target.value)}>
+            <option value="">كل التصنيفات</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>{protectedAccountPrimaryName(category)}</option>
+            ))}
+          </select>
+        </label>
+        <button type="button" aria-label="إضافة تصنيف مصروف" onClick={onCreateCategory}><Plus aria-hidden="true" size={14} /> تصنيف جديد</button>
+      </div>
+
+      <div className="ml3-history-list adreem-expense-timeline" aria-live="polite">
+        {isLoading ? <p className="ml3-empty">جاري تحميل المصروفات</p> : null}
+        {!isLoading && groups.length === 0 ? <p className="ml3-empty">لا توجد مصروفات.</p> : null}
+        {groups.map((group) => (
+          <section className="ml3-history-day" key={group.key}>
+            <div className="ml3-history-day-head">
+              <strong>{group.label}</strong>
+              <span>{formatCount(group.movements.length)}</span>
+            </div>
+            {group.movements.map((movement) => (
+              <HistoryMovementRow
+                key={movement.id}
+                movement={movement}
+                accountById={accountById}
+                investmentPlatformById={investmentPlatformById}
+                attachments={attachments}
+                dimensions={dimensions}
+                onEdit={onEdit}
+                onCancel={onCancel}
+                onDeleteAttachment={onDeleteAttachment}
+              />
+            ))}
+          </section>
+        ))}
+        {hasMore ? (
+          <button type="button" className="ml3-history-more" disabled={isLoadingOlder || isLoading} onClick={onLoadOlder}>
+            {isLoadingOlder ? 'جاري التحميل' : 'عرض مصروفات أقدم'}
+          </button>
+        ) : null}
+      </div>
     </div>
   )
 }

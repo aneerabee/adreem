@@ -7,11 +7,14 @@ import { MAIN_LEDGER_MOVEMENT_TYPES } from './separateRecords'
 import { mergeMovementHistoryPages, mergeMovementPageAttachments, mergeReviewMovementPage } from './ledgerAppState'
 import { loadEveryMovementPage } from './movementPageLoader'
 import { MAX_SEPARATE_RECORD_PAGES, MOVEMENT_REQUEST_KEYS, REVIEW_MOVEMENT_PAGE_SIZE, SEPARATE_RECORD_PAGE_SIZE } from './ledgerUiConfig'
+import { expenseCategoryRequestFilter, EXPENSE_MOVEMENT_TYPES } from './expenseActivity'
 
 export function useRemoteLedgerPages({
   accountProfileRequestSequenceRef,
   activeAccountGroup,
   activeSection,
+  expenseCategoryFilter,
+  expenseRequestSequenceRef,
   historyAccountId,
   historyDimensionId,
   historyExpenseCategoryId,
@@ -28,10 +31,14 @@ export function useRemoteLedgerPages({
   selectedAccountIsExpenseCategory,
   separateRequestSequenceRef,
   setAccountProfilePage,
+  setExpensePage,
+  setExpenseRemoteMovements,
   setFeedback,
   setHistoryPage,
   setHistoryRemoteMovements,
   setIsLoadingAccountProfile,
+  setIsLoadingExpenses,
+  setIsLoadingOlderExpenses,
   setIsLoadingHistory,
   setIsLoadingOlderMovements,
   setIsLoadingReview,
@@ -193,6 +200,49 @@ export function useRemoteLedgerPages({
     })
     return () => { cancelled = true }
   }, [activeAccountGroup, activeSection, isHydrated, ledgerStorageMode, separateRequestSequenceRef, setFeedback, setIsLoadingSeparateRecords, setLedgerExtras, setMovements, setSeparatePage])
+
+  useEffect(() => {
+    const requestSequence = expenseRequestSequenceRef.current + 1
+    expenseRequestSequenceRef.current = requestSequence
+    if (!isHydrated || activeSection !== 'accounts' || activeAccountGroup !== 'expenses' || ledgerStorageMode !== 'relational') {
+      queueMicrotask(() => {
+        if (expenseRequestSequenceRef.current !== requestSequence) return
+        setIsLoadingExpenses(false)
+        setIsLoadingOlderExpenses(false)
+      })
+      return undefined
+    }
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled || expenseRequestSequenceRef.current !== requestSequence) return
+      setIsLoadingExpenses(true)
+      setIsLoadingOlderExpenses(false)
+      setExpensePage(null)
+    })
+    void loadAdreemMovementPage({
+      limit: 100,
+      types: EXPENSE_MOVEMENT_TYPES,
+      ...expenseCategoryRequestFilter(expenseCategoryFilter),
+      requestKey: MOVEMENT_REQUEST_KEYS.expenses,
+    }).then((result) => {
+      if (cancelled || result.stale || expenseRequestSequenceRef.current !== requestSequence) return
+      setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+      const pageMovements = mergeMovementHistoryPages(result.movements)
+      setExpenseRemoteMovements(pageMovements)
+      setExpensePage({ ...(result.page || {}), categoryId: expenseCategoryFilter, loaded: pageMovements.length })
+      setMovements((current) => {
+        const merged = mergeMovementHistoryPages(current, pageMovements).reverse()
+        return sameRecordVersions(current, merged) ? current : merged
+      })
+    }).catch((error) => {
+      if (cancelled || expenseRequestSequenceRef.current !== requestSequence) return
+      console.warn('[adreem-ledger] expense movements load failed:', error?.message || error)
+      setFeedback('تعذر تحميل المصروفات. حاول مرة أخرى.')
+    }).finally(() => {
+      if (!cancelled && expenseRequestSequenceRef.current === requestSequence) setIsLoadingExpenses(false)
+    })
+    return () => { cancelled = true }
+  }, [activeAccountGroup, activeSection, expenseCategoryFilter, expenseRequestSequenceRef, isHydrated, ledgerRevision, ledgerStorageMode, setExpensePage, setExpenseRemoteMovements, setFeedback, setIsLoadingExpenses, setIsLoadingOlderExpenses, setLedgerExtras, setMovements])
 
   useEffect(() => {
     const requestSequence = historyRequestSequenceRef.current + 1

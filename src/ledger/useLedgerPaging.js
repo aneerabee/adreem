@@ -6,11 +6,16 @@ import { mergeMovementHistoryPages, mergeMovementPageAttachments, mergeReviewMov
 import { MOVEMENT_REQUEST_KEYS, REVIEW_MOVEMENT_PAGE_SIZE } from './ledgerUiConfig'
 import { accountMovementFilter } from './movementDisplay'
 import { loadEveryMovementPage } from './movementPageLoader'
+import { expenseCategoryRequestFilter, EXPENSE_MOVEMENT_TYPES } from './expenseActivity'
 
 export function useLedgerPaging({
   accountProfileRequestSequenceRef,
   activeAccountProfilePage,
   activeReviewPage,
+  expenseCategoryFilter,
+  expensePage,
+  expenseRemoteMovements,
+  expenseRequestSequenceRef,
   historyAccountId,
   historyDimensionId,
   historyExpenseCategoryId,
@@ -21,6 +26,7 @@ export function useLedgerPaging({
   historyStatus,
   historyType,
   isLoadingAccountProfile,
+  isLoadingOlderExpenses,
   isLoadingOlderMovements,
   ledgerRevision,
   ledgerStorageMode,
@@ -31,10 +37,13 @@ export function useLedgerPaging({
   selectedAccountId,
   selectedAccountIsExpenseCategory,
   setAccountProfilePage,
+  setExpensePage,
+  setExpenseRemoteMovements,
   setFeedback,
   setHistoryPage,
   setHistoryRemoteMovements,
   setIsLoadingAccountProfile,
+  setIsLoadingOlderExpenses,
   setIsLoadingOlderMovements,
   setIsLoadingReview,
   setLedgerExtras,
@@ -42,6 +51,42 @@ export function useLedgerPaging({
   setMovements,
   setReviewPage,
 }) {
+  async function loadOlderExpenses() {
+    if (isLoadingOlderExpenses || !expensePage?.hasMore || expensePage.categoryId !== expenseCategoryFilter) return
+    const requestSequence = expenseRequestSequenceRef.current
+    setIsLoadingOlderExpenses(true)
+    try {
+      const result = await loadAdreemMovementPage({
+        before: expensePage.nextCursor,
+        limit: expensePage.limit || 100,
+        types: EXPENSE_MOVEMENT_TYPES,
+        ...expenseCategoryRequestFilter(expenseCategoryFilter),
+        requestKey: MOVEMENT_REQUEST_KEYS.expenses,
+      })
+      if (result.stale || expenseRequestSequenceRef.current !== requestSequence) return
+      setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
+      const mergedExpenses = mergeMovementHistoryPages(expenseRemoteMovements, result.movements)
+      setExpenseRemoteMovements(mergedExpenses)
+      setExpensePage({
+        ...(result.page || {}),
+        categoryId: expenseCategoryFilter,
+        total: expensePage.total ?? result.page?.total ?? mergedExpenses.length,
+        loaded: mergedExpenses.length,
+      })
+      setMovements((current) => {
+        const merged = mergeMovementHistoryPages(current, result.movements).reverse()
+        return sameRecordVersions(current, merged) ? current : merged
+      })
+    } catch (error) {
+      if (expenseRequestSequenceRef.current === requestSequence) {
+        console.warn('[adreem-ledger] older expenses load failed:', error?.message || error)
+        setFeedback('تعذر جلب المصروفات الأقدم.')
+      }
+    } finally {
+      if (expenseRequestSequenceRef.current === requestSequence) setIsLoadingOlderExpenses(false)
+    }
+  }
+
   async function loadOlderMovements() {
     const activePage = ledgerStorageMode === 'relational' ? historyPage : movementPage
     if (isLoadingOlderMovements || !activePage?.hasMore) return
@@ -175,6 +220,7 @@ export function useLedgerPaging({
   }
 
   return {
+    loadOlderExpenses,
     loadOlderMovements,
     loadOlderReviewMovements,
     loadOlderAccountProfileMovements,

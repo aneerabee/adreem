@@ -188,6 +188,7 @@ export function HistoryMovementRow({ movement, accountById, investmentPlatformBy
         </span>
       </div>
       <div className="ml3-history-side">
+        <time className="ml3-history-time" dateTime={movement.createdAt || movement.updatedAt}>{movementTime(movement.createdAt || movement.updatedAt)}</time>
         <strong>{money(movement.amount, movement.currency)}</strong>
         {conversionEffect ? <small className="ml3-history-conversion">↔ {money(Math.abs(conversionEffect.delta), conversionEffect.currency)}</small> : null}
         {movement.rate ? <small className="ml3-history-rate">× {formatRate(movement.rate)}</small> : null}

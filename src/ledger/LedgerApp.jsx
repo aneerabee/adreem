@@ -17,15 +17,15 @@ import { readLedgerNavigation } from './ledgerNavigation'
 import { MOVEMENT_ENTRY_STEPS, movementConfigFor, movementLabels, movementNeedsSource, movementSupportsDimension } from './movementConfig'
 import { sameLogicalAccount } from './movementAccounts'
 import { filterSeparateRecords, isMainLedgerMovement, separateRecordNames, separateRecordTotals } from './separateRecords'
-import { buildDimensionReports, buildExpenseCategoryReports, defaultRecurringFirstRunOn, dimensionsFromAccounts, dueRecurringRules, findUnresolvedReconciliationDifferences, normalizeRecurringDateKey } from './ledgerOperations'
+import { buildDimensionReports, defaultRecurringFirstRunOn, dimensionsFromAccounts, dueRecurringRules, findUnresolvedReconciliationDifferences, normalizeRecurringDateKey } from './ledgerOperations'
 import { normalizeUiLanguage, uiLanguageDirection } from './uiLanguage'
 import { preserveUiData, readRememberedUiLanguage, rememberUiLanguage, setActiveUiLanguage, translateUiText } from './uiTranslation'
 import { INVESTMENT_RECORD_STATUSES, summarizeInvestmentPortfolio } from './investmentCore'
 import { isAutoPricedHolding } from './investmentMarketPolicy'
 import { compareBalanceBuckets, protectedAccountContext, protectedAccountLabel, protectedUserProfile } from './accountPresentation'
 import { AccountProfile } from './AccountProfile'
-import { buildBalanceOverview, buildExpenseBalanceRows } from './balanceViews'
-import { activeRecurringRuleForMovement, emptyMovementDraft, emptySeparateRecordDraft, filterMovementHistory, ledgerExtrasFromState, loadInitialLedgerState, logoutFromCloudSession, openAdminUsersPage, previewMovementEdit, storageTextForStatus } from './ledgerAppState'
+import { buildBalanceOverview } from './balanceViews'
+import { activeRecurringRuleForMovement, emptyMovementDraft, emptySeparateRecordDraft, filterMovementHistory, ledgerExtrasFromState, loadInitialLedgerState, logoutFromCloudSession, mergeMovementHistoryPages, openAdminUsersPage, previewMovementEdit, storageTextForStatus } from './ledgerAppState'
 import { ExpenseCategoryDialog, MovementActionDialog, MovementEditDialog } from './LedgerDialogs'
 import { useMobileViewport } from './mobileViewport'
 import { formatCount, money, parseLocalizedDecimal, parseMoneyAmount } from './ledgerFormat'
@@ -54,7 +54,7 @@ import { useBalanceNavigation } from './useBalanceNavigation'
 import { useEntryFlow } from './useEntryFlow'
 import { accountWizardModel } from './accountWizardModel'
 import { movementReceipts } from './movementReceipts'
-import { isExpenseCategoryAccount } from './movementDisplay'
+import { isExpenseCategoryAccount, isExpenseMovement } from './movementDisplay'
 
 export default function LedgerApp() {
   const [initialState] = useState(loadInitialLedgerState)
@@ -104,12 +104,17 @@ export default function LedgerApp() {
   const [ledgerRevision, setLedgerRevision] = useState(null)
   const [historyRemoteMovements, setHistoryRemoteMovements] = useState(null)
   const [historyPage, setHistoryPage] = useState(null)
+  const [expenseRemoteMovements, setExpenseRemoteMovements] = useState(null)
+  const [expensePage, setExpensePage] = useState(null)
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('')
   const [reviewPage, setReviewPage] = useState(null)
   const [serverReports, setServerReports] = useState(null)
   const [expenseCategoryCreator, setExpenseCategoryCreator] = useState(null)
   const [isSavingExpenseCategory, setIsSavingExpenseCategory] = useState(false)
   const [isLoadingOlderMovements, setIsLoadingOlderMovements] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(false)
+  const [isLoadingOlderExpenses, setIsLoadingOlderExpenses] = useState(false)
   const [isLoadingReview, setIsLoadingReview] = useState(false)
   const [todayRemoteSummary, setTodayRemoteSummary] = useState(null)
   const [accountProfilePage, setAccountProfilePage] = useState(null)
@@ -153,6 +158,7 @@ export default function LedgerApp() {
   const motionSequenceRef = useRef(0)
   const entryFlowLocationRef = useRef(`${activeEntryMode}:${movementStep}:${accountWizardStep}`)
   const historyRequestSequenceRef = useRef(0)
+  const expenseRequestSequenceRef = useRef(0)
   const accountProfileRequestSequenceRef = useRef(0)
   const reviewRequestSequenceRef = useRef(0)
   const separateRequestSequenceRef = useRef(0)
@@ -282,6 +288,10 @@ export default function LedgerApp() {
     .filter(isMainLedgerMovement)
     .slice()
     .reverse()
+  const currentExpenseMovements = postedUserMovements.filter(isExpenseMovement)
+  const expenseMovements = ledgerStorageMode === 'relational' && Array.isArray(expenseRemoteMovements)
+    ? mergeMovementHistoryPages(expenseRemoteMovements, currentExpenseMovements)
+    : currentExpenseMovements
   const locallyFilteredHistoryMovements = useMemo(() => filterMovementHistory({
     movements: postedUserMovements,
     query: historyQuery,
@@ -410,13 +420,7 @@ export default function LedgerApp() {
   const selectedSourceAccount = accountById.get(movementDraft.sourceAccountId)
   const selectedDestinationAccount = accountById.get(movementDraft.destinationAccountId)
   const localDimensionReports = useMemo(() => buildDimensionReports({ ...ledgerExtras, accounts, movements }), [accounts, movements, ledgerExtras])
-  const localExpenseCategoryReports = useMemo(() => buildExpenseCategoryReports({ ...ledgerExtras, accounts, movements }), [accounts, movements, ledgerExtras])
   const dimensionReports = serverReports?.dimensions || localDimensionReports
-  const expenseCategoryReports = serverReports?.expenseCategories || localExpenseCategoryReports
-  const expenseBalanceRows = useMemo(
-    () => buildExpenseBalanceRows(accounts, expenseCategoryReports),
-    [accounts, expenseCategoryReports],
-  )
   const dueRules = useMemo(() => dueRecurringRules(ledgerExtras.recurringRules), [ledgerExtras.recurringRules])
   const editingRecurringRule = useMemo(
     () => activeRecurringRuleForMovement(ledgerExtras.recurringRules, editingMovementId),
@@ -462,6 +466,8 @@ export default function LedgerApp() {
     accountProfileRequestSequenceRef,
     activeAccountGroup,
     activeSection,
+    expenseCategoryFilter,
+    expenseRequestSequenceRef,
     historyAccountId,
     historyDimensionId,
     historyExpenseCategoryId,
@@ -478,10 +484,14 @@ export default function LedgerApp() {
     selectedAccountIsExpenseCategory,
     separateRequestSequenceRef,
     setAccountProfilePage,
+    setExpensePage,
+    setExpenseRemoteMovements,
     setFeedback,
     setHistoryPage,
     setHistoryRemoteMovements,
     setIsLoadingAccountProfile,
+    setIsLoadingExpenses,
+    setIsLoadingOlderExpenses,
     setIsLoadingHistory,
     setIsLoadingOlderMovements,
     setIsLoadingReview,
@@ -537,6 +547,7 @@ export default function LedgerApp() {
   })
 
   const {
+    loadOlderExpenses,
     loadOlderMovements,
     loadOlderReviewMovements,
     loadOlderAccountProfileMovements,
@@ -545,6 +556,10 @@ export default function LedgerApp() {
     accountProfileRequestSequenceRef,
     activeAccountProfilePage,
     activeReviewPage,
+    expenseCategoryFilter,
+    expensePage,
+    expenseRemoteMovements,
+    expenseRequestSequenceRef,
     historyAccountId,
     historyDimensionId,
     historyExpenseCategoryId,
@@ -555,6 +570,7 @@ export default function LedgerApp() {
     historyStatus,
     historyType,
     isLoadingAccountProfile,
+    isLoadingOlderExpenses,
     isLoadingOlderMovements,
     ledgerRevision,
     ledgerStorageMode,
@@ -565,10 +581,13 @@ export default function LedgerApp() {
     selectedAccountId,
     selectedAccountIsExpenseCategory,
     setAccountProfilePage,
+    setExpensePage,
+    setExpenseRemoteMovements,
     setFeedback,
     setHistoryPage,
     setHistoryRemoteMovements,
     setIsLoadingAccountProfile,
+    setIsLoadingOlderExpenses,
     setIsLoadingOlderMovements,
     setIsLoadingReview,
     setLedgerExtras,
@@ -965,8 +984,11 @@ export default function LedgerApp() {
       return null
     }
     if (activeSection === 'accounts') return <BalancesSection
+        accountById={accountById}
         accountQuery={accountQuery}
         activeAccountGroup={activeAccountGroup}
+        activeDimensions={activeDimensions}
+        activeExpenseCategories={activeExpenseCategories}
         archiveSeparateRecord={archiveSeparateRecord}
         balanceFocus={balanceFocus}
         balanceOverview={balanceOverview}
@@ -978,18 +1000,26 @@ export default function LedgerApp() {
         dimensionReports={dimensionReports}
         disableRecurring={disableRecurring}
         dueRules={dueRules}
+        deleteAttachment={deleteAttachment}
         editingSeparateRecordId={editingSeparateRecordId}
+        editReviewMovement={editReviewMovement}
         editSeparateRecord={editSeparateRecord}
-        expenseBalanceRows={expenseBalanceRows}
+        expenseCategoryFilter={expenseCategoryFilter}
+        expenseHasMore={ledgerStorageMode === 'relational' ? Boolean(expensePage?.hasMore) : Boolean(movementPage?.hasMore)}
+        expenseMovements={expenseMovements}
         focusedCounterpartyId={focusedCounterpartyId}
         fullNetPosition={fullNetPosition}
         handleAccountGroupKeyDown={handleAccountGroupKeyDown}
         investmentSummary={investmentSummary}
+        investmentPlatformById={investmentPlatformById}
+        isLoadingExpenses={isLoadingExpenses}
+        isLoadingOlderExpenses={ledgerStorageMode === 'relational' ? isLoadingOlderExpenses : isLoadingOlderMovements}
         isLoadingSeparateRecords={isLoadingSeparateRecords}
         isNetOpen={isNetOpen}
         isSavingSeparateRecord={isSavingSeparateRecord}
         isSeparateEditorOpen={isSeparateEditorOpen}
         ledgerExtras={ledgerExtras}
+        loadOlderExpenses={ledgerStorageMode === 'relational' ? loadOlderExpenses : loadOlderMovements}
         loadOlderSeparateRecords={loadOlderSeparateRecords}
         netAccountQuery={netAccountQuery}
         netEurRate={netEurRate}
@@ -1001,6 +1031,7 @@ export default function LedgerApp() {
         openBalanceFocus={openBalanceFocus}
         openDimensionHistory={openDimensionHistory}
         openExpenseCategoryCreator={openExpenseCategoryCreator}
+        requestMovementCancellation={requestMovementCancellation}
         resetTemporaryNet={resetTemporaryNet}
         runRecurring={runRecurring}
         saveSeparateRecord={saveSeparateRecord}
@@ -1014,6 +1045,7 @@ export default function LedgerApp() {
         setAccountQuery={setAccountQuery}
         setBalanceFocus={setBalanceFocus}
         setCounterpartyBalanceFilter={setCounterpartyBalanceFilter}
+        setExpenseCategoryFilter={setExpenseCategoryFilter}
         setFocusedCounterpartyId={setFocusedCounterpartyId}
         setIsSeparateEditorOpen={setIsSeparateEditorOpen}
         setNetAccountQuery={setNetAccountQuery}
