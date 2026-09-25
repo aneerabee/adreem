@@ -14,6 +14,7 @@ import { AssetMark } from './AssetMark'
 import { assetMarkFor, useAssetMarkIndex } from './assetMarks'
 import { InvestmentTradeDialog } from './InvestmentTradeDialog'
 import { useTryUsdRate } from './useTryUsdRate.js'
+import { revealAfterRender } from './mobileViewport'
 import { accountLabel, activityActionLabel, activityDate, activityDay, ASSET_OPTIONS, assetTypeForMarketResult, assetUsesCurrencyMarket, symbolPlaceholderFor, blankHolding, blankPlatform, blankTradeEdit, blankTransfer, decimal, holdingIsSmall, holdingPriceIsStale, holdingPriceLabel, holdingTypeLabel, MARKET_OPTIONS, platformLogoUrl, PRICE_SOURCE_LABELS, profitPercent, profitToneClass, tradeReviewImpact, tryMoneyMicros, tryUnitMicros, usdMicros, usdUnitMicros } from './investmentFormat'
 import { InvestmentDialog, InvestmentMarketPrice, TryExchangeRate } from './InvestmentParts'
 
@@ -586,7 +587,7 @@ export default function InvestmentsPanel({
                           </div>
                         </div>
                         <div className="adreem-investment-row-actions">
-                          <button type="button" className="is-details" aria-label={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} aria-expanded={detailsOpen} title={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} onClick={() => setExpandedHoldingIds((current) => ({ ...current, [row.holding.id]: !current[row.holding.id] }))}><ChevronDown aria-hidden="true" size={14} /><span>تفاصيل</span></button>
+                          <button type="button" className="is-details" aria-label={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} aria-expanded={detailsOpen} title={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} onClick={(event) => { const section = event.currentTarget.closest('.adreem-investment-holding'); setExpandedHoldingIds((current) => ({ ...current, [row.holding.id]: !current[row.holding.id] })); if (!detailsOpen) revealAfterRender(() => section) }}><ChevronDown aria-hidden="true" size={14} /><span>تفاصيل</span></button>
                         </div>
                         {detailsOpen ? <div className="adreem-investment-holding-details">
                           <div className="adreem-investment-detail-heading">
@@ -705,6 +706,7 @@ export default function InvestmentsPanel({
         {dialog === 'transfer' ? (
           <InvestmentDialog
             key="transfer"
+            contentKey={transferStage}
             title="نقل بين المنصات"
             subtitle={transferStage === 'review' ? 'راجع قبل التسجيل' : 'USD أو USDT'}
             icon={ArrowLeftRight}
@@ -789,6 +791,7 @@ export default function InvestmentsPanel({
         {dialog === 'trade-edit' && editingTradeBaseline ? (
           <InvestmentDialog
             key="trade-edit"
+            contentKey={tradeEditStage}
             title={tradeEditStage === 'review' ? 'راجع التعديل' : 'تعديل عملية استثمار'}
             subtitle="النوع والتاريخ والمنصة ثابتة"
             onClose={returnToHistory}

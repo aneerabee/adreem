@@ -87,6 +87,7 @@ export function InvestmentTradeDialog({ platformRow, holdings, markIndex, initia
       icon={ArrowLeftRight}
       tone={isBuy ? 'buy' : 'sell'}
       className="is-trade"
+      contentKey={`${draft.type}:${inReview ? 'review' : selected ? 'amounts' : 'pick'}`}
       onClose={onClose}
       onSecondary={inReview ? () => setStage(TRADE_STAGES.FIELDS) : onClose}
       secondaryLabel={inReview ? 'تعديل' : 'إلغاء'}

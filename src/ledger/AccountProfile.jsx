@@ -9,7 +9,7 @@ import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore'
 import { movementLabels } from './movementConfig'
 import { attachmentsForRecord } from './ledgerOperations'
 import { preserveUiData } from './uiTranslation'
-import { accountKindText, accountPrimaryBalance, formatDisplayMeaning, protectedAccountContext, protectedAccountLabel, protectedAccountPrimaryName } from './accountPresentation'
+import { accountKindText, accountPrimaryBalance, formatDisplayMeaning, protectedAccountContext, protectedAccountPrimaryName } from './accountPresentation'
 import { AccountStatement } from './AccountStatement'
 import { accountProfileMovements, accountStatementAccountIds } from './accountStatementData'
 import { AccountEditHistory } from './BalancePanels'
@@ -19,6 +19,8 @@ import { AccountChoiceIcon, LedgerOverlayPortal } from './LedgerIcons'
 import { CURRENCY_OPTIONS } from './ledgerUiConfig'
 import { canCancelMovement, movementAccountImpact, movementDateTime, movementStatusLabel } from './movementPresentation'
 import { AttachmentFileField, AttachmentLink } from './MovementRows'
+import { revealInScroller } from './mobileViewport'
+import { expenseTotalsByCurrency, isExpenseCategoryAccount, isExpenseMovement, movementAccountLabel, postedCategoryExpenses } from './movementDisplay'
 
 function accountEditorDraft(account) {
   return {
@@ -161,6 +163,9 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
     accountId: account.id,
   })
   const relatedMovements = accountProfileMovements(movements, account.id)
+  const isExpenseCategory = isExpenseCategoryAccount(account)
+  const categoryExpenses = isExpenseCategory ? postedCategoryExpenses(movements, account.id) : []
+  const categoryTotals = expenseTotalsByCurrency(categoryExpenses)
   const accountMap = new Map(accounts.map((item) => [item.id, item]))
   const primaryBalance = accountPrimaryBalance(bucket)
   const profileBalanceTone = primaryBalance.amount > 0 ? 'is-positive' : primaryBalance.amount < 0 ? 'is-negative' : 'is-zero'
@@ -176,11 +181,12 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
 
   async function openStatement() {
     setStatementOpen(true)
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => revealInScroller(document.querySelector('.ml3-profile .adreem-statement'))))
     if (!onLoadStatement || statementMovements) return
     setIsLoadingStatement(true)
     setStatementError('')
     try {
-      const completeMovements = await onLoadStatement(accountStatementAccountIds(account, accounts))
+      const completeMovements = await onLoadStatement(accountStatementAccountIds(account, accounts), { byExpenseCategory: isExpenseCategory })
       setStatementMovements(Array.isArray(completeMovements) ? completeMovements : movements)
     } catch {
       setStatementError('تعذر تحميل الكشف كاملًا. أعد المحاولة.')
@@ -212,6 +218,11 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
                 <strong>صافي التتبع</strong>
                 <span>{trackingNetAmounts.length ? trackingNetAmounts.map(({ currency, net }) => <b key={currency}>{money(net, currency)}</b>) : 'لا توجد حركات بعد'}</span>
               </div>
+            ) : isExpenseCategory ? (
+              <div className="ml3-profile-balance adreem-profile-tracking-balance adreem-profile-expense-balance">
+                <strong>مجموع المصروف</strong>
+                <span>{categoryTotals.length ? categoryTotals.map(({ currency, amount }) => <b key={currency}>{money(amount, currency)}</b>) : 'لا توجد مصروفات بعد'}</span>
+              </div>
             ) : (
               <div className={`ml3-profile-balance ${profileBalanceTone}`}>
                 <strong>{formatDisplayMeaning(account, primaryBalance.amount, primaryBalance.currency)}</strong>
@@ -226,7 +237,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
               </div>
               <div>
                 <span>الحركات</span>
-                <strong>{formatCount(isTrackingAccount ? dimensionReport?.movementCount || 0 : postedCount)}</strong>
+                <strong>{formatCount(isTrackingAccount ? dimensionReport?.movementCount || 0 : isExpenseCategory ? categoryExpenses.length : postedCount)}</strong>
               </div>
               <div>
                 <span>الحالة</span>
@@ -335,23 +346,32 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
               </div>
               {relatedMovements.length === 0 ? <p className="ml3-empty">لا توجد حركات لهذا الحساب.</p> : null}
               {relatedMovements.map((movement) => {
-                const impacts = movement.status === MOVEMENT_STATUSES.POSTED ? movementAccountImpact(movement, account.id) : []
+                const expenseInCategory = isExpenseCategory && isExpenseMovement(movement) && movement.expenseCategoryId === account.id
+                const isPosted = movement.status === MOVEMENT_STATUSES.POSTED
+                const impacts = expenseInCategory
+                  ? (isPosted ? [{ currency: movement.currency, delta: -Math.abs(Number(movement.amount) || 0) }] : [])
+                  : isPosted ? movementAccountImpact(movement, account.id) : []
                 const source = accountMap.get(movement.sourceAccountId)
                 const destination = accountMap.get(movement.destinationAccountId)
+                const category = isExpenseMovement(movement) ? accountMap.get(movement.expenseCategoryId) : null
                 const movementAttachments = attachmentsForRecord(attachments, {
                   movementId: movement.id,
                 })
                 return (
                   <article className="ml3-profile-movement" key={movement.id}>
                     <div>
-                      <strong>{movementLabels[movement.type] || movement.type}</strong>
+                      <strong className={expenseInCategory && !movement.note ? 'is-quiet' : undefined}>{expenseInCategory ? (movement.note ? preserveUiData(movement.note) : 'مصروف بدون وصف') : movementLabels[movement.type] || movement.type}</strong>
                       <span className={movement.type === MOVEMENT_TYPES.RECORD_ONLY ? undefined : 'adreem-account-name'}>
                         {movement.type === MOVEMENT_TYPES.RECORD_ONLY
                           ? preserveUiData(movement.note || 'تسجيل للمتابعة فقط')
-                          : <>{source ? protectedAccountLabel(source) : 'بدون مصدر'} ← {destination ? protectedAccountLabel(destination) : 'بدون وجهة'}</>}
+                          : expenseInCategory
+                            ? <>من {source ? movementAccountLabel(source) : 'بدون مصدر'}</>
+                            : isExpenseMovement(movement)
+                              ? <>{source ? movementAccountLabel(source) : 'بدون مصدر'} ← {category ? protectedAccountPrimaryName(category) : 'بدون تصنيف'}</>
+                              : <>{source ? movementAccountLabel(source) : 'بدون مصدر'} ← {destination ? movementAccountLabel(destination) : 'بدون وجهة'}</>}
                       </span>
                       <small>{movementDateTime(movement.createdAt || movement.updatedAt)} · {movementStatusLabel(movement.status)}</small>
-                      {movement.note ? <small>{preserveUiData(movement.note)}</small> : null}
+                      {movement.note && !expenseInCategory && movement.type !== MOVEMENT_TYPES.RECORD_ONLY ? <small>{preserveUiData(movement.note)}</small> : null}
                       {movementAttachments.length ? (
                         <div className="ml3-attachment-list">
                           {movementAttachments.map((item) => (
@@ -362,7 +382,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
                     </div>
                     <div className="ml3-profile-impact">
                       {impacts.map((impact) => (
-                        <b key={`${movement.id}-${impact.currency}`}>{signedMoney(impact.delta, impact.currency)}</b>
+                        <b key={`${movement.id}-${impact.currency}`} className={impact.delta < 0 ? 'is-negative' : 'is-positive'}>{signedMoney(impact.delta, impact.currency)}</b>
                       ))}
                       {!movement.id?.startsWith('opening-') && canCancelMovement(movement) ? (
                         <button type="button" onClick={() => onEditMovement(movement)}>

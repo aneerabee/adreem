@@ -7,11 +7,12 @@ import { resolveAdreemAttachmentUrl } from './ledgerPersistence'
 import { movementLabels, movementTone } from './movementConfig'
 import { attachmentsForRecord } from './ledgerOperations'
 import { preserveUiData } from './uiTranslation'
-import { conciseAccountChoiceContext, protectedAccountLabel, protectedAccountPrimaryName } from './accountPresentation'
+import { protectedAccountPrimaryName } from './accountPresentation'
 import { expenseCategoryTone } from './balanceViews'
 import { formatRate, money, signedMoney } from './ledgerFormat'
 import { MovementTypeIcon } from './LedgerIcons'
 import { canEditMovement, movementNoteAddsContext, movementStatusLabel, movementTime } from './movementPresentation'
+import { isExpenseMovement, movementAccountContext, movementAccountLabel } from './movementDisplay'
 
 export function AttachmentFileField({ name = 'attachmentFile' }) {
   const [fileName, setFileName] = useState('')
@@ -58,6 +59,15 @@ export function AttachmentLink({ attachment, onDelete }) {
   )
 }
 
+function MovementTitle({ movement, expenseCategory }) {
+  if (!isExpenseMovement(movement)) return <strong>{movementLabels[movement.type] || movement.type}</strong>
+  return (
+    <strong className={`ml3-expense-title ${expenseCategory ? `adreem-category-tone-${expenseCategoryTone(expenseCategory.ownerName)}` : 'is-uncategorized'}`}>
+      {expenseCategory ? <span className="adreem-account-name">{protectedAccountPrimaryName(expenseCategory)}</span> : 'مصروف بدون تصنيف'}
+    </strong>
+  )
+}
+
 export function MovementMiniRow({ movement, accountById, investmentPlatformById = new Map(), attachments = [], dimensions = [], onEdit, onCancel, onDeleteAttachment }) {
   const source = accountById.get(movement.sourceAccountId)
   const destination = accountById.get(movement.destinationAccountId)
@@ -73,16 +83,19 @@ export function MovementMiniRow({ movement, accountById, investmentPlatformById 
   })
   const dimension = dimensions.find((item) => item.id === movement.dimensionId)
   const expenseCategory = accountById.get(movement.expenseCategoryId)
+  const isExpense = isExpenseMovement(movement)
   const showNote = movementNoteAddsContext(movement, expenseCategory)
 
   return (
-    <article className={`ml3-today-row ml3-today-row--${movementTone(movement.type)} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
+    <article className={`ml3-today-row ml3-today-row--${movementTone(movement.type)} ${isExpense ? 'is-expense' : ''} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
       <div className="ml3-today-main">
         <i className="ml3-movement-icon"><MovementTypeIcon type={movement.type} /></i>
         <span className="ml3-movement-copy">
-          <strong>{movementLabels[movement.type] || movement.type}</strong>
-          <small>{movementTime(movement.createdAt)} · {money(movement.amount, movement.currency)} · {movementStatusLabel(movement.status)}</small>
+          <MovementTitle movement={movement} expenseCategory={expenseCategory} />
+          {isExpense && showNote ? <span className="ml3-movement-description">{preserveUiData(movement.note)}</span> : null}
+          <small>{movementTime(movement.createdAt)} · {movementStatusLabel(movement.status)}</small>
         </span>
+        <b className="ml3-today-amount">{money(movement.amount, movement.currency)}</b>
       </div>
       <div className={`ml3-today-route ${routeSource && routeDestination ? 'is-paired' : 'is-single'}`}>
         {routeSource ? (
@@ -90,7 +103,7 @@ export function MovementMiniRow({ movement, accountById, investmentPlatformById 
             <small className="ml3-today-endpoint-label">من</small>
             <span className="ml3-today-endpoint-copy">
               <b className="adreem-account-name">{source ? protectedAccountPrimaryName(source) : preserveUiData(investmentPlatform.name)}</b>
-              <em>{source ? conciseAccountChoiceContext(source) : 'محفظتي · USD'}</em>
+              {source ? (movementAccountContext(source) ? <em>{movementAccountContext(source)}</em> : null) : <em>محفظتي · USD</em>}
             </span>
           </span>
         ) : null}
@@ -100,7 +113,7 @@ export function MovementMiniRow({ movement, accountById, investmentPlatformById 
             <small className="ml3-today-endpoint-label">إلى</small>
             <span className="ml3-today-endpoint-copy">
               <b className="adreem-account-name">{destination ? protectedAccountPrimaryName(destination) : preserveUiData(investmentPlatform.name)}</b>
-              <em>{destination ? conciseAccountChoiceContext(destination) : 'محفظتي · USD'}</em>
+              {destination ? (movementAccountContext(destination) ? <em>{movementAccountContext(destination)}</em> : null) : <em>محفظتي · USD</em>}
             </span>
           </span>
         ) : null}
@@ -117,13 +130,8 @@ export function MovementMiniRow({ movement, accountById, investmentPlatformById 
           })}
         </div>
       ) : null}
-      {showNote ? <small>{preserveUiData(movement.note)}</small> : null}
+      {showNote && !isExpense ? <small>{preserveUiData(movement.note)}</small> : null}
       {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
-      {expenseCategory ? (
-        <span className={`adreem-expense-category-tag adreem-account-name adreem-category-tone-${expenseCategoryTone(expenseCategory.ownerName)}`} aria-label={`نوع المصروف: ${protectedAccountPrimaryName(expenseCategory)}`}>
-          <i aria-hidden="true" />{protectedAccountPrimaryName(expenseCategory)}
-        </span>
-      ) : null}
       {movementAttachments.length ? (
         <div className="ml3-attachment-list">
           {movementAttachments.map((item) => (
@@ -160,18 +168,22 @@ export function HistoryMovementRow({ movement, accountById, investmentPlatformBy
   })
   const dimension = dimensions.find((item) => item.id === movement.dimensionId)
   const expenseCategory = accountById.get(movement.expenseCategoryId)
+  const isExpense = isExpenseMovement(movement)
   const showNote = movementNoteAddsContext(movement, expenseCategory)
 
   return (
-    <article className={`ml3-history-row ml3-history-row--${movementTone(movement.type)} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
+    <article className={`ml3-history-row ml3-history-row--${movementTone(movement.type)} ${isExpense ? 'is-expense' : ''} ${movement.status === MOVEMENT_STATUSES.VOIDED ? 'is-muted' : ''}`}>
       <div className="ml3-history-main">
         <i className="ml3-movement-icon"><MovementTypeIcon type={movement.type} /></i>
         <span className="ml3-movement-copy">
-          <strong>{movementLabels[movement.type] || movement.type}</strong>
+          <MovementTitle movement={movement} expenseCategory={expenseCategory} />
+          {isExpense && showNote ? <span className="ml3-movement-description">{preserveUiData(movement.note)}</span> : null}
           <small className="ml3-history-route">
-            {routeSource ? <b className="adreem-account-name">{source ? protectedAccountLabel(source) : preserveUiData(investmentPlatform.name)}</b> : null}
+            {isExpense ? <span className="ml3-movement-kind">مصروف</span> : null}
+            {isExpense && routeSource ? <span className="ml3-movement-from">من</span> : null}
+            {routeSource ? <b className="adreem-account-name">{source ? movementAccountLabel(source) : preserveUiData(investmentPlatform.name)}</b> : null}
             {routeSource && routeDestination ? <span className="ml3-history-arrow" aria-hidden="true">←</span> : null}
-            {routeDestination ? <b className="adreem-account-name">{destination ? protectedAccountLabel(destination) : preserveUiData(investmentPlatform.name)}</b> : null}
+            {routeDestination ? <b className="adreem-account-name">{destination ? movementAccountLabel(destination) : preserveUiData(investmentPlatform.name)}</b> : null}
           </small>
         </span>
       </div>
@@ -187,15 +199,10 @@ export function HistoryMovementRow({ movement, accountById, investmentPlatformBy
           </span>
         ) : null}
       </div>
-      {showNote || dimension || expenseCategory || reviewErrors.length ? (
+      {(showNote && !isExpense) || dimension || reviewErrors.length ? (
         <div className="ml3-history-details">
-          {showNote ? <p className="ml3-history-note"><span aria-hidden="true">●</span>{preserveUiData(movement.note)}</p> : null}
+          {showNote && !isExpense ? <p className="ml3-history-note"><span aria-hidden="true">●</span>{preserveUiData(movement.note)}</p> : null}
           {dimension ? <small>ملف: {preserveUiData(dimension.name)}</small> : null}
-          {expenseCategory ? (
-            <span className={`adreem-expense-category-tag adreem-account-name adreem-category-tone-${expenseCategoryTone(expenseCategory.ownerName)}`} aria-label={`نوع المصروف: ${protectedAccountPrimaryName(expenseCategory)}`}>
-              <i aria-hidden="true" />{protectedAccountPrimaryName(expenseCategory)}
-            </span>
-          ) : null}
           {reviewErrors.map((error) => <small className="is-error" key={`${movement.id}-${error.field}`}>{error.message}</small>)}
         </div>
       ) : null}

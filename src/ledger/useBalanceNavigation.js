@@ -4,6 +4,7 @@ import { prepareExpenseCategoryAccount, setCounterpartySettlementPin } from './b
 import { claimSubmission, releaseSubmission } from './ledgerAppState'
 import { accountGroupTabs, sectionOrder } from './ledgerUiConfig'
 import { scrollLedgerToTop } from './ledgerDom'
+import { isPhoneViewport, revealAfterRender } from './mobileViewport'
 
 export function useBalanceNavigation({
   accounts,
@@ -109,11 +110,16 @@ export function useBalanceNavigation({
     switchSection('history')
   }
 
+  function revealAccountGroups() {
+    revealAfterRender(() => document.querySelector('.ml3-account-switcher'), { alignTop: true, whenBelow: 0.34 })
+  }
+
   function selectAccountGroup(groupKey) {
     setActiveAccountGroup(groupKey)
     setBalanceFocus('')
     setCounterpartyBalanceFilter('all')
     setFocusedCounterpartyId('')
+    revealAccountGroups()
   }
 
   function handleAccountGroupKeyDown(event) {
@@ -158,7 +164,8 @@ export function useBalanceNavigation({
       return
     }
     applyFocus()
-    scrollLedgerToTop('auto')
+    if (isPhoneViewport()) revealAccountGroups()
+    else scrollLedgerToTop('auto')
   }
 
   function openExpenseCategoryCreator(context = 'balances') {

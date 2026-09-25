@@ -234,3 +234,21 @@
 .adreem-app .adreem-net-portfolio.is-excluded { border-style: dashed; background: #fff; opacity: .72; }
 .adreem-app .adreem-net-portfolio.is-excluded strong { text-decoration: line-through; }
 .adreem-app .adreem-net-portfolio-share { display: block; margin-top: 2px; color: var(--muted); font-size: var(--text-sm); font-weight: 700; unicode-bidi: isolate; }
+
+/* Phone windows live in the part of the screen the keyboard leaves visible. */
+@media (max-width: 720px) {
+  .adreem-investment-dialog-layer,
+  .adreem-movement-dialog-layer,
+  .ml3-profile-layer,
+  .adreem-profile-layer {
+    top: var(--adreem-visual-top, 0px);
+    bottom: var(--adreem-keyboard-inset, 0px);
+    height: auto;
+  }
+  .adreem-investment-dialog { max-height: min(92dvh, calc(var(--adreem-visual-height, 100dvh) - 8px)); }
+  .adreem-movement-edit-dialog,
+  .adreem-expense-category-dialog { max-height: calc(var(--adreem-visual-height, 100dvh) - max(8px, env(safe-area-inset-top))); }
+  .adreem-movement-action-dialog { max-height: calc(var(--adreem-visual-height, 100dvh) - 24px); }
+  .ml3-profile { height: var(--adreem-visual-height, 100dvh); }
+  html.adreem-keyboard-open .adreem-nav { visibility: hidden; }
+}

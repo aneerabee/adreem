@@ -15,6 +15,7 @@ import { LedgerOverlayPortal } from './LedgerIcons'
 import { UI_MOTION_TRANSITION } from './ledgerUiConfig'
 import { movementDateTime } from './movementPresentation'
 import { NumericEntry } from './NumericEntry'
+import { resetScroll } from './mobileViewport'
 
 function useLedgerDialogFocus(panelRef, initialFocusRef, onClose, disabled = false) {
   const onCloseRef = useRef(onClose)
@@ -164,6 +165,9 @@ export function MovementEditDialog({ movement, draft, config, preview, changes =
   const panelRef = useRef(null)
   const closeButtonRef = useRef(null)
   useLedgerDialogFocus(panelRef, closeButtonRef, onClose, isSaving)
+  useEffect(() => {
+    resetScroll(panelRef.current)
+  }, [stage])
   if (!movement) return null
 
   const sourceCurrency = movementAccountCurrencyForRole(draft.type, 'source', draft.currency)

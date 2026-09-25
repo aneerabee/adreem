@@ -990,10 +990,10 @@ describe('LedgerApp expense balances', () => {
       />,
     ))
 
-    expect(markup).toContain('adreem-expense-category-tag')
-    expect(markup).toContain('aria-label="نوع المصروف: وقود"')
+    expect(markup).toContain('ml3-expense-title')
     expect(markup).toContain('>وقود</span>')
-    expect(markup).not.toContain('>نوع المصروف:')
+    expect(markup.match(/وقود/g)).toHaveLength(1)
+    expect(markup).not.toContain('ml3-movement-description')
     expect(markup).not.toContain('ml3-history-note')
   })
 
@@ -1013,7 +1013,7 @@ describe('LedgerApp expense balances', () => {
       />,
     ))
 
-    expect(markup).toContain('ml3-history-note')
+    expect(markup).toContain('ml3-movement-description')
     expect(markup).toContain('وقود الشاحنة')
   })
 

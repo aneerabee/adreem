@@ -5,6 +5,7 @@ import { loadAdreemMovementPage } from './ledgerPersistence'
 import { sameRecordVersions } from './ledgerState'
 import { MAIN_LEDGER_MOVEMENT_TYPES } from './separateRecords'
 import { mergeMovementHistoryPages, mergeMovementPageAttachments, mergeReviewMovementPage } from './ledgerAppState'
+import { loadEveryMovementPage } from './movementPageLoader'
 import { MAX_SEPARATE_RECORD_PAGES, MOVEMENT_REQUEST_KEYS, REVIEW_MOVEMENT_PAGE_SIZE, SEPARATE_RECORD_PAGE_SIZE } from './ledgerUiConfig'
 
 export function useRemoteLedgerPages({
@@ -24,6 +25,7 @@ export function useRemoteLedgerPages({
   reviewLoadInProgressRef,
   reviewRequestSequenceRef,
   selectedAccountId,
+  selectedAccountIsExpenseCategory,
   separateRequestSequenceRef,
   setAccountProfilePage,
   setFeedback,
@@ -114,11 +116,13 @@ export function useRemoteLedgerPages({
       if (cancelled || accountProfileRequestSequenceRef.current !== requestSequence) return
       setIsLoadingAccountProfile(true)
       try {
-        const result = await loadAdreemMovementPage({
-          accountId: selectedAccountId,
-          limit: 100,
-          requestKey: MOVEMENT_REQUEST_KEYS.accountProfile,
-        })
+        const result = selectedAccountIsExpenseCategory
+          ? await loadEveryMovementPage({ expenseCategoryId: selectedAccountId }, MOVEMENT_REQUEST_KEYS.accountProfile)
+          : await loadAdreemMovementPage({
+            accountId: selectedAccountId,
+            limit: 100,
+            requestKey: MOVEMENT_REQUEST_KEYS.accountProfile,
+          })
         if (cancelled || result.stale || accountProfileRequestSequenceRef.current !== requestSequence) return
         setLedgerExtras((current) => mergeMovementPageAttachments(current, result.attachments))
         setAccountProfilePage({ accountId: selectedAccountId, ...(result.page || {}), loaded: result.movements.length })
@@ -139,7 +143,7 @@ export function useRemoteLedgerPages({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [accountProfileRequestSequenceRef, ledgerStorageMode, selectedAccountId, setAccountProfilePage, setFeedback, setIsLoadingAccountProfile, setLedgerExtras, setMovements])
+  }, [accountProfileRequestSequenceRef, ledgerStorageMode, selectedAccountId, selectedAccountIsExpenseCategory, setAccountProfilePage, setFeedback, setIsLoadingAccountProfile, setLedgerExtras, setMovements])
 
   useEffect(() => {
     const requestSequence = separateRequestSequenceRef.current + 1

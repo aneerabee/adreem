@@ -4,6 +4,8 @@ import { sameRecordVersions } from './ledgerState'
 import { MAIN_LEDGER_MOVEMENT_TYPES } from './separateRecords'
 import { mergeMovementHistoryPages, mergeMovementPageAttachments, mergeReviewMovementPage } from './ledgerAppState'
 import { MOVEMENT_REQUEST_KEYS, REVIEW_MOVEMENT_PAGE_SIZE } from './ledgerUiConfig'
+import { accountMovementFilter } from './movementDisplay'
+import { loadEveryMovementPage } from './movementPageLoader'
 
 export function useLedgerPaging({
   accountProfileRequestSequenceRef,
@@ -27,6 +29,7 @@ export function useLedgerPaging({
   reviewLoadInProgressRef,
   reviewRequestSequenceRef,
   selectedAccountId,
+  selectedAccountIsExpenseCategory,
   setAccountProfilePage,
   setFeedback,
   setHistoryPage,
@@ -132,7 +135,7 @@ export function useLedgerPaging({
     setIsLoadingAccountProfile(true)
     try {
       const result = await loadAdreemMovementPage({
-        accountId: selectedAccountId,
+        ...accountMovementFilter(selectedAccountId, selectedAccountIsExpenseCategory),
         before: activeAccountProfilePage.nextCursor,
         limit: activeAccountProfilePage.limit || 100,
         requestKey: MOVEMENT_REQUEST_KEYS.accountProfile,
@@ -157,28 +160,16 @@ export function useLedgerPaging({
     }
   }
 
-  async function loadCompleteAccountStatement(accountIds = []) {
+  async function loadCompleteAccountStatement(accountIds = [], { byExpenseCategory = false } = {}) {
     if (ledgerStorageMode !== 'relational') return movements
     const byId = new Map(movements.map((movement) => [movement.id, movement]))
     for (const accountId of Array.from(new Set(accountIds.filter(Boolean)))) {
-      let before = null
-      const seenCursors = new Set()
-      for (let pageIndex = 0; pageIndex < 1000; pageIndex += 1) {
-        const result = await loadAdreemMovementPage({
-          accountId,
-          before,
-          limit: 250,
-          includeOpening: true,
-          requestKey: `statement:${accountId}`,
-        })
-        if (result.stale) throw new Error('stale-statement')
-        for (const movement of result.movements || []) byId.set(movement.id, movement)
-        if (!result.page?.hasMore || !result.page?.nextCursor) break
-        if (seenCursors.has(result.page.nextCursor)) throw new Error('repeated-statement-cursor')
-        seenCursors.add(result.page.nextCursor)
-        before = result.page.nextCursor
-        if (pageIndex === 999) throw new Error('statement-page-limit')
-      }
+      const result = await loadEveryMovementPage(
+        { ...accountMovementFilter(accountId, byExpenseCategory), includeOpening: true },
+        `statement:${accountId}`,
+      )
+      if (result.stale) throw new Error('stale-statement')
+      for (const movement of result.movements) byId.set(movement.id, movement)
     }
     return Array.from(byId.values())
   }

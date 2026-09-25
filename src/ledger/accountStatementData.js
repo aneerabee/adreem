@@ -2,6 +2,7 @@ import { VALUE_KINDS } from './accountCatalog'
 import { CURRENCIES, MOVEMENT_STATUSES, buildPostingEntries } from './ledgerCore'
 import { normalizeAccountSearchText } from './movementAccounts'
 import { movementAccountImpact } from './movementPresentation'
+import { postedCategoryExpenses } from './movementDisplay'
 
 export function accountProfileMovements(movements = [], accountId = '') {
   return movements
@@ -29,17 +30,25 @@ export function accountStatementAccountIds(account = {}, accounts = []) {
   return [account.id]
 }
 
+function chronological(movements = []) {
+  return [...movements].sort((left, right) => Number(left.databaseSequence || 0) - Number(right.databaseSequence || 0)
+    || new Date(left.createdAt || left.updatedAt || 0).getTime() - new Date(right.createdAt || right.updatedAt || 0).getTime()
+    || String(left.id || '').localeCompare(String(right.id || '')))
+}
+
+function emptyStatementTotals() {
+  return {
+    running: Object.fromEntries(Object.values(CURRENCIES).map((currency) => [currency, 0])),
+    totals: Object.fromEntries(Object.values(CURRENCIES).map((currency) => [currency, { incoming: 0, outgoing: 0, balance: 0 }])),
+  }
+}
+
 export function buildAccountStatement(movements = [], accountIds = [], selectedCurrencies = Object.values(CURRENCIES)) {
   const ids = new Set(accountIds)
   const currencies = new Set(selectedCurrencies)
-  const running = Object.fromEntries(Object.values(CURRENCIES).map((currency) => [currency, 0]))
-  const totals = Object.fromEntries(Object.values(CURRENCIES).map((currency) => [currency, { incoming: 0, outgoing: 0, balance: 0 }]))
+  const { running, totals } = emptyStatementTotals()
   const rows = []
-  const sorted = [...movements]
-    .filter((movement) => movement?.status === MOVEMENT_STATUSES.POSTED)
-    .sort((left, right) => Number(left.databaseSequence || 0) - Number(right.databaseSequence || 0)
-      || new Date(left.createdAt || left.updatedAt || 0).getTime() - new Date(right.createdAt || right.updatedAt || 0).getTime()
-      || String(left.id || '').localeCompare(String(right.id || '')))
+  const sorted = chronological(movements.filter((movement) => movement?.status === MOVEMENT_STATUSES.POSTED))
 
   for (const movement of sorted) {
     const impacts = new Map()
@@ -55,6 +64,22 @@ export function buildAccountStatement(movements = [], accountIds = [], selectedC
       totals[currency].balance = running[currency]
       rows.push({ movement, currency, delta, balance: running[currency] })
     }
+  }
+  return { rows: rows.reverse(), totals }
+}
+
+// An expense never changes the category's own balance, so its statement lists the spending itself.
+export function buildExpenseStatement(movements = [], categoryId = '', selectedCurrencies = Object.values(CURRENCIES)) {
+  const currencies = new Set(selectedCurrencies)
+  const { running, totals } = emptyStatementTotals()
+  const rows = []
+  for (const movement of chronological(postedCategoryExpenses(movements, categoryId))) {
+    const amount = Math.abs(Number(movement.amount) || 0)
+    if (!amount || !currencies.has(movement.currency)) continue
+    running[movement.currency] -= amount
+    totals[movement.currency].outgoing += amount
+    totals[movement.currency].balance = running[movement.currency]
+    rows.push({ movement, currency: movement.currency, delta: -amount, balance: running[movement.currency] })
   }
   return { rows: rows.reverse(), totals }
 }

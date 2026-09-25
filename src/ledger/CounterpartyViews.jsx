@@ -8,6 +8,7 @@ import { counterpartyBucketAmount } from './balanceViews'
 import { formatCount, hasMoneyValue, money } from './ledgerFormat'
 import { AccountChoiceIcon } from './LedgerIcons'
 import { COUNTERPARTY_BALANCE_FILTERS, UI_MOTION_TRANSITION } from './ledgerUiConfig'
+import { revealAfterRender } from './mobileViewport'
 
 function CounterpartyChannel({ bucket }) {
   const { amount, currency } = counterpartyBucketAmount(bucket)
@@ -38,7 +39,7 @@ export function CounterpartyCard({ group, isFocused = false, isDimmed = false, o
       data-counterparty-id={group.id}
     >
       <div className="adreem-counterparty-main">
-        <button type="button" className="adreem-counterparty-focus" aria-expanded={isFocused} onClick={() => onFocus?.(group.id)}>
+        <button type="button" className="adreem-counterparty-focus" aria-expanded={isFocused} onClick={(event) => { const card = event.currentTarget.closest('.adreem-counterparty-card'); onFocus?.(group.id); if (!isFocused) revealAfterRender(() => card) }}>
           <span className="adreem-counterparty-avatar"><UserRound aria-hidden="true" size={16} /></span>
           <span className="adreem-counterparty-identity">
             <strong className="adreem-account-name">{preserveUiData(group.ownerName)}</strong>

@@ -340,6 +340,16 @@
 .ml3-movement-copy { min-width: 0; display: grid; gap: 1px; }
 .ml3-movement-copy strong { overflow: hidden; color: var(--ink); font-size: var(--text-lg); text-overflow: ellipsis; white-space: nowrap; }
 .ml3-movement-copy small { overflow: hidden; color: var(--muted); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.ml3-movement-copy .ml3-expense-title { min-width: 0; display: inline-flex; align-items: center; gap: 6px; }
+.ml3-expense-title::before { content: ''; width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--category-tone, #9aa1a4); }
+.adreem-app .ml3-movement-copy .ml3-expense-title > span { min-width: 0; font: inherit; color: inherit; }
+.ml3-expense-title.is-uncategorized { color: var(--muted); }
+.adreem-app .ml3-movement-copy .ml3-movement-description { min-width: 0; color: #3e474a; font-size: var(--text-base); font-weight: 650; line-height: 1.35; overflow-wrap: break-word; }
+.adreem-app .ml3-today-row .ml3-today-main { grid-template-columns: 31px minmax(0, 1fr) auto; }
+.ml3-today-amount { align-self: start; color: var(--ink); font-size: var(--text-lg); font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
+.ml3-today-row.is-expense .ml3-today-amount { color: var(--finance-debt-dark); }
+.ml3-history-route .ml3-movement-kind { color: var(--movement-tone); font-weight: 750; }
+.ml3-history-route .ml3-movement-from { color: var(--muted); font-size: var(--text-sm); }
 .ml3-today-effects span { color: var(--movement-tone); }
 
 .ml3-panel { padding: 0; border: 0; background: transparent; }

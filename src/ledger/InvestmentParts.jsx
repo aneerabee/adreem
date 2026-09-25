@@ -6,6 +6,7 @@ import { motion as Motion, useReducedMotion } from 'motion/react'
 import { investmentPriceChange } from './investmentCore.js'
 import { isAutoPricedHolding } from './investmentMarketPolicy.js'
 import { activityDate, activityDay, decimal, holdingPriceIsStale, holdingPriceLabel, usdUnitMicros } from './investmentFormat'
+import { resetScroll } from './mobileViewport'
 
 export function TryExchangeRate({ fx, onChange }) {
   const source = fx.source === 'twelve-data' ? 'سعر السوق'
@@ -63,7 +64,7 @@ export function InvestmentMarketPrice({ holding, error, onOpen }) {
   )
 }
 
-export function InvestmentDialog({ title, subtitle, onClose, onSecondary = onClose, children, onSubmit, canSubmit = true, submitLabel = 'حفظ', secondaryLabel = 'رجوع', hideSubmit = false, className = '', icon: DialogIcon = ChartCandlestick, tone = 'neutral' }) {
+export function InvestmentDialog({ title, subtitle, onClose, onSecondary = onClose, children, onSubmit, canSubmit = true, submitLabel = 'حفظ', secondaryLabel = 'رجوع', hideSubmit = false, className = '', icon: DialogIcon = ChartCandlestick, tone = 'neutral', contentKey = '' }) {
   const titleId = useId()
   const dialogRef = useRef(null)
   const closeRef = useRef(onClose)
@@ -73,6 +74,10 @@ export function InvestmentDialog({ title, subtitle, onClose, onSecondary = onClo
   useEffect(() => {
     closeRef.current = onClose
   }, [onClose])
+
+  useEffect(() => {
+    if (contentKey) resetScroll(dialogRef.current)
+  }, [contentKey])
 
   useEffect(() => {
     const root = document.documentElement

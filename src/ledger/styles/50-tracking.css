@@ -149,6 +149,10 @@
 .adreem-profile-tracking-balance { display: grid; gap: 3px; }
 .adreem-profile-tracking-balance span { display: flex; flex-wrap: wrap; gap: 5px; }
 .adreem-profile-tracking-balance span b { font-size: var(--text-base); font-variant-numeric: tabular-nums; }
+.adreem-profile-expense-balance span b { color: var(--finance-debt-dark, #9f2f25); }
+.ml3-profile-movement strong.is-quiet { color: var(--muted); font-weight: 650; }
+.adreem-app .ml3-profile-impact b.is-negative { color: var(--finance-debt-dark); }
+.adreem-app .ml3-profile-impact b.is-positive { color: var(--green); }
 
 .adreem-motion-fallback.adreem-section-forward .ml3-layout,
 .adreem-motion-fallback.adreem-section-back .ml3-layout { animation: none !important; }

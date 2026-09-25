@@ -7,21 +7,28 @@ import { motion as Motion } from 'motion/react'
 import { buildPostingEntries } from './ledgerCore'
 import { preserveUiData } from './uiTranslation'
 import { protectedAccountPrimaryName } from './accountPresentation'
-import { accountStatementAccountIds, buildAccountStatement } from './accountStatementData'
+import { accountStatementAccountIds, buildAccountStatement, buildExpenseStatement } from './accountStatementData'
+import { isExpenseCategoryAccount, postedCategoryExpenses } from './movementDisplay'
 import { money, signedMoney } from './ledgerFormat'
 import { CURRENCY_OPTIONS, UI_MOTION_TRANSITION } from './ledgerUiConfig'
 import { statementMovementDate } from './movementPresentation'
 
 export function AccountStatement({ account, accounts, movements, isLoading = false, loadError = '', onClose }) {
   const accountIds = accountStatementAccountIds(account, accounts)
-  const availableCurrencies = CURRENCY_OPTIONS.filter((option) => (
-    accounts.some((item) => accountIds.includes(item.id) && item.currencyKind === option.value)
-    || movements.some((movement) => buildPostingEntries(movement).some((entry) => accountIds.includes(entry.accountId) && entry.currency === option.value))
-  ))
+  const isExpenseCategory = isExpenseCategoryAccount(account)
+  const categoryExpenses = isExpenseCategory ? postedCategoryExpenses(movements, account.id) : []
+  const availableCurrencies = isExpenseCategory
+    ? CURRENCY_OPTIONS.filter((option) => categoryExpenses.some((movement) => movement.currency === option.value))
+    : CURRENCY_OPTIONS.filter((option) => (
+      accounts.some((item) => accountIds.includes(item.id) && item.currencyKind === option.value)
+      || movements.some((movement) => buildPostingEntries(movement).some((entry) => accountIds.includes(entry.accountId) && entry.currency === option.value))
+    ))
   const currencyOptions = availableCurrencies.length ? availableCurrencies : CURRENCY_OPTIONS
   const [selectedCurrencies, setSelectedCurrencies] = useState(() => currencyOptions.map((option) => option.value))
   const [visibleCount, setVisibleCount] = useState(100)
-  const statement = buildAccountStatement(movements, accountIds, selectedCurrencies)
+  const statement = isExpenseCategory
+    ? buildExpenseStatement(movements, account.id, selectedCurrencies)
+    : buildAccountStatement(movements, accountIds, selectedCurrencies)
   const visibleRows = statement.rows.slice(0, visibleCount)
   const chronologicalRows = statement.rows.slice().reverse()
   const firstMovementAt = chronologicalRows[0]?.movement?.createdAt || chronologicalRows[0]?.movement?.updatedAt
@@ -71,7 +78,7 @@ export function AccountStatement({ account, accounts, movements, isLoading = fal
           return (
             <article className={total.balance > 0 ? 'is-positive' : total.balance < 0 ? 'is-negative' : 'is-zero'} key={option.value}>
               <strong>{option.label}</strong>
-              <span className="is-balance"><small>الرصيد</small><b>{money(total.balance, option.value)}</b></span>
+              <span className="is-balance"><small>{isExpenseCategory ? 'مجموع المصروف' : 'الرصيد'}</small><b>{money(isExpenseCategory ? Math.abs(total.balance) : total.balance, option.value)}</b></span>
             </article>
           )
         })}

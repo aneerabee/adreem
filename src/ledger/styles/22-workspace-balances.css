@@ -273,7 +273,7 @@
   flex-direction: column;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
 }
 .ml3-layout--history .ml3-history-day,
 .ml3-layout--history .ml3-history-more { flex: 0 0 auto; }

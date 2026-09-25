@@ -27,6 +27,7 @@ import { AccountProfile } from './AccountProfile'
 import { buildBalanceOverview, buildExpenseBalanceRows } from './balanceViews'
 import { activeRecurringRuleForMovement, emptyMovementDraft, emptySeparateRecordDraft, filterMovementHistory, ledgerExtrasFromState, loadInitialLedgerState, logoutFromCloudSession, openAdminUsersPage, previewMovementEdit, storageTextForStatus } from './ledgerAppState'
 import { ExpenseCategoryDialog, MovementActionDialog, MovementEditDialog } from './LedgerDialogs'
+import { useMobileViewport } from './mobileViewport'
 import { formatCount, money, parseLocalizedDecimal, parseMoneyAmount } from './ledgerFormat'
 import { ACCOUNT_WIZARD_STEPS, sectionOrder, sectionTitles, UI_MOTION_TRANSITION } from './ledgerUiConfig'
 import { externalAccountKey, isToday, movementDayKey, movementDayLabel, movementEditChanges, movementStepCopy, movementVisibleSteps } from './movementPresentation'
@@ -53,6 +54,7 @@ import { useBalanceNavigation } from './useBalanceNavigation'
 import { useEntryFlow } from './useEntryFlow'
 import { accountWizardModel } from './accountWizardModel'
 import { movementReceipts } from './movementReceipts'
+import { isExpenseCategoryAccount } from './movementDisplay'
 
 export default function LedgerApp() {
   const [initialState] = useState(loadInitialLedgerState)
@@ -161,6 +163,7 @@ export default function LedgerApp() {
   const uiDirection = uiLanguageDirection(normalizedUiLanguage)
   setActiveUiLanguage(normalizedUiLanguage)
 
+  useMobileViewport()
   useLedgerPageEffects({
     accountWizardStep,
     activeAccountGroup,
@@ -428,6 +431,7 @@ export default function LedgerApp() {
   const hasMovementAccounts = (!movementSourceRequired || Boolean(movementDraft.sourceAccountId)) && (!movementConfig.needsDestination || Boolean(movementDraft.destinationAccountId)) && (!movementConfig.needsInvestmentPlatform || Boolean(movementDraft.investmentPlatformId)) && (!movementConfig.needsDestination || !selectedSourceAccount || !sameLogicalAccount(selectedSourceAccount, selectedDestinationAccount))
   const canReviewMovement = canChooseMovementAccounts && hasMovementAccounts && movementStep === MOVEMENT_ENTRY_STEPS.REVIEW
   const selectedBucket = balances.find((bucket) => bucket.account.id === selectedAccountId) || null
+  const selectedAccountIsExpenseCategory = isExpenseCategoryAccount(selectedBucket?.account)
   const draftSourceAccount = selectedSourceAccount
   const draftDestinationAccount = selectedDestinationAccount
 
@@ -471,6 +475,7 @@ export default function LedgerApp() {
     reviewLoadInProgressRef,
     reviewRequestSequenceRef,
     selectedAccountId,
+    selectedAccountIsExpenseCategory,
     separateRequestSequenceRef,
     setAccountProfilePage,
     setFeedback,
@@ -558,6 +563,7 @@ export default function LedgerApp() {
     reviewLoadInProgressRef,
     reviewRequestSequenceRef,
     selectedAccountId,
+    selectedAccountIsExpenseCategory,
     setAccountProfilePage,
     setFeedback,
     setHistoryPage,
