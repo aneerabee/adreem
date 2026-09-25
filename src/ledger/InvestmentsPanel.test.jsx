@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import InvestmentsPanel from './InvestmentsPanel.jsx'
 import { createInvestmentHolding, createInvestmentPlatform, usdToMicros } from './investmentCore.js'
+import { investmentHoldingRowsForDisplay } from './investmentFormat.js'
 import { setActiveUiLanguage } from './uiTranslation.js'
 
 const previousReact = globalThis.React
@@ -33,6 +34,24 @@ function callbacks() {
 }
 
 describe('investments panel', () => {
+  it('preserves value order when small balances are expanded and does not mutate the summary rows', () => {
+    const knownSmall = {
+      holding: { id: 'known-small', lastPriceUsdMicros: usdToMicros(0.5) },
+      quantityUnits: 100_000_000,
+      marketValueUsdMicros: usdToMicros(0.5),
+    }
+    const missingPrice = {
+      holding: { id: 'missing-price', lastPriceUsdMicros: 0 },
+      quantityUnits: 100_000_000,
+      marketValueUsdMicros: 0,
+    }
+    const sortedRows = [knownSmall, missingPrice]
+
+    expect(investmentHoldingRowsForDisplay(sortedRows, true).map((row) => row.holding.id)).toEqual(['known-small', 'missing-price'])
+    expect(investmentHoldingRowsForDisplay(sortedRows, false).map((row) => row.holding.id)).toEqual(['missing-price'])
+    expect(sortedRows.map((row) => row.holding.id)).toEqual(['known-small', 'missing-price'])
+  })
+
   it('shows a compact empty state without inventing investment data', () => {
     const html = renderToStaticMarkup(<InvestmentsPanel
       summary={{ platforms: [], totalValueUsdMicros: 0, costBasisUsdMicros: 0, unrealizedProfitUsdMicros: 0, freeCashUsdMicros: 0 }}

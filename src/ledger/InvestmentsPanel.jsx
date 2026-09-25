@@ -15,7 +15,7 @@ import { assetMarkFor, useAssetMarkIndex } from './assetMarks'
 import { InvestmentTradeDialog } from './InvestmentTradeDialog'
 import { useTryUsdRate } from './useTryUsdRate.js'
 import { revealAfterRender } from './mobileViewport'
-import { accountLabel, activityActionLabel, activityDate, activityDay, ASSET_OPTIONS, assetTypeForMarketResult, assetUsesCurrencyMarket, symbolPlaceholderFor, blankHolding, blankPlatform, blankTradeEdit, blankTransfer, decimal, holdingIsSmall, holdingPriceIsStale, holdingPriceLabel, holdingTypeLabel, MARKET_OPTIONS, platformLogoUrl, PRICE_SOURCE_LABELS, profitPercent, profitToneClass, tradeReviewImpact, tryMoneyMicros, tryUnitMicros, usdMicros, usdUnitMicros } from './investmentFormat'
+import { accountLabel, activityActionLabel, activityDate, activityDay, ASSET_OPTIONS, assetTypeForMarketResult, assetUsesCurrencyMarket, symbolPlaceholderFor, blankHolding, blankPlatform, blankTradeEdit, blankTransfer, decimal, holdingIsSmall, holdingPriceIsStale, holdingPriceLabel, holdingTypeLabel, investmentHoldingRowsForDisplay, MARKET_OPTIONS, platformLogoUrl, PRICE_SOURCE_LABELS, profitPercent, profitToneClass, tradeReviewImpact, tryMoneyMicros, tryUnitMicros, usdMicros, usdUnitMicros } from './investmentFormat'
 import { InvestmentDialog, InvestmentMarketPrice, TryExchangeRate } from './InvestmentParts'
 
 export default function InvestmentsPanel({
@@ -506,9 +506,8 @@ export default function InvestmentsPanel({
             const brand = resolveInvestmentPlatformBrand(platformRow.platform.name)
             const logoUrl = platformLogoUrl(brand)
             const smallRows = platformRow.holdings.filter(holdingIsSmall)
-            const regularRows = platformRow.holdings.filter((row) => !holdingIsSmall(row))
             const showSmallRows = Boolean(normalizedQuery || expandedSmallPlatforms[platformRow.platform.id])
-            const displayedRows = showSmallRows ? [...regularRows, ...smallRows] : regularRows
+            const displayedRows = investmentHoldingRowsForDisplay(platformRow.holdings, showSmallRows)
             const platformTotalUsdMicros = Number.isSafeInteger(platformRow.totalValueUsdMicros)
               ? platformRow.totalValueUsdMicros
               : Number(platformRow.freeCashUsdMicros || 0) + Number(platformRow.marketValueUsdMicros || 0)

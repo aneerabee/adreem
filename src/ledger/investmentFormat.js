@@ -105,6 +105,10 @@ export function holdingIsSmall(row = {}) {
     && Number(row.marketValueUsdMicros || 0) < MIN_VISIBLE_INVESTMENT_USD_MICROS
 }
 
+export function investmentHoldingRowsForDisplay(rows = [], includeSmall = false) {
+  return rows.filter((row) => includeSmall || !holdingIsSmall(row))
+}
+
 export function platformLogoUrl(brand) {
   return brand.logo ? `${import.meta.env.BASE_URL}${brand.logo}` : ''
 }

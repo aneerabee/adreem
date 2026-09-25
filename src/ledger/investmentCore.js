@@ -54,6 +54,13 @@ function safeScaledProduct(left, right, divisor) {
   return result <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(result) : 0
 }
 
+function compareInvestmentValueDescending(left, right) {
+  const leftValue = safeInteger(left)
+  const rightValue = safeInteger(right)
+  if (leftValue === rightValue) return 0
+  return leftValue > rightValue ? -1 : 1
+}
+
 function localizedDigits(value) {
   return String(value ?? '')
     .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
@@ -618,10 +625,12 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     const allHoldingRows = activeHoldings
       .filter((holding) => holding.platformId === platform.id)
       .map((holding) => summarizeHolding(holding, platformTrades, transfers))
-    const holdingRows = allHoldingRows.filter((row) => (
-      row.quantityUnits > 0
-      || !platformTrades.some((trade) => trade.holdingId === row.holding.id)
-    ))
+    const holdingRows = allHoldingRows
+      .filter((row) => (
+        row.quantityUnits > 0
+        || !platformTrades.some((trade) => trade.holdingId === row.holding.id)
+      ))
+      .sort((left, right) => compareInvestmentValueDescending(left.marketValueUsdMicros, right.marketValueUsdMicros))
     const stablecoinUsdMicros = holdingRows
       .filter((row) => investmentHoldingIsLiquidity(row.holding))
       .reduce((sum, row) => sum + row.marketValueUsdMicros, 0)
@@ -651,6 +660,7 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     }
   })
 
+  platformRows.sort((left, right) => compareInvestmentValueDescending(left.totalValueUsdMicros, right.totalValueUsdMicros))
   const freeCashUsdMicros = platformRows.reduce((sum, row) => sum + row.freeCashUsdMicros, 0)
   const stablecoinUsdMicros = platformRows.reduce((sum, row) => sum + row.stablecoinUsdMicros, 0)
   const liquidBalanceUsdMicros = freeCashUsdMicros + stablecoinUsdMicros

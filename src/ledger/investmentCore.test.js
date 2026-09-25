@@ -52,6 +52,78 @@ function fixture() {
 }
 
 describe('investment portfolio core', () => {
+  it('orders platforms and their active investments by live value and reorders after prices change', () => {
+    const lowerPlatform = createInvestmentPlatform({ id: 'platform-lower', name: 'Lower' })
+    const higherPlatform = createInvestmentPlatform({ id: 'platform-higher', name: 'Higher' })
+    const lowerHolding = createInvestmentHolding({
+      id: 'holding-lower', platformId: lowerPlatform.id, name: 'Lower asset', symbol: 'LOW',
+      lastPriceUsdMicros: usdToMicros(100),
+    })
+    const smallerHolding = createInvestmentHolding({
+      id: 'holding-smaller', platformId: higherPlatform.id, name: 'Smaller asset', symbol: 'SMALL',
+      lastPriceUsdMicros: usdToMicros(200),
+    })
+    const largerHolding = createInvestmentHolding({
+      id: 'holding-larger', platformId: higherPlatform.id, name: 'Larger asset', symbol: 'LARGE',
+      lastPriceUsdMicros: usdToMicros(500),
+    })
+    const openingTrades = [lowerHolding, smallerHolding, largerHolding].map((holding) => createInvestmentTrade({
+      id: `opening-${holding.id}`,
+      platformId: holding.platformId,
+      holdingId: holding.id,
+      type: INVESTMENT_TRADE_TYPES.OPENING,
+      quantityUnits: quantityToUnits(1),
+      priceUsdMicros: usdToMicros(1),
+    }))
+    const input = {
+      platforms: [lowerPlatform, higherPlatform],
+      holdings: [lowerHolding, smallerHolding, largerHolding],
+      trades: openingTrades,
+    }
+
+    const initial = summarizeInvestmentPortfolio(input)
+    expect(initial.platforms.map((row) => row.platform.id)).toEqual(['platform-higher', 'platform-lower'])
+    expect(initial.platforms[0].holdings.map((row) => row.holding.id)).toEqual(['holding-larger', 'holding-smaller'])
+
+    const repriced = summarizeInvestmentPortfolio({
+      ...input,
+      holdings: [
+        { ...lowerHolding, lastPriceUsdMicros: usdToMicros(2_000) },
+        { ...smallerHolding, lastPriceUsdMicros: usdToMicros(800) },
+        largerHolding,
+      ],
+    })
+    expect(repriced.platforms.map((row) => row.platform.id)).toEqual(['platform-lower', 'platform-higher'])
+    expect(repriced.platforms[1].holdings.map((row) => row.holding.id)).toEqual(['holding-smaller', 'holding-larger'])
+  })
+
+  it('includes platform cash in value order and keeps equal values stable without mutating stored arrays', () => {
+    const investedPlatform = createInvestmentPlatform({ id: 'platform-invested', name: 'Invested' })
+    const cashPlatform = createInvestmentPlatform({ id: 'platform-cash', name: 'Cash' })
+    const investedHolding = createInvestmentHolding({
+      id: 'holding-invested', platformId: investedPlatform.id, name: 'Invested asset', symbol: 'INV',
+      lastPriceUsdMicros: usdToMicros(900),
+    })
+    const opening = createInvestmentTrade({
+      id: 'opening-invested', platformId: investedPlatform.id, holdingId: investedHolding.id,
+      type: INVESTMENT_TRADE_TYPES.OPENING, quantityUnits: quantityToUnits(1), priceUsdMicros: usdToMicros(1),
+    })
+    const cash = {
+      id: 'cash-funding', type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT, status: MOVEMENT_STATUSES.POSTED,
+      currency: CURRENCIES.USD, amount: 1_000, investmentPlatformId: cashPlatform.id,
+    }
+    const platforms = [investedPlatform, cashPlatform]
+    const holdings = [investedHolding]
+
+    const summary = summarizeInvestmentPortfolio({ platforms, holdings, trades: [opening], movements: [cash] })
+    expect(summary.platforms.map((row) => row.platform.id)).toEqual(['platform-cash', 'platform-invested'])
+    expect(platforms.map((platform) => platform.id)).toEqual(['platform-invested', 'platform-cash'])
+    expect(holdings.map((holding) => holding.id)).toEqual(['holding-invested'])
+
+    const tied = summarizeInvestmentPortfolio({ platforms: [cashPlatform, investedPlatform] })
+    expect(tied.platforms.map((row) => row.platform.id)).toEqual(['platform-cash', 'platform-invested'])
+  })
+
   it('moves only free USD between platforms without changing portfolio total', () => {
     const { platform, deposit } = fixture()
     const destination = createInvestmentPlatform({ id: 'platform-2', name: 'Exodus' })
