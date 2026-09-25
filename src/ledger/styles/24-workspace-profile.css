@@ -50,7 +50,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(330px, 0.92fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, max-content) minmax(0, 1fr);
   grid-template-areas:
     "overview overview"
     "activity tools"
@@ -108,7 +108,7 @@
   background: #fff;
 }
 .ml3-profile-facts span { font-size: var(--text-xs); }
-.ml3-profile-facts strong { overflow: hidden; font-size: var(--text-md); text-overflow: ellipsis; white-space: nowrap; }
+.ml3-profile-facts strong { font-size: var(--text-md); line-height: 1.25; overflow-wrap: break-word; }
 .ml3-profile-reconcile,
 .ml3-profile-editor,
 .ml3-profile-movements {

@@ -171,7 +171,7 @@
   .adreem-app[dir='ltr'] .adreem-view { height: auto; min-height: calc(100svh - 54px); padding: 7px 7px calc(72px + env(safe-area-inset-bottom)); }
   .adreem-app .ml3-entry-mode { width: 100%; }
   .adreem-app :is(.ml3-entry-card, .ml3-add-account) {
-    height: clamp(290px, 52svh, 400px);
+    height: clamp(360px, 52svh, 400px);
     min-height: 0;
     max-height: calc(100svh - 180px - env(safe-area-inset-bottom));
   }

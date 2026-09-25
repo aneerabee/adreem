@@ -601,7 +601,9 @@
   }
 
   html.adreem-overlay-open,
-  html.adreem-overlay-open body {
+  html.adreem-overlay-open body,
+  html:has(.adreem-save-shield),
+  html:has(.adreem-save-shield) body {
     overflow: hidden;
     overscroll-behavior: none;
   }

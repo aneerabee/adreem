@@ -441,7 +441,8 @@
   .ml3-account-stage-actions button { min-height: 36px; }
 }
 
-html.adreem-overlay-open .adreem-app .adreem-view {
+html.adreem-overlay-open .adreem-app .adreem-view,
+html:has(.adreem-save-shield) .adreem-app .adreem-view {
   overflow: hidden;
   overscroll-behavior: none;
 }

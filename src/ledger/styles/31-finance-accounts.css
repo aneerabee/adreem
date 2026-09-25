@@ -600,7 +600,7 @@
 .adreem-counterparty-channel-preview {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   align-items: stretch;
   gap: 4px;
   padding: 6px;

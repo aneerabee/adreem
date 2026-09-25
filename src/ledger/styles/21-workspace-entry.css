@@ -161,6 +161,7 @@
 }
 .ml3-action-choice > svg:last-child { color: #98a8a1; }
 .ml3-action-choice strong { font-size: var(--text-lg); }
+.adreem-app .ml3-action-choice strong { overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
 .ml3-action-choice:hover {
   background: var(--action-soft);
   transform: translateY(-1px);

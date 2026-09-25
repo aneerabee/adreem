@@ -36,6 +36,7 @@
   .ml3-picker-results > button em { display: none; }
   .ml3-picked-account { align-items: flex-start; flex-direction: column; }
   .ml3-picked-actions { width: 100%; }
+  .ml3-picked-actions button { min-height: 36px; }
   .ml3-balance-chip { margin-inline-start: 0; margin-inline-end: auto; }
 
   .ml3-today-row,

@@ -640,14 +640,14 @@ export default function InvestmentsPanel({
 
       <AnimatePresence mode="wait">
         {dialog === 'platform' ? (
-          <InvestmentDialog title="منصة جديدة" subtitle="مكان وجود الاستثمار" icon={Landmark} tone="platform" onClose={() => setDialog('')} onSubmit={submitPlatform} canSubmit={Boolean(platformDraft.name.trim())}>
+          <InvestmentDialog key="platform" title="منصة جديدة" subtitle="مكان وجود الاستثمار" icon={Landmark} tone="platform" onClose={() => setDialog('')} onSubmit={submitPlatform} canSubmit={Boolean(platformDraft.name.trim())}>
             <label><span>الاسم</span><input autoFocus value={platformDraft.name} onChange={(event) => setPlatformDraft((current) => ({ ...current, name: event.target.value }))} placeholder="مثال: IBKR أو Binance" /></label>
             <label><span>النوع</span><select value={platformDraft.kind} onChange={(event) => setPlatformDraft((current) => ({ ...current, kind: event.target.value }))}><option value="platform">منصة تداول</option><option value="bank">مصرف</option><option value="wallet">محفظة</option><option value="broker">وسيط</option></select></label>
             <label><span>الموقع</span><input value={platformDraft.location} onChange={(event) => setPlatformDraft((current) => ({ ...current, location: event.target.value }))} placeholder="تركيا، ليبيا، أو أونلاين" /></label>
           </InvestmentDialog>
         ) : null}
         {dialog === 'holding' ? (
-          <InvestmentDialog title={holdingIntent === 'buy' ? 'أصل جديد للشراء' : 'استثمار جديد'} subtitle={holdingIntent === 'buy' ? preserveUiData(platformById.get(holdingDraft.platformId)?.name || '') : 'ابحث أو اكتب الأصل يدويًا'} icon={ChartCandlestick} tone="market" className="is-holding" onClose={() => setDialog('')} onSecondary={holdingIntent === 'buy' ? () => openTrade(holdingDraft.platformId) : undefined} submitLabel={holdingIntent === 'buy' ? 'متابعة للشراء' : undefined} onSubmit={submitHolding} canSubmit={Boolean(holdingDraft.platformId && holdingDraft.name.trim() && /^[A-Z0-9./_-]{1,32}$/.test(holdingDraft.symbol.trim().toUpperCase()) && (holdingDraft.marketDataMode === 'manual' || holdingDraft.providerSymbol.trim()) && holdingOpeningValid)}>
+          <InvestmentDialog key="holding" title={holdingIntent === 'buy' ? 'أصل جديد للشراء' : 'استثمار جديد'} subtitle={holdingIntent === 'buy' ? preserveUiData(platformById.get(holdingDraft.platformId)?.name || '') : 'ابحث أو اكتب الأصل يدويًا'} icon={ChartCandlestick} tone="market" className="is-holding" onClose={() => setDialog('')} onSecondary={holdingIntent === 'buy' ? () => openTrade(holdingDraft.platformId) : undefined} submitLabel={holdingIntent === 'buy' ? 'متابعة للشراء' : undefined} onSubmit={submitHolding} canSubmit={Boolean(holdingDraft.platformId && holdingDraft.name.trim() && /^[A-Z0-9./_-]{1,32}$/.test(holdingDraft.symbol.trim().toUpperCase()) && (holdingDraft.marketDataMode === 'manual' || holdingDraft.providerSymbol.trim()) && holdingOpeningValid)}>
             {holdingIntent !== 'buy' ? <label><span>المنصة</span><select value={holdingDraft.platformId} onChange={(event) => setHoldingDraft((current) => ({ ...current, platformId: event.target.value }))}>{activePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{preserveUiData(platform.name)}</option>)}</select></label> : null}
             <div className="is-paired">
               <label><span>النوع</span><select value={holdingDraft.assetType} onChange={(event) => changeHoldingAssetType(event.target.value)}>{ASSET_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
@@ -673,7 +673,7 @@ export default function InvestmentsPanel({
         ) : null}
         {dialog === 'trade' && tradeLaunchRow ? (
           <InvestmentTradeDialog
-            key={tradeLaunch.key}
+            key={`trade-${tradeLaunch.key}`}
             platformRow={tradeLaunchRow}
             holdings={activeHoldings}
             markIndex={assetMarkIndex}
@@ -687,14 +687,14 @@ export default function InvestmentsPanel({
           />
         ) : null}
         {dialog === 'price' ? (
-          <InvestmentDialog title="سعر يدوي" subtitle={isAutoPricedHolding(manualHolding || {}, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true') ? 'يبقى حتى التحديث القادم' : 'يبقى حتى تغييره'} icon={PencilLine} tone="market" onClose={() => setDialog('')} onSubmit={submitManualPrice} canSubmit={manualPriceIsValid} submitLabel="حفظ السعر">
+          <InvestmentDialog key="price" title="سعر يدوي" subtitle={isAutoPricedHolding(manualHolding || {}, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true') ? 'يبقى حتى التحديث القادم' : 'يبقى حتى تغييره'} icon={PencilLine} tone="market" onClose={() => setDialog('')} onSubmit={submitManualPrice} canSubmit={manualPriceIsValid} submitLabel="حفظ السعر">
             {manualHolding ? <div className="adreem-investment-dialog-context"><span><strong>{preserveUiData(`${manualHolding.symbol} · ${manualHolding.name}`)}</strong><small>{preserveUiData(manualPlatform?.name || '')}</small></span><b>{manualHolding.lastPriceUsdMicros ? holdingPriceLabel(manualHolding) : 'بدون سعر'}</b></div> : null}
             <label><span>{manualIsTurkish ? 'السعر الحالي TRY' : 'السعر الحالي USD'}</span><input autoFocus dir="ltr" inputMode="decimal" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} placeholder="0" /></label>
             {manualIsTurkish ? <><TryExchangeRate fx={tryFx} onChange={changeTryFxRate} /><output className="adreem-investment-fx-result">بالدولار: <strong>{manualPriceUsdPreview ? usdUnitMicros(manualPriceUsdPreview) : 'أدخل سعر الصرف'}</strong></output></> : null}
           </InvestmentDialog>
         ) : null}
         {dialog === 'close' && closingRow ? (
-          <InvestmentDialog title="إزالة استثمار صغير" subtitle="يحفظ السجل ولا يمحو المال" icon={Trash2} tone="danger" onClose={() => { setClosingRow(null); setDialog('') }} onSubmit={submitSmallClosure} submitLabel="تأكيد الإزالة">
+          <InvestmentDialog key="close" title="إزالة استثمار صغير" subtitle="يحفظ السجل ولا يمحو المال" icon={Trash2} tone="danger" onClose={() => { setClosingRow(null); setDialog('') }} onSubmit={submitSmallClosure} submitLabel="تأكيد الإزالة">
             <div className="adreem-investment-close-summary">
               <strong>{preserveUiData(`${closingRow.holding.symbol} · ${closingRow.holding.name}`)}</strong>
               <b>{usdMicros(closingRow.marketValueUsdMicros)}</b>
@@ -704,6 +704,7 @@ export default function InvestmentsPanel({
         ) : null}
         {dialog === 'transfer' ? (
           <InvestmentDialog
+            key="transfer"
             title="نقل بين المنصات"
             subtitle={transferStage === 'review' ? 'راجع قبل التسجيل' : 'USD أو USDT'}
             icon={ArrowLeftRight}
@@ -746,7 +747,7 @@ export default function InvestmentsPanel({
           const brand = resolveInvestmentPlatformBrand(historyPlatform.name)
           const logoUrl = platformLogoUrl(brand)
           return (
-            <InvestmentDialog title="سجل المحفظة" subtitle={brand.displayName || historyPlatform.name} icon={History} tone="history" onClose={() => setDialog('')} hideSubmit className="is-history">
+            <InvestmentDialog key="history" title="سجل المحفظة" subtitle={brand.displayName || historyPlatform.name} icon={History} tone="history" onClose={() => setDialog('')} hideSubmit className="is-history">
               <div className={`adreem-investment-history-head is-brand-${brand.key}`} style={investmentPlatformBrandStyle(brand)}>
                 <span className={`adreem-investment-history-logo ${logoUrl ? 'has-logo' : ''}`.trim()} title={logoUrl ? preserveUiData(brand.displayName) : undefined}>{logoUrl ? <img src={logoUrl} alt={preserveUiData(brand.displayName)} /> : <Landmark aria-hidden="true" size={20} />}</span>
                 <span>{!logoUrl ? <strong>{preserveUiData(historyPlatform.name)}</strong> : null}<small>{decimal(historyRows.length, 0)} {historyRows.length === 1 ? 'عملية محفوظة' : 'عمليات محفوظة'}</small></span>
@@ -787,6 +788,7 @@ export default function InvestmentsPanel({
         })() : null}
         {dialog === 'trade-edit' && editingTradeBaseline ? (
           <InvestmentDialog
+            key="trade-edit"
             title={tradeEditStage === 'review' ? 'راجع التعديل' : 'تعديل عملية استثمار'}
             subtitle="النوع والتاريخ والمنصة ثابتة"
             onClose={returnToHistory}
