@@ -42,6 +42,9 @@ describe('investments panel', () => {
     expect(html).toContain('adreem-investments')
     expect(html).toContain('ابدأ بمنصة واحدة')
     expect(html).toContain('USD')
+    expect(html).toContain('role="group" aria-label="إجراءات المحفظة"')
+    expect(html).not.toContain('adreem-investment-title')
+    expect(html).not.toContain('<h2>محفظتي</h2>')
   })
 
   it('shows how much of the profit is open and how much came from sales', () => {
@@ -368,6 +371,8 @@ describe('investments panel', () => {
     />)
 
     expect(html).toContain('My portfolio')
+    expect(html.match(/My portfolio/g)).toHaveLength(1)
+    expect(html).toContain('aria-label="Portfolio actions"')
     expect(html).toContain('منصتي')
     expect(html).toContain('Platform balance')
     expect(html).toContain('Liquidity')

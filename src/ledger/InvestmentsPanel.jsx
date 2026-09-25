@@ -457,11 +457,7 @@ export default function InvestmentsPanel({
   const firstPriceError = activeHoldings.map((holding) => priceErrors[holding.id]).find(Boolean)
   return (
     <section className="adreem-investments" aria-label="محفظتي">
-      <div className="adreem-investment-hero">
-        <div className="adreem-investment-title">
-          <span><ChartCandlestick aria-hidden="true" size={22} /></span>
-          <div><small>USD</small><h2>محفظتي</h2></div>
-        </div>
+      <div className="adreem-investment-commandbar" role="group" aria-label="إجراءات المحفظة">
         <div className="adreem-investment-actions">
           <button type="button" className="is-refresh" aria-label={isRefreshing ? 'جاري تحديث الكل' : 'تحديث الكل'} title={isRefreshing ? 'جاري تحديث الكل' : 'تحديث الكل'} disabled={isRefreshing || !autoPricedHoldings.length} onClick={onRefreshPrices}>
             <RefreshCw aria-hidden="true" size={16} className={isRefreshing ? 'is-spinning' : ''} />

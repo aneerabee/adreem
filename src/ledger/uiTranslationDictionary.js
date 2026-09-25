@@ -2,6 +2,7 @@
 
 export const ENGLISH_TEXT = Object.freeze({
   'محفظتي': 'My portfolio',
+  'إجراءات المحفظة': 'Portfolio actions',
   'محفظتي · USD': 'My portfolio · USD',
   'إيداع استثمار': 'Investment deposit',
   'تمويل استثمار': 'Fund investment',

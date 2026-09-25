@@ -181,6 +181,11 @@ describe('mobile form sizing', () => {
   })
 
   it('keeps investment dialogs and actions usable on narrow touch screens', () => {
+    expect(financeStylesheet).toContain('.adreem-investment-commandbar { width: 100%; }')
+    expect(financeStylesheet).toContain('.adreem-investment-actions { width: 100%; flex-wrap: nowrap; justify-content: flex-end; }')
+    expect(financeStylesheet).toContain('.adreem-investment-actions button { min-width: 0; min-height: 44px;')
+    expect(financeStylesheet).toContain('.adreem-investment-actions button:not(.is-investment) { width: 44px; }')
+    expect(financeStylesheet).toContain('.adreem-investment-actions .is-investment { flex: 1 1 auto; white-space: nowrap; }')
     expect(financeStylesheet).toContain('.adreem-investment-metrics-strip { grid-column: 1 / -1; grid-row: 2; }')
     expect(financeStylesheet).toContain('.adreem-investment-row-actions { grid-column: 2; grid-row: 1; }')
     expect(financeStylesheet).toContain('.adreem-investment-row-actions button { width: 42px; justify-content: center; }')
