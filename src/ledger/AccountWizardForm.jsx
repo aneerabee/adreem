@@ -205,7 +205,7 @@ export function AccountWizardForm({
           {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? (
             <div className="ml3-account-opening">
               {accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD ? (
-                <div className="adreem-counterparty-openings">
+                <div className="adreem-counterparty-openings adreem-card-openings">
                   {CURRENCY_OPTIONS.filter((option) => accountDraft.cardCurrencies?.includes(option.value)).map((option) => (
                     <section className="adreem-counterparty-opening" key={option.value}>
                       <header><strong>{option.label}</strong><small>الدين الحالي</small></header>

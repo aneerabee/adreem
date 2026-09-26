@@ -248,11 +248,14 @@
 .ml3-account-stage-actions { position: static; margin: 0; }
 .ml3-account-field,
 .ml3-account-summary { margin: 12px 13px; }
+.ml3-account-field { align-self: start; }
+.ml3-account-field input { align-self: start; }
 .ml3-account-opening { padding: 9px 13px; }
 .ml3-opening-direction button { border-color: var(--finance-line); border-radius: 8px; background: var(--finance-paper); }
 .ml3-opening-direction button.is-positive.is-active { border-color: var(--finance-green); background: var(--finance-green-soft); color: var(--finance-green-dark); box-shadow: inset 0 -3px 0 var(--finance-green); }
 .ml3-opening-direction button.is-negative.is-active { border-color: var(--finance-debt); background: var(--finance-debt-soft); color: var(--finance-debt-dark); box-shadow: inset 0 -3px 0 var(--finance-debt); }
 .adreem-counterparty-openings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.adreem-card-openings { align-self: start; }
 .adreem-counterparty-opening { min-width: 0; display: grid; align-content: start; gap: 6px; padding: 8px; border: 1px solid var(--finance-line); border-radius: 8px; background: var(--finance-surface); }
 .adreem-counterparty-opening > header { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .adreem-counterparty-opening > header strong { overflow: hidden; color: var(--finance-ink); font-size: var(--text-md); text-overflow: ellipsis; white-space: nowrap; }
@@ -442,6 +445,7 @@
     padding: 6px;
   }
   .adreem-counterparty-opening > header { grid-area: opening-label; align-self: center; }
+  .adreem-card-openings .adreem-counterparty-opening { grid-template-areas: "opening-label opening-value"; }
   .adreem-counterparty-opening > header strong { overflow: visible; line-height: 1.15; text-overflow: clip; white-space: normal; }
   .adreem-counterparty-opening > .ml3-number-compact { grid-area: opening-value; min-width: 0; }
   .adreem-counterparty-opening > .ml3-opening-direction { grid-area: opening-direction; }
