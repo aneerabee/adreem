@@ -39,6 +39,10 @@
 .adreem-app :is(.adreem-flow-head, .ml3-entry-head) { min-height: 59px; padding: 8px 11px; }
 .adreem-app .adreem-flow-progress { padding: 6px 11px 0; }
 .adreem-app .adreem-flow-progress-meta { min-height: 32px; }
+.adreem-app .ml3-add-account .adreem-flow-trail { flex-wrap: wrap; }
+.adreem-app .ml3-add-account .adreem-flow-trail button { height: auto; min-height: var(--finance-control-compact); max-width: min(100%, 220px); }
+.adreem-app .ml3-add-account .adreem-flow-trail button span { display: none; }
+.adreem-app .ml3-add-account .adreem-flow-trail button strong { max-width: 100%; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 .adreem-app .ml3-step { padding-inline: 11px; }
 .adreem-app .ml3-step-controls { margin-inline: -11px; padding: 7px 11px; box-shadow: none; }
 .adreem-app .ml3-account-stage-actions { padding: 7px 11px; box-shadow: none; }
