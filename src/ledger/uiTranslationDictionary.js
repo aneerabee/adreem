@@ -1097,6 +1097,7 @@ export const ENGLISH_TEXT = Object.freeze({
   'هل كل شيء صحيح؟': 'Is everything correct?',
   'هل تتكرر؟': 'Repeat this entry?',
   'يتم تحميل بياناتك من السحابة.': 'Loading your data from the cloud.',
+  'ننتظر النسخة المحفوظة قبل عرض أي رصيد.': 'Waiting for the saved copy before showing any balance.',
   'يجب اختيار حساب مصدر ووجهة صحيحين.': 'Choose a valid source and destination account.',
   'يحتاج تحديد طريقة التعامل معه.': 'Choose how this balance is handled.',
   'يخصم من': 'Taken from',

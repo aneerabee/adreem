@@ -162,14 +162,6 @@
 .ml3-profile-balance.is-positive { border-inline-start-color: var(--positive); background: var(--positive-soft); }
 .ml3-profile-balance.is-negative { border-inline-start-color: var(--negative); background: var(--negative-soft); color: #b91c1c; }
 
-.adreem-cloud-gate { background: color-mix(in srgb, var(--entry-soft) 28%, var(--canvas)); }
-.adreem-cloud-gate > section {
-  border-color: #afd1c4;
-  border-top-color: var(--entry);
-  border-radius: 8px;
-  box-shadow: var(--shadow-float);
-}
-
 .adreem-app button,
 .adreem-app summary {
   transition:

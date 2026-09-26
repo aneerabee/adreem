@@ -1,6 +1,6 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ArrowRightLeft, WalletCards } from 'lucide-react'
 import { AnimatePresence, MotionConfig } from 'motion/react'
@@ -24,6 +24,7 @@ import { INVESTMENT_RECORD_STATUSES, summarizeInvestmentPortfolio } from './inve
 import { isAutoPricedHolding } from './investmentMarketPolicy'
 import { compareBalanceBuckets, protectedAccountContext, protectedAccountLabel, protectedUserProfile } from './accountPresentation'
 import { AccountProfile } from './AccountProfile'
+import { LedgerOpeningScreen } from './LedgerOpeningScreen'
 import { buildBalanceOverview } from './balanceViews'
 import { activeRecurringRuleForMovement, emptyMovementDraft, emptySeparateRecordDraft, filterMovementHistory, ledgerExtrasFromState, loadInitialLedgerState, logoutFromCloudSession, mergeMovementHistoryPages, openAdminUsersPage, previewMovementEdit, storageTextForStatus } from './ledgerAppState'
 import { ExpenseCategoryDialog, MovementActionDialog, MovementEditDialog } from './LedgerDialogs'
@@ -56,6 +57,8 @@ import { accountWizardModel } from './accountWizardModel'
 import { movementReceipts } from './movementReceipts'
 import { isExpenseCategoryAccount, isExpenseMovement } from './movementDisplay'
 
+const LEDGER_FONT_WAIT_MS = 4_000
+
 export default function LedgerApp() {
   const [initialState] = useState(loadInitialLedgerState)
   const [initialNavigation] = useState(() => readLedgerNavigation(typeof window === 'undefined' ? '' : window.location.search))
@@ -74,6 +77,7 @@ export default function LedgerApp() {
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [feedback, setFeedback] = useState('')
   const [isHydrated, setIsHydrated] = useState(false)
+  const [ledgerFontsReady, setLedgerFontsReady] = useState(() => typeof document === 'undefined' || !document.fonts?.load)
   const [canPersist, setCanPersist] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [storageMode, setStorageMode] = useState(getLedgerPersistenceMode)
@@ -143,6 +147,27 @@ export default function LedgerApp() {
   const [accountWizardStep, setAccountWizardStep] = useState(ACCOUNT_WIZARD_STEPS.GROUP)
   const [activeAccountPresetKey, setActiveAccountPresetKey] = useState('')
   const [activeAccountDetail, setActiveAccountDetail] = useState('')
+  useEffect(() => {
+    if (typeof document === 'undefined' || !document.fonts?.load) return undefined
+    let active = true
+    const fonts = document.fonts
+    const finish = () => { if (active) setLedgerFontsReady(true) }
+    const timeoutId = globalThis.setTimeout(finish, LEDGER_FONT_WAIT_MS)
+    Promise.allSettled([
+      fonts.load('400 16px "IBM Plex Sans Arabic"', 'الأرصدة'),
+      fonts.load('500 16px "IBM Plex Sans Arabic"', 'الأرصدة'),
+      fonts.load('600 16px "IBM Plex Sans Arabic"', 'الأرصدة'),
+      fonts.load('700 16px "IBM Plex Sans Arabic"', 'الأرصدة'),
+      fonts.load('400 16px "Manrope Variable"', 'Ledger'),
+    ]).then(() => {
+      globalThis.clearTimeout(timeoutId)
+      finish()
+    })
+    return () => {
+      active = false
+      globalThis.clearTimeout(timeoutId)
+    }
+  }, [])
   const saveCoordinatorRef = useRef(null)
   const hasHydratedSnapshotRef = useRef(false)
   const pendingUploadedAttachmentPathsRef = useRef(new Set())
@@ -1166,25 +1191,9 @@ export default function LedgerApp() {
     value: step.key === ACCOUNT_WIZARD_STEPS.NAME ? preserveUiData(step.summary) : step.summary,
   }))
 
-  if (!isHydrated || loadFailed) {
+  if (!isHydrated || loadFailed || !ledgerFontsReady) {
     return (
-      <main className="adreem-app adreem-cloud-gate" dir={uiDirection} lang={normalizedUiLanguage}>
-        <section role="status" aria-live="polite">
-          <span>ADREEM</span>
-          <h1>{isHydrated ? 'تعذر فتح الدفتر' : 'جاري فتح الدفتر'}</h1>
-          <p>{isHydrated ? 'لم نعرض نسخة فارغة حتى تبقى بياناتك آمنة. أعد المحاولة بعد لحظة.' : 'يتم تحميل بياناتك من السحابة.'}</p>
-          {isHydrated ? (
-            <div>
-              <button type="button" onClick={() => window.location.reload()}>
-                إعادة المحاولة
-              </button>
-              <button type="button" className="is-secondary" onClick={logoutFromCloudSession}>
-                تسجيل الدخول من جديد
-              </button>
-            </div>
-          ) : null}
-        </section>
-      </main>
+      <LedgerOpeningScreen activeSection={activeSection} sectionTitle={activeSectionTitle} direction={uiDirection} language={normalizedUiLanguage} failed={isHydrated && loadFailed} onRetry={() => window.location.reload()} onSignIn={logoutFromCloudSession} />
     )
   }
 

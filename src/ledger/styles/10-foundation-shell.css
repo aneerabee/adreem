@@ -24,37 +24,6 @@
 .adreem-app h2,
 .adreem-app h3 { overflow-wrap: anywhere; }
 
-.adreem-cloud-gate {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-}
-.adreem-cloud-gate > section {
-  width: min(420px, 100%);
-  display: grid;
-  gap: 10px;
-  border: 1px solid var(--line);
-  border-top: 4px solid var(--green);
-  padding: 20px;
-  background: var(--paper);
-}
-.adreem-cloud-gate span { color: var(--green); font-size: var(--text-base); font-weight: 700; }
-.adreem-cloud-gate h1 { font-size: var(--text-4xl); }
-.adreem-cloud-gate p { color: var(--muted); font-size: var(--text-xl); line-height: 1.7; }
-.adreem-cloud-gate > section > div { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.adreem-cloud-gate button {
-  min-height: 42px;
-  border: 1px solid var(--green);
-  border-radius: 6px;
-  padding: 0 10px;
-  background: var(--green);
-  color: #fff;
-  font-weight: 700;
-  cursor: pointer;
-}
-.adreem-cloud-gate button.is-secondary { background: #fff; color: var(--ink); border-color: var(--line); }
-
 .adreem-header {
   border-bottom: 1px solid var(--line);
 }

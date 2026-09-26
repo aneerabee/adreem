@@ -71,7 +71,6 @@
 }
 
 @media (max-width: 380px) {
-  .adreem-cloud-gate > section > div { grid-template-columns: 1fr; }
   .adreem-brand > div > span { display: none; }
   .adreem-cloud-state { max-width: 68px; }
   .ml3-option-grid { grid-template-columns: 1fr; }
