@@ -28,6 +28,9 @@ describe('credit card views', () => {
     const list = renderToStaticMarkup(<CreditCardList rows={[bucket]} />)
     const profile = renderToStaticMarkup(<AccountProfile bucket={bucket} movements={[]} accounts={[account]} onClose={() => {}} />)
     expect(list).toContain('adreem-card-brand--maximum')
+    expect(list).toContain('adreem-credit-issuer-logo')
+    expect(list).toContain('adreem-credit-product-logo')
+    expect(list).not.toContain('adreem-credit-product-name')
     expect(profile).toContain('adreem-card-brand--maximum')
     for (const currency of account.cardCurrencies) {
       expect(list).toContain(currency)
@@ -35,6 +38,25 @@ describe('credit card views', () => {
     }
     expect(profile).toContain('300 TRY')
     expect(profile).not.toContain('حساب للمتابعة')
+  })
+
+  it('keeps zero balances out of the debt figures while retaining enabled currencies', () => {
+    const zero = renderToStaticMarkup(<CreditCardList rows={[{ ...bucket, dinar: 0, usd: 0, try: 0, eur: 0 }]} />)
+    expect(zero).toContain('لا يوجد دين')
+    expect(zero).toContain('LYD · USD · TRY · EUR')
+    expect(zero).not.toContain('has-debt')
+
+    const mixed = renderToStaticMarkup(<CreditCardList rows={[{ ...bucket, dinar: 0, usd: -20, try: 5, eur: 0 }]} />)
+    expect(mixed).toContain('has-debt')
+    expect(mixed).toContain('has-credit')
+    expect(mixed).not.toContain('<b>0</b>')
+  })
+
+  it('shows an unknown credit card without duplicating its generic type', () => {
+    const genericAccount = { ...account, subAccountName: 'بطاقتي الأخرى' }
+    const list = renderToStaticMarkup(<CreditCardList rows={[{ ...bucket, account: genericAccount }]} />)
+    expect(list.match(/بطاقة ائتمان/g)).toHaveLength(1)
+    expect(list).toContain('بطاقتي الأخرى')
   })
 
   it('keeps the card identity visible after selecting it in an entry step', () => {

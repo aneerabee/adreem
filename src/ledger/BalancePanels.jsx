@@ -5,9 +5,10 @@ import { AnimatePresence, motion as Motion } from 'motion/react'
 import { SearchField } from './SearchField'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog'
 import { groupBalanceRowsForDisplay } from './accountDisplayGroups'
+import { accountPrimaryName } from './accountConfig'
 import { accountEditChanges } from './accountEditing'
 import { creditCardBrandClass, creditCardBrandForAccount } from './creditCardBrand'
-import { CreditCardMark } from './CreditCardMark'
+import { CreditCardIssuerLogo, CreditCardProductLogo } from './CreditCardMark'
 import { CURRENCIES } from './ledgerCore'
 import { NET_PORTFOLIO_ID, convertNetPosition, filterNetContributions } from './ledgerScope'
 import { preserveUiData } from './uiTranslation'
@@ -266,18 +267,35 @@ export function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', 
 export function CreditCardList({ rows = [], onOpen }) {
   if (!rows.length) return <p className="ml3-empty">لا توجد بطاقات ائتمان.</p>
   return <div className="adreem-credit-card-list">
-    {rows.map((bucket) => (
-      <button type="button" className={`adreem-credit-card ${creditCardBrandClass(bucket.account)}`} key={bucket.account.id} onClick={() => onOpen?.(bucket.account.id)}>
-        <span className="adreem-credit-card-top"><CreditCardMark account={bucket.account} /><small>{creditCardBrandForAccount(bucket.account)?.issuer || 'بطاقة ائتمان'}</small></span>
-        <span className="adreem-credit-card-name"><strong className="adreem-account-name">{protectedAccountPrimaryName(bucket.account)}</strong><small>دين البطاقة</small></span>
-        <span className="adreem-credit-card-values">
-          {(bucket.account.cardCurrencies || []).map((currency) => {
-            const field = CURRENCY_OPTIONS.find((option) => option.value === currency)?.field
-            return <span key={currency} className={Number(bucket[field] || 0) < 0 ? 'has-debt' : ''}><b>{formatInteger(Math.abs(Number(bucket[field] || 0)))}</b><small>{currency}</small></span>
-          })}
-        </span>
-      </button>
-    ))}
+    {rows.map((bucket) => {
+      const account = bucket.account
+      const name = protectedAccountPrimaryName(account)
+      const brand = creditCardBrandForAccount(account)
+      const amounts = (account.cardCurrencies || []).map((currency) => {
+        const field = CURRENCY_OPTIONS.find((option) => option.value === currency)?.field
+        return { currency, amount: Number(bucket[field] || 0) }
+      })
+      const visibleAmounts = amounts.filter(({ amount }) => amount !== 0)
+      const showCustomName = brand && accountPrimaryName(account).toLocaleLowerCase() !== brand.product.toLocaleLowerCase()
+      return (
+        <button type="button" className={`adreem-credit-card ${creditCardBrandClass(account)}`} key={account.id} onClick={() => onOpen?.(account.id)}>
+          <span className="adreem-credit-card-top"><CreditCardIssuerLogo account={account} />{brand ? <span className="adreem-credit-card-type">بطاقة ائتمان</span> : null}</span>
+          <span className="adreem-credit-card-mid">
+            <span className="adreem-credit-card-chip" aria-hidden="true" />
+            <span className="adreem-credit-card-product"><CreditCardProductLogo account={account} name={name} />{showCustomName ? <small className="adreem-account-name">{name}</small> : null}</span>
+          </span>
+          <span className="adreem-credit-card-foot">
+            <span className="adreem-credit-card-debt">
+              <small>{visibleAmounts.some(({ amount }) => amount < 0) ? 'دين البطاقة' : visibleAmounts.length ? 'رصيد زائد' : 'لا يوجد دين'}</small>
+              <span className="adreem-credit-card-values">
+                {visibleAmounts.length ? visibleAmounts.map(({ currency, amount }) => <span key={currency} className={amount < 0 ? 'has-debt' : 'has-credit'}><b>{formatInteger(Math.abs(amount))}</b><small>{currency}</small></span>) : <strong>0</strong>}
+              </span>
+            </span>
+            <span className="adreem-credit-card-currencies" dir="ltr">{amounts.map(({ currency }) => currency).join(' · ')}</span>
+          </span>
+        </button>
+      )
+    })}
   </div>
 }
 

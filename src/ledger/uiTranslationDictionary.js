@@ -5,6 +5,8 @@ export const ENGLISH_TEXT = Object.freeze({
   'الدين الحالي': 'Current debt',
   'لا توجد بطاقات ائتمان.': 'No credit cards yet.',
   'دين البطاقة': 'Card debt',
+  'لا يوجد دين': 'No debt',
+  'رصيد زائد': 'Credit balance',
   'دين البطاقة حسب العملة': 'Card debt by currency',
   'دين البطاقات': 'Credit card debt',
   'بطاقاتي': 'My cards',
