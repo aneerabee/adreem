@@ -33,10 +33,12 @@ function isPostingAccount(account, includeInactive = false) {
 }
 
 export function getMovementAccounts(accounts = [], balancesByAccountId = new Map(), movementType, role, selected = {}, options = {}) {
-  const moneyOrPerson = accounts.filter((account) => isPostingAccount(account, options.includeInactive === true))
+  const postingAccounts = accounts.filter((account) => isPostingAccount(account, options.includeInactive === true))
+  const moneyOrPerson = postingAccounts.filter((account) => account.valueKind !== VALUE_KINDS.CREDIT_CARD)
   const supportsCurrency = (account, currency = selected.currency) =>
     accountSupportsTransferCurrency(account, currency, balancesByAccountId.get(account.id))
   const currencyReadyAccounts = moneyOrPerson.filter((account) => supportsCurrency(account))
+  const cardReadyAccounts = postingAccounts.filter((account) => account.valueKind === VALUE_KINDS.CREDIT_CARD && supportsCurrency(account))
   const transferReadyAccounts = currencyReadyAccounts
   const accountById = new Map(accounts.map((account) => [account.id, account]))
   const sourceAccount = accountById.get(selected.sourceAccountId)
@@ -57,6 +59,15 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
   if (movementType === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && role === 'source') {
     return moneyOrPerson.filter((account) =>
       [VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.RECEIVABLE].includes(account.valueKind) && supportsCurrency(account, 'USD'))
+  }
+  if (movementType === MOVEMENT_TYPES.CARD_CHARGE) {
+    return role === 'source' ? cardReadyAccounts : currencyReadyAccounts.filter((account) => account.valueKind === VALUE_KINDS.RECEIVABLE)
+  }
+  if (movementType === MOVEMENT_TYPES.CARD_PAYMENT) {
+    return role === 'destination'
+      ? cardReadyAccounts
+      : currencyReadyAccounts.filter((account) => [VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(account.valueKind) ||
+        (account.valueKind === VALUE_KINDS.RECEIVABLE && Number(balancesByAccountId.get(account.id)?.[currencyBalanceField(selected.currency)] || 0) > 0))
   }
   if (movementType === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL && role === 'destination') {
     return moneyOrPerson.filter((account) =>

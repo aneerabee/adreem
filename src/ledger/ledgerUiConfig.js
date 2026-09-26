@@ -46,6 +46,7 @@ export const BALANCE_FOCUS_LABELS = Object.freeze({
   bank: 'المصرف',
   receivable: 'أقبض من الناس',
   payable: 'أدفع للناس',
+  credit_card: 'بطاقاتي',
 })
 export const MOVEMENT_REQUEST_KEYS = Object.freeze({
   accountProfile: 'account-profile',
@@ -59,6 +60,7 @@ export const MOVEMENT_REQUEST_KEYS = Object.freeze({
 
 export const accountGroupTabs = [
   { key: 'money', label: 'فلوسي', title: 'فلوسي' },
+  { key: 'cards', label: 'بطاقاتي', title: 'بطاقاتي' },
   { key: 'people', label: 'الناس', title: 'الناس' },
   { key: 'assets', label: 'تتبّع', title: 'التتبّع' },
   { key: 'expenses', label: 'مصروفات', title: 'المصروفات' },
@@ -96,6 +98,12 @@ export const movementOptionGroups = [
     title: 'المصرف',
     hint: 'إيداع أو سحب',
     types: [MOVEMENT_TYPES.CASH_DEPOSIT, MOVEMENT_TYPES.CASH_WITHDRAWAL],
+  },
+  {
+    key: 'cards',
+    title: 'بطاقات الائتمان',
+    hint: 'دفع وسداد',
+    types: [MOVEMENT_TYPES.CARD_CHARGE, MOVEMENT_TYPES.CARD_PAYMENT],
   },
   {
     key: 'exchange',

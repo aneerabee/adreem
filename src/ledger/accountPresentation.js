@@ -83,6 +83,7 @@ export function visualKind(account) {
   if (account.status === ACCOUNT_STATUSES.NEEDS_REVIEW || account.valueKind === VALUE_KINDS.REVIEW) return 'review'
   if (account.valueKind === VALUE_KINDS.CASH) return 'cash'
   if (account.valueKind === VALUE_KINDS.BANK) return 'bank'
+  if (account.valueKind === VALUE_KINDS.CREDIT_CARD) return 'credit-card'
   if (account.valueKind === VALUE_KINDS.EXPENSE) return 'expense'
   if (account.valueKind === VALUE_KINDS.ASSET) return 'asset'
   if (account.valueKind === VALUE_KINDS.RECEIVABLE) {
@@ -110,6 +111,14 @@ export function accountBalanceChip(account, bucket, currency = '') {
   const hasTry = hasMoneyValue(tryAmount)
   const hasEur = hasMoneyValue(eurAmount)
 
+  if (account?.valueKind === VALUE_KINDS.CREDIT_CARD) {
+    const firstDebt = [[dinar, CURRENCIES.DINAR], [usd, CURRENCIES.USD], [tryAmount, CURRENCIES.TRY], [eurAmount, CURRENCIES.EUR]]
+      .find(([amount]) => hasMoneyValue(amount))
+    return firstDebt
+      ? accountBalanceChipForCurrency(account, firstDebt[0], firstDebt[1])
+      : { tone: 'zero', text: 'صفر' }
+  }
+
   if (!hasDinar && !hasUsd && !hasTry && hasEur) return accountBalanceChipForCurrency(account, eurAmount, CURRENCIES.EUR)
   if (!hasDinar && !hasUsd && hasTry) return accountBalanceChipForCurrency(account, tryAmount, CURRENCIES.TRY)
 
@@ -127,7 +136,6 @@ export function accountBalanceChip(account, bucket, currency = '') {
       text: dinar > 0 ? money(dinar) : `ناقص ${money(Math.abs(dinar))}`,
     }
   }
-
   if (account?.valueKind === VALUE_KINDS.EXPENSE) {
     return { tone: 'expense', text: money(Math.abs(dinar)) }
   }
@@ -154,6 +162,7 @@ function accountBalanceChipForCurrency(account, amount, currency) {
     }
   }
   if (account?.valueKind === VALUE_KINDS.EXPENSE) return { tone: 'expense', text: absolute }
+  if (account?.valueKind === VALUE_KINDS.CREDIT_CARD) return { tone: 'negative', text: `دين البطاقة ${absolute}` }
   if (account?.valueKind === VALUE_KINDS.ASSET) return { tone: 'asset', text: absolute }
   return {
     tone: value > 0 ? 'positive' : 'negative',
@@ -201,6 +210,7 @@ export function formatDisplayMeaning(account, amount, currency = CURRENCIES.DINA
   const formattedAmount = money(Math.abs(rounded), currency)
   if (account?.valueKind === VALUE_KINDS.EXPENSE) return `مصروف ${formattedAmount}`
   if (account?.valueKind === VALUE_KINDS.ASSET) return `قيمة ${formattedAmount}`
+  if (account?.valueKind === VALUE_KINDS.CREDIT_CARD) return `دين البطاقة ${formattedAmount}`
   if (account?.valueKind === VALUE_KINDS.CASH || account?.valueKind === VALUE_KINDS.BANK) {
     return rounded > 0 ? `موجود ${formattedAmount}` : `ناقص ${formattedAmount}`
   }

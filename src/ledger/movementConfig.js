@@ -5,6 +5,8 @@ export const movementLabels = {
   [MOVEMENT_TYPES.TRANSFER]: 'تحويل',
   [MOVEMENT_TYPES.CASH_DEPOSIT]: 'إيداع في المصرف',
   [MOVEMENT_TYPES.CASH_WITHDRAWAL]: 'سحب من المصرف',
+  [MOVEMENT_TYPES.CARD_CHARGE]: 'دفع ببطاقة عن جهة',
+  [MOVEMENT_TYPES.CARD_PAYMENT]: 'سداد بطاقة',
   [MOVEMENT_TYPES.EXPENSE]: 'مصروف',
   [MOVEMENT_TYPES.TRUCK_EXPENSE]: 'مصروف شاحنة',
   [MOVEMENT_TYPES.TRUCK_INCOME]: 'دخل شاحنة',
@@ -29,6 +31,18 @@ export const movementTypeOptions = [
     label: 'مصروف',
     detail: 'خروج فلوس من حساب واحد',
     tone: 'expense',
+  },
+  {
+    type: MOVEMENT_TYPES.CARD_CHARGE,
+    label: 'دفع ببطاقة',
+    detail: 'دين على البطاقة وحق عند جهة',
+    tone: 'card',
+  },
+  {
+    type: MOVEMENT_TYPES.CARD_PAYMENT,
+    label: 'سداد بطاقة',
+    detail: 'من فلوسك أو من الجهة مباشرة',
+    tone: 'card',
   },
   {
     type: MOVEMENT_TYPES.CASH_DEPOSIT,
@@ -122,6 +136,29 @@ export const movementConfigs = {
     sourceQuestion: 'من أي حساب مصرفي يخرج المبلغ؟',
     destinationQuestion: 'في أي كاش يدخل؟',
     routeTitle: 'السحب',
+  },
+  [MOVEMENT_TYPES.CARD_CHARGE]: {
+    amountLabel: 'كم دفعت بالبطاقة؟',
+    currencyLocked: false,
+    needsDestination: true,
+    needsRate: false,
+    sourceLabel: 'البطاقة',
+    destinationLabel: 'حقك عند',
+    sourceQuestion: 'من أي بطاقة دفعت؟',
+    destinationQuestion: 'عن أي شخص أو جهة؟',
+    routeTitle: 'الدفع بالبطاقة',
+    noteLabel: 'ماذا اشتريت للجهة؟',
+  },
+  [MOVEMENT_TYPES.CARD_PAYMENT]: {
+    amountLabel: 'كم سددت من دين البطاقة؟',
+    currencyLocked: false,
+    needsDestination: true,
+    needsRate: false,
+    sourceLabel: 'السداد من',
+    destinationLabel: 'البطاقة',
+    sourceQuestion: 'من أين جاء السداد؟',
+    destinationQuestion: 'أي بطاقة سددت؟',
+    routeTitle: 'سداد البطاقة',
   },
   [MOVEMENT_TYPES.TRUCK_EXPENSE]: {
     amountLabel: 'كم مصروف الشاحنة؟',
@@ -247,6 +284,8 @@ export const movementDefaultAccounts = {
   [MOVEMENT_TYPES.EXPENSE]: { sourceAccountId: '', destinationAccountId: '' },
   [MOVEMENT_TYPES.CASH_DEPOSIT]: { sourceAccountId: '', destinationAccountId: '' },
   [MOVEMENT_TYPES.CASH_WITHDRAWAL]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.CARD_CHARGE]: { sourceAccountId: '', destinationAccountId: '' },
+  [MOVEMENT_TYPES.CARD_PAYMENT]: { sourceAccountId: '', destinationAccountId: '' },
   [MOVEMENT_TYPES.TRUCK_EXPENSE]: { sourceAccountId: '', destinationAccountId: '' },
   [MOVEMENT_TYPES.TRUCK_INCOME]: { sourceAccountId: '', destinationAccountId: '' },
   [MOVEMENT_TYPES.USD_SALE]: { sourceAccountId: '', destinationAccountId: '' },
@@ -319,6 +358,7 @@ export function movementAccountCurrencyForRole(type, role, fallback = CURRENCIES
 }
 
 export function movementTone(type) {
+  if (type === MOVEMENT_TYPES.CARD_CHARGE || type === MOVEMENT_TYPES.CARD_PAYMENT) return 'card'
   if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT || type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL) return 'investment'
   if (type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) return 'expense'
   if (type === MOVEMENT_TYPES.EXTERNAL_INCOME || type === MOVEMENT_TYPES.TRUCK_INCOME) return 'income'

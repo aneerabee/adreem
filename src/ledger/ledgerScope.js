@@ -8,6 +8,7 @@ export const ACCOUNT_SUMMARY_SCOPES = Object.freeze({
 const NET_ELIGIBLE_VALUE_KINDS = new Set([
   VALUE_KINDS.CASH,
   VALUE_KINDS.BANK,
+  VALUE_KINDS.CREDIT_CARD,
   VALUE_KINDS.RECEIVABLE,
   VALUE_KINDS.ASSET,
 ])
@@ -15,6 +16,7 @@ const NET_ELIGIBLE_VALUE_KINDS = new Set([
 const NET_SEARCH_LABELS = Object.freeze({
   [VALUE_KINDS.CASH]: 'كاش نقد فلوسي',
   [VALUE_KINDS.BANK]: 'مصرف حساب بنكي شيك',
+  [VALUE_KINDS.CREDIT_CARD]: 'بطاقة ائتمان دين بطاقة',
   [VALUE_KINDS.RECEIVABLE]: 'شخص جهة بيننا',
   [VALUE_KINDS.ASSET]: 'اصل ممتلكات',
   [ACCOUNT_CURRENCY_KINDS.DINAR]: 'دينار د ل',
@@ -27,8 +29,9 @@ const NET_SEARCH_LABELS = Object.freeze({
 const NET_ACCOUNT_KIND_ORDER = Object.freeze({
   [VALUE_KINDS.CASH]: 0,
   [VALUE_KINDS.BANK]: 1,
-  [VALUE_KINDS.RECEIVABLE]: 2,
-  [VALUE_KINDS.ASSET]: 3,
+  [VALUE_KINDS.CREDIT_CARD]: 2,
+  [VALUE_KINDS.RECEIVABLE]: 3,
+  [VALUE_KINDS.ASSET]: 4,
 })
 
 const NET_CURRENCY_ORDER = Object.freeze({

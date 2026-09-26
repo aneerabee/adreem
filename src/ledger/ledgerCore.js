@@ -25,6 +25,8 @@ export const MOVEMENT_TYPES = {
   TRANSFER: 'transfer',
   CASH_DEPOSIT: 'cash_deposit',
   CASH_WITHDRAWAL: 'cash_withdrawal',
+  CARD_CHARGE: 'card_charge',
+  CARD_PAYMENT: 'card_payment',
   EXPENSE: 'expense',
   TRUCK_EXPENSE: 'truck_expense',
   TRUCK_INCOME: 'truck_income',
@@ -48,6 +50,8 @@ const TWO_SIDED_TYPES = new Set([
   MOVEMENT_TYPES.TRANSFER,
   MOVEMENT_TYPES.CASH_DEPOSIT,
   MOVEMENT_TYPES.CASH_WITHDRAWAL,
+  MOVEMENT_TYPES.CARD_CHARGE,
+  MOVEMENT_TYPES.CARD_PAYMENT,
   MOVEMENT_TYPES.USD_SALE,
   MOVEMENT_TYPES.USD_PURCHASE,
   MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
@@ -57,6 +61,8 @@ const SOURCE_REQUIRED_TYPES = new Set([
   MOVEMENT_TYPES.TRANSFER,
   MOVEMENT_TYPES.CASH_DEPOSIT,
   MOVEMENT_TYPES.CASH_WITHDRAWAL,
+  MOVEMENT_TYPES.CARD_CHARGE,
+  MOVEMENT_TYPES.CARD_PAYMENT,
   MOVEMENT_TYPES.EXPENSE,
   MOVEMENT_TYPES.TRUCK_EXPENSE,
   MOVEMENT_TYPES.USD_SALE,
@@ -71,6 +77,8 @@ const DESTINATION_REQUIRED_TYPES = new Set([
   MOVEMENT_TYPES.TRANSFER,
   MOVEMENT_TYPES.CASH_DEPOSIT,
   MOVEMENT_TYPES.CASH_WITHDRAWAL,
+  MOVEMENT_TYPES.CARD_CHARGE,
+  MOVEMENT_TYPES.CARD_PAYMENT,
   MOVEMENT_TYPES.TRUCK_INCOME,
   MOVEMENT_TYPES.USD_SALE,
   MOVEMENT_TYPES.USD_PURCHASE,
@@ -215,9 +223,13 @@ function validateNonNegativeOwnBalances(movement, accounts = [], movements = [],
 
   for (const entry of adjustments.values()) {
     const account = accountMap.get(entry.accountId)
-    if (!cannotGoNegative(account)) continue
     const before = balanceValueForCurrency(balanceById.get(entry.accountId), entry.currency)
     const after = roundMoney(before + entry.delta)
+    if (account?.valueKind === VALUE_KINDS.CREDIT_CARD && after > 0) {
+      errors.push({ field: 'amount', message: 'السداد أكبر من الدين القائم على البطاقة.' })
+      continue
+    }
+    if (!cannotGoNegative(account)) continue
     if (after >= 0) continue
     const field = entry.accountId === movement?.sourceAccountId ? 'sourceAccountId' : 'destinationAccountId'
     errors.push({
@@ -329,6 +341,9 @@ export function validateMovement(movement, accounts = [], movements = [], option
     if (destinationAccount && !accountSupportsTransferCurrency(destinationAccount, currency)) {
       errors.push({ field: 'destinationAccountId', message: 'عملة الرصيد الافتتاحي لا تطابق عملة الحساب.' })
     }
+    if (destinationAccount?.valueKind === VALUE_KINDS.CREDIT_CARD && amount > 0) {
+      errors.push({ field: 'amount', message: 'الرصيد الافتتاحي للبطاقة دين بالسالب فقط.' })
+    }
   }
   if (type === MOVEMENT_TYPES.CASH_DEPOSIT || type === MOVEMENT_TYPES.CASH_WITHDRAWAL) {
     const expectedSourceKind = type === MOVEMENT_TYPES.CASH_DEPOSIT ? VALUE_KINDS.CASH : VALUE_KINDS.BANK
@@ -344,6 +359,36 @@ export function validateMovement(movement, accounts = [], movements = [], option
     }
     if (destinationAccount && !accountSupportsTransferCurrency(destinationAccount, currency)) {
       errors.push({ field: 'destinationAccountId', message: 'حساب الوجهة لا يدعم عملة الحركة.' })
+    }
+  }
+  if (type === MOVEMENT_TYPES.CARD_CHARGE || type === MOVEMENT_TYPES.CARD_PAYMENT) {
+    const cardAccount = type === MOVEMENT_TYPES.CARD_CHARGE ? sourceAccount : destinationAccount
+    const otherAccount = type === MOVEMENT_TYPES.CARD_CHARGE ? destinationAccount : sourceAccount
+    const cardField = type === MOVEMENT_TYPES.CARD_CHARGE ? 'sourceAccountId' : 'destinationAccountId'
+    const otherField = type === MOVEMENT_TYPES.CARD_CHARGE ? 'destinationAccountId' : 'sourceAccountId'
+    if (cardAccount && cardAccount.valueKind !== VALUE_KINDS.CREDIT_CARD) {
+      errors.push({ field: cardField, message: 'اختر بطاقة ائتمان.' })
+    }
+    if (otherAccount && !(type === MOVEMENT_TYPES.CARD_CHARGE
+      ? otherAccount.valueKind === VALUE_KINDS.RECEIVABLE
+      : [VALUE_KINDS.RECEIVABLE, VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(otherAccount.valueKind))) {
+      errors.push({ field: otherField, message: type === MOVEMENT_TYPES.CARD_CHARGE ? 'اختر الشخص أو الجهة التي دفعت عنها.' : 'السداد يكون من فلوسك أو من الجهة مباشرة.' })
+    }
+    for (const [field, account] of [[cardField, cardAccount], [otherField, otherAccount]]) {
+      if (account && !accountSupportsTransferCurrency(account, currency)) {
+        errors.push({ field, message: 'الحساب لا يدعم عملة الحركة.' })
+      }
+    }
+    if (type === MOVEMENT_TYPES.CARD_PAYMENT && otherAccount?.valueKind === VALUE_KINDS.RECEIVABLE && Number.isFinite(amount) && amount > 0) {
+      const bucket = summarizeBalances(accounts, movements).find((item) => item.account.id === otherAccount.id)
+      const original = options.originalMovement?.type === MOVEMENT_TYPES.CARD_PAYMENT &&
+        options.originalMovement?.status === MOVEMENT_STATUSES.POSTED &&
+        options.originalMovement?.sourceAccountId === otherAccount.id &&
+        options.originalMovement?.currency === currency
+        ? options.originalMovement.amount : 0
+      if (balanceValueForCurrency(bucket, currency) + original < amount) {
+        errors.push({ field: 'sourceAccountId', message: 'حقك عند الجهة أقل من السداد المباشر.' })
+      }
     }
   }
   if ((type === MOVEMENT_TYPES.EXPENSE || type === MOVEMENT_TYPES.TRUCK_EXPENSE) && sourceAccount && !accountSupportsTransferCurrency(sourceAccount, currency)) {
@@ -415,6 +460,9 @@ export function validateMovement(movement, accounts = [], movements = [], option
     if (account.valueKind === VALUE_KINDS.PROJECT || account.valueKind === VALUE_KINDS.EXPENSE) {
       errors.push({ field, message: 'المشروع أو نوع المصروف يستخدم للتصنيف فقط، وليس كحساب فلوس.' })
     }
+    if (account.valueKind === VALUE_KINDS.CREDIT_CARD && ![MOVEMENT_TYPES.CARD_CHARGE, MOVEMENT_TYPES.CARD_PAYMENT, MOVEMENT_TYPES.OPENING_BALANCE].includes(type)) {
+      errors.push({ field, message: 'البطاقة تستخدم فقط للدفع عن جهة أو سداد دينها.' })
+    }
     if (account.status === ACCOUNT_STATUSES.INACTIVE) {
       errors.push({ field, message: 'الحساب مخفي ولا يستخدم كطرف حركة.' })
     }
@@ -475,6 +523,8 @@ export function buildPostingEntries(movement) {
     case MOVEMENT_TYPES.TRANSFER:
     case MOVEMENT_TYPES.CASH_DEPOSIT:
     case MOVEMENT_TYPES.CASH_WITHDRAWAL:
+    case MOVEMENT_TYPES.CARD_CHARGE:
+    case MOVEMENT_TYPES.CARD_PAYMENT:
       return [
         { accountId: movement.sourceAccountId, currency, delta: -Math.abs(amount) },
         { accountId: movement.destinationAccountId, currency, delta: Math.abs(amount) },
@@ -616,6 +666,7 @@ export function createAccount({
   openingTry = 0,
   openingEur = 0,
   currencyKind,
+  cardCurrencies = [],
   notes = '',
   status = ACCOUNT_STATUSES.ACTIVE,
   counterpartyId = '',
@@ -653,6 +704,7 @@ export function createAccount({
     openingTry: roundMoney(openingTry),
     openingEur: roundMoney(openingEur),
     currencyKind: normalizedCurrencyKind,
+    ...(normalizedType === ACCOUNT_TYPES.CREDIT_CARD ? { cardCurrencies: [...new Set(cardCurrencies)] } : {}),
     status,
     notes,
     ...(counterpartyId ? { counterpartyId: String(counterpartyId).trim() } : {}),
@@ -674,6 +726,15 @@ export function validateAccount(account, existingAccounts = []) {
   if (!Object.values(ACCOUNT_TYPES).includes(account?.type)) {
     errors.push({ field: 'type', message: 'نوع الحساب غير معروف.' })
   }
+  if (account?.type === ACCOUNT_TYPES.CREDIT_CARD || account?.valueKind === VALUE_KINDS.CREDIT_CARD) {
+    const currencies = account?.cardCurrencies
+    if (account.type !== ACCOUNT_TYPES.CREDIT_CARD || account.valueKind !== VALUE_KINDS.CREDIT_CARD ||
+      !Array.isArray(currencies) || !currencies.length || new Set(currencies).size !== currencies.length ||
+      currencies.some((currency) => !Object.values(CURRENCIES).includes(currency)) ||
+      account.currencyKind !== (currencies.length === 1 ? currencies[0] : ACCOUNT_CURRENCY_KINDS.MULTI)) {
+      errors.push({ field: 'cardCurrencies', message: 'حدد عملة واحدة أو أكثر للبطاقة.' })
+    }
+  }
   if (!Object.values(ACCOUNT_CURRENCY_KINDS).includes(account?.currencyKind)) {
     errors.push({ field: 'currencyKind', message: 'عملة الحساب غير معروفة.' })
   }
@@ -687,7 +748,7 @@ export function validateAccount(account, existingAccounts = []) {
     }
   }
   const hasOpeningBalance = openingDinar !== 0 || openingUsd !== 0 || openingTry !== 0 || openingEur !== 0
-  const supportsOpeningBalance = [VALUE_KINDS.RECEIVABLE, VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET].includes(account?.valueKind)
+  const supportsOpeningBalance = [VALUE_KINDS.RECEIVABLE, VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET, VALUE_KINDS.CREDIT_CARD].includes(account?.valueKind)
   if (hasOpeningBalance && !supportsOpeningBalance) {
     errors.push({ field: 'openingDinar', message: 'هذا النوع لا يحمل رصيدًا افتتاحيًا.' })
   }
@@ -715,6 +776,9 @@ export function validateAccount(account, existingAccounts = []) {
     [CURRENCIES.USD]: openingUsd,
     [CURRENCIES.TRY]: openingTry,
     [CURRENCIES.EUR]: openingEur,
+  }
+  if (account?.valueKind === VALUE_KINDS.CREDIT_CARD && Object.entries(openingByCurrency).some(([currency, amount]) => amount > 0 || (amount !== 0 && !account.cardCurrencies?.includes(currency)))) {
+    errors.push({ field: 'cardCurrencies', message: 'دين البطاقة الافتتاحي لا يتجاوز صفرًا ويجب أن يطابق عملة البطاقة.' })
   }
   if (currencyKind !== 'multi' && Object.entries(openingByCurrency).some(([currency, amount]) => currency !== currencyKind && amount !== 0)) {
     errors.push({ field: 'currencyKind', message: 'الرصيد الافتتاحي يجب أن يطابق عملة الحساب.' })
@@ -791,6 +855,7 @@ export function formatBalanceMeaning(account, amount) {
   const formatted = Math.abs(value).toLocaleString('en-US')
   if (!value) return 'مسكر'
   if (account?.valueKind === 'expense') return `تكلفة ${formatted}`
+  if (account?.valueKind === VALUE_KINDS.CREDIT_CARD) return value < 0 ? `مستحق على البطاقة ${formatted}` : `رصيد بطاقة ${formatted}`
   if (account?.valueKind === 'asset') return `قيمة/رصيد أصل ${formatted}`
   if (account?.valueKind === 'cash' || account?.valueKind === 'bank') {
     return value > 0 ? `موجود ${formatted}` : `ناقص ${formatted}`

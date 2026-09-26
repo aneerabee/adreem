@@ -1,4 +1,4 @@
-import { ACCOUNT_STATUSES } from './accountCatalog'
+import { ACCOUNT_STATUSES, VALUE_KINDS } from './accountCatalog'
 import { accountOpeningAmounts, accountOpeningDraftErrors, counterpartyOpeningDraftErrors, emptyAccountDraft } from './accountConfig'
 import { buildFinancialAccountCurrencyBundle } from './accountCurrencyUpgrade'
 import { accountDeletionEligibility, accountEditChanges, accountEditSnapshot } from './accountEditing'
@@ -71,7 +71,15 @@ export function useAccountActions({
       return
     }
     const openingAmounts = accountOpeningAmounts(accountDraft)
-    const createdAccount = accountIsCounterpartyBundle ? null : createAccount({ ...accountDraft, ...openingAmounts })
+    const cardCurrencies = [...new Set(accountDraft.cardCurrencies || [])]
+    const createdAccount = accountIsCounterpartyBundle ? null : createAccount({
+      ...accountDraft,
+      ...openingAmounts,
+      ...(accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD ? {
+        cardCurrencies,
+        currencyKind: cardCurrencies.length === 1 ? cardCurrencies[0] : 'multi',
+      } : {}),
+    })
     const nextAccounts = accountIsCounterpartyBundle
       ? buildCounterpartyAccountBundle(accountDraft, { source: 'web' })
       : buildFinancialAccountCurrencyBundle(createdAccount)

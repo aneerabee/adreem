@@ -76,6 +76,31 @@
 
 /* Balances are a table of positions, not a grid of floating cards. */
 .adreem-app .ml3-balance-ledger { gap: 6px; padding: 0; border: 0; background: transparent; }
+.adreem-app .ml3-balance-ledger:has(.is-card) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.adreem-app .ml3-balance-ledger .is-card { --summary-tone: var(--finance-debt); --summary-ink: var(--finance-debt-dark); --summary-soft: var(--finance-debt-soft); }
+.adreem-app .ml3-balance-ledger:has(.is-card) button.has-wide-balance { grid-column: span 2; }
+.adreem-app .ml3-account-switcher--cards { --group-tone: var(--finance-debt); --group-soft: var(--finance-debt-soft); }
+.adreem-credit-card-list { display: grid; gap: 6px; }
+.adreem-credit-card-list > button { min-width: 0; width: 100%; display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(0, auto); align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--finance-line); border-radius: 6px; background: var(--finance-paper); color: var(--finance-ink); text-align: start; }
+.adreem-credit-card-list > button:hover { border-color: var(--finance-debt); }
+.adreem-credit-card-list > button > i { color: var(--finance-debt); }
+.adreem-credit-card-name { min-width: 0; display: grid; gap: 2px; }
+.adreem-credit-card-name strong { min-width: 0; overflow-wrap: anywhere; }
+.adreem-credit-card-name small { color: var(--muted); }
+.adreem-credit-card-values { min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.adreem-credit-card-values > span { display: inline-flex; align-items: baseline; gap: 4px; padding: 3px 6px; border: 1px solid var(--finance-line); border-radius: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.adreem-credit-card-values > span.has-debt { color: var(--finance-debt-dark); border-color: color-mix(in srgb, var(--finance-debt) 28%, var(--finance-line)); }
+.adreem-credit-card-values small { font-size: var(--text-xs); }
+.adreem-profile-card-balance { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.adreem-profile-card-balance > span { min-width: 0; display: flex; flex-wrap: wrap; gap: 5px 12px; }
+.adreem-profile-card-balance > span > b { direction: ltr; white-space: nowrap; font-size: var(--text-md); font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .adreem-app .ml3-balance-ledger:has(.is-card) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adreem-app .ml3-balance-ledger:has(.is-card) button.has-wide-balance { grid-column: span 2; }
+  .adreem-app .ml3-balance-ledger .is-card { grid-column: 1 / -1; }
+  .adreem-credit-card-list > button { grid-template-columns: 24px minmax(0, 1fr); }
+  .adreem-credit-card-values { grid-column: 2; justify-content: flex-start; }
+}
 .adreem-app .ml3-balance-ledger button {
   min-height: 60px;
   grid-template-columns: 27px minmax(0, 1fr);
@@ -174,7 +199,7 @@
   .adreem-app .ml3-balance-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
   .adreem-app .ml3-balance-ledger button { min-height: 64px; padding: 5px; }
   .adreem-app .ml3-balances-workspace { grid-template-columns: 1fr; gap: 7px; }
-  .adreem-app .ml3-account-switcher { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
+  .adreem-app .ml3-account-switcher { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; }
   .adreem-app .ml3-account-switcher button { min-height: 42px; padding: 3px 1px; }
   .adreem-app .adreem-investment-commandbar { min-height: 44px; }
   .adreem-app .adreem-investment-actions button { min-height: 44px; }

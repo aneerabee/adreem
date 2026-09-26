@@ -25,6 +25,7 @@ export function MovementTypeIcon({ type }) {
   if (type === MOVEMENT_TYPES.EXTERNAL_INCOME) return <ArrowDownToLine {...props} />
   if (type === MOVEMENT_TYPES.CASH_DEPOSIT) return <Landmark {...props} />
   if (type === MOVEMENT_TYPES.CASH_WITHDRAWAL) return <ArrowUpFromLine {...props} />
+  if (type === MOVEMENT_TYPES.CARD_CHARGE || type === MOVEMENT_TYPES.CARD_PAYMENT) return <WalletCards {...props} />
   if (type === MOVEMENT_TYPES.USD_SALE || type === MOVEMENT_TYPES.USD_PURCHASE) return <CircleDollarSign {...props} />
   if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT || type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL) return <ChartCandlestick {...props} />
   if (type === MOVEMENT_TYPES.RECORD_ONLY) return <NotebookPen {...props} />
@@ -36,6 +37,7 @@ export function AccountPresetIcon({ presetKey }) {
   if (presetKey === 'person-cash') return <UserRound {...props} />
   if (presetKey === 'own-cash') return <Banknote {...props} />
   if (presetKey === 'own-bank') return <Landmark {...props} />
+  if (presetKey === 'credit-card') return <WalletCards {...props} />
   if (presetKey === 'asset') return <Boxes {...props} />
   if (presetKey === 'project') return <BriefcaseBusiness {...props} />
   if (presetKey === 'expense') return <ReceiptText {...props} />
@@ -50,6 +52,7 @@ export function AccountChoiceIcon({ account, size = 16 }) {
   if (kind === 'person-usd' || kind === 'person-try' || kind === 'person-eur') return <CircleDollarSign {...props} />
   if (kind === VALUE_KINDS.CASH) return <Banknote {...props} />
   if (kind === VALUE_KINDS.BANK) return <Landmark {...props} />
+  if (kind === VALUE_KINDS.CREDIT_CARD) return <WalletCards {...props} />
   if (kind === VALUE_KINDS.ASSET) return <Boxes {...props} />
   if (kind === VALUE_KINDS.PROJECT) return <BriefcaseBusiness {...props} />
   if (kind === VALUE_KINDS.EXPENSE) return <ReceiptText {...props} />
@@ -66,6 +69,7 @@ export function AccountGroupIcon({ groupKey }) {
   const props = { 'aria-hidden': true, size: 19 }
   if (groupKey === 'people') return <UserRound {...props} />
   if (groupKey === 'money') return <WalletCards {...props} />
+  if (groupKey === 'cards') return <WalletCards {...props} />
   if (groupKey === 'expenses') return <ReceiptText {...props} />
   if (groupKey === 'review') return <CircleAlert {...props} />
   if (groupKey === 'separate') return <EyeOff {...props} />

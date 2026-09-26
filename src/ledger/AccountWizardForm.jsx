@@ -3,11 +3,12 @@
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { motion as Motion } from 'motion/react'
 import { ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog'
-import { ACCOUNT_OPENING_DIRECTIONS, accountDetailDisplayName, accountPresetGroups, accountPresets, applyAccountName, counterpartyAccountChannels, counterpartyOpeningFor } from './accountConfig'
+import { ACCOUNT_OPENING_DIRECTIONS, accountDetailDisplayName, accountOpeningAmounts, accountPresetGroups, accountPresets, applyAccountName, counterpartyAccountChannels, counterpartyOpeningFor } from './accountConfig'
 import { protectedAccountDraftSummary } from './accountPresentation'
+import { CURRENCIES } from './ledgerCore'
 import { money } from './ledgerFormat'
 import { AccountGroupIcon, AccountPresetIcon, FlowProgress } from './LedgerIcons'
-import { ACCOUNT_WIZARD_STEPS, FLOW_STAGE_MOTION } from './ledgerUiConfig'
+import { ACCOUNT_WIZARD_STEPS, CURRENCY_OPTIONS, FLOW_STAGE_MOTION } from './ledgerUiConfig'
 import { NumericEntry } from './NumericEntry'
 
 export function AccountWizardForm({
@@ -42,6 +43,13 @@ export function AccountWizardForm({
   setAccountDraft,
   setActiveAccountDetail,
 }) {
+  const opening = accountOpeningAmounts(accountDraft)
+  const cardOpeningByCurrency = {
+    [CURRENCIES.DINAR]: opening.openingDinar,
+    [CURRENCIES.USD]: opening.openingUsd,
+    [CURRENCIES.TRY]: opening.openingTry,
+    [CURRENCIES.EUR]: opening.openingEur,
+  }
   return (
     <form id="adreem-entry-account-panel" role="tabpanel" aria-labelledby="adreem-entry-account-tab" hidden={activeEntryMode !== 'account'} className="ml3-add-account ml3-account-wizard" onSubmit={addAccount}>
         <FlowProgress current={currentAccountWizardIndex + 1} total={accountWizardStages.length} items={completedAccountStages} onEdit={goToAccountWizardStep} />
@@ -124,6 +132,22 @@ export function AccountWizardForm({
 
           {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY ? (
             <div className="ml3-account-choice-list is-compact" aria-label="عملة الحساب">
+              {accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD ? CURRENCY_OPTIONS.map((option) => {
+                const chosen = accountDraft.cardCurrencies?.includes(option.value)
+                return (
+                  <button type="button" key={option.value} className={chosen ? 'is-active' : ''} aria-pressed={Boolean(chosen)} onClick={() => setAccountDraft((current) => ({
+                    ...current,
+                    cardCurrencies: current.cardCurrencies?.includes(option.value)
+                      ? current.cardCurrencies.filter((currency) => currency !== option.value)
+                      : [...(current.cardCurrencies || []), option.value],
+                    cardOpenings: current.cardCurrencies?.includes(option.value)
+                      ? Object.fromEntries(Object.entries(current.cardOpenings || {}).filter(([currency]) => currency !== option.value))
+                      : current.cardOpenings,
+                  }))}>
+                    <strong>{option.label}</strong>
+                  </button>
+                )
+              }) : <>
               <button
                 type="button"
                 className={accountDraft.currencyKind === ACCOUNT_CURRENCY_KINDS.DINAR ? 'is-active' : ''}
@@ -174,12 +198,25 @@ export function AccountWizardForm({
               >
                 <strong>EUR</strong>
               </button>
+              </>}
             </div>
           ) : null}
 
           {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? (
             <div className="ml3-account-opening">
-              {accountIsCounterpartyBundle ? (
+              {accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD ? (
+                <div className="adreem-counterparty-openings">
+                  {CURRENCY_OPTIONS.filter((option) => accountDraft.cardCurrencies?.includes(option.value)).map((option) => (
+                    <section className="adreem-counterparty-opening" key={option.value}>
+                      <header><strong>{option.label}</strong><small>الدين الحالي</small></header>
+                      <NumericEntry compact hideLabel label={`دين البطاقة ${option.label}`} value={accountDraft.cardOpenings?.[option.value] || ''} onChange={(value) => setAccountDraft((current) => ({
+                        ...current,
+                        cardOpenings: { ...current.cardOpenings, [option.value]: value },
+                      }))} />
+                    </section>
+                  ))}
+                </div>
+              ) : accountIsCounterpartyBundle ? (
                 <div className="adreem-counterparty-openings">
                   {counterpartyAccountChannels.map((channel) => {
                     const opening = counterpartyOpeningFor(accountDraft, channel.key)
@@ -278,7 +315,14 @@ export function AccountWizardForm({
           {currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.SAVE ? (
             <div className="ml3-account-summary">
               <strong className="adreem-account-name">{protectedAccountDraftSummary(accountDraft)}</strong>
-              {accountIsCounterpartyBundle ? (
+              {accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD ? (
+                <div className="adreem-counterparty-summary">
+                  {CURRENCY_OPTIONS.filter((option) => accountDraft.cardCurrencies?.includes(option.value)).map((option) => {
+                    const amount = Math.abs(cardOpeningByCurrency[option.value] || 0)
+                    return <span key={option.value}><b>{option.label}</b><small>{amount ? `دين البطاقة ${money(amount, option.value)}` : 'صفر'}</small></span>
+                  })}
+                </div>
+              ) : accountIsCounterpartyBundle ? (
                 <div className="adreem-counterparty-summary">
                   {counterpartyAccountChannels.map((channel) => {
                     const opening = counterpartyOpeningFor(accountDraft, channel.key)
@@ -304,7 +348,7 @@ export function AccountWizardForm({
               <button type="submit" className="ml3-step-next" disabled={!hasAccountDraftName}>
                 حفظ الحساب <Check aria-hidden="true" size={17} />
               </button>
-            ) : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME || currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING ? (
+            ) : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME || currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING || (currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY && accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD) ? (
               <button type="button" className="ml3-step-next" disabled={!canAdvanceAccountWizard} onClick={advanceAccountWizard}>
                 التالي <ChevronLeft aria-hidden="true" size={17} />
               </button>

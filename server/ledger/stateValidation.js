@@ -23,7 +23,7 @@ import { INVESTMENT_RECORD_STATUSES, investmentOpeningTradeIsLocked, validateInv
 
 const OWN_VALUE_KINDS = new Set([VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.ASSET])
 const RECORD_LISTS = ['accounts', 'movements', 'dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'investmentTransfers', 'auditEvents']
-const ACCOUNT_CLASSIFICATION_FIELDS = ['type', 'valueKind', 'currencyKind']
+const ACCOUNT_CLASSIFICATION_FIELDS = ['type', 'valueKind', 'currencyKind', 'cardCurrencies']
 const INVESTMENT_HOLDING_IDENTITY_FIELDS = ['platformId', 'symbol', 'providerSymbol', 'assetType', 'exchange', 'quoteCurrency']
 const INVESTMENT_TRADE_EDITABLE_FIELDS = ['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros', 'note']
 const INVESTMENT_TRADE_UPDATE_FIELDS = new Set([...INVESTMENT_TRADE_EDITABLE_FIELDS, 'updatedAt'])
@@ -54,6 +54,8 @@ const RECONCILABLE_VALUE_KINDS = new Set([
 ])
 const SOURCE_REQUIRED_RULE_TYPES = new Set([
   MOVEMENT_TYPES.TRANSFER,
+  MOVEMENT_TYPES.CARD_CHARGE,
+  MOVEMENT_TYPES.CARD_PAYMENT,
   MOVEMENT_TYPES.CASH_DEPOSIT,
   MOVEMENT_TYPES.CASH_WITHDRAWAL,
   MOVEMENT_TYPES.EXPENSE,
@@ -64,6 +66,8 @@ const SOURCE_REQUIRED_RULE_TYPES = new Set([
 ])
 const DESTINATION_REQUIRED_RULE_TYPES = new Set([
   MOVEMENT_TYPES.TRANSFER,
+  MOVEMENT_TYPES.CARD_CHARGE,
+  MOVEMENT_TYPES.CARD_PAYMENT,
   MOVEMENT_TYPES.CASH_DEPOSIT,
   MOVEMENT_TYPES.CASH_WITHDRAWAL,
   MOVEMENT_TYPES.TRUCK_INCOME,
@@ -130,7 +134,7 @@ function changedRecordIds(nextRecords = [], currentRecords = []) {
 
 function changedAccountClassification(account, previousById) {
   const previous = previousById.get(account?.id)
-  return Boolean(previous) && ACCOUNT_CLASSIFICATION_FIELDS.some((field) => account?.[field] !== previous?.[field])
+  return Boolean(previous) && ACCOUNT_CLASSIFICATION_FIELDS.some((field) => !isDeepStrictEqual(account?.[field], previous?.[field]))
 }
 
 function matchingAccountNameHistory(account, previousAccount, auditEvents = [], previousAuditEventIds = new Set()) {
@@ -292,6 +296,8 @@ function rawPostingEntries(movement) {
     case MOVEMENT_TYPES.INVESTMENT_DEPOSIT:
       return [{ accountId: movement.sourceAccountId, currency, delta: -Math.abs(amount) }]
     case MOVEMENT_TYPES.TRANSFER:
+    case MOVEMENT_TYPES.CARD_CHARGE:
+    case MOVEMENT_TYPES.CARD_PAYMENT:
     case MOVEMENT_TYPES.CASH_DEPOSIT:
     case MOVEMENT_TYPES.CASH_WITHDRAWAL:
       return [

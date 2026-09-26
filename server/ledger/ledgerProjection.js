@@ -302,6 +302,10 @@ export function validateLedgerProjection(sourceState = {}, options = {}) {
       (total.dinar < 0 || total.usd < 0 || total.try < 0 || total.eur < 0)) {
       errors.push({ code: 'negative-owned-balance', accountId: account.id, dinar: total.dinar, usd: total.usd, try: total.try, eur: total.eur })
     }
+    if (account.valueKind === VALUE_KINDS.CREDIT_CARD &&
+      (total.dinar > 0 || total.usd > 0 || total.try > 0 || total.eur > 0)) {
+      errors.push({ code: 'positive-credit-card-balance', accountId: account.id, dinar: total.dinar, usd: total.usd, try: total.try, eur: total.eur })
+    }
   }
 
   return { ok: errors.length === 0, errors, state, totals }

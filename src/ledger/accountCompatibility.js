@@ -36,6 +36,7 @@ export function sameLogicalAccount(left, right) {
 }
 
 export function transferAccountKind(account) {
+  if (account?.valueKind === VALUE_KINDS.CREDIT_CARD) return VALUE_KINDS.CREDIT_CARD
   if (account?.valueKind === VALUE_KINDS.RECEIVABLE && account?.currencyKind === EUR) return 'cash'
   const text = `${account?.subAccountName || ''} ${account?.legacyName || ''}`.toLowerCase()
   if (account?.valueKind === VALUE_KINDS.RECEIVABLE && (['cash-usd', 'cash-try'].includes(account?.counterpartyKind) || /usd|try|\$|₺|ليره|ليرة/.test(text))) return 'cash'
@@ -69,6 +70,9 @@ export function accountCurrencyLabel(account, bucket = null) {
 export function accountSupportsTransferCurrency(account, currency = '', bucket = null) {
   if (!account) return false
   if (!currency) return true
+  if (account.valueKind === VALUE_KINDS.CREDIT_CARD) {
+    return Array.isArray(account.cardCurrencies) && account.cardCurrencies.includes(currency)
+  }
   const kind = accountCurrencyKind(account, bucket)
   return kind === MULTI || kind === currency
 }

@@ -1359,6 +1359,7 @@ describe('LedgerApp people account views', () => {
       money: { dinar: 1500, usd: 300, try: 0, eur: 0 },
       receivable: { dinar: 700, usd: 0, try: 0, eur: 0 },
       payable: { dinar: 0, usd: 80, try: 0, eur: 0 },
+      cardDebt: { dinar: 0, usd: 0, try: 0, eur: 0 },
     })
   })
 

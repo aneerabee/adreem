@@ -56,6 +56,7 @@ const OPENING_BALANCE_VALUE_KINDS = new Set([
   VALUE_KINDS.RECEIVABLE,
   VALUE_KINDS.CASH,
   VALUE_KINDS.BANK,
+  VALUE_KINDS.CREDIT_CARD,
   VALUE_KINDS.ASSET,
 ])
 
@@ -90,14 +91,27 @@ export const accountPresets = [
   {
     key: 'own-bank',
     title: 'حساب مصرفي',
-    detail: 'مصرف أو بطاقة أو محفظة',
+    detail: 'مصرف أو محفظة بأموالك',
     type: ACCOUNT_TYPES.BANK,
     valueKind: VALUE_KINDS.BANK,
     ownerName: 'أنا',
     subAccountName: 'مصرف',
     nameTarget: 'subAccountName',
     nameLabel: 'اسم المصرف أو المحفظة',
-    namePlaceholder: 'مثال: مصرف الجمهورية أو بطاقة الفيزا',
+    namePlaceholder: 'مثال: مصرف الجمهورية',
+    skipDetail: true,
+  },
+  {
+    key: 'credit-card',
+    title: 'بطاقة ائتمان',
+    detail: 'شراء للجهات وسداد لاحق',
+    type: ACCOUNT_TYPES.CREDIT_CARD,
+    valueKind: VALUE_KINDS.CREDIT_CARD,
+    ownerName: 'أنا',
+    subAccountName: 'بطاقة',
+    nameTarget: 'subAccountName',
+    nameLabel: 'اسم البطاقة',
+    namePlaceholder: 'مثال: İşbank Maximum',
     skipDetail: true,
   },
   {
@@ -152,6 +166,12 @@ export const accountPresetGroups = [
     keys: ['own-cash', 'own-bank'],
   },
   {
+    key: 'cards',
+    title: 'بطاقاتي',
+    hint: 'ديون بطاقات الائتمان',
+    keys: ['credit-card'],
+  },
+  {
     key: 'tracking',
     title: 'متابعة',
     hint: 'أصل أو مشروع أو مصروف',
@@ -169,6 +189,11 @@ export const accountPresetStepCopy = {
     title: 'أين الفلوس؟',
     question: 'أين تحتفظ بفلوسك؟',
     hint: 'اختر كاش أو حسابًا مصرفيًا.',
+  },
+  cards: {
+    title: 'بطاقة ائتمان',
+    question: 'ما اسم البطاقة؟',
+    hint: 'حدد العملات والدين الحالي لكل منها.',
   },
   tracking: {
     title: 'ماذا تتابع؟',
@@ -193,6 +218,8 @@ export function emptyAccountDraft() {
     currencyKind: ACCOUNT_CURRENCY_KINDS.DINAR,
     counterpartyBundle: true,
     counterpartyOpenings: emptyCounterpartyOpenings(),
+    cardCurrencies: [],
+    cardOpenings: {},
     openingBalanceAmount: '',
     openingBalanceDirection: '',
     notes: '',
@@ -220,6 +247,10 @@ export function accountSupportsOpeningBalance(draftOrAccount = {}) {
 
 export function accountOpeningAmounts(draft = {}) {
   if (!accountSupportsOpeningBalance(draft)) return { openingDinar: 0, openingUsd: 0, openingTry: 0, openingEur: 0 }
+  if (draft.valueKind === VALUE_KINDS.CREDIT_CARD) {
+    const debt = (currency) => draft.cardCurrencies?.includes(currency) ? -Math.max(0, openingInputNumber(draft.cardOpenings?.[currency])) : 0
+    return { openingDinar: debt('LYD'), openingUsd: debt('USD'), openingTry: debt('TRY'), openingEur: debt('EUR') }
+  }
 
   const hasWizardAmount = Object.hasOwn(draft, 'openingBalanceAmount')
   if (!hasWizardAmount) {
@@ -246,6 +277,18 @@ export function accountOpeningAmounts(draft = {}) {
 }
 
 export function accountOpeningDraftErrors(draft = {}) {
+  if (draft.valueKind === VALUE_KINDS.CREDIT_CARD) {
+    return Object.entries(draft.cardOpenings || {}).flatMap(([currency, raw]) => {
+      const normalized = String(raw ?? '').replaceAll(',', '').trim()
+      if (normalized && (!/^\d+$/.test(normalized) || !Number.isSafeInteger(Number(normalized)))) {
+        return [{ field: 'cardOpenings', message: 'دين البطاقة يجب أن يكون رقمًا صحيحًا غير سالب.' }]
+      }
+      const amount = openingInputNumber(raw)
+      return !draft.cardCurrencies?.includes(currency) && amount !== 0
+        ? [{ field: 'cardOpenings', message: 'امسح دين العملة التي أزلتها من البطاقة.' }]
+        : []
+    })
+  }
   if (!Object.hasOwn(draft, 'openingBalanceAmount')) return []
   const amount = Math.max(0, openingInputNumber(draft.openingBalanceAmount))
   if (
@@ -377,7 +420,7 @@ export function accountDetailDisplayName(account = {}) {
 export function accountNeedsCurrency(draftOrPreset = {}) {
   if (isCounterpartyBundleDraft(draftOrPreset) || draftOrPreset.counterpartyBundle === true) return false
   const valueKind = draftOrPreset.valueKind
-  return valueKind === VALUE_KINDS.CASH || valueKind === VALUE_KINDS.BANK || valueKind === VALUE_KINDS.RECEIVABLE
+  return valueKind === VALUE_KINDS.CASH || valueKind === VALUE_KINDS.BANK || valueKind === VALUE_KINDS.RECEIVABLE || valueKind === VALUE_KINDS.CREDIT_CARD
 }
 
 export function accountCurrencyKindFor(draft = {}) {
@@ -418,6 +461,8 @@ export function applyAccountClassification(draft = {}, type, valueKind) {
     valueKind: preset.valueKind,
     currencyKind: accountCurrencyKindFor(draft),
     counterpartyBundle: draft.counterpartyBundle === true && Boolean(preset.counterpartyBundle),
+    cardCurrencies: valueKind === VALUE_KINDS.CREDIT_CARD ? [] : draft.cardCurrencies,
+    cardOpenings: valueKind === VALUE_KINDS.CREDIT_CARD ? {} : draft.cardOpenings,
   }
   if (preset.nameTarget === 'subAccountName') {
     return {
@@ -437,6 +482,7 @@ function accountPresentationValueKind(account = {}) {
   if (Object.values(VALUE_KINDS).includes(account.valueKind)) return account.valueKind
   if (account.type === ACCOUNT_TYPES.CASH) return VALUE_KINDS.CASH
   if (account.type === ACCOUNT_TYPES.BANK) return VALUE_KINDS.BANK
+  if (account.type === ACCOUNT_TYPES.CREDIT_CARD) return VALUE_KINDS.CREDIT_CARD
   if (account.type === ACCOUNT_TYPES.ASSET) return VALUE_KINDS.ASSET
   if (account.type === ACCOUNT_TYPES.PROJECT) return VALUE_KINDS.PROJECT
   if (account.type === ACCOUNT_TYPES.EXPENSE) return VALUE_KINDS.EXPENSE
@@ -453,7 +499,7 @@ function accountPresentationValueKind(account = {}) {
 export function accountPrimaryName(account = {}) {
   const preset = accountPresetFor(account.type, account.valueKind)
   const kind = accountPresentationValueKind(account)
-  const name = normalizeAccountText(kind === VALUE_KINDS.CASH || kind === VALUE_KINDS.BANK ? account.subAccountName : account.ownerName || accountNameValue(account))
+  const name = normalizeAccountText([VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.CREDIT_CARD].includes(kind) ? account.subAccountName : account.ownerName || accountNameValue(account))
   if (kind === VALUE_KINDS.CASH && /^(كاش|نقد|نقدي|cash)$/i.test(name)) return 'كاش عندي'
   if (kind === VALUE_KINDS.BANK && /^(مصرف|بنك|حساب|حساب مصرفي|bank)$/i.test(name)) return 'حسابي المصرفي'
   if (name) return name
@@ -465,6 +511,7 @@ export function accountPrimaryName(account = {}) {
 export function accountContextLabel(account = {}) {
   const kind = accountPresentationValueKind(account)
   const currencySuffix = [VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.RECEIVABLE].includes(kind) ? ` · ${accountCurrencyLabel(account)}` : ''
+  if (kind === VALUE_KINDS.CREDIT_CARD) return `بطاقة ائتمان · ${(account.cardCurrencies || []).join(' / ')}`
   if (kind === VALUE_KINDS.CASH) return `كاش${currencySuffix}`
   if (kind === VALUE_KINDS.BANK) return `حساب مصرفي${currencySuffix}`
   if (kind === VALUE_KINDS.PROJECT) return 'مشروع'
@@ -493,6 +540,7 @@ export function accountChoiceKindLabel(account = {}) {
   if (kind === 'person-eur') return 'EUR'
   if (kind === VALUE_KINDS.CASH) return 'كاش'
   if (kind === VALUE_KINDS.BANK) return 'مصرف'
+  if (kind === VALUE_KINDS.CREDIT_CARD) return 'بطاقة'
   if (kind === 'person-bank') return 'شيك'
   if (kind === 'person-cash') return 'كاش'
   if (kind === 'person-usd') return 'USD'
@@ -514,6 +562,7 @@ export function accountKindLabel(account = {}) {
   const currencySuffix = [VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.RECEIVABLE].includes(kind) ? ` · ${accountCurrencyLabel(account)}` : ''
   if (kind === VALUE_KINDS.CASH) return `كاش${currencySuffix}`
   if (kind === VALUE_KINDS.BANK) return `حساب مصرفي${currencySuffix}`
+  if (kind === VALUE_KINDS.CREDIT_CARD) return 'بطاقة ائتمان'
   if (kind === VALUE_KINDS.PROJECT) return 'مشروع'
   if (kind === VALUE_KINDS.ASSET) return 'أصل'
   if (kind === VALUE_KINDS.EXPENSE) return 'نوع مصروف'

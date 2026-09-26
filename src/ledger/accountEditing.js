@@ -15,6 +15,7 @@ export function accountEditSnapshot(account = {}) {
     type: account.type || '',
     valueKind: account.valueKind || '',
     currencyKind: account.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR,
+    ...(account.valueKind === VALUE_KINDS.CREDIT_CARD ? { cardCurrencies: account.cardCurrencies || [] } : {}),
   }
 }
 
@@ -224,6 +225,9 @@ export function accountStructureChanges(before = {}, after = {}) {
   if (before.type !== after.type) changes.push('type')
   if (before.valueKind !== after.valueKind) changes.push('valueKind')
   if (before.currencyKind !== after.currencyKind) changes.push('currencyKind')
+  if (before.valueKind === VALUE_KINDS.CREDIT_CARD || after.valueKind === VALUE_KINDS.CREDIT_CARD) {
+    if (JSON.stringify(before.cardCurrencies || []) !== JSON.stringify(after.cardCurrencies || [])) changes.push('cardCurrencies')
+  }
   if (
     (before.valueKind === VALUE_KINDS.RECEIVABLE || after.valueKind === VALUE_KINDS.RECEIVABLE) &&
     accountDetailName(before) !== accountDetailName(after)
@@ -232,6 +236,9 @@ export function accountStructureChanges(before = {}, after = {}) {
 }
 
 export function accountStructureLockErrors(currentAccount, nextAccount, context = {}) {
+  if ((currentAccount?.valueKind === VALUE_KINDS.CREDIT_CARD || nextAccount?.valueKind === VALUE_KINDS.CREDIT_CARD) && accountStructureChanges(currentAccount, nextAccount).length) {
+    return [{ field: 'type', message: 'نوع البطاقة وعملاتها ثابتان بعد الإنشاء. يمكنك تعديل الاسم فقط.' }]
+  }
   const usage = accountStructureUsage(currentAccount, context)
   if (!usage.locked) return []
   const fields = accountStructureChanges(currentAccount, nextAccount)

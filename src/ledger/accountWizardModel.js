@@ -42,6 +42,8 @@ export function accountWizardModel({
   const accountOpeningValue = accountOpeningCurrency === CURRENCIES.USD
     ? accountOpening.openingUsd
     : accountOpeningCurrency === CURRENCIES.TRY ? accountOpening.openingTry : accountOpeningCurrency === CURRENCIES.EUR ? accountOpening.openingEur : accountOpening.openingDinar
+  const cardCurrencyCount = Array.isArray(accountDraft.cardCurrencies) ? accountDraft.cardCurrencies.length : 0
+  const cardDebtCount = [accountOpening.openingDinar, accountOpening.openingUsd, accountOpening.openingTry, accountOpening.openingEur].filter((amount) => amount < 0).length
 
   const accountOpeningDirectionReady = (accountIsCounterpartyBundle ? counterpartyOpeningDraftErrors(accountDraft) : accountOpeningDraftErrors(accountDraft)).length === 0
 
@@ -49,7 +51,9 @@ export function accountWizardModel({
     ? counterpartyAccountChannels.filter((channel) => counterpartyOpeningFor(accountDraft, channel.key).amount > 0).length
     : 0
 
-  const accountOpeningSummary = accountIsCounterpartyBundle
+  const accountOpeningSummary = accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD
+    ? cardDebtCount ? `${formatCount(cardDebtCount)} أرصدة مستحقة` : 'بدون دين سابق'
+    : accountIsCounterpartyBundle
     ? counterpartyOpeningCount > 0 ? `${formatCount(counterpartyOpeningCount)} أرصدة سابقة` : 'كلها تبدأ من صفر'
     : accountOpeningValue === 0
     ? 'بدون رصيد سابق'
@@ -94,8 +98,8 @@ export function accountWizardModel({
       ? [
           {
             key: ACCOUNT_WIZARD_STEPS.CURRENCY,
-            title: 'العملة',
-            summary: accountDraft.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR,
+            title: accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD ? 'عملات البطاقة' : 'العملة',
+            summary: accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD ? (accountDraft.cardCurrencies || []).join(' / ') || 'اختر' : accountDraft.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR,
           },
         ]
       : []),
@@ -127,6 +131,8 @@ export function accountWizardModel({
 
   const canAdvanceAccountWizard = currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.NAME
     ? hasAccountDraftName
+    : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY && accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD
+      ? cardCurrencyCount > 0
     : currentAccountWizardStep !== ACCOUNT_WIZARD_STEPS.OPENING || accountOpeningDirectionReady
 
   const accountWizardPrompt = currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.GROUP
@@ -138,7 +144,7 @@ export function accountWizardModel({
         : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.DETAIL
           ? selectedAccountPreset.detailLabel
           : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.CURRENCY
-            ? 'اختر العملة'
+            ? accountDraft.valueKind === VALUE_KINDS.CREDIT_CARD ? 'اختر عملات البطاقة' : 'اختر العملة'
             : currentAccountWizardStep === ACCOUNT_WIZARD_STEPS.OPENING
               ? 'الرصيد عند البداية'
               : 'راجع الحساب'

@@ -226,6 +226,7 @@ export default function LedgerApp() {
     const groups = {
       people: [],
       money: [],
+      cards: [],
       assets: [],
       expenses: [],
       separate: [],
@@ -236,6 +237,7 @@ export default function LedgerApp() {
       if (bucket.account.status === ACCOUNT_STATUSES.NEEDS_REVIEW || kind === VALUE_KINDS.REVIEW) groups.review.push(bucket)
       else if (kind === VALUE_KINDS.RECEIVABLE) groups.people.push(bucket)
       else if (kind === VALUE_KINDS.CASH || kind === VALUE_KINDS.BANK) groups.money.push(bucket)
+      else if (kind === VALUE_KINDS.CREDIT_CARD) groups.cards.push(bucket)
       else if (kind === VALUE_KINDS.ASSET || kind === VALUE_KINDS.PROJECT) groups.assets.push(bucket)
       else if (kind === VALUE_KINDS.EXPENSE) groups.expenses.push(bucket)
     }

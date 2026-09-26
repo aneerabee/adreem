@@ -39,6 +39,7 @@ export function buildBalanceOverview(rows = []) {
   let bankUsd = 0
   let bankTry = 0
   let bankEur = 0
+  const cardDebt = { dinar: 0, usd: 0, try: 0, eur: 0 }
   let receivableDinar = 0
   let receivableUsd = 0
   let receivableTry = 0
@@ -65,6 +66,12 @@ export function buildBalanceOverview(rows = []) {
       bankTry += tryAmount
       bankEur += eurAmount
     }
+    if (kind === VALUE_KINDS.CREDIT_CARD) {
+      cardDebt.dinar += Math.abs(Math.min(0, dinar))
+      cardDebt.usd += Math.abs(Math.min(0, usd))
+      cardDebt.try += Math.abs(Math.min(0, tryAmount))
+      cardDebt.eur += Math.abs(Math.min(0, eurAmount))
+    }
     if (kind === VALUE_KINDS.RECEIVABLE) {
       if (dinar > 0) receivableDinar += dinar
       if (dinar < 0) payableDinar += Math.abs(dinar)
@@ -82,6 +89,7 @@ export function buildBalanceOverview(rows = []) {
     money: { dinar: cashDinar + bankDinar, usd: cashUsd + bankUsd, try: cashTry + bankTry, eur: cashEur + bankEur },
     receivable: { dinar: receivableDinar, usd: receivableUsd, try: receivableTry, eur: receivableEur },
     payable: { dinar: payableDinar, usd: payableUsd, try: payableTry, eur: payableEur },
+    cardDebt,
   }
 }
 

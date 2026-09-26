@@ -145,7 +145,7 @@ export function useBalanceNavigation({
   }
 
   function openBalanceFocus(focus) {
-    const accountGroup = ['cash', 'bank'].includes(focus) ? 'money' : 'people'
+    const accountGroup = focus === 'credit_card' ? 'cards' : ['cash', 'bank'].includes(focus) ? 'money' : 'people'
     const applyFocus = () => {
       if (isNetOpen || netExcludedAccountIds.length || netAccountQuery) closeNetPanel()
       setActiveSection('accounts')

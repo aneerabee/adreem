@@ -261,6 +261,24 @@ export function AccountList({ title, subtitle, rows, emptyText = 'لا شيء', 
   )
 }
 
+export function CreditCardList({ rows = [], onOpen }) {
+  if (!rows.length) return <p className="ml3-empty">لا توجد بطاقات ائتمان.</p>
+  return <div className="adreem-credit-card-list">
+    {rows.map((bucket) => (
+      <button type="button" key={bucket.account.id} onClick={() => onOpen?.(bucket.account.id)}>
+        <i><AccountChoiceIcon account={bucket.account} size={18} /></i>
+        <span className="adreem-credit-card-name"><strong className="adreem-account-name">{protectedAccountPrimaryName(bucket.account)}</strong><small>دين البطاقة</small></span>
+        <span className="adreem-credit-card-values">
+          {(bucket.account.cardCurrencies || []).map((currency) => {
+            const field = CURRENCY_OPTIONS.find((option) => option.value === currency)?.field
+            return <span key={currency} className={Number(bucket[field] || 0) < 0 ? 'has-debt' : ''}><b>{formatInteger(Math.abs(Number(bucket[field] || 0)))}</b><small>{currency}</small></span>
+          })}
+        </span>
+      </button>
+    ))}
+  </div>
+}
+
 export function MoneyAccountList({ rows = [], onOpen }) {
   const groups = groupBalanceRowsForDisplay(rows)
   return (

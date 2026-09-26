@@ -18,8 +18,18 @@ const investmentTradeEditingSql = readFileSync(new URL('../../supabase/migration
 const turkishTradeCorrectionSql = readFileSync(new URL('../../supabase/migrations/20260923233000_allow_turkish_trade_price_corrections.sql', import.meta.url), 'utf8')
 const investmentTransferSql = readFileSync(new URL('../../supabase/migrations/20260924013000_add_investment_transfers.sql', import.meta.url), 'utf8')
 const investmentTransferGuardsSql = readFileSync(new URL('../../supabase/migrations/20260924013500_make_investment_guards_transfer_aware.sql', import.meta.url), 'utf8')
+const creditCardSql = readFileSync(new URL('../../supabase/migrations/20260926090000_add_credit_cards.sql', import.meta.url), 'utf8')
 
 describe('ADREEM v3 database migration invariants', () => {
+  it('keeps credit cards separate from bank money and validates both payment routes', () => {
+    expect(creditCardSql).toContain("account_type = 'credit_card' and value_kind = 'credit_card'")
+    expect(creditCardSql).toContain('adreem_credit_card_nonpositive_check')
+    expect(creditCardSql).toContain('ADREEM_CARD_CURRENCIES_IMMUTABLE')
+    expect(creditCardSql).toContain("v_destination.value_kind <> 'receivable'")
+    expect(creditCardSql).toContain("v_source.value_kind not in ('cash', 'bank', 'receivable')")
+    expect(creditCardSql).toContain('ADREEM_CARD_PAYMENT_EXCEEDS_RECEIVABLE')
+    expect(creditCardSql).toContain("when 'transfer', 'cash_deposit', 'cash_withdrawal', 'card_charge', 'card_payment'")
+  })
   it('keeps platform transfers tenant-bound, append-only and atomic', () => {
     expect(investmentTransferSql).toContain('create table public.adreem_investment_transfers')
     expect(investmentTransferSql).toContain('foreign key (ledger_id, owner_id)')

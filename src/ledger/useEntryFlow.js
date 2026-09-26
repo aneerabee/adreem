@@ -194,6 +194,8 @@ export function useEntryFlow({
           subAccountName: preset.nameTarget === 'subAccountName' ? '' : preset.subAccountName,
           counterpartyBundle: Boolean(preset.counterpartyBundle),
           counterpartyOpenings: emptyCounterpartyOpenings(),
+          cardCurrencies: [],
+          cardOpenings: {},
           currencyKind: accountNeedsCurrency(preset) ? current.currencyKind || ACCOUNT_CURRENCY_KINDS.DINAR : ACCOUNT_CURRENCY_KINDS.DINAR,
           openingBalanceAmount: '',
           openingBalanceDirection: '',

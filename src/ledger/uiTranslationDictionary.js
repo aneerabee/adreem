@@ -1,6 +1,12 @@
 
 
 export const ENGLISH_TEXT = Object.freeze({
+  'عملات البطاقة': 'Card currencies',
+  'الدين الحالي': 'Current debt',
+  'لا توجد بطاقات ائتمان.': 'No credit cards yet.',
+  'دين البطاقة': 'Card debt',
+  'دين البطاقة حسب العملة': 'Card debt by currency',
+  'دين البطاقات': 'Credit card debt',
   'محفظتي': 'My portfolio',
   'إجراءات المحفظة': 'Portfolio actions',
   'محفظتي · USD': 'My portfolio · USD',

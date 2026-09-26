@@ -1,12 +1,12 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
-import { ArrowDownToLine, ArrowUpFromLine, Banknote, Calculator, Landmark, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, Banknote, Calculator, Landmark, WalletCards, X } from 'lucide-react'
 import { AnimatePresence, motion as Motion } from 'motion/react'
 import { SearchField } from './SearchField'
 import { accountDetailName } from './accountConfig'
 import { buildCounterpartyBalanceViews } from './counterpartyAccounts'
 import { normalizeAccountSearchText } from './movementAccounts'
-import { AccountList, BalanceAmountPair, MoneyAccountList, NetPositionPanel } from './BalancePanels'
+import { AccountList, BalanceAmountPair, CreditCardList, MoneyAccountList, NetPositionPanel } from './BalancePanels'
 import { filterCounterpartyGroupsByQuery, filterMoneyBalanceRows, unifiedCounterpartyGroups } from './balanceViews'
 import { CounterpartyFilters, CounterpartyList } from './CounterpartyViews'
 import { ExpenseActivityList } from './ExpenseViews'
@@ -110,6 +110,7 @@ export function BalancesSection({
   const activeFocusedCounterpartyId = visiblePeopleGroups.some((group) => group.id === focusedCounterpartyId) ? focusedCounterpartyId : ''
   const activeBalanceFocus = (
     (activeGroup.key === 'money' && ['cash', 'bank'].includes(balanceFocus))
+    || (activeGroup.key === 'cards' && balanceFocus === 'credit_card')
     || (activeGroup.key === 'people' && ['receivable', 'payable'].includes(balanceFocus))
   ) ? balanceFocus : ''
   const balancePaneTitle = BALANCE_FOCUS_LABELS[activeBalanceFocus]
@@ -117,6 +118,7 @@ export function BalancesSection({
   const accountRowsByGroup = {
     people: peopleBalances,
     money: filterRows(filterMoneyBalanceRows(moneyRows, activeBalanceFocus)),
+    cards: filterRows(balancesByKind.cards || []),
     expenses: [],
     separate: [],
   }
@@ -140,6 +142,10 @@ export function BalancesSection({
           <i><ArrowUpFromLine aria-hidden="true" size={18} /></i>
           <span><b>أدفع للناس</b><BalanceAmountPair value={balanceOverview.payable} /></span>
         </button>
+        {(balancesByKind.cards || []).length ? <button type="button" className={`is-card${balanceAmountIsWide(balanceOverview.cardDebt) ? ' has-wide-balance' : ''}`} aria-pressed={activeBalanceFocus === 'credit_card'} onClick={() => openBalanceFocus('credit_card')}>
+          <i><WalletCards aria-hidden="true" size={18} /></i>
+          <span><b>دين البطاقات</b><BalanceAmountPair value={balanceOverview.cardDebt} /></span>
+        </button> : null}
       </div>
 
       <div className="adreem-net-bar">
@@ -257,6 +263,8 @@ export function BalancesSection({
               </>
             ) : activeGroup.key === 'money' ? (
               <MoneyAccountList rows={rows} onOpen={setSelectedAccountId} />
+            ) : activeGroup.key === 'cards' ? (
+              <CreditCardList rows={rows} onOpen={setSelectedAccountId} />
             ) : activeGroup.key === 'expenses' ? (
               <ExpenseActivityList
                 movements={expenseMovements}

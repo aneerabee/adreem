@@ -2,6 +2,7 @@ export const ACCOUNT_TYPES = {
   PERSON: 'person',
   CASH: 'cash',
   BANK: 'bank',
+  CREDIT_CARD: 'credit_card',
   EXPENSE: 'expense',
   ASSET: 'asset',
   PROJECT: 'project',
@@ -18,6 +19,7 @@ export const ACCOUNT_STATUSES = {
 export const VALUE_KINDS = {
   CASH: 'cash',
   BANK: 'bank',
+  CREDIT_CARD: 'credit_card',
   RECEIVABLE: 'receivable',
   EXPENSE: 'expense',
   ASSET: 'asset',

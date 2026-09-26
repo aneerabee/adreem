@@ -31,6 +31,7 @@ function accountEditorDraft(account) {
 }
 
 export function AccountClassificationEditorFields({ account, className = '', structureLocked = false, accountLocked = false }) {
+  structureLocked = structureLocked || account.valueKind === VALUE_KINDS.CREDIT_CARD
   const editorKey = [account.id, account.updatedAt, account.ownerName, account.subAccountName, account.type, account.valueKind, account.currencyKind, structureLocked, accountLocked].join(':')
   return <AccountClassificationEditor key={editorKey} account={account} className={className} structureLocked={structureLocked} accountLocked={accountLocked} />
 }
@@ -87,11 +88,11 @@ function AccountClassificationEditor({ account, className = '', structureLocked 
       ) : null}
       {accountNeedsCurrency(parsedClassification) ? (
         <label>
-          العملة
-          <select name={structureLocked ? undefined : 'currencyKind'} value={currencyFieldValue} disabled={structureLocked} onChange={(event) => setDraft((current) => ({ ...current, currencyKind: event.target.value }))}>
+          {account.valueKind === VALUE_KINDS.CREDIT_CARD ? 'عملات البطاقة' : 'العملة'}
+          {account.valueKind === VALUE_KINDS.CREDIT_CARD ? <span>{(account.cardCurrencies || []).join(' / ')}</span> : <select name={structureLocked ? undefined : 'currencyKind'} value={currencyFieldValue} disabled={structureLocked} onChange={(event) => setDraft((current) => ({ ...current, currencyKind: event.target.value }))}>
             {showLegacyMultiCurrency ? <option value="">اتركها فارغة بدون تغيير</option> : null}
             {CURRENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
+          </select>}
         </label>
       ) : null}
     </div>
@@ -205,7 +206,7 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
             <div>
               <span>{protectedAccountContext(account)}</span>
               <h2 className="adreem-account-name">{protectedAccountPrimaryName(account)}</h2>
-              <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'ما لك وما عليك معه' : account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK ? 'مكان من أماكن فلوسك' : 'حساب للمتابعة'}</p>
+              <p>{account.valueKind === VALUE_KINDS.RECEIVABLE ? 'ما لك وما عليك معه' : account.valueKind === VALUE_KINDS.CASH || account.valueKind === VALUE_KINDS.BANK ? 'مكان من أماكن فلوسك' : account.valueKind === VALUE_KINDS.CREDIT_CARD ? 'دين البطاقة حسب العملة' : 'حساب للمتابعة'}</p>
             </div>
           </div>
           <button ref={closeButtonRef} type="button" aria-label="إغلاق" title="إغلاق" onClick={onClose}><X aria-hidden="true" size={18} /></button>
@@ -222,6 +223,13 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
               <div className="ml3-profile-balance adreem-profile-tracking-balance adreem-profile-expense-balance">
                 <strong>مجموع المصروف</strong>
                 <span>{categoryTotals.length ? categoryTotals.map(({ currency, amount }) => <b key={currency}>{money(amount, currency)}</b>) : 'لا توجد مصروفات بعد'}</span>
+              </div>
+            ) : account.valueKind === VALUE_KINDS.CREDIT_CARD ? (
+              <div className="ml3-profile-balance is-negative adreem-profile-card-balance">
+                <strong>دين البطاقة</strong>
+                <span>{CURRENCY_OPTIONS.filter((option) => account.cardCurrencies?.includes(option.value)).map((option) => (
+                  <b key={option.value}>{money(Math.abs(Number(bucket[option.field] || 0)), option.value)}</b>
+                ))}</span>
               </div>
             ) : (
               <div className={`ml3-profile-balance ${profileBalanceTone}`}>
