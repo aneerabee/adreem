@@ -5,6 +5,8 @@ import { ChevronDown, ReceiptText, Trash2, X } from 'lucide-react'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog'
 import { accountClassificationOptions, accountDetailDisplayName, accountDetailName, accountDetailOptionsFor, accountNameValue, accountNeedsCurrency, accountPresetFor, applyAccountClassification, applyAccountName, classificationValueFor as classificationValue, parseAccountClassification as parseClassification } from './accountConfig'
 import { accountDeletionEligibility, accountStructureUsage } from './accountEditing'
+import { creditCardBrandClass, creditCardBrandForAccount } from './creditCardBrand'
+import { CreditCardMark } from './CreditCardMark'
 import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore'
 import { movementLabels } from './movementConfig'
 import { attachmentsForRecord } from './ledgerOperations'
@@ -200,9 +202,9 @@ export function AccountProfile({ bucket, movements, accounts, attachments = [], 
     <LedgerOverlayPortal>
       <div className={`ml3-profile-layer ${statementOpen ? 'has-statement' : ''}`} role="dialog" aria-modal="true" aria-label="ملف الحساب" onClick={onClose}>
         <aside ref={panelRef} className="ml3-profile" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
-        <div className="ml3-profile-head">
+        <div className={`ml3-profile-head ${account.valueKind === VALUE_KINDS.CREDIT_CARD ? creditCardBrandClass(account) : ''}`}>
           <div className="ml3-profile-identity">
-            <i><AccountChoiceIcon account={account} size={18} /></i>
+            <i>{creditCardBrandForAccount(account) ? <CreditCardMark account={account} /> : <AccountChoiceIcon account={account} size={18} />}</i>
             <div>
               <span>{protectedAccountContext(account)}</span>
               <h2 className="adreem-account-name">{protectedAccountPrimaryName(account)}</h2>

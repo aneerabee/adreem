@@ -5,6 +5,8 @@ import { SearchField } from './SearchField'
 import { VALUE_KINDS } from './accountCatalog'
 import { accountChoiceKind, accountChoiceKindLabel, accountDetailName } from './accountConfig'
 import { accountDisplayGroupKey, groupAccountsForDisplay } from './accountDisplayGroups'
+import { creditCardBrandClass, creditCardBrandForAccount } from './creditCardBrand'
+import { CreditCardMark } from './CreditCardMark'
 import { CURRENCIES } from './ledgerCore'
 import { normalizeAccountSearchText } from './movementAccounts'
 import { accountBalanceChip, accountLabel, closedAccountMatchesForSearch, conciseAccountChoiceContext, protectedAccountPrimaryName, visualKind } from './accountPresentation'
@@ -15,14 +17,16 @@ function AccountPickerChoiceGroup({ group, value, balanceByAccountId, balanceCur
   const groupAccounts = group.accounts || []
   const primaryAccount = groupAccounts[0]
   if (!primaryAccount) return null
+  const brand = creditCardBrandForAccount(primaryAccount)
+  const brandClass = brand ? creditCardBrandClass(primaryAccount) : ''
 
   if (groupAccounts.length === 1) {
     const balanceChip = accountBalanceChip(primaryAccount, balanceByAccountId.get(primaryAccount.id), balanceCurrency)
     const choiceKind = accountChoiceKind(primaryAccount)
     if (favorite) {
       return (
-        <button type="button" className={`${accountChoiceClasses('ml3-picker-favorite', primaryAccount)} ${primaryAccount.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(primaryAccount)}، ${accountChoiceKindLabel(primaryAccount)}، ${balanceChip.text}`} onClick={() => onChoose(primaryAccount.id)}>
-          <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}><AccountChoiceIcon account={primaryAccount} size={15} /></span>
+        <button type="button" className={`${accountChoiceClasses('ml3-picker-favorite', primaryAccount)} ${brandClass} ${primaryAccount.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(primaryAccount)}، ${accountChoiceKindLabel(primaryAccount)}، ${balanceChip.text}`} onClick={() => onChoose(primaryAccount.id)}>
+          <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}>{brand ? <CreditCardMark account={primaryAccount} /> : <AccountChoiceIcon account={primaryAccount} size={15} />}</span>
           <span className="ml3-picker-favorite-copy">
             <strong className="adreem-account-name">{protectedAccountPrimaryName(primaryAccount)}</strong>
             <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(primaryAccount)}</small>
@@ -32,8 +36,8 @@ function AccountPickerChoiceGroup({ group, value, balanceByAccountId, balanceCur
       )
     }
     return (
-      <button type="button" className={`ml3-picker-option--${visualKind(primaryAccount)} ${primaryAccount.ownerName === 'أنا' ? 'is-preferred' : ''} ${hasVisibleBalance(primaryAccount) ? 'has-balance' : ''} ${primaryAccount.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(primaryAccount)}، ${accountChoiceKindLabel(primaryAccount)}، ${balanceChip.text}`} onClick={() => onChoose(primaryAccount.id)}>
-        <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}><AccountChoiceIcon account={primaryAccount} size={16} /></span>
+      <button type="button" className={`ml3-picker-option--${visualKind(primaryAccount)} ${brandClass} ${primaryAccount.ownerName === 'أنا' ? 'is-preferred' : ''} ${hasVisibleBalance(primaryAccount) ? 'has-balance' : ''} ${primaryAccount.id === value ? 'is-selected' : ''}`} aria-label={`${protectedAccountPrimaryName(primaryAccount)}، ${accountChoiceKindLabel(primaryAccount)}، ${balanceChip.text}`} onClick={() => onChoose(primaryAccount.id)}>
+        <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}>{brand ? <CreditCardMark account={primaryAccount} /> : <AccountChoiceIcon account={primaryAccount} size={16} />}</span>
         <span className="ml3-picker-option-copy">
           <strong className="adreem-account-name">{protectedAccountPrimaryName(primaryAccount)}</strong>
           <small className={`ml3-picker-channel-tag is-${choiceKind}`}>{accountChoiceKindLabel(primaryAccount)}</small>
@@ -45,9 +49,9 @@ function AccountPickerChoiceGroup({ group, value, balanceByAccountId, balanceCur
   }
 
   return (
-    <div className={`ml3-picker-choice-group ${favorite ? 'is-favorite' : ''}`}>
+    <div className={`ml3-picker-choice-group ${brandClass} ${favorite ? 'is-favorite' : ''}`}>
       <div className="ml3-picker-choice-group-head">
-        <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}><AccountChoiceIcon account={primaryAccount} size={16} /></span>
+        <span className={`ml3-picker-type-icon ${accountChoiceClasses('ml3-picker-type-icon', primaryAccount)}`}>{brand ? <CreditCardMark account={primaryAccount} /> : <AccountChoiceIcon account={primaryAccount} size={16} />}</span>
         <strong className="adreem-account-name">{protectedAccountPrimaryName(primaryAccount)}</strong>
       </div>
       <div className="ml3-picker-choice-channels">
@@ -89,6 +93,7 @@ export function AccountSearchSelect({ label, value, accounts, referenceAccounts 
   const [showAllResults, setShowAllResults] = useState(false)
   const normalizedQuery = normalizeAccountSearchText(query)
   const selectedAccount = accounts.find((account) => account.id === value)
+  const selectedCardBrand = creditCardBrandForAccount(selectedAccount)
   const selectedBalance = selectedAccount ? accountBalanceChip(selectedAccount, balanceByAccountId.get(selectedAccount.id), balanceCurrency) : null
   const showChooser = !selectedAccount || isChanging
   const preferredIndexById = new Map(preferredAccountIds.map((accountId, index) => [accountId, index]))
@@ -175,10 +180,13 @@ export function AccountSearchSelect({ label, value, accounts, referenceAccounts 
   return (
     <div className="ml3-account-picker" aria-label={label}>
       {selectedAccount && !isChanging ? (
-        <div className={`ml3-picked-account is-selected ml3-picked-account--${visualKind(selectedAccount)}`}>
-          <div>
-            <strong className="adreem-account-name">{protectedAccountPrimaryName(selectedAccount)}</strong>
-            <small>{conciseAccountChoiceContext(selectedAccount)}</small>
+        <div className={`ml3-picked-account is-selected ml3-picked-account--${visualKind(selectedAccount)} ${selectedCardBrand ? creditCardBrandClass(selectedAccount) : ''}`}>
+          <div className={`adreem-picked-identity${selectedCardBrand ? ' has-brand' : ''}`}>
+            {selectedCardBrand ? <CreditCardMark account={selectedAccount} /> : null}
+            <span className="adreem-picked-copy">
+              <strong className="adreem-account-name">{protectedAccountPrimaryName(selectedAccount)}</strong>
+              <small>{conciseAccountChoiceContext(selectedAccount)}</small>
+            </span>
           </div>
           <div className="ml3-picked-actions">
             <b className={`ml3-balance-chip is-${selectedBalance.tone}`}>{selectedBalance.text}</b>

@@ -1,6 +1,6 @@
 /** @jsxImportSource ./i18nRuntime */
 /** @jsxRuntime automatic */
-import { Check, ChevronLeft, ChevronRight, CircleDollarSign, Landmark, NotebookPen, Plus, ReceiptText } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Landmark, NotebookPen, Plus, ReceiptText } from 'lucide-react'
 import { motion as Motion } from 'motion/react'
 import { MOVEMENT_TYPES } from './ledgerCore'
 import { MOVEMENT_ENTRY_STEPS, movementAccountCurrencyForRole, movementTone, movementTypeOptions } from './movementConfig'
@@ -72,44 +72,22 @@ export function MovementEntryForm({
 
         {movementStep === MOVEMENT_ENTRY_STEPS.TYPE ? (
           <section className="ml3-step ml3-step--type is-open">
-            <div className="ml3-action-catalog">
-              <section className="ml3-action-lane ml3-action-lane--daily">
-                <div className="ml3-action-lane-head">
-                  <strong>{movementOptionGroups[0].title}</strong>
-                </div>
-                <div className="ml3-option-grid">
-                  {movementOptionGroups[0].types
-                    .map((type) => movementTypeOptions.find((option) => option.type === type))
-                    .filter(Boolean)
-                    .map((option) => (
-                      <MovementChoiceButton key={option.type} option={option} active={hasChosenMovementType && movementDraft.type === option.type} onChoose={chooseMovementType} />
-                    ))}
-                </div>
-              </section>
-              <details className="ml3-more-actions">
-                <summary>
-                  <span>
-                    <CircleDollarSign aria-hidden="true" size={17} /> عمليات أخرى
-                  </span>
-                </summary>
-                <div className="ml3-more-actions-grid">
-                  {movementOptionGroups.slice(1).map((group) => (
-                    <section className={`ml3-action-lane ml3-action-lane--${group.key}`} key={group.key}>
-                      <div className="ml3-action-lane-head">
-                        <strong>{group.title}</strong>
-                      </div>
-                      <div className="ml3-option-grid">
-                        {group.types
-                          .map((type) => movementTypeOptions.find((option) => option.type === type))
-                          .filter(Boolean)
-                          .map((option) => (
-                            <MovementChoiceButton key={option.type} option={option} active={hasChosenMovementType && movementDraft.type === option.type} onChoose={chooseMovementType} />
-                          ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </details>
+            <div className="ml3-action-catalog" aria-label="نوع الحركة">
+              {movementOptionGroups.map((group) => (
+                <section className={`ml3-action-lane ml3-action-lane--${group.key}`} key={group.key}>
+                  <div className="ml3-action-lane-head">
+                    <strong>{group.title}</strong>
+                  </div>
+                  <div className="ml3-option-grid">
+                    {group.types
+                      .map((type) => movementTypeOptions.find((option) => option.type === type))
+                      .filter(Boolean)
+                      .map((option) => (
+                        <MovementChoiceButton key={option.type} option={option} active={hasChosenMovementType && movementDraft.type === option.type} onChoose={chooseMovementType} />
+                      ))}
+                  </div>
+                </section>
+              ))}
             </div>
           </section>
         ) : null}

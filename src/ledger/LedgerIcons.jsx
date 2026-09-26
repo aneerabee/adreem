@@ -78,10 +78,11 @@ export function AccountGroupIcon({ groupKey }) {
 
 export function MovementChoiceButton({ option, active, onChoose }) {
   return (
-    <Motion.button type="button" className={`ml3-action-choice ml3-action-choice--${option.tone} ${active ? 'is-active' : ''}`} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} onClick={() => onChoose(option.type)}>
+    <Motion.button type="button" className={`ml3-action-choice ml3-action-choice--${option.tone} ${active ? 'is-active' : ''}`} aria-pressed={active} whileTap={{ scale: 0.985 }} transition={UI_MOTION_TRANSITION} onClick={() => onChoose(option.type)}>
       <MovementTypeIcon type={option.type} />
       <span>
         <strong>{option.label}</strong>
+        <small>{option.detail}</small>
       </span>
       <ChevronLeft aria-hidden="true" size={16} />
     </Motion.button>

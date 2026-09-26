@@ -117,6 +117,12 @@ export const movementOptionGroups = [
     hint: 'سحب USD',
     types: [MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL],
   },
+  {
+    key: 'record',
+    title: 'متابعة',
+    hint: 'دون تغيير الرصيد',
+    types: [MOVEMENT_TYPES.RECORD_ONLY],
+  },
 ]
 
 export const MOVEMENT_EDITABLE_FIELDS = Object.freeze([

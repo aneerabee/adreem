@@ -6,6 +6,8 @@ import { SearchField } from './SearchField'
 import { ACCOUNT_STATUSES, ACCOUNT_CURRENCY_KINDS, VALUE_KINDS } from './accountCatalog'
 import { groupBalanceRowsForDisplay } from './accountDisplayGroups'
 import { accountEditChanges } from './accountEditing'
+import { creditCardBrandClass, creditCardBrandForAccount } from './creditCardBrand'
+import { CreditCardMark } from './CreditCardMark'
 import { CURRENCIES } from './ledgerCore'
 import { NET_PORTFOLIO_ID, convertNetPosition, filterNetContributions } from './ledgerScope'
 import { preserveUiData } from './uiTranslation'
@@ -265,8 +267,8 @@ export function CreditCardList({ rows = [], onOpen }) {
   if (!rows.length) return <p className="ml3-empty">لا توجد بطاقات ائتمان.</p>
   return <div className="adreem-credit-card-list">
     {rows.map((bucket) => (
-      <button type="button" key={bucket.account.id} onClick={() => onOpen?.(bucket.account.id)}>
-        <i><AccountChoiceIcon account={bucket.account} size={18} /></i>
+      <button type="button" className={`adreem-credit-card ${creditCardBrandClass(bucket.account)}`} key={bucket.account.id} onClick={() => onOpen?.(bucket.account.id)}>
+        <span className="adreem-credit-card-top"><CreditCardMark account={bucket.account} /><small>{creditCardBrandForAccount(bucket.account)?.issuer || 'بطاقة ائتمان'}</small></span>
         <span className="adreem-credit-card-name"><strong className="adreem-account-name">{protectedAccountPrimaryName(bucket.account)}</strong><small>دين البطاقة</small></span>
         <span className="adreem-credit-card-values">
           {(bucket.account.cardCurrencies || []).map((currency) => {

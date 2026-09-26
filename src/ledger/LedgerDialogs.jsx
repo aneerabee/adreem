@@ -16,6 +16,7 @@ import { UI_MOTION_TRANSITION } from './ledgerUiConfig'
 import { movementDateTime } from './movementPresentation'
 import { NumericEntry } from './NumericEntry'
 import { resetScroll } from './mobileViewport'
+import { isExpenseMovement } from './movementDisplay'
 
 function useLedgerDialogFocus(panelRef, initialFocusRef, onClose, disabled = false) {
   const onCloseRef = useRef(onClose)
@@ -115,6 +116,7 @@ export function MovementActionDialog({ action, accountById, investmentPlatformBy
   const routeSource = source || (movement.type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL ? investmentPlatform : null)
   const routeDestination = destination || (movement.type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT ? investmentPlatform : null)
   const isRestore = action.kind === 'restore'
+  const isExpense = isExpenseMovement(movement)
   const postingEntries = movement.status === MOVEMENT_STATUSES.POSTED ? buildPostingEntries(movement) : []
 
   return (
@@ -125,7 +127,7 @@ export function MovementActionDialog({ action, accountById, investmentPlatformBy
           <i>{isRestore ? <RotateCcw aria-hidden="true" size={20} /> : <Trash2 aria-hidden="true" size={20} />}</i>
           <div>
             {isRestore ? <span>استعادة النسخة السابقة</span> : null}
-            <h2 id="adreem-movement-action-title">{isRestore ? 'التراجع عن التعديل؟' : 'تأكيد إلغاء الحركة'}</h2>
+            <h2 id="adreem-movement-action-title">{isRestore ? 'التراجع عن التعديل؟' : isExpense ? 'تأكيد إلغاء المصروف' : 'تأكيد إلغاء الحركة'}</h2>
           </div>
           <button ref={closeButtonRef} type="button" aria-label="إغلاق" title="إغلاق" onClick={onClose} disabled={isSaving}><X aria-hidden="true" size={18} /></button>
         </header>
@@ -138,7 +140,7 @@ export function MovementActionDialog({ action, accountById, investmentPlatformBy
         </div>
 
         <div className="adreem-movement-action-impact">
-          <strong>{isRestore ? 'سيعود المبلغ والأطراف والملاحظة إلى ما قبل آخر تعديل.' : movement.status === MOVEMENT_STATUSES.POSTED ? 'سيُعكس أثر الحركة على الأرصدة، ولن تُحذف من السجل.' : 'الحركة الناقصة لم تغيّر الأرصدة، وستبقى ظاهرة كملغاة.'}</strong>
+          <strong>{isRestore ? 'سيعود المبلغ والأطراف والملاحظة إلى ما قبل آخر تعديل.' : movement.status === MOVEMENT_STATUSES.POSTED ? isExpense ? 'سيعود مبلغ المصروف إلى رصيده، وسيبقى ظاهرًا كملغى في السجل.' : 'سيُعكس أثر الحركة على الأرصدة، ولن تُحذف من السجل.' : 'الحركة الناقصة لم تغيّر الأرصدة، وستبقى ظاهرة كملغاة.'}</strong>
           {!isRestore && postingEntries.length ? (
             <div>
               {postingEntries.map((entry) => {
@@ -152,7 +154,7 @@ export function MovementActionDialog({ action, accountById, investmentPlatformBy
         <footer>
           <button type="button" className="is-secondary" onClick={onClose} disabled={isSaving}>رجوع</button>
           <button type="button" className={isRestore ? 'is-restore' : 'is-danger'} onClick={onConfirm} disabled={isSaving}>
-            {isSaving ? 'جاري الحفظ' : isRestore ? 'تأكيد التراجع' : 'نعم، إلغاء الحركة'}
+            {isSaving ? 'جاري الحفظ' : isRestore ? 'تأكيد التراجع' : isExpense ? 'نعم، إلغاء المصروف' : 'نعم، إلغاء الحركة'}
           </button>
         </footer>
         </Motion.section>

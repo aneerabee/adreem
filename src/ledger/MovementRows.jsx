@@ -193,13 +193,19 @@ export function HistoryMovementRow({ movement, accountById, investmentPlatformBy
         {conversionEffect ? <small className="ml3-history-conversion">↔ {money(Math.abs(conversionEffect.delta), conversionEffect.currency)}</small> : null}
         {movement.rate ? <small className="ml3-history-rate">× {formatRate(movement.rate)}</small> : null}
         {statusLabel ? <span className={`ml3-history-status ml3-history-status--${movement.status}`}>{statusLabel}</span> : null}
-        {canEditMovement(movement) ? (
+        {canEditMovement(movement) && !isExpense ? (
           <span className="ml3-history-actions">
             <button type="button" className="is-edit" onClick={() => onEdit?.(movement)}><Pencil aria-hidden="true" size={14} /> تعديل</button>
             <button type="button" className="is-cancel" onClick={() => onCancel(movement.id)}><Trash2 aria-hidden="true" size={14} /> إلغاء</button>
           </span>
         ) : null}
       </div>
+      {canEditMovement(movement) && isExpense ? (
+        <div className="ml3-history-actions adreem-expense-actions">
+          <button type="button" className="is-edit" onClick={() => onEdit?.(movement)}><Pencil aria-hidden="true" size={14} /> تعديل المصروف</button>
+          <button type="button" className="is-cancel" onClick={() => onCancel(movement.id)}><Trash2 aria-hidden="true" size={14} /> إلغاء المصروف</button>
+        </div>
+      ) : null}
       {(showNote && !isExpense) || dimension || reviewErrors.length ? (
         <div className="ml3-history-details">
           {showNote && !isExpense ? <p className="ml3-history-note"><span aria-hidden="true">●</span>{preserveUiData(movement.note)}</p> : null}
