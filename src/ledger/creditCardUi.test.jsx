@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { AccountProfile } from './AccountProfile.jsx'
 import { CreditCardList } from './BalancePanels.jsx'
 import { ACCOUNT_TYPES, VALUE_KINDS } from './accountCatalog.js'
+import { translateUiText } from './uiTranslation.js'
 
 const account = {
   id: 'card-one', ownerName: 'أنا', subAccountName: 'Maximum',
@@ -22,5 +23,12 @@ describe('credit card views', () => {
     }
     expect(profile).toContain('300 TRY')
     expect(profile).not.toContain('حساب للمتابعة')
+  })
+
+  it('translates card labels and currency amounts in English', () => {
+    expect(translateUiText('بطاقاتي', 'en')).toBe('My cards')
+    expect(translateUiText('ديون بطاقات الائتمان', 'en')).toBe('Credit card balances')
+    expect(translateUiText('دين البطاقة 300 TRY', 'en')).toBe('Card debt 300 TRY')
+    expect(translateUiText('2 أرصدة مستحقة', 'en')).toBe('2 outstanding balances')
   })
 })
