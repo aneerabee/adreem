@@ -145,6 +145,22 @@ describe('investments panel', () => {
     expect(html).toContain('الأسعار اليدوية محفوظة حتى تغييرها')
   })
 
+  it('localizes the accessible holding quantity in English', () => {
+    setActiveUiLanguage('en')
+    const platform = createInvestmentPlatform({ id: 'platform-1', name: 'IBKR' })
+    const holding = createInvestmentHolding({ id: 'holding-1', platformId: platform.id, name: 'Apple', symbol: 'AAPL', lastPriceUsdMicros: usdToMicros(120) })
+    const summary = {
+      platforms: [{ platform, freeCashUsdMicros: 0, holdings: [{ holding, quantityUnits: 500_000_000, marketValueUsdMicros: usdToMicros(600) }] }],
+      totalValueUsdMicros: usdToMicros(600),
+      freeCashUsdMicros: 0,
+    }
+
+    const html = renderToStaticMarkup(<InvestmentsPanel summary={summary} platforms={[platform]} holdings={[holding]} {...callbacks()} />)
+
+    expect(html).toContain('aria-label="Quantity: 5 units"')
+    expect(html).not.toContain('aria-label="Quantity: 5 وحدة"')
+  })
+
   it('uses a branded logo alone and retains the name for an unbranded platform', () => {
     const branded = createInvestmentPlatform({ id: 'midas', name: 'Midas Kripto', location: 'Turkey' })
     const custom = createInvestmentPlatform({ id: 'custom', name: 'My new platform', location: 'Libya' })

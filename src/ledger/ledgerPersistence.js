@@ -323,7 +323,7 @@ function sameRecord(left, right) {
 }
 
 const DATABASE_DERIVED_FIELDS = {
-  accounts: new Set(['balanceDinar', 'balanceUsd', 'balanceTry', 'postedCount', 'structureLocked', 'balanceSource']),
+  accounts: new Set(['balanceDinar', 'balanceUsd', 'balanceTry', 'balanceEur', 'postedCount', 'structureLocked', 'balanceSource']),
   movements: new Set(['databaseSequence']),
 }
 

@@ -866,11 +866,13 @@ describe('ADREEM cloud-only persistence', () => {
       balanceSource: 'database',
       balanceDinar: 1000,
       balanceUsd: 0,
+      balanceTry: 0,
+      balanceEur: 25,
       postedCount: 2,
       structureLocked: true,
     }
     const webAccount = { ...baseAccount, ownerName: 'بعد' }
-    const remoteAccount = { ...baseAccount, balanceDinar: 750, postedCount: 3 }
+    const remoteAccount = { ...baseAccount, balanceDinar: 750, balanceEur: 40, postedCount: 3 }
     const baseState = { accounts: [baseAccount], movements: [] }
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
@@ -892,7 +894,7 @@ describe('ADREEM cloud-only persistence', () => {
         return {
           ok: true,
           json: async () => ({
-            state: { ...baseState, accounts: [{ ...request.delta.accounts[0], balanceDinar: 750, postedCount: 3 }] },
+            state: { ...baseState, accounts: [{ ...request.delta.accounts[0], balanceDinar: 750, balanceEur: 40, postedCount: 3 }] },
             storageMode: 'relational',
             revision: 9,
           }),
