@@ -10,6 +10,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:layout": "playwright test e2e/layout.pw.js",
+    "test:visual": "playwright test e2e/visual.pw.js",
+    "test:visual:update": "playwright test e2e/visual.pw.js --update-snapshots",
     "preview": "vite preview",
     "build:asset-marks": "node scripts/build-asset-marks.mjs",
     "api:adreem": "node server/adreemApi.js",
@@ -33,6 +36,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "1.63.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
