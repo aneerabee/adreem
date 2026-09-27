@@ -229,7 +229,7 @@
     font-size: var(--type-key-value);
   }
 
-  .adreem-app .adreem-investment-price strong { font-size: var(--type-caption); font-weight: var(--type-label-weight); }
+  .adreem-app .adreem-investment-price strong { font-size: var(--type-value); font-weight: 850; }
 }
 
 @media screen and (max-width: 720px) {

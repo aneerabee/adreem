@@ -75,6 +75,7 @@ describe('investments panel', () => {
       platforms: [{
         platform,
         freeCashUsdMicros: 0,
+        investmentProfitUsdMicros: usdToMicros(69),
         holdings: [row],
         closedHoldings: [{ holding: closedHolding, quantityUnits: 0, realizedProfitUsdMicros: -usdToMicros(20) }],
       }],
@@ -91,6 +92,7 @@ describe('investments panel', () => {
     expect(html).toContain('+60.00 USD')
     expect(html).toContain('من البيع')
     expect(html).toContain('+9.00 USD')
+    expect(html.match(/class="adreem-investment-platform-balances"[\s\S]*?<\/div>/)?.[0]).toContain('+69.00 USD')
     expect(html).toContain('مراكز مغلقة')
     expect(html).toContain('TSLA')
     expect(html).toContain('-20.00 USD')
@@ -103,6 +105,7 @@ describe('investments panel', () => {
       platforms: [{
         platform,
         freeCashUsdMicros: usdToMicros(500),
+        investmentProfitUsdMicros: usdToMicros(100),
         holdings: [{ holding, quantityUnits: 500_000_000, averageCostUsdMicros: usdToMicros(100), costBasisUsdMicros: usdToMicros(500), marketValueUsdMicros: usdToMicros(600), unrealizedProfitUsdMicros: usdToMicros(100) }],
       }],
       totalValueUsdMicros: usdToMicros(1_100),
@@ -118,8 +121,10 @@ describe('investments panel', () => {
     expect(html).toContain('class="adreem-investment-platform-balances"')
     expect(html).toContain('رصيد المنصة')
     expect(html).toContain('السيولة')
+    expect(html).toContain('is-liquidity')
+    expect(html).toContain('is-profit is-positive')
     expect(html).toContain('الكمية')
-    expect(html).toContain('آخر سعر')
+    expect(html).not.toContain('>آخر سعر</span>')
     expect(html).toContain('القيمة الآن')
     expect(html).toContain('النتيجة')
     expect(html).toContain('adreem-investment-metrics-strip')

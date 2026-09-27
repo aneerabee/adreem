@@ -47,6 +47,15 @@ for (const language of ['ar', 'en']) {
       await expect(button).toHaveAttribute('aria-current', 'page')
       await checkThroughScroll(page, section)
 
+      if (section === 'investments') {
+        const price = page.locator('.adreem-investment-price')
+        await expect(price.locator('.adreem-investment-price-meta em')).toBeVisible()
+        expect((await price.boundingBox()).height).toBeGreaterThanOrEqual(44)
+        const holding = await page.locator('.adreem-investment-holding').boundingBox()
+        const result = await page.locator('.adreem-investment-result').boundingBox()
+        expect(result.x + result.width).toBeGreaterThanOrEqual(holding.x + holding.width - 12)
+      }
+
       if (section === 'accounts') {
         for (const group of BALANCE_GROUPS) {
           const tab = page.locator(`[data-account-group="${group}"]`)

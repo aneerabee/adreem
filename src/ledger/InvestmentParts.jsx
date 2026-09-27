@@ -30,9 +30,9 @@ export function InvestmentMarketPrice({ holding, error, onOpen }) {
   const sourceUnavailable = Boolean(holding.lastPriceSource && !['manual', 'trade', 'opening'].includes(holding.lastPriceSource)
     && !isAutoPricedHolding(holding, import.meta.env.VITE_ADREEM_STOCK_DISPLAY_LICENSED === 'true'))
   const stale = Boolean(error || holdingPriceIsStale(holding))
-  const priceStatus = error ? 'لم يتحدث'
+  const priceStatus = !priceMicros ? '' : error ? 'لم يتحدث'
     : stale ? (dailyClose || holding.lastPriceSource === 'twelve-data-eod+ecb-fx' ? 'إغلاق سابق' : 'سعر سابق')
-      : dailyClose ? 'إغلاق يومي' : providerUpdate ? 'سعر المزود' : holding.lastPriceMarketOpen === false ? 'إغلاق السوق' : 'آخر سعر'
+      : dailyClose ? 'إغلاق يومي' : holding.lastPriceMarketOpen === false ? 'إغلاق السوق' : ''
   const { direction, percent } = stale ? { direction: 'neutral', percent: 0 } : investmentPriceChange(holding)
   const DirectionIcon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus
   const prefersReducedMotion = useReducedMotion()
@@ -45,10 +45,6 @@ export function InvestmentMarketPrice({ holding, error, onOpen }) {
       aria-label={priceMicros ? `${stale ? 'السعر السابق' : dailyClose ? 'سعر الإغلاق' : providerUpdate ? 'سعر المزود' : 'السعر الحالي'} ${holdingPriceLabel(holding)}${showsLira ? ` (${usdUnitMicros(priceMicros)})` : ''}${direction !== 'neutral' ? ` · ${direction === 'up' ? '+' : '-'}${decimal(Math.abs(percent), 2)}%` : ''}` : 'إدخال السعر الحالي'}
       title={error || (sourceUnavailable ? 'مصدر التحديث غير متاح لهذا الرمز؛ السعر المعروض سابق.' : holding.lastPriceQuotedAt ? `${dailyClose ? 'تاريخ الإغلاق' : providerUpdate ? 'وقت تحديث المزود' : holding.lastPriceSource === 'dexscreener-reference' ? 'وقت التحقق' : 'وقت السعر'}: ${['twelve-data-eod+ecb-fx', 'tgmcharts-eod'].includes(holding.lastPriceSource) ? activityDay(holding.lastPriceQuotedAt) : activityDate(holding.lastPriceQuotedAt)}` : 'إدخال سعر يدوي')}
     >
-      <small>
-        <span>{priceStatus} {stale ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : <PencilLine aria-hidden="true" size={11} />}</span>
-        {direction !== 'neutral' ? <em><DirectionIcon aria-hidden="true" size={11} />{Math.abs(percent).toLocaleString('en-US', { maximumFractionDigits: 2 })}%</em> : null}
-      </small>
       <strong aria-live="polite" dir="ltr">
         <Motion.span
           key={`${priceTimestamp}-${priceMicros}`}
@@ -60,6 +56,11 @@ export function InvestmentMarketPrice({ holding, error, onOpen }) {
         </Motion.span>
       </strong>
       {showsLira ? <small className="adreem-investment-price-usd" dir="ltr">≈ {usdUnitMicros(priceMicros)}</small> : null}
+      {priceStatus || direction !== 'neutral' ? <small className="adreem-investment-price-meta">
+        {priceStatus ? <span>{stale ? <AlertCircle aria-hidden="true" className="is-price-error" size={11} /> : null}{priceStatus}</span> : null}
+        {direction !== 'neutral' ? <em><DirectionIcon aria-hidden="true" size={12} />{Math.abs(percent).toLocaleString('en-US', { maximumFractionDigits: 2 })}%</em> : null}
+      </small> : null}
+      <PencilLine aria-hidden="true" className="adreem-investment-price-edit" size={11} />
     </button>
   )
 }

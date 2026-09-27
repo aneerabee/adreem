@@ -51,6 +51,8 @@ function visualLedger(empty = false) {
     assetType: 'fund',
     marketDataMode: 'manual',
     lastPriceUsdMicros: usdToMicros(12.5),
+    previousPriceUsdMicros: usdToMicros(12),
+    previousPriceAt: FIXED_TIME,
     lastPriceSource: 'manual',
   }, FIXED_TIME)
   const trade = createInvestmentTrade({

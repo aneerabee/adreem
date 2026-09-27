@@ -454,6 +454,15 @@ export default function InvestmentsPanel({
       ? summary.totalProfitUsdMicros
       : summary.unrealizedProfitUsdMicros || 0
   const profitTone = portfolioProfitUsdMicros > 0 ? 'is-positive' : portfolioProfitUsdMicros < 0 ? 'is-negative' : 'is-neutral'
+  const isEnglishUi = getActiveUiLanguage() === 'en'
+  const portfolioSummaryLabel = isEnglishUi
+    ? `Portfolio total ${usdMicros(summary.totalValueUsdMicros)}. Liquidity ${usdMicros(portfolioLiquidityUsdMicros)}. Investments ${usdMicros(portfolioInvestmentsUsdMicros)}. Profit and loss ${usdMicros(portfolioProfitUsdMicros, true)}.`
+    : `إجمالي المحفظة ${usdMicros(summary.totalValueUsdMicros)}، السيولة ${usdMicros(portfolioLiquidityUsdMicros)}، الاستثمارات ${usdMicros(portfolioInvestmentsUsdMicros)}، الربح والخسارة ${usdMicros(portfolioProfitUsdMicros, true)}.`
+  const portfolioProfitBreakdownLabel = summary.realizedInvestmentProfitUsdMicros
+    ? isEnglishUi
+      ? ` Open ${usdMicros(summary.openProfitUsdMicros || 0, true)}. From sales ${usdMicros(summary.realizedInvestmentProfitUsdMicros, true)}.`
+      : ` مفتوح ${usdMicros(summary.openProfitUsdMicros || 0, true)}، من البيع ${usdMicros(summary.realizedInvestmentProfitUsdMicros, true)}.`
+    : ''
   const firstPriceError = activeHoldings.map((holding) => priceErrors[holding.id]).find(Boolean)
   return (
     <section className="adreem-investments" aria-label="محفظتي">
@@ -468,9 +477,13 @@ export default function InvestmentsPanel({
         </div>
       </div>
 
-      <div className="adreem-investment-summary">
-        <article className="is-total"><small>إجمالي المحفظة</small><strong>{usdMicros(summary.totalValueUsdMicros)}</strong></article>
-        <article className={profitTone}>
+      <div className="adreem-investment-summary" role="group" aria-label={`${portfolioSummaryLabel}${portfolioProfitBreakdownLabel}`}>
+        <div className="adreem-investment-composition" aria-hidden="true">
+          <span className="is-liquidity"><small><WalletCards aria-hidden="true" size={14} />السيولة</small><strong>{usdMicros(portfolioLiquidityUsdMicros)}</strong></span>
+          <span><small>الاستثمارات</small><strong>{usdMicros(portfolioInvestmentsUsdMicros)}</strong></span>
+        </div>
+        <article className="is-total" aria-hidden="true"><small>إجمالي المحفظة</small><strong>{usdMicros(summary.totalValueUsdMicros)}</strong></article>
+        <article className={`is-profit ${profitTone}`} aria-hidden="true">
           <small>الربح والخسارة</small>
           <strong>{usdMicros(portfolioProfitUsdMicros, true)}</strong>
           {summary.realizedInvestmentProfitUsdMicros ? (
@@ -480,10 +493,6 @@ export default function InvestmentsPanel({
             </span>
           ) : null}
         </article>
-        <div className="adreem-investment-composition">
-          <span><small>الاستثمارات</small><strong>{usdMicros(portfolioInvestmentsUsdMicros)}</strong></span>
-          <span><small>السيولة</small><strong>{usdMicros(portfolioLiquidityUsdMicros)}</strong></span>
-        </div>
       </div>
 
       <div className="adreem-investment-toolbar">
@@ -514,6 +523,8 @@ export default function InvestmentsPanel({
             const platformLiquidityUsdMicros = Number.isSafeInteger(platformRow.liquidBalanceUsdMicros)
               ? platformRow.liquidBalanceUsdMicros
               : platformRow.freeCashUsdMicros || 0
+            const platformProfitUsdMicros = Number(platformRow.investmentProfitUsdMicros || 0)
+            const platformProfitTone = platformProfitUsdMicros > 0 ? 'is-positive' : platformProfitUsdMicros < 0 ? 'is-negative' : 'is-neutral'
             return (
               <Motion.article
                 className={`adreem-investment-platform is-brand-${brand.key}`}
@@ -533,14 +544,17 @@ export default function InvestmentsPanel({
                       {platformRow.platform.location ? <small>{preserveUiData(platformRow.platform.location)}</small> : null}
                     </span> : null}
                   </div>
-                  <div className="adreem-investment-platform-balances">
-                    <span><small>رصيد المنصة</small><strong>{usdMicros(platformTotalUsdMicros)}</strong></span>
-                    {platformLiquidityUsdMicros ? <span><small>السيولة</small><strong>{usdMicros(platformLiquidityUsdMicros)}</strong></span> : null}
-                  </div>
                   <div className="adreem-investment-platform-actions">
                     <button type="button" className="is-history" aria-label="السجل" title="السجل" onClick={() => openPlatformHistory(platformRow.platform.id)}><History aria-hidden="true" size={14} /><span>السجل</span></button>
                     <button type="button" aria-label="تمويل" title="تمويل" onClick={() => onOpenFunding?.(platformRow.platform.id)}><ArrowDownToLine aria-hidden="true" size={14} /><span>تمويل</span></button>
                     <button type="button" className="is-trade" aria-label="شراء أو بيع" title="شراء أو بيع" onClick={() => openTrade(platformRow.platform.id)}><ArrowLeftRight aria-hidden="true" size={14} /><span>شراء / بيع</span></button>
+                  </div>
+                  <div className="adreem-investment-platform-balances" role="group" aria-label={isEnglishUi
+                    ? `Platform balance ${usdMicros(platformTotalUsdMicros)}. Liquidity ${usdMicros(platformLiquidityUsdMicros)}. Profit and loss ${usdMicros(platformProfitUsdMicros, true)}.`
+                    : `رصيد المنصة ${usdMicros(platformTotalUsdMicros)}، السيولة ${usdMicros(platformLiquidityUsdMicros)}، الربح والخسارة ${usdMicros(platformProfitUsdMicros, true)}.`}>
+                    <span className="is-liquidity" aria-hidden="true"><small><WalletCards aria-hidden="true" size={13} />السيولة</small><strong>{usdMicros(platformLiquidityUsdMicros)}</strong></span>
+                    <span className="is-total" aria-hidden="true"><small>رصيد المنصة</small><strong>{usdMicros(platformTotalUsdMicros)}</strong></span>
+                    <span className={`is-profit ${platformProfitTone}`} aria-hidden="true"><small>الربح والخسارة</small><strong>{usdMicros(platformProfitUsdMicros, true)}</strong></span>
                   </div>
                 </header>
                 <div className="adreem-investment-holdings">
@@ -566,9 +580,12 @@ export default function InvestmentsPanel({
                           <AssetMark mark={holdingMark} />
                           <div className="adreem-investment-identity-main">
                             <div className="adreem-investment-symbol"><b dir="ltr">{preserveUiData(row.holding.symbol)}</b><small>{holdingTypeLabel(row.holding.assetType)}</small></div>
-                            <span className="adreem-investment-quantity" aria-label={`الكمية: ${decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة`}><b dir="ltr">{decimal(unitsToQuantity(row.quantityUnits), 8)}</b><em>وحدة</em></span>
+                            <InvestmentMarketPrice holding={row.holding} error={priceErrors[row.holding.id]} onOpen={openManualPrice} />
                           </div>
-                          <InvestmentMarketPrice holding={row.holding} error={priceErrors[row.holding.id]} onOpen={openManualPrice} />
+                          <span className="adreem-investment-quantity" aria-label={`الكمية: ${decimal(unitsToQuantity(row.quantityUnits), 8)} وحدة`}><b dir="ltr">{decimal(unitsToQuantity(row.quantityUnits), 8)}</b><em>وحدة</em></span>
+                          <div className="adreem-investment-row-actions">
+                            <button type="button" className="is-details" aria-label={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} aria-expanded={detailsOpen} title={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} onClick={(event) => { const section = event.currentTarget.closest('.adreem-investment-holding'); setExpandedHoldingIds((current) => ({ ...current, [row.holding.id]: !current[row.holding.id] })); if (!detailsOpen) revealAfterRender(() => section) }}><ChevronDown aria-hidden="true" size={14} /><span>تفاصيل</span></button>
+                          </div>
                         </div>
                         <div className="adreem-investment-metrics-strip" aria-label="تفاصيل الاستثمار">
                           <div className="is-current-value"><small>{priceIsStale ? 'قيمة بسعر سابق' : 'القيمة الآن'}</small>{nativeValueMicros !== null ? <><strong>{tryMoneyMicros(nativeValueMicros)}</strong><em className="adreem-investment-usd-equivalent" dir="ltr">≈ {usdMicros(row.marketValueUsdMicros)}</em></> : <strong>{usdMicros(row.marketValueUsdMicros)}</strong>}</div>
@@ -580,9 +597,6 @@ export default function InvestmentsPanel({
                             </div>
                             {nativeProfitMicros !== null ? <small className={`adreem-investment-native-result ${profitToneClass(nativeProfitMicros)}`} dir="ltr">{tryMoneyMicros(nativeProfitMicros, true)}{row.native.costBasisMicros ? ` · ${profitPercent(nativeProfitMicros, row.native.costBasisMicros)}` : ''}</small> : null}
                           </div>
-                        </div>
-                        <div className="adreem-investment-row-actions">
-                          <button type="button" className="is-details" aria-label={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} aria-expanded={detailsOpen} title={detailsOpen ? 'إخفاء التفاصيل' : 'تفاصيل الشراء'} onClick={(event) => { const section = event.currentTarget.closest('.adreem-investment-holding'); setExpandedHoldingIds((current) => ({ ...current, [row.holding.id]: !current[row.holding.id] })); if (!detailsOpen) revealAfterRender(() => section) }}><ChevronDown aria-hidden="true" size={14} /><span>تفاصيل</span></button>
                         </div>
                         {detailsOpen ? <div className="adreem-investment-holding-details">
                           <div className="adreem-investment-detail-heading">
