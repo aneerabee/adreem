@@ -1,6 +1,19 @@
 
 
 export const ENGLISH_TEXT = Object.freeze({
+  'إجمالي المحفظة USD': 'Portfolio total USD',
+  'مجموع USD · نقد TRY منفصل': 'USD total · TRY cash separate',
+  'رصيد المنصة USD': 'Platform balance USD',
+  'رصيد المنصة USD · نقد TRY منفصل': 'Platform balance USD · TRY cash separate',
+  'مجموع USD': 'USD subtotal',
+  'سيولة': 'Liquidity',
+  'كم ستنقل إلى المنصة؟': 'How much will you fund?',
+  'من أين يأتي المبلغ؟': 'Where will the money come from?',
+  'إلى أي منصة؟': 'Which platform?',
+  'كم ستسحب من المنصة؟': 'How much will you withdraw from the platform?',
+  'إلى أي حساب يدخل المبلغ؟': 'Which account receives the money?',
+  'من أي منصة؟': 'From which platform?',
+  'سحب الاستثمار': 'Investment withdrawal',
   'عملات البطاقة': 'Card currencies',
   'الدين الحالي': 'Current debt',
   'لا توجد بطاقات ائتمان.': 'No credit cards yet.',

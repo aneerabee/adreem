@@ -217,6 +217,64 @@ describe('investment portfolio core', () => {
     expect(convertTryPriceToUsdMicros(Number.MAX_SAFE_INTEGER, 1)).toBe(0)
   })
 
+  it('keeps TRY funding and Turkish trade settlement separate from USD cash', () => {
+    const platform = createInvestmentPlatform({ id: 'try-cash-platform', name: 'Midas' })
+    const holding = createInvestmentHolding({
+      id: 'try-cash-holding', platformId: platform.id, name: 'Turkish Airlines', symbol: 'THYAO',
+      quoteCurrency: CURRENCIES.TRY, lastPriceNativeMicros: usdToMicros(350), lastPriceUsdMicros: usdToMicros(10),
+    })
+    const rate = usdToMicros(35)
+    const movements = [
+      { id: 'try-deposit', type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT, status: MOVEMENT_STATUSES.POSTED, currency: CURRENCIES.TRY, amount: 1_000, investmentPlatformId: platform.id },
+      { id: 'usd-deposit', type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT, status: MOVEMENT_STATUSES.POSTED, currency: CURRENCIES.USD, amount: 50, investmentPlatformId: platform.id },
+    ]
+    const buy = createInvestmentTrade({
+      id: 'try-buy', platformId: platform.id, holdingId: holding.id, type: INVESTMENT_TRADE_TYPES.BUY,
+      settlementCurrency: CURRENCIES.TRY, quantityUnits: quantityToUnits(2),
+      priceNativeMicros: usdToMicros(300), priceUsdMicros: convertTryPriceToUsdMicros(usdToMicros(300), rate),
+      feeNativeMicros: usdToMicros(5), feeUsdMicros: convertTryPriceToUsdMicros(usdToMicros(5), rate),
+      fxTryPerUsdMicros: rate, fxQuotedAt: '2026-10-03T00:00:00.000Z', fxSource: 'manual',
+    })
+    const afterBuy = validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [buy], movements })
+    expect(afterBuy.ok).toBe(true)
+    expect(afterBuy.summary.platforms[0].freeCashTryMicros).toBe(usdToMicros(395))
+    expect(afterBuy.summary.platforms[0].freeCashUsdMicros).toBe(usdToMicros(50))
+
+    const sell = createInvestmentTrade({
+      ...buy, id: 'try-sell', type: INVESTMENT_TRADE_TYPES.SELL, quantityUnits: quantityToUnits(1),
+      priceNativeMicros: usdToMicros(350), priceUsdMicros: convertTryPriceToUsdMicros(usdToMicros(350), rate),
+      feeNativeMicros: usdToMicros(2), feeUsdMicros: convertTryPriceToUsdMicros(usdToMicros(2), rate),
+    })
+    const afterSell = validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [buy, sell], movements })
+    expect(afterSell.ok).toBe(true)
+    expect(afterSell.summary.platforms[0].freeCashTryMicros).toBe(usdToMicros(743))
+    expect(afterSell.summary.platforms[0].freeCashUsdMicros).toBe(usdToMicros(50))
+
+    const overdrawn = { ...buy, id: 'overdrawn', quantityUnits: quantityToUnits(4) }
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [overdrawn], movements }).ok).toBe(false)
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [{ ...buy, feeNativeMicros: -1 }], movements }).ok).toBe(false)
+    const missingNative = { ...buy, priceNativeMicros: undefined, fxTryPerUsdMicros: undefined,
+      feeNativeMicros: 0, feeUsdMicros: 0 }
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [missingNative] }).ok).toBe(false)
+    const overflow = { ...buy, quantityUnits: quantityToUnits(10_000),
+      priceNativeMicros: usdToMicros(1_000_000), priceUsdMicros: usdToMicros(20_000),
+      fxTryPerUsdMicros: usdToMicros(50), feeNativeMicros: 0, feeUsdMicros: 0 }
+    expect(validateInvestmentState({ platforms: [platform], holdings: [holding], trades: [overflow] }).ok).toBe(false)
+  })
+
+  it('sums TRY cash exactly when intermediate totals exceed safe Number precision', () => {
+    const platform = createInvestmentPlatform({ id: 'precision-platform', name: 'Midas' })
+    const large = 4_503_599_627_000_000
+    const amounts = [large, large, 1_000_000, 1, -large]
+    const trades = amounts.map((amount, index) => ({
+      id: `cash-${index}`, platformId: platform.id, settlementCurrency: CURRENCIES.TRY,
+      status: 'active', type: amount > 0 ? INVESTMENT_TRADE_TYPES.SELL : INVESTMENT_TRADE_TYPES.BUY,
+      quantityUnits: quantityToUnits(1), priceNativeMicros: Math.abs(amount), feeNativeMicros: 0,
+    }))
+    expect(summarizeInvestmentPortfolio({ platforms: [platform], trades }).freeCashTryMicros)
+      .toBe(large + 1_000_001)
+  })
+
   it('does not fabricate a missing exchange-rate source or timestamp', () => {
     const platform = createInvestmentPlatform({ id: 'try-platform', name: 'Midas' })
     const holding = createInvestmentHolding({ id: 'try-holding', platformId: platform.id, name: 'Stock', symbol: 'STK', quoteCurrency: CURRENCIES.TRY })

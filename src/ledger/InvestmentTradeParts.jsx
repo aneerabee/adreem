@@ -4,7 +4,7 @@ import { ArrowLeft, PencilLine, Plus, ShieldCheck } from 'lucide-react'
 import { INVESTMENT_TRADE_TYPES, unitsToQuantity } from './investmentCore.js'
 import { AssetMark } from './AssetMark'
 import { assetMarkFor } from './assetMarks'
-import { decimal, usdMicros } from './investmentFormat'
+import { decimal, tryMoneyMicros, usdMicros } from './investmentFormat'
 import { preserveUiData } from './uiTranslation.js'
 
 function HeldQuantity({ units }) {
@@ -63,8 +63,13 @@ function ChangeLine({ before, after }) {
   )
 }
 
-export function TradeReview({ type, option, markIndex, quantityUnits, priceText, priceUsdText, fxText, valueNativeText = '', feeNativeText = '', impact, note }) {
+export function TradeReview({ type, option, markIndex, quantityUnits, priceText, priceUsdText, fxText, valueNativeText = '', feeNativeText = '', settlementCurrency = 'USD', impact, note }) {
   const isBuy = type === INVESTMENT_TRADE_TYPES.BUY
+  const settlesInTry = settlementCurrency === 'TRY'
+  const moneyText = settlesInTry ? tryMoneyMicros : usdMicros
+  const cashBeforeMicros = settlesInTry ? impact.cashBeforeTryMicros : impact.cashBeforeUsdMicros
+  const cashAfterMicros = settlesInTry ? impact.cashAfterTryMicros : impact.cashAfterUsdMicros
+  const cashChangeMicros = settlesInTry ? impact.cashChangeTryMicros : impact.cashChangeUsdMicros
   const mark = assetMarkFor(option.holding, markIndex)
   return (
     <div className={`adreem-investment-trade-review ${isBuy ? 'is-buy' : 'is-sell'}`} style={mark ? { '--asset-color': mark.color } : undefined}>
@@ -77,12 +82,13 @@ export function TradeReview({ type, option, markIndex, quantityUnits, priceText,
         <div><dt>الكمية</dt><dd><span><bdi dir="ltr">{decimal(unitsToQuantity(quantityUnits), 8)}</bdi> وحدة</span></dd></div>
         <div><dt>سعر الوحدة</dt><dd><bdi dir="ltr">{priceText}</bdi>{priceUsdText ? <small dir="ltr">≈ {priceUsdText}</small> : null}</dd></div>
         {fxText ? <div><dt>سعر الصرف</dt><dd><bdi dir="ltr">{fxText}</bdi></dd></div> : null}
+        <div><dt>العملة</dt><dd><bdi dir="ltr">{settlementCurrency}</bdi></dd></div>
         <div><dt>القيمة</dt><dd>{valueNativeText ? <><bdi dir="ltr">{valueNativeText}</bdi><small dir="ltr">≈ {usdMicros(impact.valueUsdMicros)}</small></> : <bdi dir="ltr">{usdMicros(impact.valueUsdMicros)}</bdi>}</dd></div>
         <div><dt>الرسوم</dt><dd>{feeNativeText ? <><bdi dir="ltr">{feeNativeText}</bdi><small dir="ltr">≈ {usdMicros(impact.feeUsdMicros)}</small></> : <bdi dir="ltr">{usdMicros(impact.feeUsdMicros)}</bdi>}</dd></div>
-        <div className="is-total"><dt>{isBuy ? 'يخصم من نقد المنصة' : 'يضاف إلى نقد المنصة'}</dt><dd><bdi dir="ltr">{usdMicros(impact.cashChangeUsdMicros, true)}</bdi></dd></div>
+        <div className="is-total"><dt>{cashChangeMicros < 0 ? 'يخصم من نقد المنصة' : 'يضاف إلى نقد المنصة'}</dt><dd><bdi dir="ltr">{moneyText(cashChangeMicros, true)}</bdi></dd></div>
       </dl>
       <div className="adreem-investment-trade-effects">
-        <span><small>نقد المنصة</small><ChangeLine before={usdMicros(impact.cashBeforeUsdMicros)} after={usdMicros(impact.cashAfterUsdMicros)} /></span>
+        <span><small>نقد المنصة {settlementCurrency}</small><ChangeLine before={moneyText(cashBeforeMicros)} after={moneyText(cashAfterMicros)} /></span>
         <span><small>الكمية في المنصة</small><ChangeLine before={decimal(unitsToQuantity(impact.unitsBefore), 8)} after={decimal(unitsToQuantity(impact.unitsAfter), 8)} /></span>
       </div>
       {note ? <p className="adreem-investment-trade-note">{preserveUiData(note)}</p> : null}

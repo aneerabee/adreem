@@ -232,4 +232,29 @@ describe('ADREEM net position with the investment portfolio', () => {
     expect(convertNetPosition({ dinar: 0, usd: 0, portfolioUsdMicros: 1_000_000 }, '', 'USD'))
       .toMatchObject({ ok: true, amount: 1 })
   })
+
+  it('keeps TRY free cash separate and excludes both portfolio currencies together', () => {
+    const options = { portfolioUsdMicros: 100_250_000, portfolioTryMicros: 92_500_000 }
+    const included = buildNetPosition([], [], options)
+    expect(included).toMatchObject({ usd: 0, try: 0, ...options })
+
+    const excluded = buildNetPosition([], [NET_PORTFOLIO_ID], options)
+    expect(excluded).toMatchObject({ portfolioUsdMicros: 0, portfolioTryMicros: 0 })
+    expect(convertNetPosition(excluded, 7, 'USD', 46)).toMatchObject({ ok: true, amount: 0 })
+    expect(buildNetPosition([], [], { portfolioTryMicros: 92_500_000 })).not.toHaveProperty('portfolioUsdMicros')
+  })
+
+  it('converts TRY free cash only at the entered rate, without changing the USD portfolio value', () => {
+    const position = buildNetPosition([], [], { portfolioUsdMicros: 100_250_000, portfolioTryMicros: 92_500_000 })
+
+    expect(convertNetPosition(position, 7, 'USD', 46)).toMatchObject({ ok: true, currency: 'USD', amount: 102 })
+    expect(convertNetPosition(position, 7, 'LYD', 46)).toMatchObject({ ok: true, currency: 'LYD', amount: 716 })
+    expect(convertNetPosition(position, 7, 'TRY', 46)).toMatchObject({ ok: true, currency: 'TRY', amount: 4_704 })
+    expect(convertNetPosition(position, 7, 'USD', 0)).toEqual({ ok: false, error: 'أدخل سعر TRY مقابل USD.' })
+    expect(convertNetPosition({ portfolioTryMicros: 92_500_000 }, 0, 'TRY', 0))
+      .toMatchObject({ ok: true, currency: 'TRY', amount: 93 })
+    expect(convertNetPosition({ portfolioTryMicros: Number.MAX_SAFE_INTEGER + 1 }, 7, 'USD', 46)).toMatchObject({ ok: false })
+    expect(convertNetPosition({ try: 1_000_000_000_000, portfolioTryMicros: 499_999 }, 0, 'TRY', 0))
+      .toMatchObject({ ok: true, amount: 1_000_000_000_000 })
+  })
 })

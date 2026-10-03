@@ -25,7 +25,7 @@ const OWN_VALUE_KINDS = new Set([VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS
 const RECORD_LISTS = ['accounts', 'movements', 'dimensions', 'attachments', 'recurringRules', 'reconciliations', 'investmentPlatforms', 'investmentHoldings', 'investmentTrades', 'investmentTransfers', 'auditEvents']
 const ACCOUNT_CLASSIFICATION_FIELDS = ['type', 'valueKind', 'currencyKind', 'cardCurrencies']
 const INVESTMENT_HOLDING_IDENTITY_FIELDS = ['platformId', 'symbol', 'providerSymbol', 'assetType', 'exchange', 'quoteCurrency']
-const INVESTMENT_TRADE_EDITABLE_FIELDS = ['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros', 'note']
+const INVESTMENT_TRADE_EDITABLE_FIELDS = ['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros', 'feeNativeMicros', 'note']
 const INVESTMENT_TRADE_UPDATE_FIELDS = new Set([...INVESTMENT_TRADE_EDITABLE_FIELDS, 'updatedAt'])
 const ACTIVE_STATUS = 'active'
 const INACTIVE_STATUS = 'inactive'
@@ -156,6 +156,7 @@ function investmentTradeEditValues(trade = {}) {
     quantityUnits: trade.quantityUnits,
     priceUsdMicros: trade.priceUsdMicros,
     feeUsdMicros: trade.feeUsdMicros,
+    ...(trade.settlementCurrency === CURRENCIES.TRY ? { feeNativeMicros: trade.feeNativeMicros, settlementCurrency: CURRENCIES.TRY } : {}),
     note: trade.note || '',
   }
 }
@@ -942,7 +943,7 @@ export function validateLedgerStateTransition(nextState = {}, currentState = {},
       errors.push({ code: 'invalid-investment-trade-edit', recordType: 'investmentTrades', id: trade.id, message: 'تعديل عملية الاستثمار غير مكتمل.' })
       continue
     }
-    const financialChanged = ['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros']
+    const financialChanged = ['quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'feeUsdMicros', 'feeNativeMicros']
       .some((field) => !isDeepStrictEqual(previousTrade[field], trade[field]))
     if (financialChanged && investmentOpeningTradeIsLocked(previousTrade, investmentTrades, investmentTransfers)) {
       errors.push({ code: 'investment-opening-trade-locked', recordType: 'investmentTrades', id: trade.id, message: 'القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة.' })

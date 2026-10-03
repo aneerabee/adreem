@@ -1,5 +1,5 @@
-import { MOVEMENT_TYPES } from './ledgerCore.js'
-import { INVESTMENT_TRANSFER_ASSETS, investmentTradeValueMicros, usdToMicros } from './investmentCore.js'
+import { CURRENCIES, MOVEMENT_TYPES } from './ledgerCore.js'
+import { INVESTMENT_TRANSFER_ASSETS, investmentTradeSettlementCurrency, investmentTradeValueMicros, usdToMicros } from './investmentCore.js'
 
 const FUNDING_TYPES = new Set([
   MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
@@ -25,6 +25,7 @@ export function buildInvestmentPlatformActivity({ platformId = '', trades = [], 
       occurredAt: trade.occurredAt || trade.createdAt || trade.updatedAt || '',
       note: trade.note || '',
       amountUsdMicros: investmentTradeValueMicros(trade),
+      currency: investmentTradeSettlementCurrency(trade),
       trade,
       holding: holdingById.get(trade.holdingId) || null,
       sourceAccount: null,
@@ -39,7 +40,9 @@ export function buildInvestmentPlatformActivity({ platformId = '', trades = [], 
       status: movement.status,
       occurredAt: movement.occurredAt || movement.createdAt || movement.updatedAt || '',
       note: movement.note || '',
-      amountUsdMicros: usdToMicros(Math.abs(Number(movement.amount || 0))),
+      amountUsdMicros: movement.currency === CURRENCIES.USD ? usdToMicros(Math.abs(Number(movement.amount || 0))) : 0,
+      amountNativeMicros: usdToMicros(Math.abs(Number(movement.amount || 0))),
+      currency: movement.currency || CURRENCIES.USD,
       movement,
       holding: null,
       sourceAccount: accountById.get(movement.sourceAccountId) || null,
@@ -56,6 +59,7 @@ export function buildInvestmentPlatformActivity({ platformId = '', trades = [], 
       note: transfer.note || '',
       amountUsdMicros: transfer.asset === INVESTMENT_TRANSFER_ASSETS.USD
         ? transfer.amountUsdMicros : transfer.costBasisUsdMicros,
+      currency: CURRENCIES.USD,
       transfer,
       otherPlatform: platformById.get(transfer.fromPlatformId === platformId
         ? transfer.toPlatformId : transfer.fromPlatformId) || null,

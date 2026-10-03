@@ -58,7 +58,7 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
 
   if (movementType === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && role === 'source') {
     return moneyOrPerson.filter((account) =>
-      [VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.RECEIVABLE].includes(account.valueKind) && supportsCurrency(account, 'USD'))
+      [VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.RECEIVABLE].includes(account.valueKind) && supportsCurrency(account))
   }
   if (movementType === MOVEMENT_TYPES.CARD_CHARGE) {
     return role === 'source' ? cardReadyAccounts : currencyReadyAccounts.filter((account) => account.valueKind === VALUE_KINDS.RECEIVABLE)
@@ -71,7 +71,7 @@ export function getMovementAccounts(accounts = [], balancesByAccountId = new Map
   }
   if (movementType === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL && role === 'destination') {
     return moneyOrPerson.filter((account) =>
-      [VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(account.valueKind) && supportsCurrency(account, 'USD'))
+      [VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(account.valueKind) && supportsCurrency(account))
   }
 
   if (movementType === MOVEMENT_TYPES.USD_SALE && role === 'source') {

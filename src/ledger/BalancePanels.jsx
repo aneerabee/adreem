@@ -14,11 +14,17 @@ import { NET_PORTFOLIO_ID, convertNetPosition, filterNetContributions } from './
 import { preserveUiData } from './uiTranslation'
 import { accountPrimaryBalance, formatDisplayMeaning, protectedAccountContext, protectedAccountPrimaryName, protectUiValues, visualKind } from './accountPresentation'
 import { groupNetContributionsForDisplay, netContributionDisplayValues } from './balanceViews'
-import { balanceAmountIsWide, balanceAmountNeedsStack, compactDisplayValue, formatCount, formatInteger, hasMoneyValue, money, netUsdMicrosText } from './ledgerFormat'
+import { balanceAmountIsWide, balanceAmountNeedsStack, compactDisplayValue, formatCount, formatInteger, hasMoneyValue, money } from './ledgerFormat'
 import { AccountChoiceIcon } from './LedgerIcons'
 import { CURRENCY_OPTIONS, UI_MOTION_TRANSITION } from './ledgerUiConfig'
 import { movementDateTime } from './movementPresentation'
 import { NumericEntry } from './NumericEntry'
+
+const NET_PORTFOLIO_MICROS_PER_UNIT = 1_000_000
+
+function netPortfolioMicrosText(value, currency) {
+  return `${(value / NET_PORTFOLIO_MICROS_PER_UNIT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
+}
 
 export function CurrencyAmountGrid({ value, className = 'ml3-balance-pair' }) {
   const allCells = CURRENCY_OPTIONS.map((option) => ({
@@ -47,6 +53,7 @@ export function NetPositionPanel({
   position,
   allContributions = position?.contributions || [],
   portfolioUsdMicros = 0,
+  portfolioTryMicros = 0,
   excludedAccountIds = [],
   query = '',
   rate,
@@ -64,10 +71,12 @@ export function NetPositionPanel({
 }) {
   const conversion = convertNetPosition(position, rate, targetCurrency, tryRate, eurRate)
   const excluded = new Set(excludedAccountIds)
-  const hasPortfolio = Number.isSafeInteger(portfolioUsdMicros) && portfolioUsdMicros !== 0
+  const hasUsdPortfolio = Number.isSafeInteger(portfolioUsdMicros) && portfolioUsdMicros !== 0
+  const hasTryPortfolio = Number.isSafeInteger(portfolioTryMicros) && portfolioTryMicros !== 0
+  const hasPortfolio = hasUsdPortfolio || hasTryPortfolio
   const portfolioIncluded = hasPortfolio && !excluded.has(NET_PORTFOLIO_ID)
   const portfolioShare = portfolioIncluded && conversion.ok
-    ? convertNetPosition({ dinar: 0, usd: 0, try: 0, eur: 0, portfolioUsdMicros }, rate, conversion.currency, tryRate, eurRate)
+    ? convertNetPosition({ dinar: 0, usd: 0, try: 0, eur: 0, portfolioUsdMicros, portfolioTryMicros }, rate, conversion.currency, tryRate, eurRate)
     : null
   const excludedCount = allContributions.reduce((count, item) => count + (excluded.has(item.accountId) ? 1 : 0), 0)
     + (hasPortfolio && !portfolioIncluded ? 1 : 0)
@@ -87,7 +96,8 @@ export function NetPositionPanel({
         {hasPortfolio ? (
           <button type="button" className={`adreem-net-portfolio${portfolioIncluded ? '' : ' is-excluded'}`} aria-pressed={portfolioIncluded} title={portfolioIncluded ? 'اضغط لاستبعاد المحفظة' : 'اضغط لإدخال المحفظة'} onClick={() => onToggleAccount(NET_PORTFOLIO_ID)}>
             <small><ChartCandlestick aria-hidden="true" size={13} />محفظتي</small>
-            <strong>{netUsdMicrosText(portfolioUsdMicros)}</strong>
+            {hasUsdPortfolio ? <strong>{netPortfolioMicrosText(portfolioUsdMicros, CURRENCIES.USD)}</strong> : null}
+            {hasTryPortfolio ? <strong>{netPortfolioMicrosText(portfolioTryMicros, CURRENCIES.TRY)}</strong> : null}
             <em>{portfolioIncluded ? 'داخل الصافي' : 'مستبعدة'}</em>
           </button>
         ) : null}

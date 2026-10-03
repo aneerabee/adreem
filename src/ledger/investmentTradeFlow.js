@@ -1,4 +1,4 @@
-import { INVESTMENT_PRICE_SCALE, INVESTMENT_QUANTITY_SCALE, INVESTMENT_TRADE_TYPES, investmentTradeValueMicros } from './investmentCore.js'
+import { INVESTMENT_PRICE_SCALE, INVESTMENT_QUANTITY_SCALE, INVESTMENT_TRADE_TYPES, investmentTradeValueMicros, microsToUsd } from './investmentCore.js'
 
 export const TRADE_STAGES = Object.freeze({ FIELDS: 'fields', REVIEW: 'review' })
 
@@ -35,23 +35,46 @@ export function platformTradeOptions({ platformId = '', holdings = [], platformR
     })
 }
 
-export function tradeImpact({ type, quantityUnits = 0, priceUsdMicros = 0, feeUsdMicros = 0, freeCashUsdMicros = 0, heldUnits = 0 } = {}) {
+export function pricedTradeDraft(draft, { holdingId, isTurkish, settlementCurrency, priceUsdMicros, feeUsdMicros, tryRateMicros, tryFx } = {}) {
+  const scopedDraft = { ...draft, holdingId, settlementCurrency }
+  if (!isTurkish) return scopedDraft
+  return {
+    ...scopedDraft,
+    priceUsd: String(microsToUsd(priceUsdMicros)),
+    feeUsd: String(microsToUsd(feeUsdMicros)),
+    fxTryPerUsdMicros: tryRateMicros,
+    fxQuotedAt: tryFx.quotedAt,
+    fxSource: tryFx.source,
+  }
+}
+
+export function tradeImpact({ type, settlementCurrency = 'USD', quantityUnits = 0, priceUsdMicros = 0, priceNativeMicros = 0, feeUsdMicros = 0, feeNativeMicros = 0, freeCashUsdMicros = 0, freeCashTryMicros = 0, heldUnits = 0 } = {}) {
   const isBuy = type === INVESTMENT_TRADE_TYPES.BUY
+  const settlesInTry = settlementCurrency === 'TRY'
   const valueUsdMicros = investmentTradeValueMicros({ quantityUnits, priceUsdMicros })
-  const fee = Math.max(0, Number(feeUsdMicros) || 0)
-  const cash = Number(freeCashUsdMicros) || 0
+  const valueNativeMicros = investmentTradeValueMicros({ quantityUnits, priceUsdMicros: priceNativeMicros })
+  const feeUsd = Math.max(0, Number(feeUsdMicros) || 0)
+  const feeNative = Math.max(0, Number(feeNativeMicros) || 0)
+  const cashUsd = Number(freeCashUsdMicros) || 0
+  const cashTry = Number(freeCashTryMicros) || 0
   const held = Number(heldUnits) || 0
-  const cashChangeUsdMicros = isBuy ? -(valueUsdMicros + fee) : valueUsdMicros - fee
+  const cashChangeUsdMicros = settlesInTry ? 0 : isBuy ? -(valueUsdMicros + feeUsd) : valueUsdMicros - feeUsd
+  const cashChangeTryMicros = settlesInTry ? isBuy ? -(valueNativeMicros + feeNative) : valueNativeMicros - feeNative : 0
   const unitsAfter = isBuy ? held + quantityUnits : held - quantityUnits
   return {
     valueUsdMicros,
-    feeUsdMicros: fee,
+    valueNativeMicros,
+    feeUsdMicros: feeUsd,
+    feeNativeMicros: feeNative,
     cashChangeUsdMicros,
-    cashBeforeUsdMicros: cash,
-    cashAfterUsdMicros: cash + cashChangeUsdMicros,
+    cashBeforeUsdMicros: cashUsd,
+    cashAfterUsdMicros: cashUsd + cashChangeUsdMicros,
+    cashChangeTryMicros,
+    cashBeforeTryMicros: cashTry,
+    cashAfterTryMicros: cashTry + cashChangeTryMicros,
     unitsBefore: held,
     unitsAfter,
-    hasEnoughCash: cash + cashChangeUsdMicros >= 0,
+    hasEnoughCash: settlesInTry ? cashTry + cashChangeTryMicros >= 0 : cashUsd + cashChangeUsdMicros >= 0,
     hasEnoughUnits: unitsAfter >= 0,
   }
 }

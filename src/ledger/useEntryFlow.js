@@ -64,7 +64,7 @@ export function useEntryFlow({
       setMovementDraft((current) => ({
         ...current,
         type,
-        currency: config.currency || current.currency,
+        currency: config.currency || (config.currencyOptions?.includes(current.currency) ? current.currency : config.currencyOptions?.[0] || current.currency),
         sourceAccountId: '',
         destinationAccountId: '',
         investmentPlatformId: '',

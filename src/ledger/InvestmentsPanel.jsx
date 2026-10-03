@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, ArrowDownToLine, ArrowLeft, ArrowLeftRight, ArrowUpFromLine, ChartCandlestick, Check, ChevronDown, CircleDollarSign, Clock3, Eye, EyeOff, History, Landmark, LockKeyhole, Minus, PackageCheck, PencilLine, Plus, RefreshCw, Search, ShieldCheck, TrendingDown, TrendingUp, Trash2, WalletCards } from 'lucide-react'
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'motion/react'
-import { MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
-import { INVESTMENT_ASSET_TYPES, SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS, INVESTMENT_TRADE_TYPES, INVESTMENT_TRANSFER_ASSETS, convertTryPriceToUsdMicros, convertUsdToTryMicros, newInvestmentHoldingId, investmentHoldingIsLiquidity, investmentDecimalInputIsValid, investmentOpeningTradeIsLocked, investmentTradeValueMicros, microsToUsd, parseInvestmentDecimal, quantityToUnits, unitsToQuantity, usdToMicros } from './investmentCore.js'
+import { CURRENCIES, MOVEMENT_STATUSES, MOVEMENT_TYPES } from './ledgerCore.js'
+import { INVESTMENT_ASSET_TYPES, SMALL_INVESTMENT_CLOSE_LIMIT_USD_MICROS, INVESTMENT_TRADE_TYPES, INVESTMENT_TRANSFER_ASSETS, convertTryPriceToUsdMicros, convertUsdToTryMicros, newInvestmentHoldingId, investmentHoldingIsLiquidity, investmentDecimalInputIsValid, investmentOpeningTradeIsLocked, investmentTradeCashMicros, investmentTradeSettlementCurrency, investmentTradeValueMicros, microsToUsd, parseInvestmentDecimal, quantityToUnits, unitsToQuantity, usdToMicros } from './investmentCore.js'
 import { buildInvestmentPlatformActivity } from './investmentActivity.js'
 import { investmentPlatformBrandStyle, resolveInvestmentPlatformBrand } from './investmentPlatformBrands.js'
 import { getActiveUiLanguage, preserveUiData } from './uiTranslation.js'
@@ -257,8 +257,8 @@ export default function InvestmentsPanel({
       priceUsd: String(microsToUsd(trade.priceUsdMicros)),
       priceNative: trade.priceNativeMicros ? String(microsToUsd(trade.priceNativeMicros)) : '',
       feeUsd: String(microsToUsd(trade.feeUsdMicros || 0)),
-      feeNative: trade.priceNativeMicros ? String(microsToUsd(convertUsdToTryMicros(trade.feeUsdMicros || 0, trade.fxTryPerUsdMicros))) : '',
-      feeNativeInitial: trade.priceNativeMicros ? String(microsToUsd(convertUsdToTryMicros(trade.feeUsdMicros || 0, trade.fxTryPerUsdMicros))) : '',
+      feeNative: trade.priceNativeMicros ? String(microsToUsd(investmentTradeSettlementCurrency(trade) === CURRENCIES.TRY ? trade.feeNativeMicros || 0 : convertUsdToTryMicros(trade.feeUsdMicros || 0, trade.fxTryPerUsdMicros))) : '',
+      feeNativeInitial: trade.priceNativeMicros ? String(microsToUsd(investmentTradeSettlementCurrency(trade) === CURRENCIES.TRY ? trade.feeNativeMicros || 0 : convertUsdToTryMicros(trade.feeUsdMicros || 0, trade.fxTryPerUsdMicros))) : '',
       note: trade.note || '',
     })
     setTradeEditStage('fields')
@@ -388,13 +388,13 @@ export default function InvestmentsPanel({
   const editedPriceUsdMicros = editingTradeBaseline?.priceNativeMicros
     ? convertTryPriceToUsdMicros(usdToMicros(tradeEditDraft.priceNative), editingTradeBaseline.fxTryPerUsdMicros)
     : usdToMicros(tradeEditDraft.priceUsd)
-  const editIsTurkish = Boolean(editingTradeBaseline?.priceNativeMicros)
-  const editedFeeUsdMicros = !editIsTurkish
+  const editSettlesInTry = investmentTradeSettlementCurrency(editingTradeBaseline || {}) === CURRENCIES.TRY
+  const editedFeeUsdMicros = !editSettlesInTry
     ? usdToMicros(tradeEditDraft.feeUsd || 0)
     : tradeEditDraft.feeNative === tradeEditDraft.feeNativeInitial
       ? Number(editingTradeBaseline.feeUsdMicros || 0)
       : convertTryPriceToUsdMicros(usdToMicros(tradeEditDraft.feeNative || 0), editingTradeBaseline.fxTryPerUsdMicros)
-  const tradeEditFeeInputValid = investmentDecimalInputIsValid((editIsTurkish ? tradeEditDraft.feeNative : tradeEditDraft.feeUsd) || 0)
+  const tradeEditFeeInputValid = investmentDecimalInputIsValid((editSettlesInTry ? tradeEditDraft.feeNative : tradeEditDraft.feeUsd) || 0)
   const tradeEditHasValidInput = Boolean(
     editingTradeBaseline
     && investmentDecimalInputIsValid(tradeEditDraft.quantity, { allowZero: false })
@@ -408,6 +408,7 @@ export default function InvestmentsPanel({
     || editedPriceUsdMicros !== editingTradeBaseline.priceUsdMicros
     || (editingTradeBaseline.priceNativeMicros && usdToMicros(tradeEditDraft.priceNative) !== editingTradeBaseline.priceNativeMicros)
     || editedFeeUsdMicros !== Number(editingTradeBaseline.feeUsdMicros || 0)
+    || (investmentTradeSettlementCurrency(editingTradeBaseline) === CURRENCIES.TRY && usdToMicros(tradeEditDraft.feeNative || 0) !== Number(editingTradeBaseline.feeNativeMicros || 0))
   ))
   const tradeEditHasChanges = Boolean(editingTradeBaseline && (
     tradeEditHasFinancialChanges || tradeEditDraft.note.trim() !== String(editingTradeBaseline.note || '').trim()
@@ -419,7 +420,9 @@ export default function InvestmentsPanel({
     ...editingTradeBaseline,
     quantityUnits: editedQuantityUnits,
     priceUsdMicros: editedPriceUsdMicros,
+    ...(editingTradeBaseline.priceNativeMicros ? { priceNativeMicros: usdToMicros(tradeEditDraft.priceNative) } : {}),
     feeUsdMicros: editedFeeUsdMicros,
+    ...(investmentTradeSettlementCurrency(editingTradeBaseline) === CURRENCIES.TRY ? { feeNativeMicros: usdToMicros(tradeEditDraft.feeNative || 0) } : {}),
   } : null
   const tradeEditBeforeImpact = tradeReviewImpact(editingTradeBaseline)
   const tradeEditAfterImpact = tradeReviewImpact(editedTradePreview)
@@ -456,8 +459,8 @@ export default function InvestmentsPanel({
   const profitTone = portfolioProfitUsdMicros > 0 ? 'is-positive' : portfolioProfitUsdMicros < 0 ? 'is-negative' : 'is-neutral'
   const isEnglishUi = getActiveUiLanguage() === 'en'
   const portfolioSummaryLabel = isEnglishUi
-    ? `Portfolio total ${usdMicros(summary.totalValueUsdMicros)}. Liquidity ${usdMicros(portfolioLiquidityUsdMicros)}. Investments ${usdMicros(portfolioInvestmentsUsdMicros)}. Profit and loss ${usdMicros(portfolioProfitUsdMicros, true)}.`
-    : `إجمالي المحفظة ${usdMicros(summary.totalValueUsdMicros)}، السيولة ${usdMicros(portfolioLiquidityUsdMicros)}، الاستثمارات ${usdMicros(portfolioInvestmentsUsdMicros)}، الربح والخسارة ${usdMicros(portfolioProfitUsdMicros, true)}.`
+    ? `USD subtotal excluding TRY cash ${usdMicros(summary.totalValueUsdMicros)}. USD liquidity ${usdMicros(portfolioLiquidityUsdMicros)}. TRY liquidity ${tryMoneyMicros(summary.freeCashTryMicros)}. Investments ${usdMicros(portfolioInvestmentsUsdMicros)}. Profit and loss ${usdMicros(portfolioProfitUsdMicros, true)}.`
+    : `مجموع بالدولار دون نقد الليرة ${usdMicros(summary.totalValueUsdMicros)}، سيولة الدولار ${usdMicros(portfolioLiquidityUsdMicros)}، سيولة الليرة ${tryMoneyMicros(summary.freeCashTryMicros)}، الاستثمارات ${usdMicros(portfolioInvestmentsUsdMicros)}، الربح والخسارة ${usdMicros(portfolioProfitUsdMicros, true)}.`
   const portfolioProfitBreakdownLabel = summary.realizedInvestmentProfitUsdMicros
     ? isEnglishUi
       ? ` Open ${usdMicros(summary.openProfitUsdMicros || 0, true)}. From sales ${usdMicros(summary.realizedInvestmentProfitUsdMicros, true)}.`
@@ -479,10 +482,10 @@ export default function InvestmentsPanel({
 
       <div className="adreem-investment-summary" role="group" aria-label={`${portfolioSummaryLabel}${portfolioProfitBreakdownLabel}`}>
         <div className="adreem-investment-composition" aria-hidden="true">
-          <span className="is-liquidity"><small><WalletCards aria-hidden="true" size={14} />السيولة</small><strong>{usdMicros(portfolioLiquidityUsdMicros)}</strong></span>
+          <span className="is-liquidity"><small><WalletCards aria-hidden="true" size={14} />السيولة</small><strong>{usdMicros(portfolioLiquidityUsdMicros)}</strong>{summary.freeCashTryMicros > 0 ? <strong className="is-try">{tryMoneyMicros(summary.freeCashTryMicros)}</strong> : null}</span>
           <span><small>الاستثمارات</small><strong>{usdMicros(portfolioInvestmentsUsdMicros)}</strong></span>
         </div>
-        <article className="is-total" aria-hidden="true"><small>إجمالي المحفظة</small><strong>{usdMicros(summary.totalValueUsdMicros)}</strong></article>
+        <article className="is-total" aria-hidden="true"><small>{summary.freeCashTryMicros > 0 ? (isEnglishUi ? 'USD total · TRY cash separate' : 'مجموع USD · نقد TRY منفصل') : (isEnglishUi ? 'Portfolio total USD' : 'إجمالي المحفظة USD')}</small><strong>{usdMicros(summary.totalValueUsdMicros)}</strong></article>
         <article className={`is-profit ${profitTone}`} aria-hidden="true">
           <small>الربح والخسارة</small>
           <strong>{usdMicros(portfolioProfitUsdMicros, true)}</strong>
@@ -550,10 +553,10 @@ export default function InvestmentsPanel({
                     <button type="button" className="is-trade" aria-label="شراء أو بيع" title="شراء أو بيع" onClick={() => openTrade(platformRow.platform.id)}><ArrowLeftRight aria-hidden="true" size={14} /><span>شراء / بيع</span></button>
                   </div>
                   <div className="adreem-investment-platform-balances" role="group" aria-label={isEnglishUi
-                    ? `Platform balance ${usdMicros(platformTotalUsdMicros)}. Liquidity ${usdMicros(platformLiquidityUsdMicros)}. Profit and loss ${usdMicros(platformProfitUsdMicros, true)}.`
-                    : `رصيد المنصة ${usdMicros(platformTotalUsdMicros)}، السيولة ${usdMicros(platformLiquidityUsdMicros)}، الربح والخسارة ${usdMicros(platformProfitUsdMicros, true)}.`}>
-                    <span className="is-liquidity" aria-hidden="true"><small><WalletCards aria-hidden="true" size={13} />السيولة</small><strong>{usdMicros(platformLiquidityUsdMicros)}</strong></span>
-                    <span className="is-total" aria-hidden="true"><small>رصيد المنصة</small><strong>{usdMicros(platformTotalUsdMicros)}</strong></span>
+                    ? `Platform balance USD excluding TRY cash ${usdMicros(platformTotalUsdMicros)}. USD liquidity ${usdMicros(platformLiquidityUsdMicros)}. TRY liquidity ${tryMoneyMicros(platformRow.freeCashTryMicros)}. Profit and loss ${usdMicros(platformProfitUsdMicros, true)}.`
+                    : `رصيد المنصة USD دون نقد الليرة ${usdMicros(platformTotalUsdMicros)}، سيولة الدولار ${usdMicros(platformLiquidityUsdMicros)}، سيولة الليرة ${tryMoneyMicros(platformRow.freeCashTryMicros)}، الربح والخسارة ${usdMicros(platformProfitUsdMicros, true)}.`}>
+                    <span className="is-liquidity" aria-hidden="true"><small><WalletCards aria-hidden="true" size={13} />السيولة</small><strong>{usdMicros(platformLiquidityUsdMicros)}</strong>{platformRow.freeCashTryMicros > 0 ? <strong className="is-try">{tryMoneyMicros(platformRow.freeCashTryMicros)}</strong> : null}</span>
+                    <span className="is-total" aria-hidden="true"><small>{platformRow.freeCashTryMicros > 0 ? (isEnglishUi ? 'Platform balance USD · TRY cash separate' : 'رصيد المنصة USD · نقد TRY منفصل') : (isEnglishUi ? 'Platform balance USD' : 'رصيد المنصة USD')}</small><strong>{usdMicros(platformTotalUsdMicros)}</strong></span>
                     <span className={`is-profit ${platformProfitTone}`} aria-hidden="true"><small>الربح والخسارة</small><strong>{usdMicros(platformProfitUsdMicros, true)}</strong></span>
                   </div>
                 </header>
@@ -762,7 +765,7 @@ export default function InvestmentsPanel({
               <div className={`adreem-investment-history-head is-brand-${brand.key}`} style={investmentPlatformBrandStyle(brand)}>
                 <span className={`adreem-investment-history-logo ${logoUrl ? 'has-logo' : ''}`.trim()} title={logoUrl ? preserveUiData(brand.displayName) : undefined}>{logoUrl ? <img src={logoUrl} alt={preserveUiData(brand.displayName)} /> : <Landmark aria-hidden="true" size={20} />}</span>
                 <span>{!logoUrl ? <strong>{preserveUiData(historyPlatform.name)}</strong> : null}<small>{decimal(historyRows.length, 0)} {historyRows.length === 1 ? 'عملية محفوظة' : 'عمليات محفوظة'}</small></span>
-                <b>{usdMicros(historyPlatformSummary?.totalValueUsdMicros ?? ((historyPlatformSummary?.freeCashUsdMicros || 0) + (historyPlatformSummary?.marketValueUsdMicros || 0)))}<small>رصيد المنصة</small></b>
+                <b>{usdMicros(historyPlatformSummary?.totalValueUsdMicros ?? ((historyPlatformSummary?.freeCashUsdMicros || 0) + (historyPlatformSummary?.marketValueUsdMicros || 0)))}<small>مجموع USD</small>{historyPlatformSummary?.freeCashTryMicros > 0 ? <small dir="ltr">{tryMoneyMicros(historyPlatformSummary.freeCashTryMicros)} سيولة</small> : null}</b>
               </div>
               {historyRows.length ? (
                 <div className="adreem-investment-history-list">
@@ -785,8 +788,8 @@ export default function InvestmentsPanel({
                         </div>
                         <div className="adreem-investment-history-values">
                           {isTrade ? <small>{decimal(unitsToQuantity(row.trade.quantityUnits), 8)} × {row.trade.priceNativeMicros ? `${tryUnitMicros(row.trade.priceNativeMicros)} · ${usdUnitMicros(row.trade.priceUsdMicros)}` : usdUnitMicros(row.trade.priceUsdMicros)}</small> : null}
-                          <strong>{isTransfer && row.transfer.asset === INVESTMENT_TRANSFER_ASSETS.USDT ? `${decimal(unitsToQuantity(row.transfer.quantityUnits), 8)} USDT` : usdMicros(row.amountUsdMicros)}</strong>
-                          {isTrade && row.trade.feeUsdMicros > 0 ? <em><span>رسوم</span> {row.trade.priceNativeMicros ? `${tryMoneyMicros(convertUsdToTryMicros(row.trade.feeUsdMicros, row.trade.fxTryPerUsdMicros))} ≈ ${usdMicros(row.trade.feeUsdMicros)}` : usdMicros(row.trade.feeUsdMicros)}</em> : null}
+                          <strong>{isTransfer && row.transfer.asset === INVESTMENT_TRANSFER_ASSETS.USDT ? `${decimal(unitsToQuantity(row.transfer.quantityUnits), 8)} USDT` : row.kind === 'movement' && row.currency === CURRENCIES.TRY ? tryMoneyMicros(row.amountNativeMicros) : isTrade && row.currency === CURRENCIES.TRY ? tryMoneyMicros(investmentTradeValueMicros({ quantityUnits: row.trade.quantityUnits, priceUsdMicros: row.trade.priceNativeMicros })) : usdMicros(row.amountUsdMicros)}</strong>
+                          {isTrade && row.trade.feeUsdMicros > 0 ? <em><span>رسوم</span> {row.currency === CURRENCIES.TRY ? tryMoneyMicros(row.trade.feeNativeMicros || 0) : usdMicros(row.trade.feeUsdMicros)}</em> : null}
                         </div>
                         {!isVoided && !isTransfer ? <button type="button" className="adreem-investment-history-edit" aria-label="تعديل العملية" title="تعديل العملية" onClick={() => isTrade ? openTradeEdit(row.trade) : editFundingMovement(row.movement)}><PencilLine aria-hidden="true" size={14} /><span>تعديل</span></button> : null}
                       </article>
@@ -818,16 +821,16 @@ export default function InvestmentsPanel({
               <>
                 <div className="is-paired is-investment-numbers"><label><span>الكمية</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked} value={tradeEditDraft.quantity} onChange={(event) => setTradeEditDraft((current) => ({ ...current, quantity: event.target.value }))} /></label><label><span>{editingTradeBaseline.priceNativeMicros ? 'سعر الوحدة TRY' : 'سعر الوحدة USD'}</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked} value={editingTradeBaseline.priceNativeMicros ? tradeEditDraft.priceNative : tradeEditDraft.priceUsd} onChange={(event) => setTradeEditDraft((current) => ({ ...current, [editingTradeBaseline.priceNativeMicros ? 'priceNative' : 'priceUsd']: event.target.value }))} /></label></div>
                 {editingTradeBaseline.priceNativeMicros ? <output className="adreem-investment-fx-result">1 USD = {decimal(microsToUsd(editingTradeBaseline.fxTryPerUsdMicros), 6)} TRY · <strong>{usdUnitMicros(editedPriceUsdMicros)}</strong></output> : null}
-                <label><span>{editIsTurkish ? 'الرسوم TRY' : 'الرسوم USD'}</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked || editingTradeBaseline.type === INVESTMENT_TRADE_TYPES.OPENING} value={editIsTurkish ? tradeEditDraft.feeNative : tradeEditDraft.feeUsd} onChange={(event) => setTradeEditDraft((current) => ({ ...current, [editIsTurkish ? 'feeNative' : 'feeUsd']: event.target.value }))} /></label>
+                <label><span>الرسوم {editSettlesInTry ? 'TRY' : 'USD'}</span><input dir="ltr" inputMode="decimal" disabled={openingTradeLocked || editingTradeBaseline.type === INVESTMENT_TRADE_TYPES.OPENING} value={editSettlesInTry ? tradeEditDraft.feeNative : tradeEditDraft.feeUsd} onChange={(event) => setTradeEditDraft((current) => ({ ...current, [editSettlesInTry ? 'feeNative' : 'feeUsd']: event.target.value }))} /></label>
                 {!tradeEditFeeInputValid ? <p className="adreem-investment-edit-warning">الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.</p> : null}
                 <label><span>ملاحظة</span><input value={tradeEditDraft.note} onChange={(event) => setTradeEditDraft((current) => ({ ...current, note: event.target.value }))} placeholder="اختياري" /></label>
                 {openingTradeLocked ? <p className="adreem-investment-edit-warning"><ShieldCheck aria-hidden="true" size={16} />القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة. يمكنك تعديل الملاحظة فقط.</p> : null}
               </>
             ) : (
               <div className="adreem-investment-edit-review">
-                <div><small>قبل</small><strong>{decimal(unitsToQuantity(editingTradeBaseline.quantityUnits), 8)} وحدة</strong><b>{editingTradeBaseline.priceNativeMicros ? tryUnitMicros(editingTradeBaseline.priceNativeMicros) : usdUnitMicros(editingTradeBaseline.priceUsdMicros)}</b>{editingTradeBaseline.priceNativeMicros ? <small>{usdUnitMicros(editingTradeBaseline.priceUsdMicros)}</small> : null}<em>{usdMicros(investmentTradeValueMicros(editingTradeBaseline))}</em><span className="is-review-detail"><small>الرسوم</small><b>{usdMicros(editingTradeBaseline.feeUsdMicros || 0)}</b></span><span className="is-review-detail"><small>{tradeEditBeforeImpact.label}</small><b>{usdMicros(tradeEditBeforeImpact.valueUsdMicros, true)}</b></span></div>
+                <div><small>قبل</small><strong>{decimal(unitsToQuantity(editingTradeBaseline.quantityUnits), 8)} وحدة</strong><b>{editingTradeBaseline.priceNativeMicros ? tryUnitMicros(editingTradeBaseline.priceNativeMicros) : usdUnitMicros(editingTradeBaseline.priceUsdMicros)}</b>{editingTradeBaseline.priceNativeMicros ? <small>{usdUnitMicros(editingTradeBaseline.priceUsdMicros)}</small> : null}<em>{usdMicros(investmentTradeValueMicros(editingTradeBaseline))}</em><span className="is-review-detail"><small>الرسوم</small><b>{editSettlesInTry ? tryMoneyMicros(editingTradeBaseline.feeNativeMicros || 0) : usdMicros(editingTradeBaseline.feeUsdMicros || 0)}</b></span><span className="is-review-detail"><small>{tradeEditBeforeImpact.label}</small><b>{editSettlesInTry ? tryMoneyMicros(investmentTradeCashMicros(editingTradeBaseline, CURRENCIES.TRY), true) : usdMicros(tradeEditBeforeImpact.valueUsdMicros, true)}</b></span></div>
                 <ArrowLeft aria-hidden="true" size={18} />
-                <div><small>بعد</small><strong>{decimal(unitsToQuantity(editedQuantityUnits), 8)} وحدة</strong><b>{editingTradeBaseline.priceNativeMicros ? tryUnitMicros(usdToMicros(tradeEditDraft.priceNative)) : usdUnitMicros(editedPriceUsdMicros)}</b>{editingTradeBaseline.priceNativeMicros ? <small>{usdUnitMicros(editedPriceUsdMicros)}</small> : null}<em>{usdMicros(investmentTradeValueMicros(editedTradePreview))}</em><span className="is-review-detail"><small>الرسوم</small><b>{usdMicros(editedFeeUsdMicros)}</b></span><span className="is-review-detail"><small>{tradeEditAfterImpact.label}</small><b>{usdMicros(tradeEditAfterImpact.valueUsdMicros, true)}</b></span></div>
+                <div><small>بعد</small><strong>{decimal(unitsToQuantity(editedQuantityUnits), 8)} وحدة</strong><b>{editingTradeBaseline.priceNativeMicros ? tryUnitMicros(usdToMicros(tradeEditDraft.priceNative)) : usdUnitMicros(editedPriceUsdMicros)}</b>{editingTradeBaseline.priceNativeMicros ? <small>{usdUnitMicros(editedPriceUsdMicros)}</small> : null}<em>{usdMicros(investmentTradeValueMicros(editedTradePreview))}</em><span className="is-review-detail"><small>الرسوم</small><b>{editSettlesInTry ? tryMoneyMicros(editedTradePreview.feeNativeMicros || 0) : usdMicros(editedFeeUsdMicros)}</b></span><span className="is-review-detail"><small>{tradeEditAfterImpact.label}</small><b>{editSettlesInTry ? tryMoneyMicros(investmentTradeCashMicros(editedTradePreview, CURRENCIES.TRY), true) : usdMicros(tradeEditAfterImpact.valueUsdMicros, true)}</b></span></div>
                 {tradeEditNoteChanged ? (
                   <section className="adreem-investment-edit-note-review">
                     <small>الملاحظة</small>

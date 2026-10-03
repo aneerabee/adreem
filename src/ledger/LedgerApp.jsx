@@ -396,10 +396,13 @@ export default function LedgerApp() {
   const investmentAvailableCashUsdMicros = useMemo(() => new Map(
     investmentSummary.platforms.map((row) => [row.platform.id, row.freeCashUsdMicros]),
   ), [investmentSummary])
+  const investmentAvailableCashTryMicros = useMemo(() => new Map(
+    investmentSummary.platforms.map((row) => [row.platform.id, row.freeCashTryMicros]),
+  ), [investmentSummary])
   const activeInvestmentPlatforms = useMemo(() => (ledgerExtras.investmentPlatforms || []).filter((platform) => platform.status !== INVESTMENT_RECORD_STATUSES.INACTIVE), [ledgerExtras.investmentPlatforms])
   const investmentPlatformById = useMemo(() => new Map((ledgerExtras.investmentPlatforms || []).map((platform) => [platform.id, platform])), [ledgerExtras.investmentPlatforms])
   const fullNetPosition = useMemo(() => buildNetPosition(balances), [balances])
-  const netPosition = useMemo(() => buildNetPosition(balances, netExcludedAccountIds, { portfolioUsdMicros: investmentSummary.totalValueUsdMicros }), [balances, investmentSummary.totalValueUsdMicros, netExcludedAccountIds])
+  const netPosition = useMemo(() => buildNetPosition(balances, netExcludedAccountIds, { portfolioUsdMicros: investmentSummary.totalValueUsdMicros, portfolioTryMicros: investmentSummary.freeCashTryMicros }), [balances, investmentSummary.totalValueUsdMicros, investmentSummary.freeCashTryMicros, netExcludedAccountIds])
 
   const movementConfig = movementConfigFor(movementDraft.type)
   const movementSourceRequired = movementNeedsSource(movementDraft.type)
@@ -421,8 +424,8 @@ export default function LedgerApp() {
       || editingMovementBaseline
     : null
   const preview = editingMovement
-    ? previewMovementEdit(normalizedDraft, editingMovement, accounts, movements, { investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros })
-    : previewMovement(normalizedDraft, accounts, movements, { investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros })
+    ? previewMovementEdit(normalizedDraft, editingMovement, accounts, movements, { investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros, investmentAvailableCashTryMicros })
+    : previewMovement(normalizedDraft, accounts, movements, { investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros, investmentAvailableCashTryMicros })
   const movementEditLabels = useMemo(() => ({
     accounts: new Map(accounts.map((account) => [account.id, protectedAccountLabel(account)])),
     dimensions: new Map(activeDimensions.map((dimension) => [dimension.id, preserveUiData(dimension.name)])),
@@ -874,6 +877,7 @@ export default function LedgerApp() {
     editingRecurringRule,
     historyRemoteMovements,
     investmentAvailableCashUsdMicros,
+    investmentAvailableCashTryMicros,
     isSavingMovement,
     ledgerExtras,
     movementAttachmentFile,
@@ -1263,6 +1267,7 @@ export default function LedgerApp() {
         hasMovementAmount={hasMovementAmount}
         hasMovementRate={hasMovementRate}
         investmentAvailableCashUsdMicros={investmentAvailableCashUsdMicros}
+        investmentAvailableCashTryMicros={investmentAvailableCashTryMicros}
         isSavingMovement={isSavingMovement}
         movementAccountsFor={movementAccountsFor}
         movementAttachmentFile={movementAttachmentFile}

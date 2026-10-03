@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { INVESTMENT_TRADE_TYPES, quantityToUnits, usdToMicros } from './investmentCore.js'
-import { microsToPriceText, platformTradeOptions, tradeImpact, unitsToQuantityText } from './investmentTradeFlow.js'
+import { microsToPriceText, platformTradeOptions, pricedTradeDraft, tradeImpact, unitsToQuantityText } from './investmentTradeFlow.js'
 
 const holding = (id, platformId, symbol, extra = {}) => ({ id, platformId, symbol, name: symbol, status: 'active', ...extra })
 const row = (item, quantity) => ({ holding: item, quantityUnits: quantityToUnits(quantity) })
@@ -45,6 +45,60 @@ describe('platform trade flow', () => {
     expect(tradeImpact({ ...sale, quantityUnits: quantityToUnits(60) })).toMatchObject({ unitsAfter: 0, hasEnoughUnits: true, cashAfterUsdMicros: usdToMicros(240) })
     expect(tradeImpact({ ...sale, quantityUnits: quantityToUnits(60.00000001) }).hasEnoughUnits).toBe(false)
     expect(tradeImpact({ ...sale, quantityUnits: quantityToUnits(1), feeUsdMicros: usdToMicros(5), freeCashUsdMicros: 0 }).hasEnoughCash).toBe(false)
+  })
+
+  it('settles Turkish purchases in native cash without touching USD cash', () => {
+    const impact = tradeImpact({
+      type: INVESTMENT_TRADE_TYPES.BUY,
+      settlementCurrency: 'TRY',
+      quantityUnits: quantityToUnits(2),
+      priceNativeMicros: usdToMicros(100),
+      priceUsdMicros: usdToMicros(2.5),
+      feeNativeMicros: usdToMicros(5),
+      feeUsdMicros: usdToMicros(0.125),
+      freeCashTryMicros: usdToMicros(250),
+      freeCashUsdMicros: usdToMicros(10),
+    })
+    expect(impact).toMatchObject({
+      valueNativeMicros: usdToMicros(200),
+      cashChangeTryMicros: -usdToMicros(205),
+      cashAfterTryMicros: usdToMicros(45),
+      cashChangeUsdMicros: 0,
+      cashAfterUsdMicros: usdToMicros(10),
+      hasEnoughCash: true,
+    })
+    expect(tradeImpact({
+      type: INVESTMENT_TRADE_TYPES.BUY, settlementCurrency: 'TRY', quantityUnits: quantityToUnits(2),
+      priceNativeMicros: usdToMicros(100), feeNativeMicros: usdToMicros(5),
+      freeCashTryMicros: usdToMicros(204), freeCashUsdMicros: usdToMicros(1000),
+    }).hasEnoughCash).toBe(false)
+  })
+
+  it('settles Turkish sales in the selected currency, including the fee', () => {
+    const trade = {
+      type: INVESTMENT_TRADE_TYPES.SELL,
+      quantityUnits: quantityToUnits(2),
+      heldUnits: quantityToUnits(2),
+      priceNativeMicros: usdToMicros(100),
+      priceUsdMicros: usdToMicros(2.5),
+      feeNativeMicros: usdToMicros(5),
+      feeUsdMicros: usdToMicros(0.125),
+      freeCashTryMicros: usdToMicros(1),
+      freeCashUsdMicros: usdToMicros(1),
+    }
+    expect(tradeImpact({ ...trade, settlementCurrency: 'TRY' })).toMatchObject({ cashChangeTryMicros: usdToMicros(195), cashChangeUsdMicros: 0, hasEnoughCash: true })
+    expect(tradeImpact({ ...trade, settlementCurrency: 'USD' })).toMatchObject({ cashChangeTryMicros: 0, cashChangeUsdMicros: usdToMicros(4.875), hasEnoughCash: true })
+  })
+
+  it('sends settlement currency and actual native price and fee with Turkish trades', () => {
+    const draft = { type: INVESTMENT_TRADE_TYPES.BUY, priceNative: '100', feeNative: '5', quantity: '2', note: '' }
+    const fx = { quotedAt: '2026-10-03T09:00:00.000Z', source: 'manual' }
+    for (const settlementCurrency of ['TRY', 'USD']) {
+      expect(pricedTradeDraft(draft, { holdingId: 'h-try', isTurkish: true, settlementCurrency, priceUsdMicros: usdToMicros(2.5), feeUsdMicros: usdToMicros(0.125), tryRateMicros: usdToMicros(40), tryFx: fx })).toMatchObject({
+        holdingId: 'h-try', settlementCurrency, priceNative: '100', feeNative: '5', priceUsd: '2.5', feeUsd: '0.125', fxTryPerUsdMicros: usdToMicros(40), fxQuotedAt: fx.quotedAt, fxSource: 'manual',
+      })
+    }
+    expect(pricedTradeDraft({ priceUsd: '12', feeUsd: '1' }, { holdingId: 'h-usd', isTurkish: false, settlementCurrency: 'USD' })).toMatchObject({ holdingId: 'h-usd', settlementCurrency: 'USD', priceUsd: '12', feeUsd: '1' })
   })
 
   it('writes exact quantities and prices back into inputs without rounding or exponents', () => {

@@ -37,6 +37,7 @@ export function MovementEntryForm({
   hasMovementAmount,
   hasMovementRate,
   investmentAvailableCashUsdMicros,
+  investmentAvailableCashTryMicros,
   isSavingMovement,
   movementAccountsFor,
   movementAttachmentFile,
@@ -118,7 +119,8 @@ export function MovementEntryForm({
             ) : (
               <label aria-label="العملة">
                 <select value={movementDraft.currency} onChange={(event) => updateMovementDraft('currency', event.target.value)}>
-                  {CURRENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  {CURRENCY_OPTIONS.filter((option) => !movementConfig.currencyOptions || movementConfig.currencyOptions.includes(option.value))
+                    .map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </label>
             )}
@@ -151,12 +153,12 @@ export function MovementEntryForm({
           <section className="ml3-step ml3-step--investment-platform is-open">
             <div className="adreem-investment-platform-picker" aria-label="منصة الاستثمار">
               {activeInvestmentPlatforms.length ? activeInvestmentPlatforms.map((platform) => {
-                const platformCash = investmentAvailableCashUsdMicros.get(platform.id) || 0
+                const platformCash = (movementDraft.currency === 'TRY' ? investmentAvailableCashTryMicros : investmentAvailableCashUsdMicros).get(platform.id) || 0
                 return (
                   <button type="button" key={platform.id} className={movementDraft.investmentPlatformId === platform.id ? 'is-active' : ''} aria-pressed={movementDraft.investmentPlatformId === platform.id} onClick={() => updateMovementDraft('investmentPlatformId', platform.id)}>
                     <i><Landmark aria-hidden="true" size={17} /></i>
                     <span><strong>{preserveUiData(platform.name)}</strong><small>{preserveUiData(platform.location || 'محفظة استثمار')}</small></span>
-                    <b>{`${(platformCash / 1_000_000).toLocaleString('en-US', { maximumFractionDigits: 2 })} USD`}</b>
+                    <b>{`${(platformCash / 1_000_000).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${movementDraft.currency}`}</b>
                   </button>
                 )
               }) : (

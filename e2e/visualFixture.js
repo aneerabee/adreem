@@ -113,11 +113,15 @@ export async function inspectVisibleLayout(page) {
     const visible = (element) => {
       const rect = element.getBoundingClientRect()
       const style = getComputedStyle(element)
+      const closedDetails = element.closest('details:not([open])')
+      if (closedDetails && !element.closest('summary')) return false
       return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight
         && style.display !== 'none' && style.visibility !== 'hidden'
     }
     const label = (element) => element.getAttribute('aria-label') || element.textContent?.trim().slice(0, 50) || element.tagName
-    const controls = Array.from(document.querySelectorAll('button, input, select, textarea, [role="dialog"]')).filter(visible)
+    const activeProfile = document.querySelector('.ml3-profile-layer')
+    const controlRoot = activeProfile && visible(activeProfile) ? activeProfile : document
+    const controls = Array.from(controlRoot.querySelectorAll('button, input, select, textarea, [role="dialog"]')).filter(visible)
     const escapedControls = controls.filter((element) => {
       const rect = element.getBoundingClientRect()
       return rect.left < -1 || rect.right > viewportWidth + 1

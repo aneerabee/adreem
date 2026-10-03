@@ -276,8 +276,8 @@ export function validateMovement(movement, accounts = [], movements = [], option
     errors.push({ field: 'currency', message: 'شراء USD يبدأ بمبلغ LYD.' })
   }
   if ([MOVEMENT_TYPES.INVESTMENT_DEPOSIT, MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL].includes(type)) {
-    if (currency && currency !== CURRENCIES.USD) {
-      errors.push({ field: 'currency', message: 'حركات محفظتي تستخدم USD فقط.' })
+    if (currency && ![CURRENCIES.USD, CURRENCIES.TRY].includes(currency)) {
+      errors.push({ field: 'currency', message: 'حركات محفظتي تستخدم USD أو TRY فقط.' })
     }
     const platforms = Array.isArray(options.investmentPlatforms) ? options.investmentPlatforms : []
     const platform = platforms.find((item) => item?.id === investmentPlatformId && item?.status !== ACCOUNT_STATUSES.INACTIVE)
@@ -285,24 +285,27 @@ export function validateMovement(movement, accounts = [], movements = [], option
       errors.push({ field: 'investmentPlatformId', message: 'اختر منصة استثمار نشطة.' })
     }
     if (Number.isFinite(amount) && Math.abs(amount) > MAX_INVESTMENT_MOVEMENT_AMOUNT) {
-      errors.push({ field: 'amount', message: `قيمة حركة الاستثمار يجب ألا تتجاوز ${MAX_INVESTMENT_MOVEMENT_AMOUNT.toLocaleString('en-US')} USD.` })
+      errors.push({ field: 'amount', message: `قيمة حركة الاستثمار يجب ألا تتجاوز ${MAX_INVESTMENT_MOVEMENT_AMOUNT.toLocaleString('en-US')} من عملتها.` })
     }
     if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && sourceId && sourceAccount && ![VALUE_KINDS.CASH, VALUE_KINDS.BANK, VALUE_KINDS.RECEIVABLE].includes(sourceAccount.valueKind)) {
-      errors.push({ field: 'sourceAccountId', message: 'تمويل الاستثمار يخرج من حساب USD أو من شخص.' })
+      errors.push({ field: 'sourceAccountId', message: 'تمويل الاستثمار يخرج من فلوسك أو من شخص.' })
     }
-    if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && sourceAccount && !accountSupportsTransferCurrency(sourceAccount, CURRENCIES.USD)) {
-      errors.push({ field: 'sourceAccountId', message: 'حساب المصدر لا يدعم USD.' })
+    if (type === MOVEMENT_TYPES.INVESTMENT_DEPOSIT && sourceAccount && !accountSupportsTransferCurrency(sourceAccount, currency)) {
+      errors.push({ field: 'sourceAccountId', message: 'حساب المصدر لا يدعم عملة التمويل.' })
     }
     if (type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL && destinationId && destinationAccount && ![VALUE_KINDS.CASH, VALUE_KINDS.BANK].includes(destinationAccount.valueKind)) {
       errors.push({ field: 'destinationAccountId', message: 'سحب الاستثمار يدخل إلى كاش أو مصرف تملكه.' })
     }
-    if (type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL && destinationAccount && !accountSupportsTransferCurrency(destinationAccount, CURRENCIES.USD)) {
-      errors.push({ field: 'destinationAccountId', message: 'حساب الوجهة لا يدعم USD.' })
+    if (type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL && destinationAccount && !accountSupportsTransferCurrency(destinationAccount, currency)) {
+      errors.push({ field: 'destinationAccountId', message: 'حساب الوجهة لا يدعم عملة السحب.' })
     }
-    const currentAvailableCashMicros = options.investmentAvailableCashUsdMicros?.get?.(investmentPlatformId)
+    const availableCashByPlatform = currency === CURRENCIES.TRY
+      ? options.investmentAvailableCashTryMicros : options.investmentAvailableCashUsdMicros
+    const currentAvailableCashMicros = availableCashByPlatform?.get?.(investmentPlatformId)
     const originalWithdrawalMicros = options.originalMovement?.type === MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL &&
       options.originalMovement?.status === MOVEMENT_STATUSES.POSTED &&
-      options.originalMovement?.investmentPlatformId === investmentPlatformId
+      options.originalMovement?.investmentPlatformId === investmentPlatformId &&
+      options.originalMovement?.currency === currency
       ? Math.abs(Number(options.originalMovement.amount || 0)) * 1_000_000
       : 0
     const availableCashMicros = Number.isSafeInteger(currentAvailableCashMicros)

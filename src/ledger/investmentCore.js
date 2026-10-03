@@ -20,6 +20,7 @@ export const INVESTMENT_TRADE_TYPES = Object.freeze({
   SELL: 'sell',
 })
 export const INVESTMENT_TRANSFER_ASSETS = Object.freeze({ USD: 'USD', USDT: 'USDT' })
+export const INVESTMENT_SETTLEMENT_CURRENCIES = Object.freeze({ USD: CURRENCIES.USD, TRY: CURRENCIES.TRY })
 export const INVESTMENT_ASSET_TYPES = Object.freeze({
   STOCK: 'stock',
   CRYPTO: 'crypto',
@@ -52,6 +53,16 @@ function safeScaledProduct(left, right, divisor) {
   const divisorInteger = BigInt(divisor)
   const result = ((BigInt(leftInteger) * BigInt(rightInteger)) + (divisorInteger / 2n)) / divisorInteger
   return result <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(result) : 0
+}
+
+function sumSafeMicros(values) {
+  let total = 0n
+  for (const value of values) {
+    if (!Number.isSafeInteger(value)) return Number.NaN
+    total += BigInt(value)
+  }
+  return total <= BigInt(Number.MAX_SAFE_INTEGER) && total >= BigInt(Number.MIN_SAFE_INTEGER)
+    ? Number(total) : Number.NaN
 }
 
 function compareInvestmentValueDescending(left, right) {
@@ -256,6 +267,22 @@ export function investmentTradeValueMicros(trade = {}) {
   return safeScaledProduct(quantityUnits, priceUsdMicros, INVESTMENT_QUANTITY_SCALE)
 }
 
+export function investmentTradeSettlementCurrency(trade = {}) {
+  return trade.settlementCurrency || CURRENCIES.USD
+}
+
+export function investmentTradeCashMicros(trade = {}, currency = CURRENCIES.USD) {
+  if (trade.status === INVESTMENT_RECORD_STATUSES.VOIDED || investmentTradeSettlementCurrency(trade) !== currency) return 0
+  const native = currency === CURRENCIES.TRY
+  const value = native
+    ? investmentTradeValueMicros({ quantityUnits: trade.quantityUnits, priceUsdMicros: trade.priceNativeMicros })
+    : investmentTradeValueMicros(trade)
+  const fee = safeInteger(native ? trade.feeNativeMicros : trade.feeUsdMicros)
+  if (trade.type === INVESTMENT_TRADE_TYPES.BUY) return -value - fee
+  if (trade.type === INVESTMENT_TRADE_TYPES.SELL) return value - fee
+  return 0
+}
+
 export function investmentTransferCostBasisUsdMicros(holdingRow = {}, quantityUnits = 0) {
   const available = safePositiveInteger(holdingRow.quantityUnits)
   const cost = safeInteger(holdingRow.costBasisUsdMicros, -1)
@@ -330,6 +357,8 @@ export function createInvestmentTrade(draft = {}, createdAt = new Date().toISOSt
     type,
     quantityUnits: safePositiveInteger(draft.quantityUnits),
     priceUsdMicros: safePositiveInteger(draft.priceUsdMicros),
+    ...(draft.settlementCurrency !== undefined ? { settlementCurrency: draft.settlementCurrency } : {}),
+    ...(draft.settlementCurrency === CURRENCIES.TRY ? { feeNativeMicros: safeInteger(draft.feeNativeMicros, -1) } : {}),
     ...(hasNativePrice ? {
       priceNativeMicros: safePositiveInteger(draft.priceNativeMicros),
       fxTryPerUsdMicros: safePositiveInteger(draft.fxTryPerUsdMicros),
@@ -357,7 +386,8 @@ export function buildInvestmentTradeEdit(trade = {}, draft = {}, updatedAt = new
   ) {
     return { ok: false, message: 'الكمية والسعر يجب أن يكونا أكبر من صفر.' }
   }
-  if (!investmentDecimalInputIsValid(draft.feeUsd || 0)) {
+  if (!investmentDecimalInputIsValid(draft.feeUsd || 0)
+    || (investmentTradeSettlementCurrency(trade) === CURRENCIES.TRY && !investmentDecimalInputIsValid(draft.feeNative || 0))) {
     return { ok: false, message: 'الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.' }
   }
   const quantityUnits = quantityToUnits(draft.quantity)
@@ -366,6 +396,8 @@ export function buildInvestmentTradeEdit(trade = {}, draft = {}, updatedAt = new
     ? convertTryPriceToUsdMicros(priceNativeMicros, trade.fxTryPerUsdMicros)
     : usdToMicros(draft.priceUsd)
   const feeUsdMicros = usdToMicros(draft.feeUsd || 0)
+  const feeNativeMicros = investmentTradeSettlementCurrency(trade) === CURRENCIES.TRY
+    ? usdToMicros(draft.feeNative || 0) : 0
   if (trade.type === INVESTMENT_TRADE_TYPES.OPENING && feeUsdMicros !== 0) {
     return { ok: false, message: 'الرصيد الافتتاحي لا يقبل رسومًا.' }
   }
@@ -381,6 +413,7 @@ export function buildInvestmentTradeEdit(trade = {}, draft = {}, updatedAt = new
     priceUsdMicros,
     ...(priceNativeMicros ? { priceNativeMicros } : {}),
     feeUsdMicros,
+    ...(investmentTradeSettlementCurrency(trade) === CURRENCIES.TRY ? { feeNativeMicros } : {}),
     note: cleanText(draft.note, 300),
     updatedAt,
   }
@@ -407,7 +440,7 @@ export function investmentOpeningTradeIsLocked(trade = {}, trades = [], transfer
 
 export function investmentTradeMatchesBaseline(currentTrade = {}, baselineTrade = {}) {
   if (!currentTrade?.id || currentTrade.id !== baselineTrade?.id) return false
-  return ['platformId', 'holdingId', 'type', 'occurredAt', 'createdAt', 'updatedAt', 'quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'fxTryPerUsdMicros', 'fxQuotedAt', 'fxSource', 'feeUsdMicros', 'note', 'status']
+  return ['platformId', 'holdingId', 'type', 'occurredAt', 'createdAt', 'updatedAt', 'quantityUnits', 'priceUsdMicros', 'priceNativeMicros', 'fxTryPerUsdMicros', 'fxQuotedAt', 'fxSource', 'feeUsdMicros', 'feeNativeMicros', 'settlementCurrency', 'note', 'status']
     .every((field) => String(currentTrade[field] ?? '') === String(baselineTrade[field] ?? ''))
 }
 
@@ -418,6 +451,9 @@ export function buildSmallInvestmentClosure(row = {}, createdAt = new Date().toI
     return { ok: false, message: 'الاستثمار غير موجود.' }
   }
   if (!quantityUnits) return { ok: true, kind: 'deactivate', holding }
+  if (holding.quoteCurrency === CURRENCIES.TRY) {
+    return { ok: false, message: 'بع الاستثمار التركي أولًا مع اختيار عملة التسوية، ثم أغلقه.' }
+  }
 
   const priceUsdMicros = safePositiveInteger(holding.lastPriceUsdMicros)
   const marketValueUsdMicros = safeScaledProduct(quantityUnits, priceUsdMicros, INVESTMENT_QUANTITY_SCALE)
@@ -496,8 +532,8 @@ export function applyInvestmentTradeEditPriceFallback(holding = {}, previousTrad
   }
 }
 
-export function investmentMovementCashMicros(movement = {}) {
-  if (movement.status !== MOVEMENT_STATUSES.POSTED || movement.currency !== CURRENCIES.USD) return 0
+export function investmentMovementCashMicros(movement = {}, currency = CURRENCIES.USD) {
+  if (movement.status !== MOVEMENT_STATUSES.POSTED || movement.currency !== currency) return 0
   const amount = safePositiveInteger(Math.abs(movement.amount))
   const amountMicros = amount ? safeScaledProduct(amount, INVESTMENT_PRICE_SCALE, 1) : 0
   if (!amountMicros) return 0
@@ -610,18 +646,16 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     const platformTrades = trades.filter((trade) => trade?.platformId === platform.id && trade.status !== INVESTMENT_RECORD_STATUSES.VOIDED)
     const cashFromLedgerUsdMicros = movements
       .filter((movement) => movement?.investmentPlatformId === platform.id)
-      .reduce((sum, movement) => sum + investmentMovementCashMicros(movement), 0)
+      .map((movement) => investmentMovementCashMicros(movement))
+    const cashFromLedgerTryMicros = movements
+      .filter((movement) => movement?.investmentPlatformId === platform.id)
+      .map((movement) => investmentMovementCashMicros(movement, CURRENCIES.TRY))
     const cashFromTransfersUsdMicros = transfers
       .filter((transfer) => transfer?.asset === INVESTMENT_TRANSFER_ASSETS.USD && transfer.status !== INVESTMENT_RECORD_STATUSES.VOIDED)
-      .reduce((sum, transfer) => sum + (transfer.toPlatformId === platform.id ? transfer.amountUsdMicros : 0)
-        - (transfer.fromPlatformId === platform.id ? transfer.amountUsdMicros : 0), 0)
-    const tradeCashUsdMicros = platformTrades.reduce((sum, trade) => {
-      const value = investmentTradeValueMicros(trade)
-      const fee = Math.max(0, safeInteger(trade.feeUsdMicros))
-      if (trade.type === INVESTMENT_TRADE_TYPES.BUY) return sum - value - fee
-      if (trade.type === INVESTMENT_TRADE_TYPES.SELL) return sum + value - fee
-      return sum
-    }, 0)
+      .map((transfer) => (transfer.toPlatformId === platform.id ? transfer.amountUsdMicros : 0)
+        - (transfer.fromPlatformId === platform.id ? transfer.amountUsdMicros : 0))
+    const tradeCashUsdMicros = platformTrades.map((trade) => investmentTradeCashMicros(trade))
+    const tradeCashTryMicros = platformTrades.map((trade) => investmentTradeCashMicros(trade, CURRENCIES.TRY))
     const allHoldingRows = activeHoldings
       .filter((holding) => holding.platformId === platform.id)
       .map((holding) => summarizeHolding(holding, platformTrades, transfers))
@@ -637,7 +671,8 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     const investedMarketValueUsdMicros = holdingRows
       .filter((row) => !investmentHoldingIsLiquidity(row.holding))
       .reduce((sum, row) => sum + row.marketValueUsdMicros, 0)
-    const freeCashUsdMicros = cashFromLedgerUsdMicros + cashFromTransfersUsdMicros + tradeCashUsdMicros
+    const freeCashUsdMicros = sumSafeMicros([...cashFromLedgerUsdMicros, ...cashFromTransfersUsdMicros, ...tradeCashUsdMicros])
+    const freeCashTryMicros = sumSafeMicros([...cashFromLedgerTryMicros, ...tradeCashTryMicros])
     const marketValueUsdMicros = stablecoinUsdMicros + investedMarketValueUsdMicros
     const investmentRows = allHoldingRows.filter((row) => !investmentHoldingIsLiquidity(row.holding))
     const openProfitUsdMicros = investmentRows.reduce((sum, row) => sum + row.unrealizedProfitUsdMicros, 0)
@@ -645,6 +680,7 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
     return {
       platform,
       freeCashUsdMicros,
+      freeCashTryMicros,
       stablecoinUsdMicros,
       liquidBalanceUsdMicros: freeCashUsdMicros + stablecoinUsdMicros,
       holdings: holdingRows,
@@ -661,7 +697,8 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
   })
 
   platformRows.sort((left, right) => compareInvestmentValueDescending(left.totalValueUsdMicros, right.totalValueUsdMicros))
-  const freeCashUsdMicros = platformRows.reduce((sum, row) => sum + row.freeCashUsdMicros, 0)
+  const freeCashUsdMicros = sumSafeMicros(platformRows.map((row) => row.freeCashUsdMicros))
+  const freeCashTryMicros = sumSafeMicros(platformRows.map((row) => row.freeCashTryMicros))
   const stablecoinUsdMicros = platformRows.reduce((sum, row) => sum + row.stablecoinUsdMicros, 0)
   const liquidBalanceUsdMicros = freeCashUsdMicros + stablecoinUsdMicros
   const marketValueUsdMicros = platformRows.reduce((sum, row) => sum + row.marketValueUsdMicros, 0)
@@ -675,6 +712,7 @@ export function summarizeInvestmentPortfolio({ platforms = [], holdings = [], tr
   return {
     platforms: platformRows,
     freeCashUsdMicros,
+    freeCashTryMicros,
     stablecoinUsdMicros,
     liquidBalanceUsdMicros,
     marketValueUsdMicros,
@@ -751,6 +789,20 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
     if (holdingById.get(trade.holdingId)?.platformId !== trade.platformId) errors.push({ field: 'investmentTrades', id: trade.id, message: 'الاستثمار لا يتبع المنصة المختارة.' })
     if (!Object.values(INVESTMENT_TRADE_TYPES).includes(trade.type) || !safePositiveInteger(trade.quantityUnits) || !safePositiveInteger(trade.priceUsdMicros) || !investmentTradeValueMicros(trade) || ![INVESTMENT_RECORD_STATUSES.ACTIVE, INVESTMENT_RECORD_STATUSES.VOIDED].includes(trade.status) || safeInteger(trade.feeUsdMicros, -1) < 0 || (trade.type === INVESTMENT_TRADE_TYPES.OPENING && safeInteger(trade.feeUsdMicros) !== 0)) {
       errors.push({ field: 'investmentTrades', id: trade.id, message: 'كمية أو سعر عملية الاستثمار غير صالح.' })
+    }
+    const settlementCurrency = investmentTradeSettlementCurrency(trade)
+    if (![CURRENCIES.USD, CURRENCIES.TRY].includes(settlementCurrency)
+      || (settlementCurrency === CURRENCIES.TRY && (
+        holdingById.get(trade.holdingId)?.quoteCurrency !== CURRENCIES.TRY
+        || !safePositiveInteger(trade.priceNativeMicros)
+        || !safePositiveInteger(trade.fxTryPerUsdMicros)
+        || !investmentTradeValueMicros({ quantityUnits: trade.quantityUnits, priceUsdMicros: trade.priceNativeMicros })
+        || !Number.isSafeInteger(Number(trade.feeNativeMicros))
+        || Number(trade.feeNativeMicros) < 0
+        || BigInt(investmentTradeValueMicros({ quantityUnits: trade.quantityUnits, priceUsdMicros: trade.priceNativeMicros })) + BigInt(Number(trade.feeNativeMicros) || 0) > BigInt(Number.MAX_SAFE_INTEGER)
+        || convertTryPriceToUsdMicros(trade.feeNativeMicros, trade.fxTryPerUsdMicros) !== Number(trade.feeUsdMicros || 0)
+      ))) {
+      errors.push({ field: 'investmentTrades', id: trade.id, message: 'عملة تسوية الاستثمار أو رسوم الليرة غير صالحة.' })
     }
     if (trade.priceNativeMicros !== undefined || trade.fxTryPerUsdMicros !== undefined) {
       if (holdingById.get(trade.holdingId)?.quoteCurrency !== CURRENCIES.TRY
@@ -874,35 +926,37 @@ export function validateInvestmentState({ platforms = [], holdings = [], trades 
       errors.push({ field: 'investmentPlatforms', id: platform.id, message: 'لا يمكن إيقاف منصة مرتبطة ببيانات محفوظة.' })
     }
     let freeCashUsdMicros = 0n
+    let freeCashTryMicros = 0n
     for (const movement of movements) {
-      if (movement?.investmentPlatformId === platform.id) freeCashUsdMicros += BigInt(investmentMovementCashMicros(movement))
+      if (movement?.investmentPlatformId !== platform.id) continue
+      freeCashUsdMicros += BigInt(investmentMovementCashMicros(movement))
+      freeCashTryMicros += BigInt(investmentMovementCashMicros(movement, CURRENCIES.TRY))
     }
     for (const trade of trades) {
       if (trade?.platformId !== platform.id || trade.status === INVESTMENT_RECORD_STATUSES.VOIDED) continue
-      const value = BigInt(investmentTradeValueMicros(trade))
-      const fee = BigInt(Math.max(0, safeInteger(trade.feeUsdMicros)))
-      if (trade.type === INVESTMENT_TRADE_TYPES.BUY) freeCashUsdMicros -= value + fee
-      if (trade.type === INVESTMENT_TRADE_TYPES.SELL) freeCashUsdMicros += value - fee
+      freeCashUsdMicros += BigInt(investmentTradeCashMicros(trade))
+      freeCashTryMicros += BigInt(investmentTradeCashMicros(trade, CURRENCIES.TRY))
     }
     for (const transfer of transfers) {
       if (transfer.asset !== INVESTMENT_TRANSFER_ASSETS.USD || transfer.status === INVESTMENT_RECORD_STATUSES.VOIDED) continue
       if (transfer.fromPlatformId === platform.id) freeCashUsdMicros -= BigInt(safePositiveInteger(transfer.amountUsdMicros))
       if (transfer.toPlatformId === platform.id) freeCashUsdMicros += BigInt(safePositiveInteger(transfer.amountUsdMicros))
     }
-    if (freeCashUsdMicros < 0n) errors.push({ field: 'investmentTrades', id: platform.id, message: 'النقد الحر في منصة الاستثمار لا يمكن أن يصبح سالبًا.' })
-    if (freeCashUsdMicros > BigInt(Number.MAX_SAFE_INTEGER) || freeCashUsdMicros < BigInt(Number.MIN_SAFE_INTEGER)) {
+    if (freeCashUsdMicros < 0n || freeCashTryMicros < 0n) errors.push({ field: 'investmentTrades', id: platform.id, message: 'النقد الحر في المنصة بعملة USD أو TRY لا يمكن أن يصبح سالبًا.' })
+    if ([freeCashUsdMicros, freeCashTryMicros].some((cash) => cash > BigInt(Number.MAX_SAFE_INTEGER) || cash < BigInt(Number.MIN_SAFE_INTEGER))) {
       errors.push({ field: 'investmentTrades', id: platform.id, message: 'إجمالي نقد الاستثمار تجاوز حد الدقة المسموح.' })
     }
   }
   for (const movement of movements) {
     if (![MOVEMENT_TYPES.INVESTMENT_DEPOSIT, MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL].includes(movement?.type)) continue
     if (!platformById.has(movement.investmentPlatformId)) errors.push({ field: 'investmentPlatformId', id: movement.id, message: 'منصة حركة الاستثمار غير موجودة.' })
-    if (movement?.status === MOVEMENT_STATUSES.POSTED && !investmentMovementCashMicros(movement)) {
-      errors.push({ field: 'amount', id: movement.id, message: `قيمة حركة الاستثمار يجب ألا تتجاوز ${MAX_INVESTMENT_USD.toLocaleString('en-US')} USD.` })
+    if (movement?.status === MOVEMENT_STATUSES.POSTED
+      && !investmentMovementCashMicros(movement, movement.currency)) {
+      errors.push({ field: 'amount', id: movement.id, message: `قيمة حركة الاستثمار يجب ألا تتجاوز ${MAX_INVESTMENT_USD.toLocaleString('en-US')} من عملتها.` })
     }
   }
   const summary = summarizeInvestmentPortfolio({ platforms, holdings, trades, transfers, movements })
-  for (const value of [summary.freeCashUsdMicros, summary.stablecoinUsdMicros, summary.liquidBalanceUsdMicros, summary.marketValueUsdMicros, summary.investedMarketValueUsdMicros, summary.totalValueUsdMicros, summary.costBasisUsdMicros, summary.realizedProfitUsdMicros, summary.unrealizedProfitUsdMicros, summary.investmentProfitUsdMicros, summary.totalProfitUsdMicros]) {
+  for (const value of [summary.freeCashUsdMicros, summary.freeCashTryMicros, summary.stablecoinUsdMicros, summary.liquidBalanceUsdMicros, summary.marketValueUsdMicros, summary.investedMarketValueUsdMicros, summary.totalValueUsdMicros, summary.costBasisUsdMicros, summary.realizedProfitUsdMicros, summary.unrealizedProfitUsdMicros, summary.investmentProfitUsdMicros, summary.totalProfitUsdMicros]) {
     if (!Number.isSafeInteger(value)) {
       errors.push({ field: 'investmentTrades', message: 'إجمالي المحفظة تجاوز حد الدقة المسموح.' })
       break

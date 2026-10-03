@@ -162,6 +162,7 @@ export function BalancesSection({
             position={netPosition}
             allContributions={fullNetPosition.contributions}
             portfolioUsdMicros={investmentSummary.totalValueUsdMicros}
+            portfolioTryMicros={investmentSummary.freeCashTryMicros}
             excludedAccountIds={netExcludedAccountIds}
             query={netAccountQuery}
             rate={netRate}

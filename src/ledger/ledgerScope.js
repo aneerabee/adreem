@@ -167,9 +167,15 @@ export function buildNetPosition(rows = [], excludedAccountIds = [], options = {
     accountCount: contributions.length,
     contributions,
   }
-  if (options?.portfolioUsdMicros === undefined) return position
-  const portfolioUsdMicros = Number.isSafeInteger(options.portfolioUsdMicros) ? options.portfolioUsdMicros : 0
-  return { ...position, portfolioUsdMicros: excluded.has(NET_PORTFOLIO_ID) ? 0 : portfolioUsdMicros }
+  const hasUsdPortfolio = options?.portfolioUsdMicros !== undefined
+  const hasTryPortfolio = options?.portfolioTryMicros !== undefined
+  if (!hasUsdPortfolio && !hasTryPortfolio) return position
+  const portfolioIncluded = !excluded.has(NET_PORTFOLIO_ID)
+  return {
+    ...position,
+    ...(hasUsdPortfolio ? { portfolioUsdMicros: portfolioIncluded && Number.isSafeInteger(options.portfolioUsdMicros) ? options.portfolioUsdMicros : 0 } : {}),
+    ...(hasTryPortfolio ? { portfolioTryMicros: portfolioIncluded && Number.isSafeInteger(options.portfolioTryMicros) ? options.portfolioTryMicros : 0 } : {}),
+  }
 }
 
 export function convertNetPosition(position = {}, requestedRate, targetCurrency = 'LYD', requestedTryRate = 0, requestedEurRate = 0) {
@@ -179,16 +185,20 @@ export function convertNetPosition(position = {}, requestedRate, targetCurrency 
   const eurPerUsd = Number(requestedEurRate)
   const dinar = Number(position.dinar || 0)
   const accountUsd = Number(position.usd || 0)
-  const tryAmount = Number(position.try || 0)
+  const accountTry = Number(position.try || 0)
   const eurAmount = Number(position.eur || 0)
   const portfolioUsdMicros = Number(position.portfolioUsdMicros || 0)
-  if (![dinar, accountUsd, tryAmount, eurAmount, portfolioUsdMicros].every(Number.isSafeInteger)) {
+  const portfolioTryMicros = Number(position.portfolioTryMicros || 0)
+  if (![dinar, accountUsd, accountTry, eurAmount, portfolioUsdMicros, portfolioTryMicros].every(Number.isSafeInteger)) {
     return { ok: false, error: 'نتيجة الصافي أكبر من الحد المسموح.' }
   }
-  const usd = accountUsd + portfolioUsdMicros / USD_MICROS_PER_UNIT
-  const needsLydRate = currency === 'LYD' ? usd !== 0 || tryAmount !== 0 || eurAmount !== 0 : dinar !== 0
-  const needsTryRate = currency === 'TRY' ? dinar !== 0 || usd !== 0 || eurAmount !== 0 : tryAmount !== 0
-  const needsEurRate = currency === 'EUR' ? dinar !== 0 || usd !== 0 || tryAmount !== 0 : eurAmount !== 0
+  const portfolioUsd = portfolioUsdMicros / USD_MICROS_PER_UNIT
+  const portfolioTry = portfolioTryMicros / USD_MICROS_PER_UNIT
+  const hasUsd = accountUsd !== 0 || portfolioUsdMicros !== 0
+  const hasTry = accountTry !== 0 || portfolioTryMicros !== 0
+  const needsLydRate = currency === 'LYD' ? hasUsd || hasTry || eurAmount !== 0 : dinar !== 0
+  const needsTryRate = currency === 'TRY' ? dinar !== 0 || hasUsd || eurAmount !== 0 : hasTry
+  const needsEurRate = currency === 'EUR' ? dinar !== 0 || hasUsd || hasTry : eurAmount !== 0
   if (needsEurRate && (!Number.isFinite(eurPerUsd) || eurPerUsd <= 0)) {
     return { ok: false, error: 'أدخل سعر EUR مقابل USD.' }
   }
@@ -202,11 +212,14 @@ export function convertNetPosition(position = {}, requestedRate, targetCurrency 
         : missingTryRate ? 'أدخل سعر TRY مقابل USD.' : 'أدخل سعر LYD مقابل USD.',
     }
   }
-  const amounts = { LYD: dinar, USD: usd, TRY: tryAmount, EUR: eurAmount }
+  const amounts = { LYD: dinar, USD: accountUsd, TRY: accountTry, EUR: eurAmount }
+  const portfolioAmounts = { USD: portfolioUsd, TRY: portfolioTry }
   const rates = { LYD: lydPerUsd, USD: 1, TRY: tryPerUsd, EUR: eurPerUsd }
   const otherUsd = Object.entries(amounts).reduce((sum, [code, amount]) =>
-    code === currency || amount === 0 ? sum : sum + amount / rates[code], 0)
-  const rawAmount = Math.round(amounts[currency] + (otherUsd === 0 ? 0 : otherUsd * rates[currency]))
+    code === currency || (amount === 0 && !portfolioAmounts[code])
+      ? sum : sum + amount / rates[code] + (portfolioAmounts[code] || 0) / rates[code], 0)
+  const ownPortfolio = portfolioAmounts[currency] || 0
+  const rawAmount = amounts[currency] + Math.round(ownPortfolio + (otherUsd === 0 ? 0 : otherUsd * rates[currency]))
   if (!Number.isSafeInteger(rawAmount)) {
     return { ok: false, error: 'نتيجة الصافي أكبر من الحد المسموح.' }
   }

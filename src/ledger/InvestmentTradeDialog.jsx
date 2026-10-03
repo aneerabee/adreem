@@ -2,21 +2,24 @@
 /** @jsxRuntime automatic */
 import { useRef, useState } from 'react'
 import { ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, CircleDollarSign } from 'lucide-react'
-import { INVESTMENT_TRADE_TYPES, convertTryPriceToUsdMicros, investmentDecimalInputIsValid, investmentTradeValueMicros, microsToUsd, quantityToUnits, unitsToQuantity, usdToMicros } from './investmentCore.js'
+import { INVESTMENT_TRADE_TYPES, convertTryPriceToUsdMicros, investmentDecimalInputIsValid, investmentTradeValueMicros, quantityToUnits, unitsToQuantity, usdToMicros } from './investmentCore.js'
 import { blankTrade, decimal, holdingPriceLabel, tryMoneyMicros, tryUnitMicros, usdMicros, usdUnitMicros } from './investmentFormat'
 import { resolveInvestmentPlatformBrand } from './investmentPlatformBrands.js'
-import { microsToPriceText, platformTradeOptions, TRADE_STAGES, tradeImpact, unitsToQuantityText } from './investmentTradeFlow.js'
+import { microsToPriceText, platformTradeOptions, pricedTradeDraft, TRADE_STAGES, tradeImpact, unitsToQuantityText } from './investmentTradeFlow.js'
 import { InvestmentDialog, TryExchangeRate } from './InvestmentParts'
 import { TradeAssetPicker, TradeReview, TradeSelectedAsset } from './InvestmentTradeParts'
 import { preserveUiData } from './uiTranslation.js'
 import { tryFxIsUsable, useTryUsdRate } from './useTryUsdRate.js'
 
-export function InvestmentTradeDialog({ platformRow, holdings, markIndex, initialType = INVESTMENT_TRADE_TYPES.BUY, initialHoldingId = '', onAddTrade, onOpenFunding, onAddAsset, onLoadTryUsdRate, onClose }) {
+export function InvestmentTradeDialog({ platformRow, holdings, markIndex, initialType = INVESTMENT_TRADE_TYPES.BUY, initialHoldingId = '', initialSettlementCurrency = '', onAddTrade, onOpenFunding, onAddAsset, onLoadTryUsdRate, onClose }) {
   const platformId = platformRow.platform.id
   const optionsFor = (type) => platformTradeOptions({ platformId, holdings, platformRow, type })
   const [draft, setDraft] = useState(() => {
     const options = optionsFor(initialType)
-    return { ...blankTrade, type: initialType, holdingId: initialHoldingId || (options.length === 1 ? options[0].holding.id : '') }
+    const holdingId = initialHoldingId || (options.length === 1 ? options[0].holding.id : '')
+    const initialHolding = options.find((option) => option.holding.id === holdingId)?.holding
+    const settlementCurrency = initialHolding?.quoteCurrency === 'TRY' && initialSettlementCurrency !== 'USD' ? 'TRY' : 'USD'
+    return { ...blankTrade, type: initialType, holdingId, settlementCurrency }
   })
   const [stage, setStage] = useState(TRADE_STAGES.FIELDS)
   const submissionRef = useRef(false)
@@ -26,14 +29,20 @@ export function InvestmentTradeDialog({ platformRow, holdings, markIndex, initia
   const selected = options.find((option) => option.holding.id === draft.holdingId) || null
   const holding = selected?.holding
   const isTurkish = holding?.quoteCurrency === 'TRY'
+  const settlementCurrency = isTurkish && draft.settlementCurrency !== 'USD' ? 'TRY' : 'USD'
   const { tryFx, changeTryFxRate, tryFxIsReadyForSave } = useTryUsdRate(isTurkish ? `trade:${holding.id}` : '', onLoadTryUsdRate)
   const tryRateMicros = usdToMicros(tryFx.rate)
   const priceUsdMicros = isTurkish ? convertTryPriceToUsdMicros(usdToMicros(draft.priceNative), tryRateMicros) : usdToMicros(draft.priceUsd)
-  const feeUsdMicros = isTurkish ? convertTryPriceToUsdMicros(usdToMicros(draft.feeNative || 0), tryRateMicros) : usdToMicros(draft.feeUsd || 0)
+  const feeNativeMicros = isTurkish && settlementCurrency === 'TRY' ? usdToMicros(draft.feeNative || 0) : 0
+  const feeUsdMicros = settlementCurrency === 'TRY' ? convertTryPriceToUsdMicros(feeNativeMicros, tryRateMicros) : usdToMicros(draft.feeUsd || 0)
   const quantityUnits = quantityToUnits(draft.quantity)
-  const valueNativeMicros = isTurkish ? investmentTradeValueMicros({ quantityUnits, priceUsdMicros: usdToMicros(draft.priceNative) }) : 0
-  const feeInputValid = investmentDecimalInputIsValid((isTurkish ? draft.feeNative : draft.feeUsd) || 0)
-  const preview = tradeImpact({ type: draft.type, quantityUnits, priceUsdMicros, feeUsdMicros, freeCashUsdMicros: platformRow.freeCashUsdMicros || 0, heldUnits: selected?.quantityUnits || 0 })
+  const priceNativeMicros = isTurkish ? usdToMicros(draft.priceNative) : 0
+  const valueNativeMicros = isTurkish ? investmentTradeValueMicros({ quantityUnits, priceUsdMicros: priceNativeMicros }) : 0
+  const feeInputValid = investmentDecimalInputIsValid((settlementCurrency === 'TRY' ? draft.feeNative : draft.feeUsd) || 0)
+  const preview = tradeImpact({ type: draft.type, settlementCurrency, quantityUnits, priceUsdMicros, priceNativeMicros, feeUsdMicros, feeNativeMicros, freeCashUsdMicros: platformRow.freeCashUsdMicros || 0, freeCashTryMicros: platformRow.freeCashTryMicros || 0, heldUnits: selected?.quantityUnits || 0 })
+  const moneyText = settlementCurrency === 'TRY' ? tryMoneyMicros : usdMicros
+  const cashBeforeMicros = settlementCurrency === 'TRY' ? preview.cashBeforeTryMicros : preview.cashBeforeUsdMicros
+  const requiredMicros = settlementCurrency === 'TRY' ? valueNativeMicros + feeNativeMicros : preview.valueUsdMicros + preview.feeUsdMicros
   const hasValidInput = Boolean(selected
     && investmentDecimalInputIsValid(draft.quantity, { allowZero: false })
     && investmentDecimalInputIsValid(isTurkish ? draft.priceNative : draft.priceUsd, { allowZero: false })
@@ -52,7 +61,8 @@ export function InvestmentTradeDialog({ platformRow, holdings, markIndex, initia
   }
 
   function selectHolding(holdingId) {
-    setDraft((current) => ({ ...blankTrade, type: current.type, note: current.note, holdingId }))
+    const option = options.find((item) => item.holding.id === holdingId)
+    setDraft((current) => ({ ...blankTrade, type: current.type, note: current.note, holdingId, settlementCurrency: option?.holding.quoteCurrency === 'TRY' ? 'TRY' : 'USD' }))
   }
 
   function updateDraft(field, value) {
@@ -68,11 +78,8 @@ export function InvestmentTradeDialog({ platformRow, holdings, markIndex, initia
       return
     }
     submissionRef.current = true
-    const scopedDraft = { ...draft, holdingId: holding.id }
-    const pricedDraft = isTurkish
-      ? { ...scopedDraft, priceUsd: String(microsToUsd(priceUsdMicros)), feeUsd: String(microsToUsd(feeUsdMicros)), fxTryPerUsdMicros: tryRateMicros, fxQuotedAt: tryFx.quotedAt, fxSource: tryFx.source }
-      : scopedDraft
-    if (onAddTrade(pricedDraft) === false) {
+    const submission = pricedTradeDraft(draft, { holdingId: holding.id, isTurkish, settlementCurrency, priceUsdMicros, feeUsdMicros, tryRateMicros, tryFx })
+    if (onAddTrade(submission) === false) {
       submissionRef.current = false
       setStage(TRADE_STAGES.FIELDS)
       return
@@ -105,7 +112,8 @@ export function InvestmentTradeDialog({ platformRow, holdings, markIndex, initia
           priceUsdText={isTurkish ? usdUnitMicros(priceUsdMicros) : ''}
           fxText={isTurkish ? `1 USD = ${decimal(tryFx.rate, 6)} TRY` : ''}
           valueNativeText={isTurkish ? tryMoneyMicros(valueNativeMicros) : ''}
-          feeNativeText={isTurkish ? tryMoneyMicros(usdToMicros(draft.feeNative || 0)) : ''}
+          feeNativeText={settlementCurrency === 'TRY' ? tryMoneyMicros(feeNativeMicros) : ''}
+          settlementCurrency={settlementCurrency}
           impact={preview}
           note={draft.note.trim()}
         />
@@ -128,9 +136,10 @@ export function InvestmentTradeDialog({ platformRow, holdings, markIndex, initia
                 </div>
               ) : null}
               {isTurkish ? <><TryExchangeRate fx={tryFx} onChange={changeTryFxRate} /><output className="adreem-investment-fx-result">تكلفة الوحدة: <strong>{priceUsdMicros ? usdUnitMicros(priceUsdMicros) : 'أدخل سعر الصرف'}</strong>{valueNativeMicros && priceUsdMicros ? <> · الإجمالي <strong dir="ltr">{tryMoneyMicros(valueNativeMicros)}</strong> ≈ <strong dir="ltr">{usdMicros(preview.valueUsdMicros)}</strong></> : null}</output></> : null}
-              <div className="is-paired"><label><span>{isTurkish ? 'الرسوم TRY' : 'الرسوم USD'}</span><input dir="ltr" inputMode="decimal" value={isTurkish ? draft.feeNative : draft.feeUsd} onChange={(event) => updateDraft(isTurkish ? 'feeNative' : 'feeUsd', event.target.value)} placeholder="0" /></label><label><span>ملاحظة</span><input value={draft.note} maxLength={300} onChange={(event) => updateDraft('note', event.target.value)} placeholder="اختياري" /></label></div>
+              {isTurkish ? <div className="adreem-investment-trade-settlement"><span>نقد المنصة</span><div className="adreem-investment-trade-toggle adreem-investment-trade-currency" role="group" aria-label="العملة"><button type="button" aria-pressed={settlementCurrency === 'TRY'} className={settlementCurrency === 'TRY' ? 'is-active' : ''} onClick={() => updateDraft('settlementCurrency', 'TRY')}>الليرة التركية <bdi dir="ltr">TRY</bdi></button><button type="button" aria-pressed={settlementCurrency === 'USD'} className={settlementCurrency === 'USD' ? 'is-active' : ''} onClick={() => updateDraft('settlementCurrency', 'USD')}>الدولار <bdi dir="ltr">USD</bdi></button></div></div> : null}
+              <div className="is-paired"><label><span>الرسوم {settlementCurrency}</span><input dir="ltr" inputMode="decimal" value={settlementCurrency === 'TRY' ? draft.feeNative : draft.feeUsd} onChange={(event) => updateDraft(settlementCurrency === 'TRY' ? 'feeNative' : 'feeUsd', event.target.value)} placeholder="0" /></label><label><span>ملاحظة</span><input value={draft.note} maxLength={300} onChange={(event) => updateDraft('note', event.target.value)} placeholder="اختياري" /></label></div>
               {!feeInputValid ? <p className="adreem-investment-edit-warning">الرسوم يجب أن تكون رقمًا صحيحًا أو صفرًا.</p> : null}
-              <div className={`adreem-investment-trade-context ${!preview.hasEnoughCash || !preview.hasEnoughUnits ? 'is-error' : ''}`}><CircleDollarSign aria-hidden="true" size={15} /><span><strong>{isBuy ? 'نقد المنصة' : 'الكمية المتاحة للبيع'}</strong><small>{isBuy ? `المتاح ${usdMicros(platformRow.freeCashUsdMicros || 0)} · المطلوب ${usdMicros(preview.valueUsdMicros + preview.feeUsdMicros)}` : `الموجود ${decimal(unitsToQuantity(selected.quantityUnits), 8)} وحدة`}</small></span>{isBuy && !preview.hasEnoughCash && typeof onOpenFunding === 'function' ? <button type="button" onClick={() => { onClose(); onOpenFunding(platformId) }}>حوّل USD أولًا</button> : null}</div>
+              <div className={`adreem-investment-trade-context ${!preview.hasEnoughCash || !preview.hasEnoughUnits ? 'is-error' : ''}`}><CircleDollarSign aria-hidden="true" size={15} /><span><strong>{isBuy ? 'نقد المنصة' : 'الكمية المتاحة للبيع'}</strong><small>{isBuy ? `المتاح ${moneyText(cashBeforeMicros)} · المطلوب ${moneyText(requiredMicros)}` : `الموجود ${decimal(unitsToQuantity(selected.quantityUnits), 8)} وحدة · النقد بعد البيع ${moneyText(settlementCurrency === 'TRY' ? preview.cashAfterTryMicros : preview.cashAfterUsdMicros)}`}</small></span>{isBuy && !preview.hasEnoughCash && typeof onOpenFunding === 'function' ? <button type="button" onClick={() => { onClose(); onOpenFunding(platformId, settlementCurrency) }}>{settlementCurrency === 'USD' ? 'حوّل USD أولًا' : 'تحويل'}{settlementCurrency === 'TRY' ? ' TRY' : ''}</button> : null}</div>
               {!isBuy && preview.hasEnoughUnits && !preview.hasEnoughCash ? <p className="adreem-investment-edit-warning">الرسوم أكبر من نقد المنصة بعد البيع.</p> : null}
             </>
           ) : null}

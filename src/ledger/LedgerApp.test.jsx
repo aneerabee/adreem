@@ -1936,6 +1936,48 @@ describe('net position portfolio line', () => {
     expect(excluded).toContain('>10,700</b>')
     expect(excluded).not.toContain('منها محفظتي')
   })
+
+  it('shows USD and TRY portfolio amounts separately and removes their net share together', () => {
+    const portfolioUsdMicros = 100_250_000
+    const portfolioTryMicros = 92_500_000
+    const renderPanel = (excluded = false) => stripUiDataProtection(renderToStaticMarkup(
+      <NetPositionPanel
+        position={{ dinar: 0, usd: 0, try: 0, eur: 0, portfolioUsdMicros: excluded ? 0 : portfolioUsdMicros, portfolioTryMicros: excluded ? 0 : portfolioTryMicros, accountCount: 0, contributions: [] }}
+        portfolioUsdMicros={portfolioUsdMicros}
+        portfolioTryMicros={portfolioTryMicros}
+        excludedAccountIds={excluded ? ['investment-portfolio'] : []}
+        rate="7"
+        tryRate="46"
+        targetCurrency={CURRENCIES.USD}
+      />,
+    ))
+
+    const included = renderPanel()
+    expect(included).toContain('100.25 USD')
+    expect(included).toContain('92.50 TRY')
+    expect(included).toContain('>102</b>')
+    expect(included).toContain('منها محفظتي 102 USD')
+
+    const excluded = renderPanel(true)
+    expect(excluded).toContain('مستبعدة')
+    expect(excluded).toContain('>0</b>')
+    expect(excluded).not.toContain('منها محفظتي')
+  })
+
+  it('keeps a TRY-only portfolio visible without inventing a USD amount', () => {
+    const markup = stripUiDataProtection(renderToStaticMarkup(
+      <NetPositionPanel
+        position={{ dinar: 0, usd: 0, try: 0, eur: 0, portfolioUsdMicros: 0, portfolioTryMicros: 92_500_000, accountCount: 0, contributions: [] }}
+        portfolioUsdMicros={0}
+        portfolioTryMicros={92_500_000}
+        targetCurrency={CURRENCIES.TRY}
+      />,
+    ))
+
+    expect(markup).toContain('92.50 TRY')
+    expect(markup).not.toContain('0.00 USD')
+    expect(markup).toContain('منها محفظتي 93 TRY')
+  })
 })
 
 describe('account picker source visibility', () => {

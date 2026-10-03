@@ -91,6 +91,7 @@
 .adreem-investment-composition .is-liquidity { padding: 5px 8px; border: 1px solid #cbd8d8; border-radius: 5px; background: #edf3f2; }
 .adreem-investment-composition .is-liquidity small { display: inline-flex; align-items: center; gap: 4px; color: #365757; }
 .adreem-investment-composition .is-liquidity strong { color: #234c4e; }
+.adreem-investment-composition .is-liquidity strong.is-try { font-size: var(--text-sm); color: #455b60; }
 .adreem-investment-composition strong { color: #4c585d; font-size: var(--text-lg); font-weight: 750; }
 .adreem-investment-toolbar {
   min-width: 0;
@@ -170,10 +171,13 @@
 .adreem-investment-platform-balances > span { min-width: 0; display: flex; align-items: baseline; gap: 5px; padding: 4px 6px; }
 [dir='rtl'] .adreem-investment-platform-balances > span { direction: rtl; }
 .adreem-investment-platform-balances > span small { display: inline-flex; align-items: center; gap: 3px; color: #687175; font-size: var(--text-xs); white-space: nowrap; }
+.adreem-investment-platform-balances > .is-total small { white-space: normal; }
 .adreem-investment-platform-balances > span strong { min-width: 0; direction: ltr; font-size: var(--text-md); font-variant-numeric: tabular-nums; line-height: 1.2; overflow-wrap: anywhere; }
 .adreem-investment-platform-balances > .is-liquidity { border: 1px solid #cbd8d8; border-radius: 5px; background: #e8f0ef; }
 .adreem-investment-platform-balances > .is-liquidity small,
 .adreem-investment-platform-balances > .is-liquidity strong { color: #285252; }
+.adreem-investment-platform-balances > .is-liquidity:has(.is-try) { display: grid; gap: 2px; align-content: center; }
+.adreem-investment-platform-balances > .is-liquidity strong.is-try { font-size: var(--text-sm); color: #455b60; }
 .adreem-investment-platform-balances > .is-total strong { color: #303a3e; font-weight: 850; }
 .adreem-investment-platform-balances > .is-profit { display: grid; align-content: center; justify-items: end; gap: 1px; border-radius: 5px; }
 [dir='rtl'] .adreem-investment-platform-balances > .is-profit { direction: ltr; }
@@ -496,6 +500,8 @@ span.adreem-asset-mark.is-sm > b { font-size: var(--text-2xs); letter-spacing: 0
 .adreem-investment-trade-toggle button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: #6b6760; font-weight: 850; }
 .adreem-investment-trade-toggle button.is-buy.is-active { border-color: #a8d8c7; background: #fff; color: #087757; box-shadow: 0 2px 8px rgba(8, 119, 87, 0.1); }
 .adreem-investment-trade-toggle button.is-sell.is-active { border-color: #efc4c4; background: #fff; color: #b72525; box-shadow: 0 2px 8px rgba(183, 37, 37, 0.1); }
+.adreem-investment-trade-settlement { display: grid; gap: 5px; font-size: var(--text-sm); font-weight: 750; }
+.adreem-investment-trade-currency button.is-active { border-color: #a8d8c7; background: #fff; color: #087757; box-shadow: 0 2px 8px rgba(8, 119, 87, 0.1); }
 .adreem-investment-trade-context { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 0; padding: 8px; border-radius: 6px; background: var(--investment-gold-soft); color: #735313; font-size: var(--text-sm); font-weight: 800; }
 .adreem-investment-trade-context > span { min-width: 0; display: grid; flex: 1; gap: 2px; }
 .adreem-investment-trade-context small { color: #7b6942; font-size: var(--text-xs); }

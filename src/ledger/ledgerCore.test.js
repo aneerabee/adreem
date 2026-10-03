@@ -77,6 +77,33 @@ describe('adreem ledger core', () => {
     expect(overdrawnFunding.validation.errors).toContainEqual(expect.objectContaining({ field: 'sourceAccountId' }))
   })
 
+  it('moves TRY from owned cash to platform and only withdraws available TRY', () => {
+    const cash = createAccount({
+      id: 'own-try', ownerName: 'أنا', subAccountName: 'TRY', type: ACCOUNT_TYPES.CASH,
+      valueKind: VALUE_KINDS.CASH, currencyKind: CURRENCIES.TRY, openingTry: 1_000,
+    })
+    const movements = createOpeningMovements([cash])
+    const platform = { id: 'platform-try', name: 'Midas', status: 'active' }
+    const options = {
+      investmentPlatforms: [platform],
+      investmentAvailableCashUsdMicros: new Map([[platform.id, 0]]),
+      investmentAvailableCashTryMicros: new Map([[platform.id, 700_000_000]]),
+    }
+    const deposit = postMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT, amount: 300, currency: CURRENCIES.TRY,
+      sourceAccountId: cash.id, investmentPlatformId: platform.id,
+    }, [cash], movements, options)
+    const withdrawal = postMovement({
+      type: MOVEMENT_TYPES.INVESTMENT_WITHDRAWAL, amount: 700, currency: CURRENCIES.TRY,
+      destinationAccountId: cash.id, investmentPlatformId: platform.id,
+    }, [cash], movements, options)
+    expect(deposit.validation.ok).toBe(true)
+    expect(withdrawal.validation.ok).toBe(true)
+    expect(buildPostingEntries(deposit)).toEqual([{ accountId: cash.id, currency: CURRENCIES.TRY, delta: -300 }])
+    expect(buildPostingEntries(withdrawal)).toEqual([{ accountId: cash.id, currency: CURRENCIES.TRY, delta: 700 }])
+    expect(validateMovement({ ...withdrawal, amount: 701 }, [cash], movements, options).ok).toBe(false)
+  })
+
   it('rejects an investment movement with the wrong currency, platform, account, or free cash', () => {
     const cash = createAccount({
       id: 'own-usd', ownerName: 'أنا', subAccountName: 'USD', type: ACCOUNT_TYPES.CASH,

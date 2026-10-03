@@ -204,10 +204,12 @@ export function useInvestmentActions({
       platformId: holding.platformId,
       holdingId: holding.id,
       type: draft.type,
+      settlementCurrency: draft.settlementCurrency || CURRENCIES.USD,
       quantityUnits: quantityToUnits(draft.quantity),
       priceUsdMicros,
       ...(priceNativeMicros ? { priceNativeMicros, fxTryPerUsdMicros, fxQuotedAt: draft.fxQuotedAt, fxSource: draft.fxSource } : {}),
       feeUsdMicros: usdToMicros(draft.feeUsd || 0),
+      ...(draft.settlementCurrency === CURRENCIES.TRY ? { feeNativeMicros: usdToMicros(draft.feeNative || 0) } : {}),
       note: draft.note,
     })
     const nextTrades = [...(ledgerExtras.investmentTrades || []), trade]
@@ -249,7 +251,7 @@ export function useInvestmentActions({
       setFeedback(edit.message || 'لم يتم تعديل عملية الاستثمار.')
       return false
     }
-    const financialFields = ['quantityUnits', 'priceUsdMicros', 'feeUsdMicros']
+    const financialFields = ['quantityUnits', 'priceUsdMicros', 'feeUsdMicros', 'feeNativeMicros']
     const financialChanged = financialFields.some((field) => Number(edit.trade[field] || 0) !== Number(currentTrade[field] || 0))
     if (financialChanged && investmentOpeningTradeIsLocked(currentTrade, ledgerExtras.investmentTrades || [], ledgerExtras.investmentTransfers || [])) {
       setFeedback('القيم الافتتاحية ثابتة بعد وجود عمليات لاحقة. يمكنك تعديل الملاحظة فقط.')
@@ -288,12 +290,14 @@ export function useInvestmentActions({
           quantityUnits: currentTrade.quantityUnits,
           priceUsdMicros: currentTrade.priceUsdMicros,
           feeUsdMicros: currentTrade.feeUsdMicros,
+          ...(currentTrade.settlementCurrency === CURRENCIES.TRY ? { feeNativeMicros: currentTrade.feeNativeMicros, settlementCurrency: CURRENCIES.TRY } : {}),
           note: currentTrade.note || '',
         },
         after: {
           quantityUnits: edit.trade.quantityUnits,
           priceUsdMicros: edit.trade.priceUsdMicros,
           feeUsdMicros: edit.trade.feeUsdMicros,
+          ...(edit.trade.settlementCurrency === CURRENCIES.TRY ? { feeNativeMicros: edit.trade.feeNativeMicros, settlementCurrency: CURRENCIES.TRY } : {}),
           note: edit.trade.note || '',
         },
         ...(currentTrade.priceNativeMicros ? {
@@ -380,7 +384,7 @@ export function useInvestmentActions({
     return true
   }
 
-  function openInvestmentFunding(platformId = '') {
+  function openInvestmentFunding(platformId = '', currency = CURRENCIES.USD) {
     const type = MOVEMENT_TYPES.INVESTMENT_DEPOSIT
     activeEntryModeRef.current = 'movement'
     setActiveEntryMode('movement')
@@ -388,7 +392,7 @@ export function useInvestmentActions({
     setEditingMovementBaseline(null)
     setMovementDraft({
       ...emptyMovementDraft(type),
-      currency: CURRENCIES.USD,
+      currency: [CURRENCIES.USD, CURRENCIES.TRY].includes(currency) ? currency : CURRENCIES.USD,
       investmentPlatformId: platformId,
     })
     setMovementStep(MOVEMENT_ENTRY_STEPS.AMOUNT)

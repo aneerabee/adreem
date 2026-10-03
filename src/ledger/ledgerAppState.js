@@ -61,7 +61,7 @@ export function emptyMovementDraft(type = MOVEMENT_TYPES.TRANSFER) {
   return {
     type,
     amount: '',
-    currency: config.currency || CURRENCIES.DINAR,
+    currency: config.currency || config.currencyOptions?.[0] || CURRENCIES.DINAR,
     sourceAccountId: '',
     destinationAccountId: '',
     investmentPlatformId: '',

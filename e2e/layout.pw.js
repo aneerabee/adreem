@@ -83,6 +83,9 @@ for (const language of ['ar', 'en']) {
     await page.locator('.adreem-money-group-channels button').first().click()
     const profile = page.locator('.ml3-profile-layer')
     await expect(profile).toBeVisible()
+    await profile.locator('.ml3-profile').evaluate(async (element) => {
+      await Promise.all(element.getAnimations().map((animation) => animation.finished))
+    })
     await checkLayout(page, 'account profile')
     const profileBounds = await profile.locator('.ml3-profile').boundingBox()
     expect(profileBounds.x).toBeGreaterThanOrEqual(-1)

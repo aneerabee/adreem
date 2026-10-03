@@ -40,6 +40,17 @@ describe('investment platform activity', () => {
     expect(rows[0]).toMatchObject({ id: 'voided', status: MOVEMENT_STATUSES.VOIDED, amountUsdMicros: usdToMicros(20) })
   })
 
+  it('preserves TRY funding as TRY instead of presenting it as USD', () => {
+    const rows = buildInvestmentPlatformActivity({
+      platformId: 'platform-1',
+      movements: [{ id: 'try-funding', type: MOVEMENT_TYPES.INVESTMENT_DEPOSIT,
+        status: MOVEMENT_STATUSES.POSTED, currency: CURRENCIES.TRY, amount: 1000,
+        investmentPlatformId: 'platform-1', occurredAt: '2026-01-05T10:00:00.000Z' }],
+    })
+    expect(rows).toMatchObject([{ id: 'try-funding', currency: CURRENCIES.TRY,
+      amountNativeMicros: usdToMicros(1000), amountUsdMicros: 0 }])
+  })
+
   it('shows one transfer on both platform histories with its direction and note', () => {
     const platforms = [{ id: 'one', name: 'Source' }, { id: 'two', name: 'Destination' }]
     const transfer = createInvestmentTransfer({ id: 'move-1', asset: 'USD', fromPlatformId: 'one', toPlatformId: 'two', amountUsdMicros: usdToMicros(25), note: 'Internal move' }, '2026-01-04T10:00:00.000Z')

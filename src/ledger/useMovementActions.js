@@ -16,6 +16,7 @@ export function useMovementActions({
   editingRecurringRule,
   historyRemoteMovements,
   investmentAvailableCashUsdMicros,
+  investmentAvailableCashTryMicros,
   isSavingMovement,
   ledgerExtras,
   movementAttachmentFile,
@@ -89,7 +90,7 @@ export function useMovementActions({
         },
         accounts,
         validationMovements,
-        { originalMovement, investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros },
+        { originalMovement, investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros, investmentAvailableCashTryMicros },
       )
       if (!canCommitMovementEdit(originalMovement, movement)) {
         setFeedback(`لم يتم حفظ التعديل. أصلح الحركة أولًا حتى لا يتغير الرصيد: ${movement.validation.errors.map((error) => error.message).join(' ')}`)
@@ -237,6 +238,7 @@ export function useMovementActions({
           originalMovement: target,
           investmentPlatforms: ledgerExtras.investmentPlatforms,
           investmentAvailableCashUsdMicros,
+          investmentAvailableCashTryMicros,
         })
         if (!canCommitMovementEdit(target, restoredMovement) || !restoredMovement.validation.ok) {
           setFeedback(restoredMovement.validation.errors[0]?.message || 'تعذر الرجوع لأن الأرصدة الحالية لا تسمح بالنسخة السابقة.')
@@ -402,7 +404,7 @@ export function useMovementActions({
       },
       accounts,
       movements.filter((item) => item.id !== movement.id),
-      { originalMovement: movement, investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros },
+      { originalMovement: movement, investmentPlatforms: ledgerExtras.investmentPlatforms, investmentAvailableCashUsdMicros, investmentAvailableCashTryMicros },
     )
     const candidateMovements = movements.map((item) => (item.id === movement.id ? candidate : item))
     const investmentValidation = validateInvestmentMovementCandidate(candidateMovements, movement, candidate)
